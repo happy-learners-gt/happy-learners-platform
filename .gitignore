@@ -9,3 +9,7 @@ dist/
 build/
 coverage/
 *.log
+.wrangler/
+.dev.vars*
+apps/api/src/generated/
+apps/api/worker-configuration.d.ts
