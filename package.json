@@ -1,0 +1,33 @@
+{
+  "name": "happy-learners-platform",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:web": "npm run build --workspace @happy-learners/web",
+    "typecheck": "tsc -p apps/web/tsconfig.json && tsc -p apps/api/tsconfig.json && tsc -p packages/domain/tsconfig.json && tsc -p tsconfig.json",
+    "types": "wrangler types --config infrastructure/wrangler.jsonc apps/api/worker-configuration.d.ts",
+    "test": "vitest run",
+    "dev": "npm run build && wrangler dev --local --config build/wrangler.json",
+    "verify": "./scripts/verify"
+  },
+  "devDependencies": {
+    "@testing-library/react": "16.3.3",
+    "@types/node": "24.13.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "jsdom": "30.0.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.0",
+    "vitest": "5.0.1",
+    "wrangler": "4.132.0",
+    "yaml": "2.9.1"
+  }
+}
