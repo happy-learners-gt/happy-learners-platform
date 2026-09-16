@@ -19,5 +19,13 @@ for relative in "${required[@]}"; do
   fi
 done
 
-# Las verificaciones de cada stack se agregarán aquí cuando el ADR tecnológico sea aceptado.
-echo "Estructura del monorepo válida."
+cd "$repo_root"
+export WRANGLER_SEND_METRICS=false
+export WRANGLER_LOG_PATH="$repo_root/.wrangler/logs"
+node -e 'if (process.versions.node.split(".")[0] !== "24") { console.error("Se requiere Node.js 24"); process.exit(1); }'
+npm run build
+npm run types
+npm run typecheck
+npm test
+npx --no-install wrangler deploy --dry-run --config build/wrangler.json
+echo "ST-043: verificaciones locales completas; no se ha desplegado."
