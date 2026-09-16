@@ -27,5 +27,6 @@ npm run build
 npm run types
 npm run typecheck
 npm test
+python3 -m unittest discover -s tests -p "test_*.py"
 npx --no-install wrangler deploy --dry-run --config build/wrangler.json
-echo "ST-043: verificaciones locales completas; no se ha desplegado."
+echo "Verificaciones locales completas; no se ha desplegado."
