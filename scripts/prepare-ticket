@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 || ! "$1" =~ ^ST-[0-9]{3}$ ]]; then
+  echo "Uso: ./scripts/prepare-ticket ST-###" >&2
+  exit 2
+fi
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+ops_repo="${HL_OPS_REPO:-$repo_root/../happy-learners-ops}"
+
+if [[ ! -x "$ops_repo/hlops" ]]; then
+  echo "No se encontró happy-learners-ops en: $ops_repo" >&2
+  echo "Defina HL_OPS_REPO con la ruta correcta y vuelva a ejecutar." >&2
+  exit 1
+fi
+
+mkdir -p "$repo_root/.codex"
+"$ops_repo/hlops" context "$1" --stdout > "$repo_root/.codex/context.md"
+printf 'Contexto preparado: .codex/context.md (%s)\n' "$1"

@@ -1,0 +1,11 @@
+.codex/
+.env
+.env.local
+.mise.local.toml
+.DS_Store
+node_modules/
+.venv/
+dist/
+build/
+coverage/
+*.log

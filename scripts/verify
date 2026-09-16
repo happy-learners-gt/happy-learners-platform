@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+required=(
+  "apps/web/README.md"
+  "apps/api/README.md"
+  "packages/domain/README.md"
+  "packages/contracts/README.md"
+  "database/migrations/README.md"
+  "infrastructure/README.md"
+  "tests/README.md"
+)
+
+for relative in "${required[@]}"; do
+  if [[ ! -f "$repo_root/$relative" ]]; then
+    echo "Falta un límite del monorepo: $relative" >&2
+    exit 1
+  fi
+done
+
+# Las verificaciones de cada stack se agregarán aquí cuando el ADR tecnológico sea aceptado.
+echo "Estructura del monorepo válida."
