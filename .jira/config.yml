@@ -1,0 +1,4 @@
+deployments:
+  environmentMapping:
+    testing:
+      - "demo"
