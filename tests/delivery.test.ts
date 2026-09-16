@@ -9,6 +9,14 @@ describe("delivery gate", () => {
     expect(workflow.on).toEqual({ pull_request: null, push: { branches: ["main"] } });
     expect(workflow.jobs.verify.steps.some((step: { run?: string }) => step.run === "./scripts/verify")).toBe(true);
     expect(workflow.jobs.deploy.needs).toBe("verify");
+    for (const job of Object.values(workflow.jobs)) {
+      expect(job).not.toHaveProperty("environment");
+    }
+    const deployStep = workflow.jobs.deploy.steps.find((step: { name?: string }) => step.name === "Deploy verified package");
+    expect(deployStep.env).toEqual({
+      CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
+      CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}",
+    });
     expect(workflow.jobs.deploy.if).toBe("github.event_name == 'push' && github.ref == 'refs/heads/main'");
     for (const step of workflow.jobs.verify.steps) expect(step["continue-on-error"]).toBeUndefined();
     expect(workflow.jobs.verify["continue-on-error"]).toBeUndefined();
