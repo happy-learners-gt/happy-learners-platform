@@ -13,3 +13,7 @@ coverage/
 .dev.vars*
 apps/api/src/generated/
 apps/api/worker-configuration.d.ts
+
+# Pruebas y automatización Python de entrega.
+__pycache__/
+*.pyc
