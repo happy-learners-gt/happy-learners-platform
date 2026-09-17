@@ -1,0 +1,14 @@
+changelog:
+  exclude:
+    labels: [release:exclude]
+  categories:
+    - title: Cambios incompatibles
+      labels: [semver:major]
+    - title: Capacidades
+      labels: [type:feature, semver:minor]
+    - title: Correcciones
+      labels: [type:fix, semver:patch]
+    - title: Mantenimiento
+      labels: [type:maintenance]
+    - title: Otros cambios
+      labels: ['*']

@@ -38,6 +38,20 @@ describe("delivery gate", () => {
     expect(config.d1_databases).toBeUndefined();
     expect(config.r2_buckets).toBeUndefined();
   });
+  it("reports deployment status with the repository token and maps demo to Jira testing", () => {
+    expect(workflow.jobs.deploy.permissions).toEqual({ contents: "read", deployments: "write" });
+    const steps = workflow.jobs.deploy.steps;
+    const start = steps.findIndex((step: { id?: string }) => step.id === "deployment");
+    const delivery = steps.findIndex((step: { id?: string }) => step.id === "cloudflare");
+    expect(start).toBeLessThan(delivery);
+    expect(steps[start].env).toEqual({ GH_TOKEN: "${{ github.token }}" });
+    const finish = steps[steps.length - 1];
+    expect(finish.if).toBe("always() && steps.deployment.outputs.id != ''");
+    expect(finish.env.DEPLOY_OUTCOME).toBe("${{ steps.cloudflare.outcome }}");
+    expect(finish.env.DEPLOYMENT_ID).toBe("${{ steps.deployment.outputs.id }}");
+    const jira = parse(readFileSync(".jira/config.yml", "utf8"));
+    expect(jira.deployments.environmentMapping.testing).toEqual(["demo"]);
+  });
   it("rejects a build with a SHA different from the checkout", () => {
     expect(() => execFileSync(process.execPath, ["scripts/build.mjs"], {
       env: { ...process.env, GITHUB_SHA: "0".repeat(40) }, stdio: "pipe",

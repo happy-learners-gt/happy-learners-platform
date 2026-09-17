@@ -1,0 +1,16 @@
+name: Delivery traceability
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled, ready_for_review]
+permissions:
+  contents: read
+jobs:
+  traceability:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate branch, commits and PR
+        run: python3 scripts/check-traceability.py
