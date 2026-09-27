@@ -17,3 +17,4 @@ apps/api/worker-configuration.d.ts
 # Pruebas y automatización Python de entrega.
 __pycache__/
 *.pyc
+.recovery-evidence/
