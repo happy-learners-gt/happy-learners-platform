@@ -1,1 +1,9 @@
-{"name":"@happy-learners/api","private":true,"type":"module","dependencies":{"@happy-learners/contracts":"*"}}
+{
+  "name": "@happy-learners/api",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@happy-learners/contracts": "*",
+    "@happy-learners/domain": "*"
+  }
+}

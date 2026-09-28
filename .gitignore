@@ -18,3 +18,7 @@ apps/api/worker-configuration.d.ts
 __pycache__/
 *.pyc
 .recovery-evidence/
+
+.release-evidence/
+test-results/
+playwright-report/

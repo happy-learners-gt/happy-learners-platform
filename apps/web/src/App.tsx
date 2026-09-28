@@ -1,36 +1,68 @@
 import { useEffect, useState } from "react";
-import type { HealthResponse, VersionResponse } from "@happy-learners/contracts";
+import type { FormEvent } from "react";
+import type { Lesson, Member, Organization } from "@happy-learners/contracts";
+
+class ApiError extends Error { constructor(message: string, public status: number) { super(message); } }
+async function api<T>(path: string, method = "GET", data?: unknown): Promise<T> {
+  let response: Response;
+  try { response = await fetch(`/api${path}`, { method, credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(15000), ...(data ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) } : {}) }); }
+  catch { throw new ApiError("No pudimos conectar. Comprueba tu conexión y vuelve a intentar.", 0); }
+  const result = await response.json();
+  if (!response.ok) throw new ApiError(result.error || "No se pudo completar la operación.", response.status);
+  return result as T;
+}
+function Mark() { return <span className="brand-mark" aria-hidden="true">h<span>l</span></span>; }
+function Flower() { return <svg viewBox="0 0 260 240" fill="none" aria-hidden="true"><path d="M130 204V114M130 163c-44 0-59-21-59-21 37-8 52 2 59 21Zm0 19c38-1 56-23 56-23-35-5-49 6-56 23Z" stroke="currentColor" strokeWidth="7" strokeLinecap="round"/><g fill="#eac76e"><ellipse cx="130" cy="55" rx="25" ry="42"/><ellipse cx="130" cy="55" rx="25" ry="42" transform="rotate(60 130 97)"/><ellipse cx="130" cy="55" rx="25" ry="42" transform="rotate(120 130 97)"/><ellipse cx="130" cy="55" rx="25" ry="42" transform="rotate(180 130 97)"/><ellipse cx="130" cy="55" rx="25" ry="42" transform="rotate(240 130 97)"/><ellipse cx="130" cy="55" rx="25" ry="42" transform="rotate(300 130 97)"/></g><circle cx="130" cy="97" r="27" fill="#193f37"/><path d="M121 100q9 10 18 0" stroke="#fff9e9" strokeWidth="3" strokeLinecap="round"/><circle cx="120" cy="90" r="2" fill="#fff9e9"/><circle cx="140" cy="90" r="2" fill="#fff9e9"/></svg>; }
 
 export function App() {
-  const [sha, setSha] = useState<string>();
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
-    let active = true;
-    async function load() {
-      try {
-        const options = { signal: controller.signal, cache: "no-store" as const };
-        const [health, version] = await Promise.all([
-          fetch("/api/health", options), fetch("/api/version", options),
-        ]);
-        if (!health.ok || !version.ok) throw new Error("Unavailable");
-        const healthData: HealthResponse = await health.json();
-        const versionData: VersionResponse = await version.json();
-        if (healthData.status !== "ok" || !/^[a-f0-9]{40}$/.test(versionData.sha)) {
-          throw new Error("Invalid response");
-        }
-        if (active) setSha(versionData.sha);
-      } catch {
-        if (active) setFailed(true);
-      } finally { clearTimeout(timer); }
-    }
-    void load();
-    return () => { active = false; clearTimeout(timer); controller.abort(); };
-  }, []);
-  return <main>
-    <h1>Happy Learners</h1>
-    <p role="status">{failed ? "No pudimos comprobar la disponibilidad. Intenta recargar la página." : sha ? "Happy Learners está disponible." : "Comprobando disponibilidad…"}</p>
-    {sha && <p>Versión desplegada: <code>{sha}</code></p>}
-  </main>;
+  const [member, setMember] = useState<Member | null>(null);
+  const [organization, setOrganization] = useState<Organization | null>(null);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [lesson, setLesson] = useState<Lesson | null>(null);
+  const [page, setPage] = useState("home");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [username, setUsername] = useState("instructor-demo");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [timezone, setTimezone] = useState("America/Guatemala");
+  const [prepared, setPrepared] = useState<string[]>([]);
+  async function refresh() {
+    const session = await api<{ member: Member }>("/session");
+    const [org, catalog] = await Promise.all([api<{ organization: Organization }>("/organization"), api<{ lessons: Lesson[] }>("/lessons")]);
+    setMember(session.member); setOrganization(org.organization); setLessons(catalog.lessons);
+    setName(org.organization.name || ""); setTimezone(org.organization.timezone);
+    if (!org.organization.configured && session.member.role === "admin") setPage("organization");
+  }
+  useEffect(() => { refresh().catch(e => { if (!(e instanceof ApiError && e.status === 401)) setError(e.message); }).finally(() => setLoading(false)); }, []);
+  async function action(work: () => Promise<void>) {
+    setBusy(true); setError(""); setNotice("");
+    try { await work(); }
+    catch (e) {
+      if (e instanceof ApiError && e.status === 401 && member) { setMember(null); setLesson(null); setOrganization(null); setLessons([]); setPrepared([]); setPage("home"); }
+      setError(e instanceof Error ? e.message : "Vuelve a intentar.");
+    } finally { setBusy(false); }
+  }
+  function login(event: FormEvent) { event.preventDefault(); void action(async () => { await api("/login", "POST", { username, password }); setPassword(""); setPage("home"); await refresh(); }); }
+  function save(event: FormEvent) { event.preventDefault(); void action(async () => { const result = await api<{ organization: Organization }>("/organization", "PUT", { name, timezone }); setOrganization(result.organization); setNotice("Organización guardada. Tu espacio está listo."); setPage("home"); }); }
+  function navigate(next: string) { setPage(next); setLesson(null); setError(""); setNotice(""); }
+  function openLesson(id: string) { void action(async () => { const result = await api<{ lesson: Lesson }>(`/lessons/${id}`); setLesson(result.lesson); setPage("lesson"); setPrepared([]); window.scrollTo(0, 0); }); }
+  if (loading) return <main className="loading"><Mark/><p role="status">Preparando tu espacio…</p></main>;
+  return <div className={member ? "app-shell" : "login-shell"}>
+    <a className="skip-link" href="#main">Saltar al contenido</a>
+    <header className="topbar"><a href="#" className="brand" onClick={e => { e.preventDefault(); navigate("home"); }}><Mark/><span>Happy Learners</span></a><span className="demo-tag">Espacio de demostración</span>{member && <button className="text-button logout" disabled={busy} onClick={() => void action(async () => { await api("/logout", "POST"); setMember(null); setOrganization(null); setLessons([]); setLesson(null); setPrepared([]); setPage("home"); setNotice("Sesión cerrada de forma segura."); })}>Cerrar sesión <span aria-hidden="true">↗</span></button>}</header>
+    {member && <aside className="sidebar"><p className="eyebrow">TU ESPACIO</p><strong>{organization?.name || "Organización inicial"}</strong><nav aria-label="Navegación principal"><button className={page === "home" ? "active" : ""} onClick={() => navigate("home")}><span aria-hidden="true">⌂</span> Inicio</button><button className={page === "lesson" || page === "lessons" ? "active" : ""} onClick={() => navigate("lessons")}><span aria-hidden="true">▤</span> Mis lecciones</button>{member.role === "admin" && <button className={page === "organization" ? "active" : ""} onClick={() => navigate("organization")}><span aria-hidden="true">⚙</span> Organización</button>}<button className={page === "help" ? "active" : ""} onClick={() => navigate("help")}><span aria-hidden="true">?</span> Ayuda y privacidad</button></nav><div className="member-card"><span className="avatar">{member.role === "admin" ? "A" : "I"}</span><div><strong>{member.role === "admin" ? "Administración" : "Instructor"}</strong><small>Cuenta ficticia · {member.username}</small></div></div></aside>}
+    <main id="main" className={member ? "workspace" : "login-main"}>
+      {error && <div className="alert error" role="alert">{error} <button className="text-button" disabled={busy} onClick={() => void action(refresh)}>Volver a intentar</button></div>}
+      {notice && <div className="alert success" role="status">{notice}</div>}
+      {!member ? <><section className="welcome"><span className="eyebrow">PEQUEÑOS DESCUBRIMIENTOS, GRANDES COMIENZOS</span><h1>Todo listo para<br/>aprender juntos.</h1><p>Tu próxima lección, sus actividades y los materiales que necesitas. En un solo lugar, desde cualquier pantalla.</p><div className="flower-art"><Flower/><span>Crecer comienza<br/>con la curiosidad.</span></div><span className="privacy-note">Sin expedientes de niños. Solo lo necesario para enseñar.</span></section><section className="login-card"><span className="eyebrow">BIENVENIDO A TU ESPACIO</span><h2>Iniciar sesión</h2><p>Accede con una cuenta autorizada.</p><form onSubmit={login}><label htmlFor="username">Usuario</label><input id="username" autoComplete="username" maxLength={64} value={username} onChange={e => setUsername(e.target.value)} required/><label htmlFor="password">Contraseña</label><input id="password" type="password" autoComplete="current-password" maxLength={128} value={password} onChange={e => setPassword(e.target.value)} required/><button className="primary full" disabled={busy}>{busy ? "Entrando…" : "Entrar a mi espacio"} <span aria-hidden="true">→</span></button></form><details className="demo-help"><summary>Probar con datos ficticios</summary><p>Usuario <code>instructor-demo</code> para consultar lecciones o <code>admin-demo</code> para configurar la organización.</p><p>Contraseña de demostración: <code>Aprender-2026!</code></p><p>Estas cuentas son públicas y compartidas. No introduzcas información personal.</p></details></section></> : <>
+        {(page === "home" || page === "lessons") && <><div className="page-heading"><div><span className="eyebrow">{page === "home" ? "UN BUEN DÍA PARA DESCUBRIR" : "BIBLIOTECA DEL INSTRUCTOR"}</span><h1>{page === "home" ? "Aprendamos algo nuevo." : "Mis lecciones"}</h1><p>Ideas claras. Materiales sencillos. Tiempo para acompañar.</p></div><span className="pill">{lessons.length} lección{lessons.length === 1 ? "" : "es"} disponible{lessons.length === 1 ? "" : "s"}</span></div>{!organization?.configured && <div className="alert">{member.role === "admin" ? <><strong>Completa tu organización.</strong> Define su nombre para preparar el espacio. <button className="text-button" onClick={() => navigate("organization")}>Configurar ahora →</button></> : "La organización está pendiente de configuración por administración. Puedes consultar la lección de demostración."}</div>}{page === "home" && <section className="hero-banner"><div><span className="eyebrow">EL APRENDIZAJE EMPIEZA CONTIGO</span><h2>Menos búsquedas.<br/>Más momentos para enseñar.</h2><p>Abre una lección y encuentra todo lo que necesitas para preparar tu próximo encuentro.</p></div><Flower/></section>}<section aria-label="Lecciones publicadas"><div className="section-heading"><h2>{page === "home" ? "Tu próxima lección" : "Contenido publicado"}</h2><span>Listo para usar</span></div>{lessons.length ? lessons.map(item => <article className="lesson-card" key={item.id}><div className="lesson-art" aria-hidden="true"><span className="color-circle coral"/><span className="color-circle yellow"/><span className="color-circle green"/><small>EXPLORAR · CREAR · COMPARTIR</small></div><div className="lesson-summary"><div className="lesson-meta"><span className="published">Publicada</span><span>{item.duration} minutos</span></div><p className="eyebrow">{item.program}</p><h3>{item.title}</h3><p>{item.objective}</p><button className="primary" disabled={busy} onClick={() => openLesson(item.id)}>Abrir lección <span aria-hidden="true">→</span></button></div></article>) : <div className="empty-state"><h3>Aún no hay lecciones publicadas</h3><p>Cuando tu organización publique contenido, podrás encontrarlo aquí.</p></div>}</section><div className="privacy-strip"><span aria-hidden="true">◈</span><div><strong>Un espacio pensado para cuidar</strong><p>Contenido ficticio, sin nombres, fotografías ni registros individuales de niños.</p></div><button className="text-button" onClick={() => navigate("help")}>Conocer más →</button></div></>}
+        {page === "organization" && member.role === "admin" && <><div className="page-heading"><div><span className="eyebrow">ADMINISTRACIÓN</span><h1>Tu organización</h1><p>Una base sencilla para trabajar juntos.</p></div></div><section className="form-card"><h2>{organization?.configured ? "Configuración del espacio" : "Preparemos el espacio inicial"}</h2><p>La organización reúne el programa, las lecciones y las cuentas autorizadas.</p><form onSubmit={save}><label htmlFor="org-name">Nombre de la organización</label><input id="org-name" minLength={3} maxLength={80} value={name} onChange={e => setName(e.target.value)} placeholder="Ejemplo: Jardín de Colores" required aria-describedby="org-note"/><small id="org-note">En esta demostración, usa únicamente un nombre ficticio.</small><label htmlFor="timezone">Zona horaria</label><select id="timezone" value={timezone} onChange={e => setTimezone(e.target.value)}><option value="America/Guatemala">Guatemala</option><option value="America/Mexico_City">Ciudad de México</option><option value="America/Bogota">Bogotá</option></select><button className="primary" disabled={busy}>{busy ? "Guardando…" : "Guardar organización"}</button></form><div className="form-note"><strong>Privacidad por defecto</strong><p>No solicitamos dirección, teléfono, documentos de identidad ni información de niños.</p></div></section></>}
+        {page === "lesson" && lesson && <article className="lesson-detail"><button className="text-button back" onClick={() => navigate("lessons")}>← Volver a mis lecciones</button><div className="lesson-meta"><span className="published">Publicada · Solo lectura</span><span>{lesson.duration} minutos</span></div><p className="eyebrow">{lesson.program}</p><h1>{lesson.title}</h1><p className="lesson-intro">Una invitación para mirar, crear y descubrir en equipo.</p><section className="objective"><span className="eyebrow">OBJETIVO DEL ENCUENTRO</span><p>{lesson.objective}</p></section><div className="lesson-columns"><div><h2>La experiencia, paso a paso</h2>{lesson.activities.map((activity, index) => <section className="activity" key={activity.title}><span className="step-number">0{index + 1}</span><div><span className="duration">{activity.minutes} minutos</span><h3>{activity.title}</h3><p>{activity.instructions}</p></div></section>)}<section className="reflection"><span className="eyebrow">PARA REFLEXIONAR</span><h2>Un momento para aprender de la experiencia</h2><p>{lesson.reflection}</p></section></div><aside className="materials"><h2>Antes de empezar</h2><p>Prepara estos materiales. Marca lo que tienes a mano.</p>{lesson.materials.map(material => <label key={material}><input type="checkbox" checked={prepared.includes(material)} onChange={e => setPrepared(e.target.checked ? [...prepared, material] : prepared.filter(x => x !== material))}/><span>{material}</span></label>)}<p className="preparation-status" role="status">{prepared.length} de {lesson.materials.length} materiales listos</p><small>Esta lista se conserva solo mientras tienes abierta la lección.</small><button className="secondary full print-button" onClick={() => window.print()}>Imprimir guía</button><div className="form-note"><strong>Adaptar también es enseñar</strong><p>Permite responder con palabras, gestos o señalamientos. La participación no necesita ser igual para todos.</p></div></aside></div></article>}
+        {page === "help" && <section className="help-page"><span className="eyebrow">ACOMPAÑAMIENTO</span><h1>Ayuda y privacidad</h1><h2>Prepara tu encuentro en tres pasos</h2><ol><li>Abre Mis lecciones y elige una lección publicada.</li><li>Consulta el objetivo y marca los materiales disponibles.</li><li>Sigue las actividades desde tu teléfono o imprime la guía.</li></ol><h2>Datos que utilizamos</h2><p>Solo guardamos el usuario ficticio, su rol, su organización, la configuración de esa organización y una sesión temporal de hasta ocho horas. La sesión se revoca al cerrarla.</p><p>No hay perfiles de niños, fotografías, asistencia ni evaluaciones individuales. La lista de materiales permanece en memoria y desaparece al salir de la lección. No utilizamos analítica publicitaria ni cookies de terceros.</p><h2>Esta es una demostración compartida</h2><p>Todos los nombres y contenidos son ficticios. Las cuentas de prueba son públicas: no introduzcas datos personales. Administración puede cambiar el nombre de la organización; instructores solo consultan sus lecciones.</p><h2>Si algo no responde</h2><p>Comprueba tu conexión y vuelve a intentar. Si tu sesión terminó, inicia sesión otra vez. Un mensaje de error conserva el formulario para que puedas corregirlo.</p><button className="primary" onClick={() => navigate("lessons")}>Ir a mis lecciones →</button></section>}
+      </>}
+    </main><footer className="footer"><span>Happy Learners <span aria-hidden="true">·</span> Aprender, acompañar, crecer.</span><span>Demostración con datos ficticios · 0.1.0</span></footer>
+  </div>;
 }
