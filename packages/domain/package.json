@@ -1,1 +1,6 @@
-{"name":"@happy-learners/domain","private":true,"type":"module"}
+{
+  "name": "@happy-learners/domain",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts"
+}
