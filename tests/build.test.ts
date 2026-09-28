@@ -29,11 +29,7 @@ beforeAll(async () => {
     if (worker.exitCode !== null) throw new Error(logs);
     try {
       const response = await fetch(`${origin}/api/health`, { signal: AbortSignal.timeout(500) });
-      if (response.ok) {
-        // Wrangler registers RPC bindings after its HTTP listener starts. Allow that initial reload to finish.
-        await delay(1500);
-        return;
-      }
+      if (response.ok) return;
     } catch { /* Wait for the local runtime to start. */ }
     await delay(200);
   }
