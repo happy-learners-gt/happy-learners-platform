@@ -1,5 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 process.chdir(fileURLToPath(new URL("../", import.meta.url)));
@@ -19,3 +21,11 @@ config.assets.directory = "web";
 config.no_bundle = true;
 writeFileSync("build/wrangler.json", JSON.stringify(config, null, 2) + "\n");
 writeFileSync("build/version.json", JSON.stringify({ sha }) + "\n");
+
+function hashes(folder) {
+  return readdirSync(folder, { withFileTypes: true }).flatMap(entry => {
+    const path = `${folder}/${entry.name}`;
+    return entry.isDirectory() ? hashes(path) : [{ path: path.slice(6), sha256: createHash("sha256").update(readFileSync(path)).digest("hex") }];
+  });
+}
+writeFileSync("build/integrity.json", JSON.stringify({ sha, files: hashes("build") }, null, 2) + "\n");

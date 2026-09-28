@@ -2,6 +2,9 @@ name: Platform delivery
 
 on:
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
   push:
     branches: [main]
 
@@ -13,6 +16,7 @@ env:
 
 jobs:
   verify:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,6 +28,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: ./scripts/verify
+      - run: npx --no-install playwright install --with-deps chromium
+      - run: npm run test:e2e
       - uses: actions/upload-artifact@v4
         with:
           name: demo-${{ github.sha }}
@@ -36,7 +42,7 @@ jobs:
       contents: read
       deployments: write
     needs: verify
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     concurrency:
       group: demo-deployment
@@ -55,7 +61,7 @@ jobs:
           name: demo-${{ github.sha }}
           path: build/
       - name: Confirm artifact version
-        run: node --input-type=module -e "import fs from 'node:fs'; if (JSON.parse(fs.readFileSync('build/version.json')).sha !== process.env.GITHUB_SHA) process.exit(1)"
+        run: node scripts/verify-artifact.mjs
       - name: Record deployment start
         id: deployment
         env:
@@ -74,3 +80,38 @@ jobs:
           DEPLOYMENT_ID: ${{ steps.deployment.outputs.id }}
           DEPLOY_OUTCOME: ${{ steps.cloudflare.outcome }}
         run: python3 scripts/deployment-event.py finish
+
+  critical-flows:
+    needs: deploy
+    if: always() && (github.event_name == 'schedule' || needs.deploy.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: npm
+      - run: node scripts/critical-flows.mjs
+        env:
+          BASE_URL: https://happy-learners-demo.lfmendoza-alvarez.workers.dev
+          EXPECTED_SHA: ${{ github.sha }}
+      - if: github.event_name != 'schedule'
+        run: npm ci
+      - if: github.event_name != 'schedule'
+        run: npx --no-install playwright install --with-deps chromium
+      - if: github.event_name != 'schedule'
+        run: npm run test:e2e
+        env:
+          BASE_URL: https://happy-learners-demo.lfmendoza-alvarez.workers.dev
+          EXPECTED_SHA: ${{ github.sha }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-evidence-${{ github.sha }}
+          path: .release-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
