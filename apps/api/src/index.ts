@@ -41,10 +41,12 @@ async function route(request: Request, env: Env): Promise<Response> {
     for (const [name, value] of Object.entries(headers)) result.headers.set(name, value);
     return result;
   }
+  const input = ((path === "/api/login" && method === "POST") || (path === "/api/organization" && method === "PUT"))
+    ? await body(request) : undefined;
   let scope = sessionToken(request)?.startsWith("o_") ? "org-other" : "org-demo";
   if (path === "/api/login" && method === "POST") {
-    const input = await body(request.clone()) as Record<string, unknown> | null;
-    scope = typeof input?.username === "string" && input.username.trim().toLowerCase() === "externo-demo" ? "org-other" : "org-demo";
+    const credentials = input as Record<string, unknown> | null;
+    scope = typeof credentials?.username === "string" && credentials.username.trim().toLowerCase() === "externo-demo" ? "org-other" : "org-demo";
   }
   const db = database(env, scope);
   if (["/api/health", "/api/version"].includes(path)) {
@@ -60,7 +62,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (request.headers.get("Origin") !== url.origin || request.headers.get("Sec-Fetch-Site") === "cross-site") return json({ error: "Origen no permitido." }, 403);
   }
   if (path === "/api/login") {
-    const value = await body(request) as Record<string, unknown>;
+    const value = input as Record<string, unknown>;
     if (!value || typeof value.username !== "string" || typeof value.password !== "string" || value.username.length > 64 || value.password.length > 128) return json({ error: "Introduce usuario y contraseña." }, 400);
     // Daily rotating short-lived hash; no raw IP addresses in application storage.
     const bucket = await digest(`${new Date().toISOString().slice(0, 10)}:${request.headers.get("CF-Connecting-IP") || "local"}`);
@@ -90,9 +92,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/organization") {
     if (method === "PUT") {
       if (current.role !== "admin") return json({ error: "Solo administración puede configurar la organización." }, 403);
-      const input = organizationInput(await body(request));
-      if (!input) return json({ error: "Usa un nombre de 3 a 80 caracteres y una zona horaria válida." }, 400);
-      await db.prepare("UPDATE organizations SET name=?,timezone=?,configured=1 WHERE id=?").bind(input.name, input.timezone, current.organizationId).run();
+      const settings = organizationInput(input);
+      if (!settings) return json({ error: "Usa un nombre de 3 a 80 caracteres y una zona horaria válida." }, 400);
+      await db.prepare("UPDATE organizations SET name=?,timezone=?,configured=1 WHERE id=?").bind(settings.name, settings.timezone, current.organizationId).run();
     }
     const organization = await db.prepare("SELECT id,name,timezone,configured FROM organizations WHERE id=?").bind(current.organizationId).first<Organization>();
     if (!organization) return json({ error: "Organización no disponible." }, 404);
