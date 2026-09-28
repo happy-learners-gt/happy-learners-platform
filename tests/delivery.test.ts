@@ -6,7 +6,9 @@ import { describe, expect, it } from "vitest";
 const workflow = parse(readFileSync(".github/workflows/repository.yml", "utf8"));
 describe("delivery gate", () => {
   it("verifies PRs and main pushes, and requires a successful verification before deploying", () => {
-    expect(workflow.on).toEqual({ pull_request: null, push: { branches: ["main"] } });
+    expect(workflow.on.push).toEqual({ branches: ["main"] });
+    expect(workflow.on).toHaveProperty("pull_request");
+    expect(workflow.on.schedule).toEqual([{ cron: "17 * * * *" }]);
     expect(workflow.jobs.verify.steps.some((step: { run?: string }) => step.run === "./scripts/verify")).toBe(true);
     expect(workflow.jobs.deploy.needs).toBe("verify");
     for (const job of Object.values(workflow.jobs)) {
@@ -17,7 +19,7 @@ describe("delivery gate", () => {
       CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
       CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}",
     });
-    expect(workflow.jobs.deploy.if).toBe("github.event_name == 'push' && github.ref == 'refs/heads/main'");
+    expect(workflow.jobs.deploy.if).toBe("(github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'");
     for (const step of workflow.jobs.verify.steps) expect(step["continue-on-error"]).toBeUndefined();
     expect(workflow.jobs.verify["continue-on-error"]).toBeUndefined();
     expect(JSON.stringify(workflow.jobs.verify)).not.toContain("CLOUDFLARE_API_TOKEN");
@@ -35,7 +37,8 @@ describe("delivery gate", () => {
     const config = JSON.parse(readFileSync("build/wrangler.json", "utf8"));
     expect(config.no_bundle).toBe(true);
     expect(config.assets.directory).toBe("web");
-    expect(config.d1_databases).toBeUndefined();
+    expect(config.durable_objects.bindings).toEqual([{ name: "ORGANIZATIONS", class_name: "OrganizationStore" }]);
+    expect(config.migrations).toEqual([{ tag: "v1", new_sqlite_classes: ["OrganizationStore"] }]);
     expect(config.r2_buckets).toBeUndefined();
   });
   it("reports deployment status with the repository token and maps demo to Jira testing", () => {
