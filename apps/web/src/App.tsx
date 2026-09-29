@@ -1,36 +1,21 @@
 import { useEffect, useState } from "react";
-import type { HealthResponse, VersionResponse } from "@happy-learners/contracts";
+import type { FormEvent } from "react";
+import type { CatalogResponse, Lesson, Resource, Skill } from "@happy-learners/contracts";
+
+const skills: Skill[] = ["lectura", "escritura", "escucha", "conversación"];
+async function api(path: string, options?: RequestInit) { const response = await fetch(`/api${path}`, { ...options, headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) } }); const data = await response.json(); if (!response.ok) throw new Error(data.error ?? "No se pudo completar la acción"); return data; }
+const empty = { title: "", description: "", level: "Inicial", skill: "lectura" as Skill, topic: "", tags: "", content: "" };
 
 export function App() {
-  const [sha, setSha] = useState<string>();
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
-    let active = true;
-    async function load() {
-      try {
-        const options = { signal: controller.signal, cache: "no-store" as const };
-        const [health, version] = await Promise.all([
-          fetch("/api/health", options), fetch("/api/version", options),
-        ]);
-        if (!health.ok || !version.ok) throw new Error("Unavailable");
-        const healthData: HealthResponse = await health.json();
-        const versionData: VersionResponse = await version.json();
-        if (healthData.status !== "ok" || !/^[a-f0-9]{40}$/.test(versionData.sha)) {
-          throw new Error("Invalid response");
-        }
-        if (active) setSha(versionData.sha);
-      } catch {
-        if (active) setFailed(true);
-      } finally { clearTimeout(timer); }
-    }
-    void load();
-    return () => { active = false; clearTimeout(timer); controller.abort(); };
-  }, []);
-  return <main>
-    <h1>Happy Learners</h1>
-    <p role="status">{failed ? "No pudimos comprobar la disponibilidad. Intenta recargar la página." : sha ? "Happy Learners está disponible." : "Comprobando disponibilidad…"}</p>
-    {sha && <p>Versión desplegada: <code>{sha}</code></p>}
-  </main>;
+  const [session, setSession] = useState(false); const [code, setCode] = useState(""); const [error, setError] = useState(""); const [catalog, setCatalog] = useState<CatalogResponse>({ resources: [], lessons: [] }); const [query, setQuery] = useState(""); const [view, setView] = useState<"resources" | "lessons" | "student">("resources"); const [selected, setSelected] = useState<string[]>([]); const [message, setMessage] = useState(""); const [form, setForm] = useState(empty); const publicCode = new URLSearchParams(location.search).get("lesson");
+  const load = async () => setCatalog(await api("/state")); useEffect(() => { void load(); }, []);
+  async function login(event: FormEvent) { event.preventDefault(); try { await api("/login", { method: "POST", body: JSON.stringify({ code }) }); setSession(true); setError(""); } catch (e) { setError((e as Error).message); } }
+  async function addResource(event: FormEvent) { event.preventDefault(); try { await api("/resource", { method: "POST", body: JSON.stringify({ ...form, tags: form.tags.split(",").map(x => x.trim()).filter(Boolean), status: "borrador" }) }); setForm(empty); setMessage("Recurso guardado como borrador."); await load(); } catch (e) { setError((e as Error).message); } }
+  async function createLesson() { if (!selected.length) return setError("Selecciona al menos un recurso."); try { await api("/lesson", { method: "POST", body: JSON.stringify({ title: "Lección de demostración", objective: "Practicar vocabulario en contexto.", instructions: "Lee el material y conversa con otra persona.", resourceIds: selected }) }); setSelected([]); setMessage("Lección creada. Puedes publicarla desde la lista."); await load(); } catch (e) { setError((e as Error).message); } }
+  const filtered = catalog.resources.filter(r => `${r.title} ${r.description} ${r.topic} ${r.tags.join(" ")}`.toLowerCase().includes(query.toLowerCase()));
+  if (!session && publicCode) return <main className="shell"><Student lesson={catalog.lessons.find(l => l.shareCode === publicCode && l.published)} onBack={() => { location.href = "/"; }} /></main>;
+  if (!session) return <main className="shell"><header><span className="eyebrow">SAN GASPAR · INGLÉS</span><h1>Materiales claros para enseñar mejor.</h1><p className="lead">Organiza recursos y comparte lecciones sencillas con tu equipo.</p></header><form className="card login" onSubmit={login}><h2>Entrar como educador</h2><label>Código de demostración<input aria-label="Código" value={code} onChange={e => setCode(e.target.value)} placeholder="san-gaspar" /></label><button>Entrar</button>{error && <p className="error" role="alert">{error}</p>}<small>Para esta demostración usa: <code>san-gaspar</code></small></form></main>;
+  return <main className="shell"><header className="top"><div><span className="eyebrow">HAPPY LEARNERS</span><h1>Biblioteca de enseñanza</h1><p className="lead">Crea, organiza y comparte materiales para las clases de inglés.</p></div><button className="secondary" onClick={() => setView("student")}>Ver como estudiante</button></header><nav className="tabs"><button className={view === "resources" ? "active" : ""} onClick={() => setView("resources")}>Recursos</button><button className={view === "lessons" ? "active" : ""} onClick={() => setView("lessons")}>Lecciones</button></nav>{message && <p className="notice">{message}</p>}{error && <p className="error" role="alert">{error}</p>}{view === "resources" && <section><div className="section-head"><div><h2>Recursos</h2><p>Encuentra materiales por tema, nivel o habilidad.</p></div><input aria-label="Buscar recursos" placeholder="Buscar recursos" value={query} onChange={e => setQuery(e.target.value)} /></div><div className="grid">{filtered.map(resource => <ResourceCard key={resource.id} resource={resource} selected={selected.includes(resource.id)} toggle={() => setSelected(selected.includes(resource.id) ? selected.filter(id => id !== resource.id) : [...selected, resource.id])} />)}</div><form className="card form" onSubmit={addResource}><h2>Registrar recurso</h2><div className="form-grid"><label>Título<input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></label><label>Nivel<select value={form.level} onChange={e => setForm({ ...form, level: e.target.value })}><option>Inicial</option><option>Básico</option><option>Intermedio</option></select></label><label>Habilidad<select value={form.skill} onChange={e => setForm({ ...form, skill: e.target.value as Skill })}>{skills.map(skill => <option key={skill}>{skill}</option>)}</select></label><label>Tema<input required value={form.topic} onChange={e => setForm({ ...form, topic: e.target.value })} /></label><label className="wide">Descripción breve<input required value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></label><label className="wide">Etiquetas<input placeholder="vocabulario, rutina" value={form.tags} onChange={e => setForm({ ...form, tags: e.target.value })} /></label><label className="wide">Contenido o enlace<textarea required value={form.content} onChange={e => setForm({ ...form, content: e.target.value })} /></label></div><button>Guardar borrador</button></form></section>}{view === "lessons" && <section><div className="section-head"><div><h2>Lecciones</h2><p>Combina recursos y publica una actividad para el grupo.</p></div><button onClick={createLesson}>Crear con selección ({selected.length})</button></div><div className="grid">{catalog.lessons.map(lesson => <article className="card lesson" key={lesson.id}><span className={lesson.published ? "published" : "draft"}>{lesson.published ? "Publicada" : "Borrador"}</span><h3>{lesson.title}</h3><p>{lesson.objective}</p><small>{lesson.resourceIds.length} recurso(s) · {lesson.completedCount} finalizaciones</small>{!lesson.published && <button onClick={async () => { await api(`/lesson/${lesson.id}/publish`, { method: "POST" }); await load(); }}>Publicar lección</button>}{lesson.published && <p className="share">Código de acceso: <strong>{lesson.shareCode}</strong></p>}</article>)}</div></section>}{view === "student" && <Student lesson={catalog.lessons.find(l => l.published)} onBack={() => setView("resources")} />}</main>;
 }
+function ResourceCard({ resource, selected, toggle }: { resource: Resource; selected: boolean; toggle: () => void }) { return <article className="card resource"><div className="chips"><span>{resource.level}</span><span>{resource.skill}</span></div><h3>{resource.title}</h3><p>{resource.description}</p><small>{resource.topic} · {resource.tags.join(" · ")}</small><label className="check"><input type="checkbox" checked={selected} onChange={toggle} /> Añadir a una lección</label></article>; }
+function Student({ lesson, onBack }: { lesson?: Lesson; onBack: () => void }) { const [done, setDone] = useState(false); return <section className="student"><button className="secondary" onClick={onBack}>← Volver al espacio del educador</button><div className="student-card"><span className="eyebrow">ACTIVIDAD</span><h2>{lesson?.title ?? "No hay una lección publicada"}</h2>{lesson && <><p className="lead">{lesson.objective}</p><p>{lesson.instructions}</p><hr /><p>Lee cada material con calma y conversa sobre lo aprendido. No necesitamos tu nombre ni otros datos personales.</p><button disabled={done} onClick={async () => { await api(`/lesson/${lesson.id}/complete`, { method: "POST" }); setDone(true); }}>{done ? "Actividad completada" : "Marcar como completada"}</button></>}</div></section>; }

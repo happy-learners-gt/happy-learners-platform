@@ -1,6 +1,6 @@
 # Entrega de demostración — ST-043
 
-`wrangler.jsonc` configura `happy-learners-demo` con Workers Static Assets y destino `workers.dev`. `/api/*` pasa primero por el Worker; el resto sirve la web. No hay D1, R2, dominio personalizado ni credenciales en esta configuración.
+`wrangler.jsonc` configura `happy-learners-demo` con Workers Static Assets, un Durable Object SQLite (`AppState`) y destino `workers.dev`. `/api/*` pasa primero por el Worker; el resto sirve la web. El Durable Object conserva el catálogo, las lecciones y el conteo agregado de finalizaciones sin guardar nombres de estudiantes.
 
 ## Paquete verificado
 
