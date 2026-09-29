@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0 — 2026-09-29
+
+Primera versión utilizable para organizar materiales y preparar una clase.
+
+- Biblioteca persistente de recursos con título, descripción, nivel, habilidad, tema, etiquetas y contenido.
+- Creación de lecciones en borrador y publicación con código de acceso.
+- Consulta desde teléfono sin pedir datos personales al estudiante.
+- Registro únicamente agregado de finalizaciones.
+- Migración reversible `0002_catalog.sql`, aislamiento por organización y smoke test en producción.
+
 ## 0.1.0 — 2026-09-28
 
 Primer espacio funcional de Happy Learners para preparar una lección publicada desde escritorio o móvil.
