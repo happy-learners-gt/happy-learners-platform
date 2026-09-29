@@ -3,7 +3,7 @@ import { validActivities } from "@happy-learners/domain";
 import type { Database } from "./storage";
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
 type LessonRow = { id: string; content: string; published_content: string | null; unit_id: string; position: number; status: "draft" | "published"; archived: number; revision: number; draft_version: number; published_version: number; updated_at: string; completions: number };
-const lessonQuery = "SELECT l.*,(SELECT count(*) FROM lesson_completions c WHERE c.lesson_id=l.id) AS completions FROM lessons l JOIN programs p ON p.id=l.program_id WHERE p.organization_id=?";
+const lessonQuery = "SELECT l.*,(SELECT count(*) FROM lesson_completions c WHERE c.lesson_id=l.id) AS completions FROM lessons l JOIN programs p ON p.id=l.program_id JOIN units u ON u.id=l.unit_id JOIN levels lv ON lv.id=u.level_id WHERE p.organization_id=?";
 function lessonView(row: LessonRow, draft: boolean): Lesson {
   return { ...JSON.parse(draft ? row.content : row.published_content || row.content), unitId: row.unit_id, position: row.position, status: row.archived ? "archived" : row.status, revision: row.revision, draftVersion: row.draft_version, hasDraft: row.draft_version !== row.published_version, updatedAt: row.updated_at, completions: row.completions };
 }
@@ -17,7 +17,7 @@ export async function content(url: URL, method: string, input: unknown, current:
   if ((method !== "GET" || draft) && current.role !== "educator") return reply({ error: "Solo educadores pueden modificar contenido." }, 403);
   if (resourceRoute) {
     const list = await resources(db, current.organizationId);
-    if (method === "GET") return reply({ resources: list });
+    if (method === "GET") { const one = list.find(r => r.id === id); return id ? one ? reply({ resource: one }) : reply({ error: "Recurso no disponible." }, 404) : reply({ resources: list }); }
     if (method === "DELETE") return reply({ error: "Conserva los vínculos: archiva el recurso desde su formulario." }, 409);
     const old = list.find(r => r.id === id);
     if (id && !old) return reply({ error: "Recurso no disponible." }, 404);
@@ -40,7 +40,7 @@ export async function content(url: URL, method: string, input: unknown, current:
     else await db.prepare("INSERT INTO resources(title,description,level,skill,topic,tags,content,status,archived,kind,updated_at,id,organization_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(...values, rid, current.organizationId).run();
     return reply({ resource: (await resources(db, current.organizationId)).find(r => r.id === rid) }, id ? 200 : 201);
   }
-  const rows = (await db.prepare(lessonQuery + " ORDER BY l.position,l.id").bind(current.organizationId).all<LessonRow>()).results;
+  const rows = (await db.prepare(lessonQuery + " ORDER BY lv.position,u.position,l.position,l.id").bind(current.organizationId).all<LessonRow>()).results;
   if (id === "order" && method === "PUT") {
     const v = input as { unitId?: string; ids?: string[] } | null;
     const selected = rows.filter(r => r.unit_id === v?.unitId);
@@ -86,6 +86,12 @@ export async function content(url: URL, method: string, input: unknown, current:
     if (v.draftVersion !== row.draft_version) return reply({ error: "Hay cambios más recientes. Recarga antes de guardar." }, 409);
     const written = await db.prepare("UPDATE lessons SET content=?,unit_id=?,archived=?,draft_version=draft_version+1,updated_at=? WHERE id=? AND draft_version=? RETURNING id").bind(JSON.stringify(lesson), unit.id, v.status === "archived" ? 1 : 0, now, lid, row.draft_version).first();
     if (!written) return reply({ error: "Hay cambios más recientes. Recarga antes de guardar." }, 409);
+    if (unit.id !== row.unit_id) {
+      await db.batch([
+        db.prepare("UPDATE lessons SET position=? WHERE id=?").bind(rows.filter(r => r.unit_id === unit.id).length, lid),
+        ...rows.filter(r => r.unit_id === row.unit_id && r.id !== lid).sort((a, b) => a.position - b.position).map((r, position) => db.prepare("UPDATE lessons SET position=? WHERE id=?").bind(position, r.id)),
+      ]);
+    }
   } else {
     let program = await db.prepare("SELECT id FROM programs WHERE organization_id=? LIMIT 1").bind(current.organizationId).first<{ id: string }>();
     if (!program) { program = { id: `curriculum-${current.organizationId}` }; await db.prepare("INSERT OR IGNORE INTO programs VALUES (?,?,?)").bind(program.id, current.organizationId, "Happy Learners").run(); }
