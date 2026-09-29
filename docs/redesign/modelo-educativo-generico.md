@@ -177,7 +177,7 @@ En cursos libres sin evaluación, el recorrido puede acabar en «Completado», n
 stateDiagram-v2
   [*] --> Borrador
   Borrador --> En_revision: enviar
-  En_revision --> Cambios_solicitados: comentar
+  En_revision --> Cambios_solicitados: solicitar cambios
   Cambios_solicitados --> Borrador: editar
   En_revision --> Aprobada: aprobar versión concreta
   Aprobada --> Publicada: publicar
