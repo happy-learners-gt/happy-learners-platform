@@ -9,7 +9,8 @@ test("SPR-002: educator creates, edits, orders, publishes, shares and observes c
   await page.getByLabel("Usuario", { exact: true }).fill("educador-demo");
   await page.getByLabel("Contraseña", { exact: true }).fill("Aprender-2026!");
   await page.getByRole("button", { name: /Entrar a mi espacio/ }).click();
-  await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: "Biblioteca", exact: true }).click();
+  // Compatibility coverage: the new navigation begins with Courses.
+  await page.goto("/biblioteca");
   await expect(page.getByRole("button", { name: "Educadores", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Nuevo recurso" }).click();
   await page.getByLabel("Título del recurso").fill(`Hello ${suffix}`);
@@ -25,7 +26,7 @@ test("SPR-002: educator creates, edits, orders, publishes, shares and observes c
   await page.getByRole("button", { name: "Guardar recurso", exact: true }).click();
   await expect(page.getByText("Saludo editado y persistente.")).toBeVisible();
   await page.screenshot({ path: `${folder}/s2-resources.png`, fullPage: true });
-  await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: "Contenido", exact: true }).click();
+  await page.goto("/contenido");
   await page.getByRole("button", { name: "Nuevo nivel", exact: true }).click();
   await page.getByLabel("Nombre del nivel").fill(`Beginner ${suffix}`);
   await page.getByLabel("Descripción del nivel").fill("Primeros saludos en inglés.");
@@ -41,6 +42,7 @@ test("SPR-002: educator creates, edits, orders, publishes, shares and observes c
   await page.getByLabel("Título de la lección").fill(`Greetings ${suffix}`);
   await page.getByLabel("Objetivo de la lección").fill("Usar Hello! para saludar.");
   await page.getByLabel("Módulo de la lección").selectOption({ label: `Greetings ${suffix}` });
+  await page.locator("fieldset.activity-editor").first().getByLabel("Instrucciones de actividad").fill("Saluda y practica con un personaje ficticio.");
   await page.getByRole("button", { name: "Agregar actividad", exact: true }).click();
   let activity = page.locator("fieldset.activity-editor").nth(1);
   await activity.getByLabel("Tipo de actividad").selectOption("resource");
@@ -52,6 +54,7 @@ test("SPR-002: educator creates, edits, orders, publishes, shares and observes c
   await activity.getByLabel("Tipo de actividad").selectOption("question");
   await activity.getByLabel("Título de actividad").fill("Elige el saludo");
   await activity.getByLabel("Instrucciones de actividad").fill("¿Cómo saludas?");
+  await activity.getByLabel("Opciones (una por línea)").fill("Hello!\nGoodbye!");
   await page.getByRole("button", { name: "Subir actividad 3", exact: true }).click();
   await expect(page.locator("fieldset.activity-editor").nth(1).getByLabel("Título de actividad")).toHaveValue("Elige el saludo");
   await page.getByRole("button", { name: "Guardar borrador", exact: true }).click();
@@ -79,7 +82,7 @@ test("SPR-002: educator creates, edits, orders, publishes, shares and observes c
   await student.screenshot({ path: `${folder}/s2-student.png`, fullPage: true });
   await student.close();
   await page.reload();
-  await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: "Contenido", exact: true }).click();
+  await page.goto("/contenido");
   await page.getByRole("link", { name: "Lecciones", exact: true }).click();
   const card = page.locator("article.editor-card").filter({ has: page.getByRole("heading", { name: `Greetings ${suffix}`, exact: true }) });
   await expect(card).toContainText("1 finalizaciones");
