@@ -18,6 +18,7 @@
     "dev": "npm run build && wrangler dev --local --config build/wrangler.json",
     "verify": "./scripts/verify",
     "test:e2e": "playwright test",
+    "test:smoke": "E2E_SUITE=smoke playwright test",
     "test:critical": "node scripts/critical-flows.mjs"
   },
   "devDependencies": {

@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./local-test";
 import { mkdir } from "node:fs/promises";
 
 test("Sprint 1: login, organization, mobile published lesson, privacy and logout", async ({ page, request }, info) => {
@@ -19,14 +19,15 @@ test("Sprint 1: login, organization, mobile published lesson, privacy and logout
   await page.getByLabel("Contraseña", { exact: true }).fill("Aprender-2026!");
   await page.getByRole("button", { name: /Entrar a mi espacio/ }).click();
   await expect(page.getByRole("button", { name: /Cerrar sesión/ })).toBeVisible();
-  await page.getByRole("navigation").getByRole("button", { name: "Organización" }).click();
+  await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: "Organización" }).click();
   await page.getByLabel("Nombre de la organización").fill("Jardín de Colores");
   await page.getByLabel("Zona horaria").selectOption("America/Guatemala");
   await page.getByRole("button", { name: "Guardar organización" }).click();
   await expect(page.getByRole("status")).toContainText("Organización guardada");
+  await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: "Inicio", exact: true }).click();
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Aprendamos algo nuevo." })).toBeVisible();
-  await page.getByRole("navigation").getByRole("button", { name: "Organización" }).click();
+  await expect(page.getByRole("heading", { name: "¿Qué vamos a enseñar hoy?" })).toBeVisible();
+  await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: "Organización" }).click();
   await expect(page.getByLabel("Nombre de la organización")).toHaveValue("Jardín de Colores");
   await page.screenshot({ path: `${folder}/02-organization.png`, fullPage: true });
   await page.getByRole("button", { name: /Cerrar sesión/ }).click();
@@ -34,10 +35,10 @@ test("Sprint 1: login, organization, mobile published lesson, privacy and logout
   await page.getByLabel("Usuario", { exact: true }).fill("instructor-demo");
   await page.getByLabel("Contraseña", { exact: true }).fill("Aprender-2026!");
   await page.getByRole("button", { name: /Entrar a mi espacio/ }).click();
-  await expect(page.getByRole("heading", { name: "Aprendamos algo nuevo." })).toBeVisible();
-  await expect(page.getByRole("navigation").getByRole("button", { name: "Organización" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "¿Qué vamos a enseñar hoy?" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: "Organización" })).toHaveCount(0);
   await page.screenshot({ path: `${folder}/03-workspace.png`, fullPage: true });
-  await page.locator("article").filter({ has: page.getByRole("heading", { name: "Un mundo de colores" }) }).getByRole("button", { name: /Abrir lección/ }).click();
+  await page.locator("article").filter({ has: page.getByRole("heading", { name: "Un mundo de colores" }) }).getByRole("link", { name: /Abrir lección/ }).click();
   await expect(page.getByRole("heading", { name: "Un mundo de colores" })).toBeVisible();
   await expect(page.getByText("Publicada · Solo lectura")).toBeVisible();
   await expect(page.getByRole("button", { name: /editar|guardar lección/i })).toHaveCount(0);
@@ -45,7 +46,7 @@ test("Sprint 1: login, organization, mobile published lesson, privacy and logout
   await expect(page.getByRole("status")).toContainText("1 de 3 materiales listos");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: `${folder}/04-lesson.png`, fullPage: true });
-  await page.getByRole("navigation").getByRole("button", { name: "Ayuda y privacidad" }).click();
+  await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: "Ayuda y privacidad" }).click();
   await expect(page.getByRole("heading", { name: "Ayuda y privacidad" })).toBeVisible();
   await page.screenshot({ path: `${folder}/05-privacy.png`, fullPage: true });
   await page.getByRole("button", { name: /Cerrar sesión/ }).click();
