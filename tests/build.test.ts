@@ -199,6 +199,9 @@ it("HL-23–29 editing, republication, ordered activities, links, archive and ag
   expect((await requestAs(educator, `/lessons/${lesson.id}/publish`, "POST")).status).toBe(200);
   const publicAfter = (await (await requestAs("", `/share/${lesson.shareCode}`)).json()).lesson;
   expect(publicAfter.revision).toBe(2); expect(publicAfter.title).toBe("New revision"); expect(publicAfter.activities.map((a: { id: string }) => a.id)).toEqual(["c", "a", "b"]);
+  const shortened = reordered.slice(1).map((a, i) => ({ ...a, position: i, title: a.id === "a" ? "Edited instruction" : a.title }));
+  expect((await requestAs(educator, `/lessons/${lesson.id}`, "PUT", { ...data, activities: shortened, draftVersion: lesson.draftVersion })).status).toBe(200);
+  expect((await (await requestAs("", `/share/${lesson.shareCode}`)).json()).lesson.activities).toHaveLength(3);
   expect((await requestAs(educator, `/resources/${resource.id}`, "DELETE")).status).toBe(409);
   expect((await requestAs(educator, `/resources/${resource.id}`, "PUT", { ...value, status: "archived" })).status).toBe(200);
   expect((await (await requestAs("", `/share/${lesson.shareCode}`)).json()).lesson.resources[0].title).toBe("Edited greeting");
@@ -206,7 +209,8 @@ it("HL-23–29 editing, republication, ordered activities, links, archive and ag
   const cookie = completion.headers.get("set-cookie")!.split(";")[0];
   await requestAs(cookie, `/share/${lesson.shareCode}/complete`, "POST");
   const persisted = (await (await requestAs(await login("educador-demo"), `/lessons/${lesson.id}?draft=1`)).json()).lesson;
-  expect(persisted.completions).toBe(1); expect(persisted.activities.map((a: { position: number }) => a.position)).toEqual([0, 1, 2]);
+  expect(persisted.completions).toBe(1); expect(persisted.activities.map((a: { position: number }) => a.position)).toEqual([0, 1]);
+  expect(persisted.activities[0].title).toBe("Edited instruction");
   const outsider = await login("externo-demo");
   expect((await requestAs(outsider, `/lessons/${lesson.id}?draft=1`)).status).toBe(404);
   expect((await requestAs(outsider, `/resources/${resource.id}`, "PUT", value)).status).toBe(404);
