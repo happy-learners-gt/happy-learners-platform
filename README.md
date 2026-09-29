@@ -1,8 +1,8 @@
 # Happy Learners Platform
 
-Aplicación para preparar y compartir lecciones de inglés. Incluye acceso del equipo, biblioteca de recursos, niveles y módulos, edición de lecciones, publicación por enlace y finalización agregada. Los estudiantes no necesitan una cuenta.
+Aplicación para preparar cursos y compartir lecciones de distintas disciplinas. Cada curso reúne sus unidades de aprendizaje, materiales y lecciones. Las clasificaciones son configurables y opcionales. Los estudiantes abren las publicaciones sin cuenta.
 
-La revisión pedagógica del rediseño está aprobada. Consulta la [primera entrega de implementación](docs/redesign/README.md), su alcance y lo que sigue pendiente.
+La implementación del modelo genérico está aprobada. Consulta la [entrega de cursos](docs/redesign/cursos-implementacion.md), los [diagramas de base de datos](docs/redesign/base-de-datos.md) y el [diseño completo](docs/redesign/modelo-educativo-generico.md). El diseño distingue las capacidades implementadas de programas, requisitos y coedición, que siguen pendientes.
 
 ## Desarrollo local
 

@@ -2,7 +2,7 @@
 
 Revisión de producto y UX · 29 de septiembre de 2026
 
-**Estado:** diseño para la siguiente implementación. No describe funcionalidades ya desplegadas. Esta revisión sustituye la jerarquía obligatoria «Nivel → Módulo → Lección» y el enfoque de una biblioteca de recursos de inglés. Conserva la aprobación pedagógica del contenido existente como un ejemplo de uso, no como definición del producto.
+**Estado:** diseño aprobado por el usuario. La [primera implementación](cursos-implementacion.md) cubre cursos, unidades de aprendizaje, materiales, clasificaciones y navegación contextual. Los [diagramas de base de datos](base-de-datos.md) separan el esquema implementado del modelo objetivo. El resto de esta propuesta no debe interpretarse como funcionalidades ya disponibles. Sustituye la jerarquía obligatoria «Nivel → Módulo → Lección» y conserva el inglés como un ejemplo de uso, no como definición del producto.
 
 [Abrir los wireframes navegables](prototipo-cursos.html). Las pantallas ilustran la propuesta; no guardan datos ni simulan una conexión con producción.
 
@@ -12,7 +12,7 @@ Organizar, preparar, impartir y evaluar experiencias educativas de distintas dis
 
 El inglés de San Gaspar es un caso de uso. No determina los tipos, jerarquías, vocabularios ni reglas del núcleo.
 
-### Qué confirma el código actual
+### Restricciones observadas antes de esta implementación
 
 - `ResourceSkill` fija cuatro habilidades lingüísticas en `packages/contracts/src/index.ts`. La API también rechaza otros valores en `apps/api/src/content.ts`.
 - La migración `0004_curriculum.sql` crea «Beginner» y «Greetings» para cada organización.
