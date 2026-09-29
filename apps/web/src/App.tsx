@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { Lesson, Member, Organization } from "@happy-learners/contracts";
+import type { Lesson, Member, Organization, Resource } from "@happy-learners/contracts";
 
 class ApiError extends Error { constructor(message: string, public status: number) { super(message); } }
 async function api<T>(path: string, method = "GET", data?: unknown): Promise<T> {
@@ -18,6 +18,7 @@ export function App() {
   const [member, setMember] = useState<Member | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [resources, setResources] = useState<Resource[]>([]);
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [page, setPage] = useState("home");
   const [loading, setLoading] = useState(true);
@@ -31,8 +32,8 @@ export function App() {
   const [prepared, setPrepared] = useState<string[]>([]);
   async function refresh() {
     const session = await api<{ member: Member }>("/session");
-    const [org, catalog] = await Promise.all([api<{ organization: Organization }>("/organization"), api<{ lessons: Lesson[] }>("/lessons")]);
-    setMember(session.member); setOrganization(org.organization); setLessons(catalog.lessons);
+    const [org, catalog, library] = await Promise.all([api<{ organization: Organization }>("/organization"), api<{ lessons: Lesson[] }>("/lessons"), api<{ resources: Resource[] }>("/resources")]);
+    setMember(session.member); setOrganization(org.organization); setLessons(catalog.lessons); setResources(library.resources);
     setName(org.organization.name || ""); setTimezone(org.organization.timezone);
     if (!org.organization.configured && session.member.role === "admin") setPage("organization");
   }
@@ -41,7 +42,7 @@ export function App() {
     setBusy(true); setError(""); setNotice("");
     try { await work(); }
     catch (e) {
-      if (e instanceof ApiError && e.status === 401 && member) { setMember(null); setLesson(null); setOrganization(null); setLessons([]); setPrepared([]); setPage("home"); }
+      if (e instanceof ApiError && e.status === 401 && member) { setMember(null); setLesson(null); setOrganization(null); setLessons([]); setResources([]); setPrepared([]); setPage("home"); }
       setError(e instanceof Error ? e.message : "Vuelve a intentar.");
     } finally { setBusy(false); }
   }
@@ -52,7 +53,7 @@ export function App() {
   if (loading) return <main className="loading"><Mark/><p role="status">Preparando tu espacio…</p></main>;
   return <div className={member ? "app-shell" : "login-shell"}>
     <a className="skip-link" href="#main">Saltar al contenido</a>
-    <header className="topbar"><a href="#" className="brand" onClick={e => { e.preventDefault(); navigate("home"); }}><Mark/><span>Happy Learners</span></a><span className="demo-tag">Espacio de demostración</span>{member && <button className="text-button logout" disabled={busy} onClick={() => void action(async () => { await api("/logout", "POST"); setMember(null); setOrganization(null); setLessons([]); setLesson(null); setPrepared([]); setPage("home"); setNotice("Sesión cerrada de forma segura."); })}>Cerrar sesión <span aria-hidden="true">↗</span></button>}</header>
+    <header className="topbar"><a href="#" className="brand" onClick={e => { e.preventDefault(); navigate("home"); }}><Mark/><span>Happy Learners</span></a><span className="demo-tag">Espacio de demostración</span>{member && <button className="text-button logout" disabled={busy} onClick={() => void action(async () => { await api("/logout", "POST"); setMember(null); setOrganization(null); setLessons([]); setResources([]); setLesson(null); setPrepared([]); setPage("home"); setNotice("Sesión cerrada de forma segura."); })}>Cerrar sesión <span aria-hidden="true">↗</span></button>}</header>
     {member && <aside className="sidebar"><p className="eyebrow">TU ESPACIO</p><strong>{organization?.name || "Organización inicial"}</strong><nav aria-label="Navegación principal"><button className={page === "home" ? "active" : ""} onClick={() => navigate("home")}><span aria-hidden="true">⌂</span> Inicio</button><button className={page === "lesson" || page === "lessons" ? "active" : ""} onClick={() => navigate("lessons")}><span aria-hidden="true">▤</span> Mis lecciones</button>{member.role === "admin" && <button className={page === "organization" ? "active" : ""} onClick={() => navigate("organization")}><span aria-hidden="true">⚙</span> Organización</button>}<button className={page === "help" ? "active" : ""} onClick={() => navigate("help")}><span aria-hidden="true">?</span> Ayuda y privacidad</button></nav><div className="member-card"><span className="avatar">{member.role === "admin" ? "A" : "I"}</span><div><strong>{member.role === "admin" ? "Administración" : "Instructor"}</strong><small>Cuenta ficticia · {member.username}</small></div></div></aside>}
     <main id="main" className={member ? "workspace" : "login-main"}>
       {error && <div className="alert error" role="alert">{error} <button className="text-button" disabled={busy} onClick={() => void action(refresh)}>Volver a intentar</button></div>}
