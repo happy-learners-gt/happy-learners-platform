@@ -5,11 +5,12 @@ import rolesMigration from "../../../database/migrations/0003_roles.sql";
 import curriculumMigration from "../../../database/migrations/0004_curriculum.sql";
 import editingMigration from "../../../database/migrations/0005_editing.sql";
 import greetingsMigration from "../../../database/migrations/0006_greetings_seed.sql";
+import coursesMigration from "../../../database/migrations/0007_courses.sql";
 
 type Statement = { sql: string; values: (string | number | null)[] };
 // One SQLite object per organization; only the Worker holds this binding.
 export class OrganizationStore extends DurableObject<Env> {
-  async query(scope: string, statements: Statement[]): Promise<Record<string, unknown>[][]> {
+  async query(scope: string, statements: Statement[], guard?: Statement): Promise<Record<string, SqlStorageValue>[][]> {
     if (!["org-demo", "org-other"].includes(scope)) throw new Error("Invalid organization");
     return this.ctx.storage.transactionSync(() => {
       this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, organization_id TEXT NOT NULL)");
@@ -30,6 +31,9 @@ export class OrganizationStore extends DurableObject<Env> {
       if (!applied.length || applied[0].version < 4) { this.ctx.storage.sql.exec(curriculumMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (4,?)", scope); }
       if (!applied.length || applied[0].version < 5) { this.ctx.storage.sql.exec(editingMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (5,?)", scope); }
       if (!applied.length || applied[0].version < 6) { this.ctx.storage.sql.exec(greetingsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (6,?)", scope); }
+      if (!applied.length || applied[0].version < 7) { this.ctx.storage.sql.exec(coursesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (7,?)", scope); }
+      // Compare-and-write plus dependent writes belong to one SQLite transaction.
+      if (guard && !this.ctx.storage.sql.exec(guard.sql, ...guard.values).toArray().length) return [];
       return statements.map(statement => this.ctx.storage.sql.exec(statement.sql, ...statement.values).toArray());
     });
   }
@@ -47,5 +51,9 @@ export class Database {
   prepare(sql: string) { return new Prepared(this, sql); }
   execute(statements: Prepared[]) { return this.stub.query(this.scope, statements.map(({ sql, values }) => ({ sql, values }))); }
   batch(statements: Prepared[]) { return this.execute(statements); }
+  async guardedBatch(guard: Prepared, statements: Prepared[]) {
+    const results = await this.stub.query(this.scope, statements.map(({ sql, values }) => ({ sql, values })), { sql: guard.sql, values: guard.values });
+    return results.length > 0;
+  }
 }
 export function database(env: Env, scope: string) { return new Database(env.ORGANIZATIONS.getByName(scope), scope); }

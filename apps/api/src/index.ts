@@ -8,6 +8,7 @@ import { cookie, digest, newToken, sessionToken, verifyPassword } from "./auth";
 import { roles } from "./roles";
 import { curriculum } from "./curriculum";
 import { content, shared } from "./content";
+import { courses, taxonomy } from "./courses";
 
 const headers = {
   "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer",
@@ -44,7 +45,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     for (const [name, value] of Object.entries(headers)) result.headers.set(name, value);
     return result;
   }
-  const input = (["POST", "PUT"].includes(method) && /^\/api\/(login|organization|members|levels|units|resources|lessons)(\/[a-z0-9-]+)?$/.test(path))
+  const input = (["POST", "PUT"].includes(method) && /^\/api\/(login|organization|members|levels|units|resources|lessons|courses|vocabularies|terms)(\/[a-z0-9-]+){0,3}$/.test(path) && !path.endsWith("/publish"))
     ? await body(request) : undefined;
   let scope = sessionToken(request)?.startsWith("o_") ? "org-other" : "org-demo";
   if (path.startsWith("/api/share/")) scope = path.split("/")[3].startsWith("O-") ? "org-other" : "org-demo";
@@ -59,6 +60,13 @@ async function route(request: Request, env: Env): Promise<Response> {
     return method === "HEAD" ? new Response(null, { headers }) : json(path === "/api/health" ? { status: "ok" } : { sha });
   }
   const methods: Record<string, string[]> = { "/api/session": ["GET"], "/api/login": ["POST"], "/api/logout": ["POST"], "/api/organization": ["GET", "PUT"], "/api/resources": ["GET", "POST"], "/api/lessons": ["GET", "POST"] };
+  if (/^\/api\/courses$/.test(path)) methods[path] = ["GET", "POST"];
+  if (/^\/api\/courses\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET", "PUT"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/(units|materials)$/.test(path)) methods[path] = ["GET", "POST"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/(units|materials)\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
+  if (path === "/api/taxonomy") methods[path] = ["GET"];
+  if (/^\/api\/(vocabularies|terms)$/.test(path)) methods[path] = ["POST"];
+  if (/^\/api\/(vocabularies|terms)\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
   const allowed = methods[path] || (path === "/api/curriculum" ? ["GET"] : /^\/api\/(levels|units)$/.test(path) ? ["POST"] : /^\/api\/(levels|units)\/[a-z0-9-]+$/.test(path) ? ["PUT"] : path === "/api/members" ? ["GET"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/(lessons|resources)\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/publish$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : null);
   if (!allowed) return json({ error: "Not found" }, 404);
   if (!allowed.includes(method)) return json({ error: "Method not allowed" }, 405, { Allow: allowed.join(", ") });
@@ -96,6 +104,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   const current = await member(request, db);
   if (!current) return json({ error: "Inicia sesión para continuar." }, 401);
   if (path === "/api/session") return json({ member: current });
+  if (/^\/api\/(taxonomy|vocabularies|terms)(\/|$)/.test(path)) return taxonomy(path, method, input, current, db);
+  if (/^\/api\/courses(\/|$)/.test(path)) return courses(path, method, input, current, db);
   if (path.startsWith("/api/members")) return roles(path, method, input, current, db);
   if (/^\/api\/(curriculum|levels|units)(\/|$)/.test(path)) return curriculum(path, method, input, current, db);
   if (!["GET", "HEAD"].includes(method) && path !== "/api/organization" && current.role !== "educator") return json({ error: "Solo educadores pueden modificar contenido." }, 403);

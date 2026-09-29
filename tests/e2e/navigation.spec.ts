@@ -23,7 +23,8 @@ test("HL-44: one navigation, spaced cards, deep links, filters and keyboard focu
   const folder = `.release-evidence/screenshots/${info.project.name}`;
   await mkdir(folder, { recursive: true });
   await page.screenshot({ path: `${folder}/redesign-home.png`, fullPage: true });
-  await nav.getByRole("link", { name: "Biblioteca", exact: true }).click();
+  await nav.getByRole("link", { name: "Cursos", exact: true }).click();
+  await page.getByRole("link", { name: "Consultar recursos heredados" }).click();
   await expect(page).toHaveURL(/\/biblioteca$/);
   await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
   await expect(page.getByRole("button", { name: "Nuevo recurso" })).toBeEnabled();
@@ -35,14 +36,14 @@ test("HL-44: one navigation, spaced cards, deep links, filters and keyboard focu
   await page.reload();
   await expect(page.getByLabel("Buscar recursos")).toHaveValue("Hello");
   await expect(page.getByLabel("Filtrar por habilidad")).toHaveValue("lectura");
-  await nav.getByRole("link", { name: "Contenido", exact: true }).click();
-  await expect(page).toHaveURL(/\/contenido$/);
+  await nav.getByRole("link", { name: "Cursos", exact: true }).click();
+  await expect(page).toHaveURL(/\/cursos$/);
   await page.goBack();
   await expect(page.getByLabel("Buscar recursos")).toHaveValue("Hello");
   await page.goForward();
-  await expect(page.getByRole("heading", { name: "Niveles y módulos", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Cursos", exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Niveles y módulos", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Cursos", exact: true })).toBeVisible();
   await expect(nav).toHaveCount(1);
   await page.screenshot({ path: `${folder}/redesign-content.png`, fullPage: true });
   if (info.project.name === "mobile") {
@@ -55,20 +56,22 @@ test("HL-44: one navigation, spaced cards, deep links, filters and keyboard focu
 
 test("HL-44: leaving dirty forms requires an explicit discard, including browser Back", async ({ page }) => {
   const nav = page.getByRole("navigation", { name: "Navegación principal" });
-  await nav.getByRole("link", { name: "Biblioteca", exact: true }).click();
+  await nav.getByRole("link", { name: "Cursos", exact: true }).click();
+  await page.getByRole("link", { name: "Consultar recursos heredados" }).click();
   await page.getByRole("button", { name: "Nuevo recurso" }).click();
   await page.getByLabel("Título del recurso").fill("Trabajo que no se debe perder");
   page.once("dialog", dialog => dialog.dismiss());
-  await nav.getByRole("link", { name: "Contenido", exact: true }).click();
+  await nav.getByRole("link", { name: "Cursos", exact: true }).click();
   await expect(page.getByLabel("Título del recurso")).toHaveValue("Trabajo que no se debe perder");
   page.once("dialog", dialog => dialog.dismiss());
   await page.evaluate(() => history.back());
   await expect(page).toHaveURL(/\/biblioteca$/);
   await expect(page.getByLabel("Título del recurso")).toHaveValue("Trabajo que no se debe perder");
   page.once("dialog", dialog => dialog.accept());
-  await nav.getByRole("link", { name: "Contenido", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Niveles y módulos", exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "Lecciones", exact: true }).click();
+  await nav.getByRole("link", { name: "Cursos", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Cursos", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Abrir curso: Exploradores", exact: true }).click();
+  await page.getByRole("navigation", { name: "Navegación del curso" }).getByRole("link", { name: "Lecciones", exact: true }).click();
   await page.getByRole("button", { name: "Nueva lección", exact: true }).click();
   await page.getByRole("button", { name: "Agregar actividad", exact: true }).click();
   // An unrelated order save must not mark the open lesson draft as saved.

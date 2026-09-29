@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { Lesson, Member, Organization } from "@happy-learners/contracts";
 import { Workspace, PublicLesson } from "./Workspace";
+import { Courses, Taxonomies } from "./Courses";
 import { api, ApiError } from "./api";
 import { Link, NavigationProvider, useNavigation, useUnsavedChanges } from "./navigation";
 
@@ -67,15 +68,14 @@ function AuthenticatedApp() {
   const editor = member?.role === "educator";
   const links = [
     { href: "/inicio", title: "Inicio", icon: "⌂", active: home },
-    { href: "/contenido", title: "Contenido", icon: "▤", active: content },
-    { href: "/biblioteca", title: "Biblioteca", icon: "▧", active: path === "/biblioteca" },
-    ...(admin ? [{ href: "/organizacion", title: "Organización", icon: "⚙", active: path === "/organizacion" }, { href: "/educadores", title: "Educadores", icon: "♧", active: path === "/educadores" }] : []),
+    { href: "/cursos", title: "Cursos", icon: "▤", active: path.startsWith("/cursos") },
+    ...(admin ? [{ href: "/organizacion", title: "Organización", icon: "⚙", active: path === "/organizacion" }, { href: "/educadores", title: "Educadores", icon: "♧", active: path === "/educadores" }, { href: "/clasificaciones", title: "Clasificaciones", icon: "▧", active: path === "/clasificaciones" }] : []),
     { href: "/ayuda", title: "Ayuda y privacidad", icon: "?", active: path === "/ayuda" },
   ];
   const detailId = path.startsWith("/contenido/publicadas/") ? path.slice("/contenido/publicadas/".length) : "";
   const catalog = path === "/contenido/publicadas" || (path === "/contenido" && admin);
   const section = path === "/biblioteca" ? "resources" : path === "/educadores" && admin ? "members" : path === "/contenido/lecciones" && editor ? "lessons" : path === "/contenido" && editor ? "curriculum" : null;
-  const known = home || catalog || detailId || section || path === "/ayuda" || (path === "/organizacion" && admin);
+  const known = path.startsWith("/cursos") || (path === "/clasificaciones" && admin) || home || catalog || detailId || section || path === "/ayuda" || (path === "/organizacion" && admin);
   return <div className={member ? "app-shell" : "login-shell"}>
     <a className="skip-link" href="#main">Saltar al contenido</a>
     <header className="topbar"><Link href="/inicio" className="brand"><Mark/><span>Happy Learners</span></Link><span className="demo-tag">Demo compartida</span>{member && <button className="text-button logout" disabled={busy} onClick={logout}>Cerrar sesión</button>}</header>
@@ -84,26 +84,28 @@ function AuthenticatedApp() {
       {error && <div className="alert error" role="alert">{error} <button className="text-button" disabled={busy} onClick={() => void action(refresh)}>Volver a intentar</button></div>}
       {notice && <div className="alert success" role="status">{notice}</div>}
       {!member ? <>
-        <section className="welcome"><span className="eyebrow">Inglés para aprender juntos</span><h1>Una clase bien preparada<br/>empieza aquí.</h1><p>Organiza tus materiales, prepara lecciones y compártelas con un enlace. Los estudiantes no necesitan una cuenta.</p><div className="welcome-example" aria-hidden="true"><span className="eyebrow">Preparar · Compartir · Enseñar</span><h2>Más tiempo para acompañar.</h2><p>El objetivo, las actividades y los recursos en un mismo lugar.</p></div><p className="privacy-note">Sin expedientes ni datos personales de niños.</p></section>
+        <section className="welcome"><span className="eyebrow">Un espacio para aprender juntos</span><h1>Una clase bien preparada<br/>empieza aquí.</h1><p>Organiza tus materiales, prepara lecciones y compártelas con un enlace. Los estudiantes no necesitan una cuenta.</p><div className="welcome-example" aria-hidden="true"><span className="eyebrow">Preparar · Compartir · Enseñar</span><h2>Más tiempo para acompañar.</h2><p>El objetivo, las actividades y los recursos en un mismo lugar.</p></div><p className="privacy-note">Sin expedientes ni datos personales de niños.</p></section>
         <section className="login-card"><h2>Iniciar sesión</h2><p>Para educadores y administradores.</p><form onSubmit={login}><label htmlFor="username">Usuario</label><input id="username" autoComplete="username" maxLength={64} value={username} onChange={e => setUsername(e.target.value)} required/><label htmlFor="password">Contraseña</label><input id="password" type="password" autoComplete="current-password" maxLength={128} value={password} onChange={e => setPassword(e.target.value)} required/><button className="primary full" disabled={busy}>{busy ? "Entrando…" : "Entrar a mi espacio"}</button></form><details className="demo-help"><summary>Probar con datos ficticios</summary><p><code>educador-demo</code>: recursos y lecciones. <code>admin-demo</code>: organización y permisos.</p><p>Contraseña de demostración: <code>Aprender-2026!</code></p><p>Cuentas públicas y compartidas. No introduzcas información personal.</p></details></section>
         <form className="code-entry" action="/" method="get"><div><label htmlFor="lesson-code">¿Tienes un código de lección?</label><p>Ábrela sin iniciar sesión.</p></div><input id="lesson-code" name="code" required maxLength={40} placeholder="Código de lección"/><button className="secondary">Abrir con código</button></form>
       </> : <>
         {home && <>
-          <div className="page-heading"><div><span className="eyebrow">Tu espacio de trabajo</span><h1>¿Qué vamos a enseñar hoy?</h1><p>Encuentra una lección o continúa preparando contenido.</p></div><Link className="primary" href={editor ? "/contenido/lecciones" : "/educadores"}>{editor ? "Preparar una lección" : "Administrar educadores"}</Link></div>
+          <div className="page-heading"><div><span className="eyebrow">Tu espacio de trabajo</span><h1>¿Qué vamos a enseñar hoy?</h1><p>Encuentra una lección o continúa preparando contenido.</p></div><Link className="primary" href={editor ? "/cursos/nuevo" : "/educadores"}>{editor ? "Crear curso" : "Administrar educadores"}</Link></div>
           {!organization?.configured && <div className="alert">{admin ? <>Configura el nombre de tu organización. <Link href="/organizacion">Abrir configuración</Link></> : "Administración aún debe configurar la organización. Puedes consultar las lecciones disponibles."}</div>}
-          <section className="quick-actions" aria-label="Herramientas para preparar"><Link href="/contenido"><span className="action-icon" aria-hidden="true">▤</span><strong>Organizar contenido</strong><span>{editor ? "Niveles, módulos y lecciones" : "Consultar lecciones publicadas"}</span></Link><Link href="/biblioteca"><span className="action-icon" aria-hidden="true">▧</span><strong>Buscar un recurso</strong><span>Materiales para tus actividades</span></Link></section>
+          <section className="quick-actions" aria-label="Herramientas para preparar"><Link href="/cursos"><span className="action-icon" aria-hidden="true">▤</span><strong>Mis cursos</strong><span>Objetivos, secuencia y materiales</span></Link><Link href="/contenido/publicadas"><span className="action-icon" aria-hidden="true">▧</span><strong>Lecciones listas</strong><span>Abrir y compartir lo publicado</span></Link></section>
           <section aria-label="Lecciones publicadas"><div className="section-heading"><div><h2>Listo para enseñar</h2><p>Lecciones publicadas que puedes abrir ahora.</p></div><Link href="/contenido/publicadas">Ver todas</Link></div><LessonCards lessons={lessons.slice(0, 3)}/></section>
           <aside className="privacy-strip"><strong>Enseñar sin pedir datos de más</strong><p>Los estudiantes abren una lección sin cuenta. Solo se registra la finalización agregada.</p><Link href="/ayuda">Cómo cuidamos la privacidad</Link></aside>
         </>}
         {content && !detailId && <><div className="page-heading"><div><span className="eyebrow">Preparar y enseñar</span><h1>Contenido</h1><p>{editor ? "Organiza niveles y módulos. Prepara sus lecciones y consulta lo publicado." : "Consulta las lecciones que el equipo ha publicado."}</p></div></div><nav className="content-tabs" aria-label="Secciones de contenido">{editor && <><Link href="/contenido" aria-current={path === "/contenido" ? "page" : undefined}>Niveles y módulos</Link><Link href="/contenido/lecciones" aria-current={path === "/contenido/lecciones" ? "page" : undefined}>Lecciones</Link></>}<Link href="/contenido/publicadas" aria-current={catalog ? "page" : undefined}>Publicadas</Link></nav></>}
         {catalog && <section aria-label="Lecciones publicadas"><LessonCards lessons={lessons}/></section>}
+        {path.startsWith("/cursos") && <Courses member={member}/>}
+        {path === "/clasificaciones" && admin && <Taxonomies/>}
         {section && <Workspace key={path} member={member} section={section}/>}
         {detailId && <PublishedLesson key={detailId} id={detailId}/>}
         {path === "/organizacion" && admin && organization && <OrganizationForm organization={organization} saved={setOrganization}/>}
         {path === "/ayuda" && <Help/>}
         {!known && <section className="empty-state"><h1>No encontramos esta página</h1><p>El enlace puede haber cambiado o no estar disponible para tu cuenta.</p><Link className="primary" href="/inicio">Volver al inicio</Link></section>}
       </>}
-    </main><footer className="footer"><span>Happy Learners · San Gaspar</span><span>Demostración compartida · Sin datos personales de niños</span></footer>
+    </main><footer className="footer"><span>Happy Learners · Aprendizaje compartido</span><span>Demostración compartida · Sin datos personales de niños</span></footer>
   </div>;
 }
 
@@ -141,5 +143,5 @@ function PublishedLesson({ id }: { id: string }) {
 }
 
 function Help() {
-  return <section className="help-page"><span className="eyebrow">Acompañamiento</span><h1>Ayuda y privacidad</h1><h2>Prepara una clase</h2><ol><li>En Contenido, organiza un nivel y sus módulos.</li><li>Consulta Biblioteca para crear o encontrar recursos.</li><li>Prepara una lección con actividades y guarda el borrador.</li><li>Publica cuando esté lista y comparte su enlace o código.</li></ol><h2>Lo publicado no cambia al editar</h2><p>Los cambios posteriores quedan en borrador. Selecciona Republicar para actualizar lo que ve el estudiante.</p><h2>Datos que utilizamos</h2><p>Guardamos cuentas del equipo, permisos, organización, currículo, recursos, borradores, publicaciones y conteos agregados de finalización. La sesión dura hasta ocho horas y se revoca al cerrarla.</p><p>No guardamos perfiles de niños, fotografías, asistencia ni respuestas individuales. Una cookie evita contar de nuevo la misma finalización en este navegador durante 30 días. No usamos analítica publicitaria ni cookies de terceros.</p><h2>Demostración compartida</h2><p>Las cuentas son públicas: no introduzcas datos personales. Administración configura la organización y los permisos. Educadores preparan el contenido. Los estudiantes abren un enlace o código sin cuenta.</p><h2>Si algo no responde</h2><p>Comprueba la conexión y vuelve a intentar. Si tu sesión terminó, inicia sesión otra vez.</p><Link className="primary" href="/contenido">Ir a contenido</Link></section>;
+  return <section className="help-page"><span className="eyebrow">Acompañamiento</span><h1>Ayuda y privacidad</h1><h2>Prepara una clase</h2><ol><li>En Cursos, crea un curso y define su objetivo.</li><li>Organiza sus temas, unidades, experiencias o prácticas desde Contenido.</li><li>Crea textos o enlaces en Materiales. La clasificación es opcional.</li><li>Prepara una lección con actividades y guarda el borrador.</li><li>Publica cuando esté lista y comparte su enlace o código.</li></ol><h2>Lo publicado no cambia al editar</h2><p>Los cambios posteriores quedan en borrador. Selecciona Republicar para actualizar lo que ve el estudiante.</p><h2>Datos que utilizamos</h2><p>Guardamos cuentas del equipo, permisos, organización, currículo, recursos, borradores, publicaciones y conteos agregados de finalización. La sesión dura hasta ocho horas y se revoca al cerrarla.</p><p>No guardamos perfiles de niños, fotografías, asistencia ni respuestas individuales. Una cookie evita contar de nuevo la misma finalización en este navegador durante 30 días. No usamos analítica publicitaria ni cookies de terceros.</p><h2>Demostración compartida</h2><p>Las cuentas son públicas: no introduzcas datos personales. Administración configura la organización y los permisos. Educadores preparan el contenido. Los estudiantes abren un enlace o código sin cuenta.</p><h2>Si algo no responde</h2><p>Comprueba la conexión y vuelve a intentar. Si tu sesión terminó, inicia sesión otra vez.</p><h2>Contenido anterior</h2><p>Los cursos existentes conservan sus lecciones y enlaces. <Link href="/biblioteca">Recursos heredados</Link> · <Link href="/contenido">Organización anterior</Link>.</p><Link className="primary" href="/cursos">Ir a cursos</Link></section>;
 }
