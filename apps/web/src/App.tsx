@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { Lesson, Member, Organization } from "@happy-learners/contracts";
+import type { Lesson, Member, Organization, Resource } from "@happy-learners/contracts";
 
 class ApiError extends Error { constructor(message: string, public status: number) { super(message); } }
 async function api<T>(path: string, method = "GET", data?: unknown): Promise<T> {
@@ -18,6 +18,7 @@ export function App() {
   const [member, setMember] = useState<Member | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [resources, setResources] = useState<Resource[]>([]);
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [page, setPage] = useState("home");
   const [loading, setLoading] = useState(true);
@@ -31,8 +32,8 @@ export function App() {
   const [prepared, setPrepared] = useState<string[]>([]);
   async function refresh() {
     const session = await api<{ member: Member }>("/session");
-    const [org, catalog] = await Promise.all([api<{ organization: Organization }>("/organization"), api<{ lessons: Lesson[] }>("/lessons")]);
-    setMember(session.member); setOrganization(org.organization); setLessons(catalog.lessons);
+    const [org, catalog, library] = await Promise.all([api<{ organization: Organization }>("/organization"), api<{ lessons: Lesson[] }>("/lessons"), api<{ resources: Resource[] }>("/resources")]);
+    setMember(session.member); setOrganization(org.organization); setLessons(catalog.lessons); setResources(library.resources);
     setName(org.organization.name || ""); setTimezone(org.organization.timezone);
     if (!org.organization.configured && session.member.role === "admin") setPage("organization");
   }
@@ -41,7 +42,7 @@ export function App() {
     setBusy(true); setError(""); setNotice("");
     try { await work(); }
     catch (e) {
-      if (e instanceof ApiError && e.status === 401 && member) { setMember(null); setLesson(null); setOrganization(null); setLessons([]); setPrepared([]); setPage("home"); }
+      if (e instanceof ApiError && e.status === 401 && member) { setMember(null); setLesson(null); setOrganization(null); setLessons([]); setResources([]); setPrepared([]); setPage("home"); }
       setError(e instanceof Error ? e.message : "Vuelve a intentar.");
     } finally { setBusy(false); }
   }
@@ -50,9 +51,10 @@ export function App() {
   function navigate(next: string) { setPage(next); setLesson(null); setError(""); setNotice(""); }
   function openLesson(id: string) { void action(async () => { const result = await api<{ lesson: Lesson }>(`/lessons/${id}`); setLesson(result.lesson); setPage("lesson"); setPrepared([]); window.scrollTo(0, 0); }); }
   if (loading) return <main className="loading"><Mark/><p role="status">Preparando tu espacio…</p></main>;
+  if (member && new URLSearchParams(location.search).has("biblioteca")) return <LibraryPage resources={resources} onRefresh={refresh} onBack={() => { location.href = "/"; }} />;
   return <div className={member ? "app-shell" : "login-shell"}>
     <a className="skip-link" href="#main">Saltar al contenido</a>
-    <header className="topbar"><a href="#" className="brand" onClick={e => { e.preventDefault(); navigate("home"); }}><Mark/><span>Happy Learners</span></a><span className="demo-tag">Espacio de demostración</span>{member && <button className="text-button logout" disabled={busy} onClick={() => void action(async () => { await api("/logout", "POST"); setMember(null); setOrganization(null); setLessons([]); setLesson(null); setPrepared([]); setPage("home"); setNotice("Sesión cerrada de forma segura."); })}>Cerrar sesión <span aria-hidden="true">↗</span></button>}</header>
+    <header className="topbar"><a href="#" className="brand" onClick={e => { e.preventDefault(); navigate("home"); }}><Mark/><span>Happy Learners</span></a><span className="demo-tag">Espacio de demostración</span>{member && <button className="text-button logout" disabled={busy} onClick={() => void action(async () => { await api("/logout", "POST"); setMember(null); setOrganization(null); setLessons([]); setResources([]); setLesson(null); setPrepared([]); setPage("home"); setNotice("Sesión cerrada de forma segura."); })}>Cerrar sesión <span aria-hidden="true">↗</span></button>}</header>
     {member && <aside className="sidebar"><p className="eyebrow">TU ESPACIO</p><strong>{organization?.name || "Organización inicial"}</strong><nav aria-label="Navegación principal"><button className={page === "home" ? "active" : ""} onClick={() => navigate("home")}><span aria-hidden="true">⌂</span> Inicio</button><button className={page === "lesson" || page === "lessons" ? "active" : ""} onClick={() => navigate("lessons")}><span aria-hidden="true">▤</span> Mis lecciones</button>{member.role === "admin" && <button className={page === "organization" ? "active" : ""} onClick={() => navigate("organization")}><span aria-hidden="true">⚙</span> Organización</button>}<button className={page === "help" ? "active" : ""} onClick={() => navigate("help")}><span aria-hidden="true">?</span> Ayuda y privacidad</button></nav><div className="member-card"><span className="avatar">{member.role === "admin" ? "A" : "I"}</span><div><strong>{member.role === "admin" ? "Administración" : "Instructor"}</strong><small>Cuenta ficticia · {member.username}</small></div></div></aside>}
     <main id="main" className={member ? "workspace" : "login-main"}>
       {error && <div className="alert error" role="alert">{error} <button className="text-button" disabled={busy} onClick={() => void action(refresh)}>Volver a intentar</button></div>}
@@ -65,4 +67,12 @@ export function App() {
       </>}
     </main><footer className="footer"><span>Happy Learners <span aria-hidden="true">·</span> Aprender, acompañar, crecer.</span><span>Demostración con datos ficticios · 0.1.0</span></footer>
   </div>;
+}
+
+function LibraryPage({ resources, onRefresh, onBack }: { resources: Resource[]; onRefresh: () => Promise<void>; onBack: () => void }) {
+  const [title, setTitle] = useState(""); const [description, setDescription] = useState(""); const [topic, setTopic] = useState(""); const [content, setContent] = useState(""); const [selected, setSelected] = useState<string[]>([]); const [notice, setNotice] = useState(""); const [query, setQuery] = useState("");
+  const filtered = resources.filter(resource => `${resource.title} ${resource.topic} ${resource.tags.join(" ")}`.toLowerCase().includes(query.toLowerCase()));
+  async function add(event: FormEvent) { event.preventDefault(); await api("/resources", "POST", { title, description, level: "Inicial", skill: "lectura", topic, tags: ["demostración"], content }); setTitle(""); setDescription(""); setTopic(""); setContent(""); setNotice("Recurso guardado como borrador."); await onRefresh(); }
+  async function lesson() { if (!selected.length) return; const result = await api<{ lesson: Lesson }>("/lessons", "POST", { title: "Lección desde biblioteca", objective: "Practicar vocabulario con el grupo.", instructions: "Lee el recurso y conversa sobre lo aprendido.", resourceIds: selected }); await api(`/lessons/${result.lesson.id}/publish`, "POST"); setNotice(`Lección publicada. Código de acceso: ${(result.lesson as Lesson & { shareCode?: string }).shareCode ?? "ver en lecciones"}`); await onRefresh(); }
+  return <div className="login-shell"><header className="topbar"><a className="brand" href="#" onClick={e => { e.preventDefault(); onBack(); }}><Mark/><span>Happy Learners</span></a><span className="demo-tag">Biblioteca de recursos</span></header><main className="workspace library-page"><button className="text-button" onClick={onBack}>← Volver al espacio principal</button><div className="page-heading"><div><span className="eyebrow">SPR-002 · CATÁLOGO</span><h1>Biblioteca del equipo</h1><p>Crea recursos sencillos y conviértelos en lecciones para la clase.</p></div></div>{notice && <div className="alert success" role="status">{notice}</div>}<section className="library-grid"><div><div className="section-heading"><h2>Recursos</h2><input aria-label="Buscar recursos" placeholder="Buscar por título o tema" value={query} onChange={e => setQuery(e.target.value)} /></div>{filtered.map(resource => <label className="resource-row" key={resource.id}><input type="checkbox" checked={selected.includes(resource.id)} onChange={e => setSelected(e.target.checked ? [...selected, resource.id] : selected.filter(id => id !== resource.id))}/><span><strong>{resource.title}</strong><small>{resource.topic} · {resource.level} · {resource.tags.join(" · ")}</small><span>{resource.description}</span></span></label>)}<button className="primary" disabled={!selected.length} onClick={() => void lesson()}>Crear y publicar lección ({selected.length})</button></div><form className="form-card" onSubmit={add}><h2>Registrar recurso</h2><p>Usa material ficticio o un enlace aprobado por el equipo.</p><label htmlFor="resource-title">Título</label><input id="resource-title" required value={title} onChange={e => setTitle(e.target.value)}/><label htmlFor="resource-description">Descripción breve</label><input id="resource-description" required value={description} onChange={e => setDescription(e.target.value)}/><label htmlFor="resource-topic">Tema</label><input id="resource-topic" required value={topic} onChange={e => setTopic(e.target.value)}/><label htmlFor="resource-content">Contenido o enlace</label><textarea id="resource-content" required value={content} onChange={e => setContent(e.target.value)}/><button className="primary">Guardar borrador</button></form></section></main></div>;
 }

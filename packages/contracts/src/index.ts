@@ -7,3 +7,5 @@ export interface Lesson {
   materials: string[]; activities: { title: string; minutes: number; instructions: string }[];
   reflection: string; publishedAt: string;
 }
+export type ResourceSkill = "lectura" | "escritura" | "escucha" | "conversación";
+export interface Resource { id: string; title: string; description: string; level: string; skill: ResourceSkill; topic: string; tags: string[]; content: string; status: "draft" | "published"; }

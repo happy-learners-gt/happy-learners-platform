@@ -1,4 +1,4 @@
-import type { Lesson, Member, Organization } from "@happy-learners/contracts";
+import type { Lesson, Member, Organization, Resource } from "@happy-learners/contracts";
 import { organizationInput } from "@happy-learners/domain";
 import { sha } from "./generated/version";
 import { database } from "./storage";
@@ -41,7 +41,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     for (const [name, value] of Object.entries(headers)) result.headers.set(name, value);
     return result;
   }
-  const input = ((path === "/api/login" && method === "POST") || (path === "/api/organization" && method === "PUT"))
+  const input = ((path === "/api/login" && method === "POST") || (path === "/api/organization" && method === "PUT") || (path === "/api/resources" && method === "POST") || (path === "/api/lessons" && method === "POST"))
     ? await body(request) : undefined;
   let scope = sessionToken(request)?.startsWith("o_") ? "org-other" : "org-demo";
   if (path === "/api/login" && method === "POST") {
@@ -54,8 +54,8 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (path === "/api/health") await db.prepare("SELECT id FROM organizations LIMIT 1").first();
     return method === "HEAD" ? new Response(null, { headers }) : json(path === "/api/health" ? { status: "ok" } : { sha });
   }
-  const methods: Record<string, string[]> = { "/api/session": ["GET"], "/api/login": ["POST"], "/api/logout": ["POST"], "/api/organization": ["GET", "PUT"], "/api/lessons": ["GET"] };
-  const allowed = methods[path] || (/^\/api\/lessons\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
+  const methods: Record<string, string[]> = { "/api/session": ["GET"], "/api/login": ["POST"], "/api/logout": ["POST"], "/api/organization": ["GET", "PUT"], "/api/resources": ["GET", "POST"], "/api/lessons": ["GET", "POST"] };
+  const allowed = methods[path] || (/^\/api\/lessons\/[a-z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/lessons\/[a-z0-9-]+\/publish$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : null);
   if (!allowed) return json({ error: "Not found" }, 404);
   if (!allowed.includes(method)) return json({ error: "Method not allowed" }, 405, { Allow: allowed.join(", ") });
   if (!["GET", "HEAD"].includes(method)) {
@@ -81,6 +81,14 @@ async function route(request: Request, env: Env): Promise<Response> {
     ]);
     return json({ ok: true }, 200, { "Set-Cookie": cookie(token, request) });
   }
+  if (path.startsWith("/api/share/")) {
+    const code = path.split("/")[3];
+    const shared = await db.prepare("SELECT id,content FROM lessons WHERE status='published'").all<{ id: string; content: string }>();
+    const match = shared.results.find(row => (JSON.parse(row.content) as Lesson & { shareCode?: string }).shareCode === code);
+    if (!match) return json({ error: "Lección no disponible." }, 404);
+    if (method === "POST") { const id = `completion-${crypto.randomUUID()}`; await db.prepare("INSERT INTO lesson_completions (id,lesson_id,completed_at) VALUES (?,?,?)").bind(id, match.id, Date.now()).run(); return json({ ok: true }); }
+    return json({ lesson: JSON.parse(match.content) as Lesson });
+  }
   if (path === "/api/logout") {
     const token = sessionToken(request);
     if (token) await db.prepare("DELETE FROM sessions WHERE token_hash=?").bind(await digest(token)).run();
@@ -100,7 +108,25 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (!organization) return json({ error: "Organización no disponible." }, 404);
     return json({ organization: { ...organization, configured: !!organization.configured } });
   }
-  if (path === "/api/lessons") {
+  if (path === "/api/resources" && method === "GET") {
+    const rows = await db.prepare("SELECT id,title,description,level,skill,topic,tags,content,status FROM resources WHERE organization_id=? ORDER BY title").bind(current.organizationId).all<Omit<Resource, "tags"> & { tags: string }>();
+    return json({ resources: rows.results.map(row => ({ ...row, tags: JSON.parse(row.tags) })) });
+  }
+  if (path === "/api/resources" && method === "POST") {
+    if (!input || typeof input !== "object") return json({ error: "Revisa el recurso." }, 400);
+    const value = input as Record<string, unknown>; const fields = ["title", "description", "level", "skill", "topic", "content"];
+    if (fields.some(field => typeof value[field] !== "string" || !(value[field] as string).trim()) || !["lectura", "escritura", "escucha", "conversación"].includes(value.skill as string)) return json({ error: "Completa los campos del recurso." }, 400);
+    const resource: Resource = { id: `resource-${crypto.randomUUID().slice(0, 8)}`, title: value.title as string, description: value.description as string, level: value.level as string, skill: value.skill as Resource["skill"], topic: value.topic as string, tags: Array.isArray(value.tags) ? value.tags.filter(tag => typeof tag === "string") as string[] : [], content: value.content as string, status: "draft" };
+    await db.prepare("INSERT INTO resources VALUES (?,?,?,?,?,?,?,?,?,?)").bind(resource.id, current.organizationId, resource.title, resource.description, resource.level, resource.skill, resource.topic, JSON.stringify(resource.tags), resource.content, resource.status).run(); return json({ resource }, 201);
+  }
+  if (path === "/api/lessons" && method === "POST") {
+    if (!input || typeof input !== "object") return json({ error: "Revisa la lección." }, 400); const value = input as Record<string, unknown>;
+    if (typeof value.title !== "string" || typeof value.objective !== "string" || !Array.isArray(value.resourceIds) || !value.resourceIds.length) return json({ error: "Una lección necesita título, objetivo y recursos." }, 400);
+    const id = `lesson-${crypto.randomUUID().slice(0, 8)}`; const content = { id, title: value.title, program: "Biblioteca Happy Learners", duration: 20, objective: value.objective, materials: [], activities: [{ title: "Exploramos el material", minutes: 20, instructions: typeof value.instructions === "string" ? value.instructions : "Lee el material y conversa sobre lo aprendido." }], reflection: "¿Qué ayudó a participar?", publishedAt: "", resourceIds: value.resourceIds, shareCode: crypto.randomUUID().slice(0, 6).toUpperCase() };
+    await db.prepare("INSERT INTO lessons VALUES (?,?,?,?)").bind(id, "exploradores", "draft", JSON.stringify(content)).run(); return json({ lesson: content }, 201);
+  }
+  if (path.match(/^\/api\/lessons\/[^/]+\/publish$/)) { const id = path.split("/")[3]; const row = await db.prepare("SELECT content FROM lessons WHERE id=? AND program_id='exploradores'").bind(id).first<{ content: string }>(); if (!row) return json({ error: "Lección no encontrada." }, 404); const content = JSON.parse(row.content) as Lesson; content.publishedAt = new Date().toISOString().slice(0, 10); await db.prepare("UPDATE lessons SET status='published',content=? WHERE id=?").bind(JSON.stringify(content), id).run(); return json({ lesson: content }); }
+  if (path === "/api/lessons" && method === "GET") {
     const rows = await db.prepare("SELECT l.content FROM lessons l JOIN programs p ON p.id=l.program_id WHERE p.organization_id=? AND l.status='published' ORDER BY l.id").bind(current.organizationId).all<{ content: string }>();
     return json({ lessons: rows.results.map(row => JSON.parse(row.content) as Lesson) });
   }
