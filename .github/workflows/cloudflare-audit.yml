@@ -1,0 +1,38 @@
+name: Cloudflare recovery audit
+on:
+  workflow_dispatch:
+    inputs:
+      provision_d1:
+        description: Provision the authorized free Sprint 1 database
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: happy-learners-cloudflare-audit
+  cancel-in-progress: false
+jobs:
+  audit:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Provision Sprint 1 persistence
+        if: inputs.provision_d1
+        run: python3 scripts/provision-d1.py
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - run: python3 scripts/audit-cloudflare.py
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cloudflare-recovery-evidence
+          path: .recovery-evidence/
+          include-hidden-files: true
+          if-no-files-found: error

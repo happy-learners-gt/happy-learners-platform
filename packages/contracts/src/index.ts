@@ -1,8 +1,9 @@
 export interface HealthResponse { status: "ok" }
 export interface VersionResponse { sha: string }
-export type Skill = "lectura" | "escritura" | "escucha" | "conversación";
-export type ResourceStatus = "borrador" | "publicado";
-export interface Resource { id: string; title: string; description: string; level: string; skill: Skill; topic: string; tags: string[]; content: string; status: ResourceStatus; }
-export interface Lesson { id: string; title: string; objective: string; instructions: string; resourceIds: string[]; published: boolean; shareCode: string; completedCount: number; }
-export interface Session { user: string; role: "educador"; }
-export interface CatalogResponse { resources: Resource[]; lessons: Lesson[]; }
+export interface Member { id: string; username: string; role: "admin" | "instructor"; organizationId: string }
+export interface Organization { id: string; name: string | null; timezone: string; configured: boolean }
+export interface Lesson {
+  id: string; title: string; program: string; duration: number; objective: string;
+  materials: string[]; activities: { title: string; minutes: number; instructions: string }[];
+  reflection: string; publishedAt: string;
+}

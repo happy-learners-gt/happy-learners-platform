@@ -1,17 +1,22 @@
 // @vitest-environment jsdom
-import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
 import { App } from "../apps/web/src/App";
-
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
-const catalog = { resources: [{ id: "r1", title: "Colors", description: "Practice colors", level: "Inicial", skill: "lectura", topic: "Colores", tags: ["vocabulario"], content: "red", status: "publicado" }], lessons: [] };
-it("permite entrar al espacio del educador y buscar recursos", async () => {
-  vi.stubGlobal("fetch", vi.fn(async (path: string) => path.endsWith("/state") ? Response.json(catalog) : path.endsWith("/login") ? Response.json({ session: { user: "Educador", role: "educador" } }) : Response.json(catalog)));
-  render(<App />); fireEvent.change(screen.getByLabelText("Código"), { target: { value: "san-gaspar" } }); fireEvent.click(screen.getByText("Entrar"));
-  expect(await screen.findByText("Biblioteca de enseñanza")).toBeTruthy(); expect(screen.getByText("Colors")).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("Buscar recursos"), { target: { value: "inexistente" } }); expect(screen.queryByText("Colors")).toBeNull();
+it("shows an accessible Spanish login with explicit synthetic account guidance", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ error: "Inicia sesión para continuar." }, { status: 401 })));
+  render(<App/>);
+  expect(await screen.findByRole("heading", { name: "Iniciar sesión" })).toBeTruthy();
+  expect(screen.getByLabelText("Usuario")).toBeTruthy();
+  expect(screen.getByLabelText("Contraseña").getAttribute("type")).toBe("password");
+  expect(screen.getByText("Probar con datos ficticios")).toBeTruthy();
 });
-it("muestra un error si el código no es válido", async () => {
-  vi.stubGlobal("fetch", vi.fn(async (path: string) => path.endsWith("/state") ? Response.json(catalog) : new Response(JSON.stringify({ error: "Código no válido" }), { status: 401, headers: { "Content-Type": "application/json" } })));
-  render(<App />); fireEvent.change(screen.getByLabelText("Código"), { target: { value: "no" } }); fireEvent.click(screen.getByText("Entrar")); expect((await screen.findByRole("alert")).textContent).toContain("Código no válido");
+it("preserves the login form and explains network failure", async () => {
+  const request = vi.fn().mockResolvedValueOnce(Response.json({}, { status: 401 })).mockRejectedValue(new TypeError("Network"));
+  vi.stubGlobal("fetch", request); render(<App/>);
+  await screen.findByRole("heading", { name: "Iniciar sesión" });
+  fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "invalid" } });
+  fireEvent.submit(screen.getByRole("button", { name: /Entrar a mi espacio/ }).closest("form")!);
+  expect((await screen.findByRole("alert")).textContent).toContain("Comprueba tu conexión");
+  expect((screen.getByLabelText("Usuario") as HTMLInputElement).value).toBe("instructor-demo");
 });
