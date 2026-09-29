@@ -5,6 +5,7 @@ import { database } from "./storage";
 import type { Database } from "./storage";
 export { OrganizationStore } from "./storage";
 import { cookie, digest, newToken, sessionToken, verifyPassword } from "./auth";
+import { roles } from "./roles";
 
 const headers = {
   "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer",
@@ -31,7 +32,7 @@ async function body(request: Request): Promise<unknown> {
 async function member(request: Request, db: Database): Promise<Member | null> {
   const token = sessionToken(request);
   if (!token) return null;
-  return db.prepare("SELECT u.id, u.username, m.role, m.organization_id AS organizationId FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id WHERE s.token_hash=? AND s.expires_at>?")
+  return db.prepare("SELECT u.id, u.username, CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END AS role, m.organization_id AS organizationId FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND m.active=1")
     .bind(await digest(token), Date.now()).first<Member>();
 }
 async function route(request: Request, env: Env): Promise<Response> {
@@ -41,7 +42,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     for (const [name, value] of Object.entries(headers)) result.headers.set(name, value);
     return result;
   }
-  const input = ((path === "/api/login" && method === "POST") || (path === "/api/organization" && method === "PUT") || (path === "/api/resources" && method === "POST") || (path === "/api/lessons" && method === "POST"))
+  const input = ((path === "/api/login" && method === "POST") || (path === "/api/organization" && method === "PUT") || (path.startsWith("/api/members/") && method === "PUT") || (path === "/api/resources" && method === "POST") || (path === "/api/lessons" && method === "POST"))
     ? await body(request) : undefined;
   let scope = sessionToken(request)?.startsWith("o_") ? "org-other" : "org-demo";
   if (path === "/api/login" && method === "POST") {
@@ -55,7 +56,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     return method === "HEAD" ? new Response(null, { headers }) : json(path === "/api/health" ? { status: "ok" } : { sha });
   }
   const methods: Record<string, string[]> = { "/api/session": ["GET"], "/api/login": ["POST"], "/api/logout": ["POST"], "/api/organization": ["GET", "PUT"], "/api/resources": ["GET", "POST"], "/api/lessons": ["GET", "POST"] };
-  const allowed = methods[path] || (/^\/api\/lessons\/[a-z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/lessons\/[a-z0-9-]+\/publish$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : null);
+  const allowed = methods[path] || (path === "/api/members" ? ["GET"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/lessons\/[a-z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/lessons\/[a-z0-9-]+\/publish$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : null);
   if (!allowed) return json({ error: "Not found" }, 404);
   if (!allowed.includes(method)) return json({ error: "Method not allowed" }, 405, { Allow: allowed.join(", ") });
   if (!["GET", "HEAD"].includes(method)) {
@@ -70,7 +71,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     const limit = await db.prepare("INSERT INTO login_limits (bucket, attempts, expires_at) VALUES (?,1,?) ON CONFLICT(bucket) DO UPDATE SET attempts=CASE WHEN expires_at<? THEN 1 ELSE attempts+1 END, expires_at=CASE WHEN expires_at<? THEN excluded.expires_at ELSE expires_at END RETURNING attempts")
       .bind(bucket, now + 900000, now, now).first<{ attempts: number }>();
     if (!limit || limit.attempts > 30) return json({ error: "Demasiados intentos. Espera 15 minutos y vuelve a intentar." }, 429, { "Retry-After": "900" });
-    const user = await db.prepare("SELECT id, password_salt, password_hash FROM users WHERE username=?").bind(value.username.trim().toLowerCase()).first<{ id: string; password_salt: string; password_hash: string }>();
+    const user = await db.prepare("SELECT u.id, u.password_salt, u.password_hash FROM users u JOIN memberships m ON m.user_id=u.id WHERE u.username=? AND m.active=1").bind(value.username.trim().toLowerCase()).first<{ id: string; password_salt: string; password_hash: string }>();
     const valid = await verifyPassword(value.password, user?.password_salt || "synthetic-dummy-salt", user?.password_hash || "0".repeat(64));
     if (!user || !valid) return json({ error: "Usuario o contraseña incorrectos." }, 401);
     const token = (scope === "org-other" ? "o_" : "d_") + newToken();
@@ -97,6 +98,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   const current = await member(request, db);
   if (!current) return json({ error: "Inicia sesión para continuar." }, 401);
   if (path === "/api/session") return json({ member: current });
+  if (path.startsWith("/api/members")) return roles(path, method, input, current, db);
+  if (!["GET", "HEAD"].includes(method) && path !== "/api/organization" && current.role !== "educator") return json({ error: "Solo educadores pueden modificar contenido." }, 403);
   if (path === "/api/organization") {
     if (method === "PUT") {
       if (current.role !== "admin") return json({ error: "Solo administración puede configurar la organización." }, 403);
@@ -135,7 +138,7 @@ async function route(request: Request, env: Env): Promise<Response> {
 }
 export default {
   async fetch(request, env): Promise<Response> {
-    try { return await route(request, env); }
+    try { const response = await route(request, env); for (const [key, value] of Object.entries(headers)) response.headers.set(key, value); return response; }
     catch (error) {
       if (error instanceof Error && error.message === "INPUT") return json({ error: "Revisa los datos del formulario." }, 400);
       console.error(JSON.stringify({ event: "request_failed", code: "DEPENDENCY_UNAVAILABLE", release: "0.1.0", sha }));
