@@ -8,6 +8,9 @@ export interface Lesson {
   id: string; title: string; program: string; duration: number; objective: string;
   materials: string[]; activities: { title: string; minutes: number; instructions: string }[];
   reflection: string; publishedAt: string;
+  unitId?: string; position?: number; status?: "draft" | "published" | "archived";
+  revision?: number; draftVersion?: number; hasDraft?: boolean; updatedAt?: string; shareCode?: string; completions?: number;
+  resources?: Resource[];
 }
 export type ResourceSkill = "lectura" | "escritura" | "escucha" | "conversación";
-export interface Resource { id: string; title: string; description: string; level: string; skill: ResourceSkill; topic: string; tags: string[]; content: string; status: "draft" | "published"; }
+export interface Resource { id: string; title: string; description: string; level: string; skill: ResourceSkill; topic: string; tags: string[]; content: string; status: "draft" | "published" | "archived"; kind?: "text" | "link"; updatedAt?: string; }
