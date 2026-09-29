@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./local-test";
 import { mkdir } from "node:fs/promises";
 
 test("SPR-002: educator creates, edits, orders, publishes, shares and observes completion", async ({ page, context }, info) => {
@@ -9,7 +9,7 @@ test("SPR-002: educator creates, edits, orders, publishes, shares and observes c
   await page.getByLabel("Usuario", { exact: true }).fill("educador-demo");
   await page.getByLabel("Contraseña", { exact: true }).fill("Aprender-2026!");
   await page.getByRole("button", { name: /Entrar a mi espacio/ }).click();
-  await page.getByRole("button", { name: "Preparar contenido" }).click();
+  await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: "Biblioteca", exact: true }).click();
   await expect(page.getByRole("button", { name: "Educadores", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Nuevo recurso" }).click();
   await page.getByLabel("Título del recurso").fill(`Hello ${suffix}`);
@@ -25,22 +25,22 @@ test("SPR-002: educator creates, edits, orders, publishes, shares and observes c
   await page.getByRole("button", { name: "Guardar recurso", exact: true }).click();
   await expect(page.getByText("Saludo editado y persistente.")).toBeVisible();
   await page.screenshot({ path: `${folder}/s2-resources.png`, fullPage: true });
-  await page.getByRole("button", { name: "Niveles y unidades", exact: true }).click();
+  await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: "Contenido", exact: true }).click();
   await page.getByRole("button", { name: "Nuevo nivel", exact: true }).click();
   await page.getByLabel("Nombre del nivel").fill(`Beginner ${suffix}`);
   await page.getByLabel("Descripción del nivel").fill("Primeros saludos en inglés.");
   await page.getByRole("button", { name: "Guardar nivel", exact: true }).click();
-  await page.getByRole("button", { name: `Nueva unidad en Beginner ${suffix}`, exact: true }).click();
-  await page.getByLabel("Nombre de la unidad").fill(`Greetings ${suffix}`);
-  await page.getByLabel("Objetivo de la unidad").fill("Saludar y presentarse.");
-  await page.getByRole("button", { name: "Guardar unidad", exact: true }).click();
+  await page.getByRole("button", { name: `Nuevo módulo en Beginner ${suffix}`, exact: true }).click();
+  await page.getByLabel("Nombre del módulo").fill(`Greetings ${suffix}`);
+  await page.getByLabel("Objetivo del módulo").fill("Saludar y presentarse.");
+  await page.getByRole("button", { name: "Guardar módulo", exact: true }).click();
   await expect(page.getByRole("heading", { name: `1. Greetings ${suffix}`, exact: true })).toBeVisible();
   await page.screenshot({ path: `${folder}/s2-curriculum.png`, fullPage: true });
-  await page.getByRole("button", { name: "Lecciones", exact: true }).click();
+  await page.getByRole("link", { name: "Lecciones", exact: true }).click();
   await page.getByRole("button", { name: "Nueva lección", exact: true }).click();
   await page.getByLabel("Título de la lección").fill(`Greetings ${suffix}`);
   await page.getByLabel("Objetivo de la lección").fill("Usar Hello! para saludar.");
-  await page.getByLabel("Unidad de la lección").selectOption({ label: `Greetings ${suffix}` });
+  await page.getByLabel("Módulo de la lección").selectOption({ label: `Greetings ${suffix}` });
   await page.getByRole("button", { name: "Agregar actividad", exact: true }).click();
   let activity = page.locator("fieldset.activity-editor").nth(1);
   await activity.getByLabel("Tipo de actividad").selectOption("resource");
@@ -79,8 +79,8 @@ test("SPR-002: educator creates, edits, orders, publishes, shares and observes c
   await student.screenshot({ path: `${folder}/s2-student.png`, fullPage: true });
   await student.close();
   await page.reload();
-  await page.getByRole("button", { name: "Preparar contenido" }).click();
-  await page.getByRole("button", { name: "Lecciones", exact: true }).click();
+  await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: "Contenido", exact: true }).click();
+  await page.getByRole("link", { name: "Lecciones", exact: true }).click();
   const card = page.locator("article.editor-card").filter({ has: page.getByRole("heading", { name: `Greetings ${suffix}`, exact: true }) });
   await expect(card).toContainText("1 finalizaciones");
   await card.getByRole("button", { name: `Editar lección Greetings ${suffix}`, exact: true }).click();
