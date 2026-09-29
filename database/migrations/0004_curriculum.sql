@@ -1,0 +1,10 @@
+CREATE TABLE levels (id TEXT PRIMARY KEY, organization_id TEXT NOT NULL REFERENCES organizations(id), name TEXT NOT NULL, description TEXT NOT NULL, position INTEGER NOT NULL CHECK(position>=0), status TEXT NOT NULL CHECK(status IN ('draft','active','archived')), updated_at TEXT NOT NULL);
+CREATE TABLE units (id TEXT PRIMARY KEY, level_id TEXT NOT NULL REFERENCES levels(id), name TEXT NOT NULL, objective TEXT NOT NULL, position INTEGER NOT NULL CHECK(position>=0), status TEXT NOT NULL CHECK(status IN ('active','archived')), updated_at TEXT NOT NULL);
+INSERT INTO levels SELECT 'level-'||id,id,'Beginner','Primeras palabras y conversaciones en inglés.',0,'active',strftime('%Y-%m-%dT%H:%M:%fZ','now') FROM organizations;
+INSERT INTO units SELECT 'unit-'||organization_id,id,'Greetings','Saludar y presentarse con confianza.',0,'active',updated_at FROM levels;
+ALTER TABLE lessons ADD COLUMN unit_id TEXT REFERENCES units(id);
+ALTER TABLE lessons ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE lessons ADD COLUMN archived INTEGER NOT NULL DEFAULT 0;
+UPDATE lessons SET unit_id='unit-'||(SELECT organization_id FROM programs WHERE programs.id=lessons.program_id);
+UPDATE lessons SET position=(SELECT count(*) FROM lessons other WHERE other.unit_id=lessons.unit_id AND other.id<lessons.id);
+CREATE INDEX units_level ON units(level_id,position);
