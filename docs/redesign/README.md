@@ -1,8 +1,8 @@
-# Rediseño: primera entrega de implementación
+# Rediseño: historial de la primera entrega visual
 
 29 de septiembre de 2026 · ST-041 / HL-44
 
-**Dirección revisada:** [Cursos, recorridos y contenido compartido](modelo-educativo-generico.md) sustituye la jerarquía académica fija de esta primera entrega. Incluye taxonomías configurables, flujos, estados, progresión y [wireframes navegables](prototipo-cursos.html). El resto de esta página conserva el alcance realmente implementado; no presenta la nueva propuesta como desplegada.
+**Entrega vigente:** [Cursos para distintas disciplinas](cursos-implementacion.md), con [diagramas de base de datos](base-de-datos.md). El [diseño completo](modelo-educativo-generico.md) conserva los siguientes incrementos y los [wireframes](prototipo-cursos.html). El resto de esta página documenta la entrega visual anterior; su navegación, paleta y cifras de pruebas no describen la entrega vigente.
 
 ## Aprobación
 
