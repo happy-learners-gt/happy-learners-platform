@@ -1,4 +1,5 @@
-import type { Lesson, Member, Resource } from "@happy-learners/contracts";
+import type { Activity, Lesson, Member, Resource } from "@happy-learners/contracts";
+import { validActivities } from "@happy-learners/domain";
 import type { Database } from "./storage";
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
 type LessonRow = { id: string; content: string; published_content: string | null; unit_id: string; position: number; status: "draft" | "published"; archived: number; revision: number; draft_version: number; published_version: number; updated_at: string; completions: number };
@@ -66,6 +67,10 @@ export async function content(url: URL, method: string, input: unknown, current:
   const lid = id || `lesson-${crypto.randomUUID()}`;
   const lesson: Lesson = { id: lid, title: v.title.trim(), objective: v.objective.trim(), program: unit.name, unitId: unit.id, duration: typeof v.duration === "number" && v.duration > 0 && v.duration <= 300 ? v.duration : 20, materials: old?.materials || [], reflection: old?.reflection || "¿Qué palabras aprendiste?", activities: [{ title: "Instrucciones", minutes: 20, instructions: v.instructions }], publishedAt: old?.publishedAt || "", shareCode: old?.shareCode || (current.organizationId === "org-other" ? "O-" : "D-") + crypto.randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase() };
   const now = new Date().toISOString();
+  if (v.activities !== undefined) {
+    if (!validActivities(v.activities)) return reply({ error: "Revisa las actividades: título, instrucciones, tipo y posiciones consecutivas desde cero; cada pregunta requiere opciones distintas y una respuesta válida." }, 400);
+    lesson.activities = (v.activities as Activity[]).map(a => ({ id: a.id, type: a.type, position: a.position, title: a.title, instructions: a.instructions, minutes: a.minutes, ...(a.type === "resource" ? { resourceId: a.resourceId } : {}), ...(a.type === "question" ? { options: a.options, answer: a.answer } : {}) }));
+  } else if (old) lesson.activities = old.activities;
   if (row) {
     if (v.draftVersion !== row.draft_version) return reply({ error: "Hay cambios más recientes. Recarga antes de guardar." }, 409);
     const written = await db.prepare("UPDATE lessons SET content=?,unit_id=?,archived=?,draft_version=draft_version+1,updated_at=? WHERE id=? AND draft_version=? RETURNING id").bind(JSON.stringify(lesson), unit.id, v.status === "archived" ? 1 : 0, now, lid, row.draft_version).first();
