@@ -5,6 +5,13 @@ import { describe, expect, it } from "vitest";
 
 const workflow = parse(readFileSync(".github/workflows/repository.yml", "utf8"));
 describe("delivery gate", () => {
+  it("never runs the content-writing E2E suite against production", () => {
+    const checks = workflow.jobs["critical-flows"].steps;
+    expect(checks.find((step: { run?: string }) => step.run === "npm run test:smoke").env.BASE_URL).toMatch(/^https:/);
+    expect(checks.some((step: { run?: string }) => step.run === "npm run test:e2e")).toBe(false);
+    const e2e = workflow.jobs.verify.steps.find((step: { run?: string }) => step.run === "npm run test:e2e");
+    expect(e2e.env?.BASE_URL).toBeUndefined();
+  });
   it("verifies PRs and main pushes, and requires a successful verification before deploying", () => {
     expect(workflow.on.push).toEqual({ branches: ["main"] });
     expect(workflow.on).toHaveProperty("pull_request");

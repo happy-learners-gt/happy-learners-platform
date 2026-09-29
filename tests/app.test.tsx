@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { App } from "../apps/web/src/App";
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+beforeEach(() => { vi.stubGlobal("scrollTo", vi.fn()); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); history.replaceState(null, "", "/"); });
 it("shows an accessible Spanish login with explicit synthetic account guidance", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ error: "Inicia sesión para continuar." }, { status: 401 })));
   render(<App/>);
@@ -18,5 +19,5 @@ it("preserves the login form and explains network failure", async () => {
   fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "invalid" } });
   fireEvent.submit(screen.getByRole("button", { name: /Entrar a mi espacio/ }).closest("form")!);
   expect((await screen.findByRole("alert")).textContent).toContain("Comprueba tu conexión");
-  expect((screen.getByLabelText("Usuario") as HTMLInputElement).value).toBe("instructor-demo");
+  expect((screen.getByLabelText("Usuario") as HTMLInputElement).value).toBe("educador-demo");
 });

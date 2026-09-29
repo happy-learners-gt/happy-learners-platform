@@ -103,7 +103,7 @@ jobs:
       - if: github.event_name != 'schedule'
         run: npx --no-install playwright install --with-deps chromium
       - if: github.event_name != 'schedule'
-        run: npm run test:e2e
+        run: npm run test:smoke
         env:
           BASE_URL: https://happy-learners-demo.lfmendoza-alvarez.workers.dev
           EXPECTED_SHA: ${{ github.sha }}

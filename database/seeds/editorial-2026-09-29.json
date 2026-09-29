@@ -1,0 +1,886 @@
+{
+  "schema_version": 1,
+  "seed_version": "editorial-2026-09-29",
+  "status": "pedagogy_approved_not_applied",
+  "initial_editorial_state": "draft",
+  "publication_rule": "Revisión pedagógica aprobada. La integración y publicación se verifican al implementar el editor; no atribuir revisores ni fechas de transición que no consten.",
+  "organization": {
+    "seed_key": "organization.happy-learners-demo",
+    "display_name": "Happy Learners · San Gaspar",
+    "reuse_existing": true
+  },
+  "identity_policy": {
+    "unique_by": [
+      "organization_id",
+      "entity_type",
+      "seed_key"
+    ],
+    "preserve_existing_ids": true,
+    "overwrite_human_edits": false,
+    "defaults_for_metrics": 0,
+    "passwords_in_seed": false
+  },
+  "levels": [
+    {
+      "seed_key": "level.beginner",
+      "name": "Beginner",
+      "description": "Primeros encuentros con el inglés mediante juegos, objetos y conversación guiada.",
+      "order": 0
+    }
+  ],
+  "modules": [
+    {
+      "seed_key": "module.nos-conocemos",
+      "level_key": "level.beginner",
+      "title": "Nos conocemos",
+      "objective": "Saludar, despedirse y presentarse con personajes.",
+      "order": 0
+    },
+    {
+      "seed_key": "module.exploramos-el-aula",
+      "level_key": "level.beginner",
+      "title": "Exploramos el aula",
+      "objective": "Describir colores, identificar objetos y contar para trabajar juntos.",
+      "order": 1
+    }
+  ],
+  "resources": [
+    {
+      "seed_key": "resource.hello-dialogue",
+      "title": "Hello, Sunny! · diálogo para leer",
+      "kind": "rich_text",
+      "skill": "escucha",
+      "language": "en",
+      "teacher_language": "es",
+      "body_markdown": "**Sunny:** Hello!\n**Luna:** Hello, Sunny!\n**Sunny:** Goodbye, Luna!\n**Luna:** Goodbye!\n\nEscucha a tu educador. Levanta la mano o señala cuando oigas Hello. En la segunda ronda, responde con el saludo.",
+      "teacher_notes": "**Educador:** lee despacio y cambia la voz para cada personaje. No hace falta una grabación.\n\n**Sunny:** Hello!\n**Luna:** Hello, Sunny!\n**Sunny:** Goodbye, Luna!\n**Luna:** Goodbye!\n\nPrimera escucha: levanta la mano cuando oigas Hello. Segunda escucha: responde con el saludo. Al terminar, identifica qué palabra usarías al llegar y cuál al salir."
+    },
+    {
+      "seed_key": "resource.greeting-cards",
+      "title": "Tarjetas de saludo: llegar y despedirse",
+      "kind": "rich_text",
+      "skill": "lectura",
+      "language": "en",
+      "teacher_language": "es",
+      "body_markdown": "## Cuando llegamos\n**Hello!** — Podemos saludar con la mano.\n\n## Cuando nos vamos\n**Goodbye!** — Podemos despedirnos con la mano.\n\nTu educador representará llegar o salir. Elige la tarjeta que corresponde. Puedes señalarla o decir la palabra.",
+      "teacher_notes": "## Cuando llegamos\n**Hello!** — Saluda con la mano y mira a tu compañero si te resulta cómodo.\n\n## Cuando nos vamos\n**Goodbye!** — Despídete con la mano.\n\nRecorta dos tarjetas de papel y escribe una expresión en cada una. El educador representa llegar al aula o salir. El grupo elige una tarjeta; no es necesario que cada niño lea solo."
+    },
+    {
+      "seed_key": "resource.name-dialogue",
+      "title": "Sunny meets Luna · presentación breve",
+      "kind": "rich_text",
+      "skill": "conversación",
+      "language": "en",
+      "teacher_language": "es",
+      "body_markdown": "**Sunny:** Hello! My name is Sunny. What is your name?\n**Luna:** My name is Luna.\n**Sunny:** Nice to meet you!\n**Luna:** Nice to meet you!\n\nLee o escucha con un compañero. Elige el nombre de un personaje. Puedes señalar tu frase mientras otra persona la lee.",
+      "teacher_notes": "**Sunny:** Hello! My name is Sunny. What is your name?\n**Luna:** My name is Luna.\n**Sunny:** Nice to meet you!\n**Luna:** Nice to meet you!\n\nLee por turnos. Usa el nombre de un personaje, no el nombre real de un niño. Un compañero puede señalar su personaje en vez de hablar; después podrá repetir una frase con apoyo."
+    },
+    {
+      "seed_key": "resource.character-cards",
+      "title": "Personajes para presentarnos",
+      "kind": "rich_text",
+      "skill": "lectura",
+      "language": "en",
+      "teacher_language": "es",
+      "body_markdown": "## Sunny\nUn sol de papel. **My name is Sunny.**\n\n## Luna\nUna luna de papel. **My name is Luna.**\n\n## Pip\nUn pájaro de papel. **My name is Pip.**\n\nElige un personaje y preséntate. Cambia de personaje en la siguiente ronda.",
+      "teacher_notes": "## Personaje 1: Sunny\nDibuja un sol en una tarjeta. Frase de apoyo: **My name is Sunny.**\n\n## Personaje 2: Luna\nDibuja una luna. Frase de apoyo: **My name is Luna.**\n\n## Personaje 3: Pip\nDibuja un pájaro. Frase de apoyo: **My name is Pip.**\n\nReparte o muestra las tarjetas. Cambia de personaje en la segunda ronda. No registres quién eligió cada tarjeta."
+    },
+    {
+      "seed_key": "resource.colour-cards",
+      "title": "Four colours · tarjetas con nombre",
+      "kind": "rich_text",
+      "skill": "lectura",
+      "language": "en",
+      "teacher_language": "es",
+      "body_markdown": "**red — rojo — círculo**\n**blue — azul — estrella**\n**yellow — amarillo — triángulo**\n**green — verde — cuadrado**\n\nEscucha el color y busca la palabra o el símbolo en tu tarjeta. No necesitas distinguir los colores para participar.",
+      "teacher_notes": "**red — rojo**\n**blue — azul**\n**yellow — amarillo**\n**green — verde**\n\nEscribe el nombre junto a cada muestra de color. No dependas solo del color: incluye un símbolo diferente en cada tarjeta (círculo, estrella, triángulo y cuadrado). La forma sirve como apoyo de identificación, no como vocabulario que deba memorizarse en esta clase."
+    },
+    {
+      "seed_key": "resource.colour-dialogue",
+      "title": "What colour is it? · guion de práctica",
+      "kind": "rich_text",
+      "skill": "escucha",
+      "language": "en",
+      "teacher_language": "es",
+      "body_markdown": "**A:** What colour is it?\n**B:** It is red.\n\nPrueba también con **blue**, **yellow** y **green**. Puedes responder con una palabra o señalar la tarjeta. Después escucha la frase completa con tu educador.",
+      "teacher_notes": "**Educador:** muestra una tarjeta roja con la palabra red.\n**Educador:** What colour is it?\n**Grupo:** It is red.\n\nRepite con blue, yellow y green. Luego elige una tarjeta sin decir la respuesta. Acepta señalar el nombre o responder con una palabra; modela después la frase completa. No corrijas al niño delante del grupo por una diferencia de pronunciación inicial."
+    },
+    {
+      "seed_key": "resource.classroom-words",
+      "title": "Book, pencil, chair · palabras del aula",
+      "kind": "rich_text",
+      "skill": "lectura",
+      "language": "en",
+      "teacher_language": "es",
+      "body_markdown": "**a book — un libro**\n**a pencil — un lápiz**\n**a chair — una silla**\n\n**It is a book.**\n**It is a pencil.**\n**It is a chair.**\n\nSeñala un objeto o su dibujo mientras escuchas la frase.",
+      "teacher_notes": "**a book — un libro**\n**a pencil — un lápiz**\n**a chair — una silla**\n\nColoca un objeto o un dibujo junto a cada palabra. Frases modelo: **It is a book. It is a pencil. It is a chair.**\n\nUsa objetos comunes del aula. No es necesario que cada participante traiga materiales de casa."
+    },
+    {
+      "seed_key": "resource.classroom-instructions",
+      "title": "Point and show · instrucciones del aula",
+      "kind": "rich_text",
+      "skill": "escucha",
+      "language": "en",
+      "teacher_language": "es",
+      "body_markdown": "**Point to the book.** — Señala el libro.\n**Show me a pencil.** — Muéstrame un lápiz.\n**Point to the chair.** — Señala la silla.\n\nEscucha una instrucción cada vez. Puedes responder con un gesto o con la mirada. No necesitas levantarte ni mover muebles.",
+      "teacher_notes": "**Point to the book.** — Señala el libro.\n**Show me a pencil.** — Muéstrame un lápiz.\n**Point to the chair.** — Señala la silla.\n\nDi una instrucción cada vez y espera cinco segundos. Primero modela el gesto. Después cambia el orden. Evita pedir carreras, desplazamientos rápidos o levantar muebles; todas las acciones se pueden realizar sentado."
+    },
+    {
+      "seed_key": "resource.number-strip",
+      "title": "One to ten · tira de números",
+      "kind": "rich_text",
+      "skill": "lectura",
+      "language": "en",
+      "teacher_language": "es",
+      "body_markdown": "**1 one · 2 two · 3 three · 4 four · 5 five**\n**6 six · 7 seven · 8 eight · 9 nine · 10 ten**\n\nSeñala cada punto o ficha una vez mientras cuentas. Puedes empezar con uno a cinco y continuar después.",
+      "teacher_notes": "**1 one · 2 two · 3 three · 4 four · 5 five**\n**6 six · 7 seven · 8 eight · 9 nine · 10 ten**\n\nDibuja debajo de cada número la cantidad de puntos correspondiente. Cuenta señalando cada punto una vez. Si el grupo necesita más tiempo, trabaja de uno a cinco y conserva la segunda fila como ampliación."
+    },
+    {
+      "seed_key": "resource.counting-dialogue",
+      "title": "How many pencils? · contar en pareja",
+      "kind": "rich_text",
+      "skill": "conversación",
+      "language": "en",
+      "teacher_language": "es",
+      "body_markdown": "**A:** How many pencils?\n**B:** Three pencils.\n**A:** Thank you!\n**B:** You are welcome!\n\nPon tres lápices o dibujos sobre la mesa. Cuenta y responde. Cambia la cantidad, cambia de papel con tu compañero y prueba otra vez.",
+      "teacher_notes": "Coloca tres lápices o tres dibujos de lápices.\n\n**A:** How many pencils?\n**B:** Three pencils.\n**A:** Thank you!\n**B:** You are welcome!\n\nCambia la cantidad entre uno y diez. Cada pareja señala y cuenta antes de responder. No registres puntajes individuales ni compares públicamente a los participantes."
+    }
+  ],
+  "lessons": [
+    {
+      "seed_key": "lesson.hello-and-goodbye",
+      "module_key": "module.nos-conocemos",
+      "title": "Hello and goodbye",
+      "order": 0,
+      "duration_minutes": 25,
+      "objective": "Distinguir Hello y Goodbye y usar el saludo adecuado al llegar y salir.",
+      "language_focus": "Hello; Goodbye",
+      "materials": [
+        "Dos tarjetas de papel",
+        "Un personaje dibujado"
+      ],
+      "skills": [
+        "lectura",
+        "escucha",
+        "conversación"
+      ],
+      "teacher_notes": {
+        "exit_observation": "Antes de terminar, representa salir del aula y pide que el grupo elija el saludo de despedida. Observa si distingue ambas situaciones; no registres nombres.",
+        "inclusion": "Si todavía no lee, usa el gesto y lee tú las tarjetas. Ampliación: combinar Hello con el nombre del personaje.",
+        "privacy": "Usar personajes o datos ficticios. No registrar nombres ni resultados individuales."
+      },
+      "activities": [
+        {
+          "seed_key": "activity.hello-and-goodbye.welcome",
+          "position": 0,
+          "type": "text",
+          "title": "Comenzamos",
+          "minutes": 3,
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Hoy vas a usar Hello para saludar y Goodbye para despedirte. Elige un personaje de papel y saluda con la mano. Puedes escuchar primero y participar cuando estés listo."
+                  }
+                ]
+              }
+            ]
+          },
+          "teacher_notes": "Invita al grupo a saludar con la mano. Explica que hoy aprenderán dos palabras para comenzar y terminar un encuentro. Permite observar la primera ronda."
+        },
+        {
+          "seed_key": "activity.hello-and-goodbye.model",
+          "position": 1,
+          "type": "resource",
+          "title": "Escuchamos y observamos",
+          "minutes": 5,
+          "resource_key": "resource.hello-dialogue",
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Abre el material con tu educador. Escucha el modelo una vez; en la segunda ronda participa señalando, repitiendo o respondiendo."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "seed_key": "activity.hello-and-goodbye.prepare",
+          "position": 2,
+          "type": "resource",
+          "title": "Practicamos con apoyo",
+          "minutes": 7,
+          "resource_key": "resource.greeting-cards",
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Usa las tarjetas o el guion para ensayar. Trabaja con un compañero y cambia de papel para que ambos participen."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "seed_key": "activity.hello-and-goodbye.practice",
+          "position": 3,
+          "type": "text",
+          "title": "Lo hacemos en pareja",
+          "minutes": 7,
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Representen en parejas una llegada y una despedida con los personajes. Cambien de papel. Primero pueden señalar la tarjeta; después intenten decir la palabra sin verla."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "seed_key": "activity.hello-and-goodbye.check",
+          "position": 4,
+          "type": "question",
+          "title": "Comprobamos",
+          "minutes": 3,
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Llegas al aula. ¿Qué puedes decir?"
+                  }
+                ]
+              }
+            ]
+          },
+          "options": [
+            "Hello!",
+            "Goodbye!",
+            "Three!"
+          ],
+          "correct_answer_index": 0,
+          "feedback_correct": "Hello se usa para saludar al llegar. Goodbye se usa al despedirse.",
+          "feedback_retry": "Vuelve al material de la actividad anterior y busca la palabra clave. Hello se usa para saludar al llegar. Goodbye se usa al despedirse."
+        }
+      ]
+    },
+    {
+      "seed_key": "lesson.meet-a-friend",
+      "module_key": "module.nos-conocemos",
+      "title": "Meet a new friend",
+      "order": 1,
+      "duration_minutes": 25,
+      "objective": "Presentarse con el nombre de un personaje y responder a What is your name?",
+      "language_focus": "My name is…; What is your name?; Nice to meet you",
+      "materials": [
+        "Tres tarjetas de personajes",
+        "Papel y lápices compartidos"
+      ],
+      "skills": [
+        "lectura",
+        "escucha",
+        "conversación"
+      ],
+      "teacher_notes": {
+        "exit_observation": "Una pareja muestra el diálogo usando dos tarjetas distintas. El grupo reconoce cuál frase pregunta y cuál responde.",
+        "inclusion": "Modela la pregunta por fragmentos: What / is your name? No solicites el nombre real, edad, dirección ni información familiar.",
+        "privacy": "Usar personajes o datos ficticios. No registrar nombres ni resultados individuales."
+      },
+      "activities": [
+        {
+          "seed_key": "activity.meet-a-friend.welcome",
+          "position": 0,
+          "type": "text",
+          "title": "Comenzamos",
+          "minutes": 3,
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Hoy vas a presentarte como Sunny, Luna o Pip. No necesitas decir tu nombre real. Escucha cómo se presenta el personaje y elige el tuyo."
+                  }
+                ]
+              }
+            ]
+          },
+          "teacher_notes": "Recupera Hello con un saludo colectivo. Muestra a Sunny y di My name is Sunny señalando el personaje. Aclara que hoy hablaremos como personajes inventados."
+        },
+        {
+          "seed_key": "activity.meet-a-friend.model",
+          "position": 1,
+          "type": "resource",
+          "title": "Escuchamos y observamos",
+          "minutes": 5,
+          "resource_key": "resource.name-dialogue",
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Abre el material con tu educador. Escucha el modelo una vez; en la segunda ronda participa señalando, repitiendo o respondiendo."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "seed_key": "activity.meet-a-friend.prepare",
+          "position": 2,
+          "type": "resource",
+          "title": "Practicamos con apoyo",
+          "minutes": 7,
+          "resource_key": "resource.character-cards",
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Usa las tarjetas o el guion para ensayar. Trabaja con un compañero y cambia de papel para que ambos participen."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "seed_key": "activity.meet-a-friend.practice",
+          "position": 3,
+          "type": "text",
+          "title": "Lo hacemos en pareja",
+          "minutes": 7,
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "En parejas, cada persona elige un personaje y realiza el diálogo. Cambien las tarjetas y repitan. Quien no quiera hablar puede señalar su frase mientras un compañero la lee."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "seed_key": "activity.meet-a-friend.check",
+          "position": 4,
+          "type": "question",
+          "title": "Comprobamos",
+          "minutes": 3,
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Luna responde a What is your name? ¿Qué frase corresponde?"
+                  }
+                ]
+              }
+            ]
+          },
+          "options": [
+            "Goodbye, book!",
+            "My name is Luna.",
+            "It is green."
+          ],
+          "correct_answer_index": 1,
+          "feedback_correct": "My name is Luna presenta el nombre del personaje. What is your name? pregunta por ese nombre.",
+          "feedback_retry": "Vuelve al material de la actividad anterior y busca la palabra clave. My name is Luna presenta el nombre del personaje. What is your name? pregunta por ese nombre."
+        }
+      ]
+    },
+    {
+      "seed_key": "lesson.colours-around-us",
+      "module_key": "module.exploramos-el-aula",
+      "title": "Colours around us",
+      "order": 0,
+      "duration_minutes": 25,
+      "objective": "Reconocer red, blue, yellow y green y describir una tarjeta con It is…",
+      "language_focus": "red; blue; yellow; green; It is…",
+      "materials": [
+        "Cuatro tarjetas con palabra, símbolo y color",
+        "Papel para dibujar"
+      ],
+      "skills": [
+        "lectura",
+        "escucha",
+        "conversación"
+      ],
+      "teacher_notes": {
+        "exit_observation": "Muestra dos tarjetas en orden distinto y pide al grupo señalar la palabra que escucha. Pregunta qué pista usó: palabra, símbolo o color.",
+        "inclusion": "No evaluar solo por percepción cromática. Ofrece etiquetas y símbolos; una persona puede trabajar con palabras impresas sin distinguir colores.",
+        "privacy": "Usar personajes o datos ficticios. No registrar nombres ni resultados individuales."
+      },
+      "activities": [
+        {
+          "seed_key": "activity.colours-around-us.welcome",
+          "position": 0,
+          "type": "text",
+          "title": "Comenzamos",
+          "minutes": 3,
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Vamos a descubrir cuatro colores en inglés: red, blue, yellow y green. Mira las tarjetas con tu educador. Puedes reconocerlas por su palabra, símbolo o color."
+                  }
+                ]
+              }
+            ]
+          },
+          "teacher_notes": "Muestra cuatro tarjetas, cada una con un color, su nombre y un símbolo. Nombra cada palabra lentamente; el grupo puede repetir o señalar."
+        },
+        {
+          "seed_key": "activity.colours-around-us.model",
+          "position": 1,
+          "type": "resource",
+          "title": "Escuchamos y observamos",
+          "minutes": 5,
+          "resource_key": "resource.colour-cards",
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Abre el material con tu educador. Escucha el modelo una vez; en la segunda ronda participa señalando, repitiendo o respondiendo."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "seed_key": "activity.colours-around-us.prepare",
+          "position": 2,
+          "type": "resource",
+          "title": "Practicamos con apoyo",
+          "minutes": 7,
+          "resource_key": "resource.colour-dialogue",
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Usa las tarjetas o el guion para ensayar. Trabaja con un compañero y cambia de papel para que ambos participen."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "seed_key": "activity.colours-around-us.practice",
+          "position": 3,
+          "type": "text",
+          "title": "Lo hacemos en pareja",
+          "minutes": 7,
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Una persona elige una tarjeta; la otra pregunta What colour is it? Responde con It is y el color. Intercambien los papeles. Al final, cada pareja dibuja dos objetos imaginarios y añade sus palabras de color."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "seed_key": "activity.colours-around-us.check",
+          "position": 4,
+          "type": "question",
+          "title": "Comprobamos",
+          "minutes": 3,
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "La tarjeta dice blue. ¿Qué frase la describe?"
+                  }
+                ]
+              }
+            ]
+          },
+          "options": [
+            "It is yellow.",
+            "It is red.",
+            "It is blue."
+          ],
+          "correct_answer_index": 2,
+          "feedback_correct": "Blue significa azul. It is blue describe la tarjeta que elegiste.",
+          "feedback_retry": "Vuelve al material de la actividad anterior y busca la palabra clave. Blue significa azul. It is blue describe la tarjeta que elegiste."
+        }
+      ]
+    },
+    {
+      "seed_key": "lesson.my-classroom",
+      "module_key": "module.exploramos-el-aula",
+      "title": "My classroom",
+      "order": 1,
+      "duration_minutes": 25,
+      "objective": "Identificar book, pencil y chair y seguir dos instrucciones sencillas del aula.",
+      "language_focus": "book; pencil; chair; Point to…; Show me…",
+      "materials": [
+        "Un libro",
+        "Un lápiz",
+        "Una silla o dibujo"
+      ],
+      "skills": [
+        "lectura",
+        "escucha",
+        "conversación"
+      ],
+      "teacher_notes": {
+        "exit_observation": "Da dos instrucciones en orden nuevo y observa si el grupo relaciona palabra y objeto. Invita a corregir señalando otra tarjeta.",
+        "inclusion": "Señalar con la mirada o nombrar el objeto también cuenta como participación. No exigir desplazamiento, lectura autónoma ni materiales personales.",
+        "privacy": "Usar personajes o datos ficticios. No registrar nombres ni resultados individuales."
+      },
+      "activities": [
+        {
+          "seed_key": "activity.my-classroom.welcome",
+          "position": 0,
+          "type": "text",
+          "title": "Comenzamos",
+          "minutes": 3,
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Vamos a conocer tres palabras del aula: book, pencil y chair. Busca los objetos o sus dibujos con tu educador. Puedes señalar, mirar o decir cuál es."
+                  }
+                ]
+              }
+            ]
+          },
+          "teacher_notes": "Muestra un libro, un lápiz y una silla o sus dibujos. Relaciona cada objeto con su palabra. Todos pueden participar sentados; no se necesita un objeto por persona."
+        },
+        {
+          "seed_key": "activity.my-classroom.model",
+          "position": 1,
+          "type": "resource",
+          "title": "Escuchamos y observamos",
+          "minutes": 5,
+          "resource_key": "resource.classroom-words",
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Abre el material con tu educador. Escucha el modelo una vez; en la segunda ronda participa señalando, repitiendo o respondiendo."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "seed_key": "activity.my-classroom.prepare",
+          "position": 2,
+          "type": "resource",
+          "title": "Practicamos con apoyo",
+          "minutes": 7,
+          "resource_key": "resource.classroom-instructions",
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Usa las tarjetas o el guion para ensayar. Trabaja con un compañero y cambia de papel para que ambos participen."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "seed_key": "activity.my-classroom.practice",
+          "position": 3,
+          "type": "text",
+          "title": "Lo hacemos en pareja",
+          "minutes": 7,
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Por turnos, una persona usa las tarjetas para decir Point to the book o Show me a pencil. Su compañero responde con un gesto. Luego intercambian papeles y nombran un objeto con It is a…."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "seed_key": "activity.my-classroom.check",
+          "position": 4,
+          "type": "question",
+          "title": "Comprobamos",
+          "minutes": 3,
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Escuchas Point to the book. ¿Qué debes señalar?"
+                  }
+                ]
+              }
+            ]
+          },
+          "options": [
+            "El libro.",
+            "El lápiz.",
+            "La silla."
+          ],
+          "correct_answer_index": 0,
+          "feedback_correct": "Book significa libro. La instrucción pide señalarlo, no levantarlo ni moverse por el aula.",
+          "feedback_retry": "Vuelve al material de la actividad anterior y busca la palabra clave. Book significa libro. La instrucción pide señalarlo, no levantarlo ni moverse por el aula."
+        }
+      ]
+    },
+    {
+      "seed_key": "lesson.count-and-share",
+      "module_key": "module.exploramos-el-aula",
+      "title": "Count and share",
+      "order": 2,
+      "duration_minutes": 25,
+      "objective": "Contar hasta diez objetos y responder How many? usando el número correspondiente.",
+      "language_focus": "one to ten; How many pencils?; Thank you",
+      "materials": [
+        "Hasta diez fichas de papel",
+        "Tres lápices o dibujos"
+      ],
+      "skills": [
+        "lectura",
+        "escucha",
+        "conversación"
+      ],
+      "teacher_notes": {
+        "exit_observation": "Presenta cuatro fichas en una distribución distinta y pregunta How many? Comprueba que cuenta objetos, no que repite la secuencia de memoria.",
+        "inclusion": "Reducir a uno–cinco si hace falta. Dar tiempo para señalar o mostrar una tarjeta de número; no usar velocidad ni competencia para evaluar.",
+        "privacy": "Usar personajes o datos ficticios. No registrar nombres ni resultados individuales."
+      },
+      "activities": [
+        {
+          "seed_key": "activity.count-and-share.welcome",
+          "position": 0,
+          "type": "text",
+          "title": "Comenzamos",
+          "minutes": 3,
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Hoy vamos a contar objetos en inglés. Empieza con cinco fichas de papel: toca o señala cada una mientras cuentas. Después puedes probar hasta diez."
+                  }
+                ]
+              }
+            ]
+          },
+          "teacher_notes": "Coloca cinco fichas y cuenta señalándolas una vez. Repite con el grupo. Añade hasta diez solo después de que cada ficha corresponda a una palabra."
+        },
+        {
+          "seed_key": "activity.count-and-share.model",
+          "position": 1,
+          "type": "resource",
+          "title": "Escuchamos y observamos",
+          "minutes": 5,
+          "resource_key": "resource.number-strip",
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Abre el material con tu educador. Escucha el modelo una vez; en la segunda ronda participa señalando, repitiendo o respondiendo."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "seed_key": "activity.count-and-share.prepare",
+          "position": 2,
+          "type": "resource",
+          "title": "Practicamos con apoyo",
+          "minutes": 7,
+          "resource_key": "resource.counting-dialogue",
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Usa las tarjetas o el guion para ensayar. Trabaja con un compañero y cambia de papel para que ambos participen."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "seed_key": "activity.count-and-share.practice",
+          "position": 3,
+          "type": "text",
+          "title": "Lo hacemos en pareja",
+          "minutes": 7,
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "En parejas, una persona elige entre uno y diez dibujos de lápices. La otra pregunta How many pencils? Cuenten juntos y respondan con número y pencils. Intercambien papeles y usen Thank you al terminar."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "seed_key": "activity.count-and-share.check",
+          "position": 4,
+          "type": "question",
+          "title": "Comprobamos",
+          "minutes": 3,
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Hay three pencils. ¿Cuántos lápices hay?"
+                  }
+                ]
+              }
+            ]
+          },
+          "options": [
+            "Dos.",
+            "Tres.",
+            "Cinco."
+          ],
+          "correct_answer_index": 1,
+          "feedback_correct": "Three significa tres. Señala cada lápiz una vez para comprobar la cantidad.",
+          "feedback_retry": "Vuelve al material de la actividad anterior y busca la palabra clave. Three significa tres. Señala cada lápiz una vez para comprobar la cantidad."
+        }
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "seed_key": "group.colibri",
+      "name": "Colibrí",
+      "description": "Grupo de demostración de primeros encuentros.",
+      "participant_records": [],
+      "suggested_lesson_keys": [
+        "lesson.hello-and-goodbye",
+        "lesson.meet-a-friend"
+      ]
+    },
+    {
+      "seed_key": "group.quetzal",
+      "name": "Quetzal",
+      "description": "Grupo de demostración para explorar el aula.",
+      "participant_records": [],
+      "suggested_lesson_keys": [
+        "lesson.colours-around-us",
+        "lesson.my-classroom",
+        "lesson.count-and-share"
+      ]
+    }
+  ],
+  "student_render_policy": "Solo content/body_markdown; excluir teacher_notes y respuestas correctas de payloads públicos cuando corresponda a evaluaciones. Esta demo es práctica guiada con retroalimentación local, no examen.",
+  "pedagogical_approval": {
+    "recorded_on": "2026-09-29",
+    "basis": "Confirmación explícita del usuario en la conversación de implementación.",
+    "reviewer_name": null
+  }
+}
