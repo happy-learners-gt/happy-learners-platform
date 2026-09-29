@@ -4,6 +4,7 @@ import catalogMigration from "../../../database/migrations/0002_catalog.sql";
 import rolesMigration from "../../../database/migrations/0003_roles.sql";
 import curriculumMigration from "../../../database/migrations/0004_curriculum.sql";
 import editingMigration from "../../../database/migrations/0005_editing.sql";
+import greetingsMigration from "../../../database/migrations/0006_greetings_seed.sql";
 
 type Statement = { sql: string; values: (string | number | null)[] };
 // One SQLite object per organization; only the Worker holds this binding.
@@ -28,6 +29,7 @@ export class OrganizationStore extends DurableObject<Env> {
       if (!applied.length || applied[0].version < 3) { this.ctx.storage.sql.exec(rolesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (3,?)", scope); }
       if (!applied.length || applied[0].version < 4) { this.ctx.storage.sql.exec(curriculumMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (4,?)", scope); }
       if (!applied.length || applied[0].version < 5) { this.ctx.storage.sql.exec(editingMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (5,?)", scope); }
+      if (!applied.length || applied[0].version < 6) { this.ctx.storage.sql.exec(greetingsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (6,?)", scope); }
       return statements.map(statement => this.ctx.storage.sql.exec(statement.sql, ...statement.values).toArray());
     });
   }
