@@ -2,6 +2,8 @@
 
 29 de septiembre de 2026 · ST-041 / HL-44
 
+**Dirección revisada:** [Cursos, recorridos y contenido compartido](modelo-educativo-generico.md) sustituye la jerarquía académica fija de esta primera entrega. Incluye taxonomías configurables, flujos, estados, progresión y [wireframes navegables](prototipo-cursos.html). El resto de esta página conserva el alcance realmente implementado; no presenta la nueva propuesta como desplegada.
+
 ## Aprobación
 
 El usuario confirmó que la revisión pedagógica está aprobada y autorizó comenzar la implementación del plan de rediseño. No se solicita otra revisión de los mismos contenidos. Esta nota registra la confirmación recibida; no atribuye la revisión a una persona ni inventa su fecha original.
