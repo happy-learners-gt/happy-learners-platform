@@ -1,0 +1,11 @@
+ALTER TABLE resources ADD COLUMN archived INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE resources ADD COLUMN kind TEXT NOT NULL DEFAULT 'text';
+ALTER TABLE resources ADD COLUMN updated_at TEXT NOT NULL DEFAULT '';
+UPDATE resources SET kind=CASE WHEN content LIKE 'https://%' OR content LIKE 'http://%' THEN 'link' ELSE 'text' END,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now');
+ALTER TABLE lessons ADD COLUMN published_content TEXT;
+ALTER TABLE lessons ADD COLUMN revision INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE lessons ADD COLUMN draft_version INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE lessons ADD COLUMN published_version INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE lessons ADD COLUMN updated_at TEXT NOT NULL DEFAULT '';
+UPDATE lessons SET published_content=content,revision=1,published_version=1 WHERE status='published';
+UPDATE lessons SET updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now');
