@@ -1,4 +1,4 @@
-# Pruebas ST-043
+# Pruebas de producto
 
 Ejecuta `npm ci` y `./scripts/verify` con Node.js 24. Para repetir solo las pruebas tras un build: `npm test`.
 
@@ -6,4 +6,8 @@ Ejecuta `npm ci` y `./scripts/verify` con Node.js 24. Para repetir solo las prue
 - `build.test.ts`: inicia Wrangler local con el paquete construido; comprueba health, versión exacta, navegación a la API, HTML y assets, 404, 405 y HEAD. No utiliza recursos remotos.
 - `delivery.test.ts`: comprueba los triggers, la dependencia obligatoria de verificación, ausencia de publicación en PRs, transferencia del artefacto y rechazo de SHA ajeno al checkout. Es una comprobación estática del workflow, no una ejecución del scheduler de GitHub.
 
-El dry-run de Wrangler y estas pruebas son evidencia local. Quedan pendientes la ejecución en GitHub, la configuración de repository secrets y preflight manual de integración, el despliegue y la aceptación en workers.dev.
+`npm run test:e2e` inicia un servidor local con una base nueva por ejecución. Prueba los recorridos completos de Sprint 1 y Sprint 2 y la navegación de ST-041 en escritorio y móvil. No admite `BASE_URL`: nunca debe escribir sobre la demo pública.
+
+`npm run test:smoke` comprueba navegación, inicio/cierre de sesión y lectura de contenido. Admite `BASE_URL` para verificar producción. Bloquea escrituras de contenido y finalizaciones; solo permite las operaciones de sesión. La política se prueba en `target-policy.test.ts` y su selección en CI se verifica en `delivery.test.ts`.
+
+Las capturas y resultados se escriben en `.release-evidence/`. El dry-run y los E2E locales no son evidencia de un despliegue. El workflow verifica cada PR; después de integrar, despliega el mismo artefacto y ejecuta el smoke de producción.

@@ -81,6 +81,16 @@ it("returns API errors without falling back to the page", async () => {
   expect(head.status).toBe(200);
   expect(await head.text()).toBe("");
 });
+it("HL-44 serves deep links without bypassing API authorization", async () => {
+  for (const path of ["/inicio", "/biblioteca?q=Hello", "/contenido/lecciones", "/aprender/GREETINGS"]) {
+    const response = await fetch(origin + path, { headers: { "Sec-Fetch-Mode": "navigate" } });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/html");
+  }
+  const session = await fetch(origin + "/api/session", { headers: { "Sec-Fetch-Mode": "navigate" } });
+  expect(session.status).toBe(401);
+  expect(session.headers.get("content-type")).toContain("application/json");
+});
 
 async function login(username: string) {
   const response = await fetch(`${origin}/api/login`, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin }, body: JSON.stringify({ username, password: "Aprender-2026!" }) });

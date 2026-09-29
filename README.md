@@ -1,6 +1,8 @@
 # Happy Learners Platform
 
-Monorepo de la aplicación. ST-043 incorpora una página de disponibilidad, `/api/health`, `/api/version` y la entrega verificable. No incluye autenticación, contenido académico ni persistencia.
+Aplicación para preparar y compartir lecciones de inglés. Incluye acceso del equipo, biblioteca de recursos, niveles y módulos, edición de lecciones, publicación por enlace y finalización agregada. Los estudiantes no necesitan una cuenta.
+
+La revisión pedagógica del rediseño está aprobada. Consulta la [primera entrega de implementación](docs/redesign/README.md), su alcance y lo que sigue pendiente.
 
 ## Desarrollo local
 
@@ -20,9 +22,10 @@ npm run dev
 
 - `apps/web`: React/Vite y presentación; consume los contratos de la API.
 - `apps/api`: Worker TypeScript y composición del backend.
-- `packages/domain`: reglas independientes de frameworks, transporte y persistencia; ST-043 no añade reglas.
-- `packages/contracts`: contratos compartidos de health y versión.
-- `database/migrations`: migraciones acumulativas de historias futuras.
+- `packages/domain`: reglas independientes de frameworks, transporte y persistencia.
+- `packages/contracts`: contratos compartidos de organización, recursos, currículo y lecciones.
+- `database/migrations`: migraciones acumulativas de la persistencia SQLite en Durable Objects.
+- `database/seeds`: contenido editorial aprobado; no se carga automáticamente en producción.
 - `infrastructure`: configuración de Workers Static Assets y documentación de entrega.
 - `tests`: pruebas de interfaz, paquete construido y controles del workflow.
 
@@ -30,7 +33,7 @@ DEC-008 / ADR-0003 en `happy-learners-ops` aprueban el stack. El lockfile se ver
 
 ## Entrega y versión
 
-Consulta [infrastructure/README.md](infrastructure/README.md). El SHA se obtiene de `git rev-parse HEAD`, se incorpora al Worker durante el build y se registra en `build/version.json`. En GitHub se comprueba que coincida con `GITHUB_SHA`. La página consulta la versión que responde la API, sin un SHA duplicado en el frontend. Las respuestas API llevan `Cache-Control: no-store`.
+Consulta [infrastructure/README.md](infrastructure/README.md). El SHA se obtiene de `git rev-parse HEAD`, se incorpora al Worker durante el build y se registra en `build/version.json`. En GitHub se comprueba que coincida con `GITHUB_SHA`. `/api/version` devuelve esa revisión. Las respuestas API llevan `Cache-Control: no-store`.
 
 Un build local con cambios sin commit informa el SHA base del checkout: no representa esos cambios como una revisión publicada. Solo la construcción desde un checkout integrado y limpio de CI ofrece trazabilidad de una revisión desplegada. La validación local no equivale a un despliegue ni declara ST-043 Done.
 
