@@ -6,6 +6,7 @@ import { createServer } from "node:net";
 import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, expect, it } from "vitest";
+import type { Lesson, Resource } from "../packages/contracts/src/index";
 
 let worker: ChildProcess;
 let origin: string;
@@ -116,13 +117,13 @@ it("HL-10 persists organization settings, validates input and restricts administ
 it("HL-11 published lessons are read-only and isolated from other organizations", async () => {
   const Cookie = await login("instructor-demo");
   const data = await (await fetch(`${origin}/api/lessons`, { headers: { Cookie } })).json();
-  expect(data.lessons).toHaveLength(1);
+  expect(data.lessons.map((l: { id: string }) => l.id)).toContain("colores-en-equipo");
   const response = await fetch(`${origin}/api/lessons/colores-en-equipo`, { headers: { Cookie } });
   const { lesson } = await response.json();
   expect(lesson.title).toBe("Un mundo de colores");
   expect(lesson.activities).toHaveLength(3);
   expect(lesson.materials).toHaveLength(3);
-  expect((await fetch(`${origin}/api/lessons/colores-en-equipo`, { method: "PUT", headers: { Cookie, Origin: origin } })).status).toBe(405);
+  expect((await fetch(`${origin}/api/lessons/colores-en-equipo`, { method: "PUT", headers: { Cookie, Origin: origin, "Content-Type": "application/json" }, body: "{}" })).status).toBe(400);
   const outsider = await login("externo-demo");
   expect((await fetch(`${origin}/api/lessons/colores-en-equipo`, { headers: { Cookie: outsider } })).status).toBe(404);
   expect((await (await fetch(`${origin}/api/lessons`, { headers: { Cookie: outsider } })).json()).lessons).toEqual([]);
@@ -131,11 +132,83 @@ it("HL-11 published lessons are read-only and isolated from other organizations"
 it("HL-14 responses expose no password data and reject oversized or malformed input", async () => {
   const Cookie = await login("instructor-demo");
   const response = await fetch(`${origin}/api/session`, { headers: { Cookie } });
-  expect(await response.json()).toEqual({ member: { id: "user-1", username: "instructor-demo", role: "instructor", organizationId: "org-demo" } });
+  expect(await response.json()).toEqual({ member: { id: "user-1", username: "instructor-demo", role: "educator", organizationId: "org-demo" } });
   expect(response.headers.get("referrer-policy")).toBe("no-referrer");
   for (const body of ["{", JSON.stringify({ username: "x".repeat(3000), password: "x" })]) {
     const invalid = await fetch(`${origin}/api/login`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body });
     expect(invalid.status).toBe(400);
     expect(await invalid.text()).not.toMatch(/SQL|stack|password_hash/);
   }
+});
+
+async function requestAs(cookie: string, path: string, method = "GET", data?: unknown) {
+  return fetch(origin + "/api" + path, { method, headers: { Cookie: cookie, Origin: origin, ...(data ? { "Content-Type": "application/json" } : {}) }, ...(data ? { body: JSON.stringify(data) } : {}) });
+}
+it("HL-19 roles are enforced and changing a role revokes sessions", async () => {
+  const admin = await login("admin-demo"); const educator = await login("educador-demo");
+  expect((await requestAs(educator, "/members")).status).toBe(403);
+  expect((await requestAs(admin, "/levels", "POST", { name: "Blocked", description: "Forbidden" })).status).toBe(403);
+  expect((await requestAs("", "/curriculum")).status).toBe(401);
+  expect((await requestAs(admin, "/members/user-educator", "PUT", { role: "admin", active: true })).status).toBe(200);
+  expect((await requestAs(educator, "/session")).status).toBe(401);
+  expect((await (await requestAs(await login("educador-demo"), "/session")).json()).member.role).toBe("admin");
+  expect((await requestAs(admin, "/members/user-educator", "PUT", { role: "educator", active: true })).status).toBe(200);
+  expect((await requestAs(admin, "/members/user-0", "PUT", { role: "educator", active: false })).status).toBe(409);
+});
+
+it("HL-20 HL-22 HL-24 curriculum persists, rejects orphans and validates exact ordering", async () => {
+  const educator = await login("educador-demo");
+  const created = await requestAs(educator, "/levels", "POST", { name: "Elementary", description: "Next steps", status: "draft" });
+  expect(created.status).toBe(201); const level = (await created.json()).id;
+  expect((await requestAs(educator, `/levels/${level}`, "PUT", { name: "Elementary revised", description: "Next steps", status: "active" })).status).toBe(200);
+  const unit = await requestAs(educator, "/units", "POST", { levelId: level, name: "Colors", objective: "Name colors" }); expect(unit.status).toBe(201);
+  const uid = (await unit.json()).id;
+  expect((await requestAs(educator, "/units", "POST", { levelId: "not-real", name: "Orphan", objective: "Blocked" })).status).toBe(400);
+  expect((await requestAs(educator, "/levels/order", "PUT", { ids: [level, level] })).status).toBe(400);
+  const original = (await (await requestAs(educator, "/curriculum")).json()).levels.map((l: { id: string }) => l.id).reverse();
+  expect((await requestAs(educator, "/levels/order", "PUT", { ids: original })).status).toBe(200);
+  const after = await (await requestAs(await login("educador-demo"), "/curriculum")).json();
+  expect(after.levels.map((l: { id: string }) => l.id)).toEqual(original);
+  expect(after.levels.map((l: { position: number }) => l.position)).toEqual([0, 1]);
+  expect((await requestAs(educator, `/units/${uid}`, "PUT", { levelId: level, name: "Colors edited", objective: "Name colors", status: "archived" })).status).toBe(200);
+  expect((await requestAs(educator, `/levels/${level}`, "PUT", { name: "Elementary revised", description: "Archived", status: "archived" })).status).toBe(200);
+});
+
+it("HL-23–29 editing, republication, ordered activities, links, archive and aggregate completion", async () => {
+  const educator = await login("educador-demo");
+  const value = { title: "Hello test", description: "Synthetic", level: "Beginner", skill: "lectura", topic: "Greetings", tags: ["demo"], content: "Hello, friend!", kind: "text", status: "draft" };
+  const made = await requestAs(educator, "/resources", "POST", value); expect(made.status).toBe(201); const resource: Resource = (await made.json()).resource;
+  expect((await requestAs(educator, `/resources/${resource.id}`, "PUT", { ...value, title: "Edited greeting" })).status).toBe(200);
+  expect((await requestAs(educator, "/resources", "POST", { ...value, kind: "link", content: "javascript:alert(1)" })).status).toBe(400);
+  expect((await requestAs(educator, "/resources", "POST", { ...value, kind: "link", content: "https://example.org/english" })).status).toBe(201);
+  const data = { title: "Acceptance lesson", objective: "Greet", instructions: "Say hello", unitId: "unit-org-demo", activities: [
+    { id: "a", type: "text", position: 0, title: "Listen", instructions: "Say hello", minutes: 5 },
+    { id: "b", type: "resource", position: 1, title: "Read", instructions: "Read the greeting", minutes: 5, resourceId: resource.id },
+    { id: "c", type: "question", position: 2, title: "Choose", instructions: "Select the greeting", minutes: 5, options: ["Hello", "Goodbye"], answer: 0 },
+  ] };
+  const draft = await requestAs(educator, "/lessons", "POST", data); expect(draft.status).toBe(201); let lesson: Lesson = (await draft.json()).lesson;
+  expect(lesson.status).toBe("draft"); expect((await requestAs("", `/share/${lesson.shareCode}`)).status).toBe(404);
+  expect((await requestAs(educator, `/lessons/${lesson.id}/publish`, "POST")).status).toBe(200);
+  const publicBefore = await (await requestAs("", `/share/${lesson.shareCode}`)).json(); expect(publicBefore.lesson.resources[0].title).toBe("Edited greeting");
+  const reordered = [data.activities[2], data.activities[0], data.activities[1]].map((a, i) => ({ ...a, position: i }));
+  const edited = await requestAs(educator, `/lessons/${lesson.id}`, "PUT", { ...data, title: "New revision", activities: reordered, draftVersion: lesson.draftVersion });
+  expect(edited.status).toBe(200); lesson = (await edited.json()).lesson;
+  expect((await (await requestAs("", `/share/${lesson.shareCode}`)).json()).lesson.title).toBe("Acceptance lesson");
+  expect((await requestAs(educator, `/lessons/${lesson.id}`, "PUT", { ...data, draftVersion: 0 })).status).toBe(409);
+  expect((await requestAs(educator, `/lessons/${lesson.id}`, "PUT", { ...data, activities: [{ ...data.activities[0], position: 2 }], draftVersion: lesson.draftVersion })).status).toBe(400);
+  expect((await requestAs(educator, `/lessons/${lesson.id}/publish`, "POST")).status).toBe(200);
+  const publicAfter = (await (await requestAs("", `/share/${lesson.shareCode}`)).json()).lesson;
+  expect(publicAfter.revision).toBe(2); expect(publicAfter.title).toBe("New revision"); expect(publicAfter.activities.map((a: { id: string }) => a.id)).toEqual(["c", "a", "b"]);
+  expect((await requestAs(educator, `/resources/${resource.id}`, "DELETE")).status).toBe(409);
+  expect((await requestAs(educator, `/resources/${resource.id}`, "PUT", { ...value, status: "archived" })).status).toBe(200);
+  expect((await (await requestAs("", `/share/${lesson.shareCode}`)).json()).lesson.resources[0].title).toBe("Edited greeting");
+  const completion = await requestAs("", `/share/${lesson.shareCode}/complete`, "POST"); expect(completion.status).toBe(200);
+  const cookie = completion.headers.get("set-cookie")!.split(";")[0];
+  await requestAs(cookie, `/share/${lesson.shareCode}/complete`, "POST");
+  const persisted = (await (await requestAs(await login("educador-demo"), `/lessons/${lesson.id}?draft=1`)).json()).lesson;
+  expect(persisted.completions).toBe(1); expect(persisted.activities.map((a: { position: number }) => a.position)).toEqual([0, 1, 2]);
+  const outsider = await login("externo-demo");
+  expect((await requestAs(outsider, `/lessons/${lesson.id}?draft=1`)).status).toBe(404);
+  expect((await requestAs(outsider, `/resources/${resource.id}`, "PUT", value)).status).toBe(404);
+  const crossed = await requestAs(outsider, "/lessons", "POST", { ...data, unitId: "unit-org-other" }); expect(crossed.status).toBe(400);
 });
