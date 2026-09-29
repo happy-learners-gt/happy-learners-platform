@@ -11,7 +11,26 @@ export interface Lesson {
   reflection: string; publishedAt: string;
   unitId?: string; position?: number; status?: "draft" | "published" | "archived";
   revision?: number; draftVersion?: number; hasDraft?: boolean; updatedAt?: string; shareCode?: string; completions?: number;
-  resources?: Resource[];
+  resources?: (Resource | Material)[];
+  courseId?: string; courseUnitId?: string;
 }
 export type ResourceSkill = "lectura" | "escritura" | "escucha" | "conversación";
 export interface Resource { id: string; title: string; description: string; level: string; skill: ResourceSkill; topic: string; tags: string[]; content: string; status: "draft" | "published" | "archived"; kind?: "text" | "link"; updatedAt?: string; }
+
+export type CourseProfile = "free" | "preschool" | "school" | "university" | "workshop" | "laboratory";
+export type UnitLabel = "Temas" | "Experiencias" | "Unidades" | "Semanas" | "Módulos" | "Prácticas";
+export interface Course {
+  id: string; title: string; objective: string; profile: CourseProfile; unitLabel: UnitLabel;
+  status: "active" | "archived"; version: number; updatedAt: string; termIds: string[];
+}
+export interface LearningUnit {
+  id: string; courseId: string; name: string; objective: string; position: number;
+  status: "active" | "archived"; updatedAt: string;
+}
+export interface Vocabulary { id: string; name: string; status: "active" | "archived"; version: number }
+export interface TaxonomyTerm extends Vocabulary { vocabularyId: string }
+export interface Taxonomy { vocabularies: Vocabulary[]; terms: TaxonomyTerm[] }
+export interface Material {
+  id: string; courseId: string; title: string; description: string; kind: "text" | "link";
+  content: string; status: "draft" | "published" | "archived"; version: number; updatedAt: string; termIds: string[];
+}
