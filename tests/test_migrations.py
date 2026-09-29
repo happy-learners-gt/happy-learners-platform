@@ -4,6 +4,44 @@ import unittest
 
 
 class UpgradeTests(unittest.TestCase):
+    def migrated(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            db.executescript(path.read_text())
+        return db
+
+    def test_course_mapping_preserves_every_published_byte(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        for path in migrations[:6]:
+            db.executescript(path.read_text())
+        before = db.execute("SELECT id,content,published_content,revision FROM lessons ORDER BY id").fetchall()
+        resources = db.execute("SELECT * FROM resources ORDER BY id").fetchall()
+        db.executescript(migrations[6].read_text())
+        self.assertEqual(before, db.execute("SELECT id,content,published_content,revision FROM lessons ORDER BY id").fetchall())
+        self.assertEqual(resources, db.execute("SELECT * FROM resources ORDER BY id").fetchall())
+        self.assertEqual(db.execute("SELECT count(*) FROM lessons WHERE course_unit_id IS NULL").fetchone()[0], 0)
+        self.assertEqual(db.execute("SELECT id,title FROM courses").fetchall(), [("course-exploradores", "Exploradores")])
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_course_classification_cannot_cross_organization(self):
+        db = self.migrated()
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO course_terms VALUES (?,?,?)", ("course-exploradores", "discipline-org-other-science", "org-demo"))
+        self.assertEqual(db.execute("SELECT count(*) FROM course_terms").fetchone()[0], 0)
+
+    def test_generic_material_has_no_english_fields_and_keeps_archived_reference(self):
+        db = self.migrated()
+        db.execute("INSERT INTO materials(id,course_id,organization_id,title,description,kind,content,status,updated_at) VALUES (?,?,?,?,?,?,?,?,?)", ("material-light", "course-exploradores", "org-demo", "Luz", "Observar sombras", "text", "Compara dos sombras.", "draft", "2026-09-29T00:00:00Z"))
+        db.execute("INSERT INTO material_terms VALUES (?,?,?)", ("material-light", "discipline-org-demo-science", "org-demo"))
+        db.execute("UPDATE taxonomy_terms SET status='archived' WHERE id='discipline-org-demo-science'")
+        self.assertEqual(db.execute("SELECT count(*) FROM material_terms").fetchone()[0], 1)
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("DELETE FROM taxonomy_terms WHERE id='discipline-org-demo-science'")
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
     def test_existing_content_survives_additive_migrations(self):
         db = sqlite3.connect(":memory:")
         db.execute("PRAGMA foreign_keys=ON")

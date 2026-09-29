@@ -1,11 +1,12 @@
 import type { Activity, Lesson, Member, Resource } from "@happy-learners/contracts";
 import { validActivities } from "@happy-learners/domain";
 import type { Database } from "./storage";
+import { materialsFor } from "./courses";
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
-type LessonRow = { id: string; content: string; published_content: string | null; unit_id: string; position: number; status: "draft" | "published"; archived: number; revision: number; draft_version: number; published_version: number; updated_at: string; completions: number };
-const lessonQuery = "SELECT l.*,(SELECT count(*) FROM lesson_completions c WHERE c.lesson_id=l.id) AS completions FROM lessons l JOIN programs p ON p.id=l.program_id JOIN units u ON u.id=l.unit_id JOIN levels lv ON lv.id=u.level_id WHERE p.organization_id=?";
+type LessonRow = { id: string; content: string; published_content: string | null; unit_id: string | null; course_unit_id: string | null; course_id: string | null; position: number; status: "draft" | "published"; archived: number; revision: number; draft_version: number; published_version: number; updated_at: string; completions: number };
+const lessonQuery = "SELECT l.*,c.id AS course_id,(SELECT count(*) FROM lesson_completions lc WHERE lc.lesson_id=l.id) AS completions FROM lessons l JOIN programs p ON p.id=l.program_id LEFT JOIN courses c ON c.legacy_program_id=p.id LEFT JOIN learning_units cu ON cu.id=l.course_unit_id LEFT JOIN units u ON u.id=l.unit_id LEFT JOIN levels lv ON lv.id=u.level_id WHERE p.organization_id=?";
 function lessonView(row: LessonRow, draft: boolean): Lesson {
-  return { ...JSON.parse(draft ? row.content : row.published_content || row.content), unitId: row.unit_id, position: row.position, status: row.archived ? "archived" : row.status, revision: row.revision, draftVersion: row.draft_version, hasDraft: row.draft_version !== row.published_version, updatedAt: row.updated_at, completions: row.completions };
+  return { ...JSON.parse(draft ? row.content : row.published_content || row.content), unitId: row.unit_id || undefined, courseUnitId: row.course_unit_id || undefined, courseId: row.course_id || undefined, position: row.position, status: row.archived ? "archived" : row.status, revision: row.revision, draftVersion: row.draft_version, hasDraft: row.draft_version !== row.published_version, updatedAt: row.updated_at, completions: row.completions };
 }
 export async function resources(db: Database, organization: string) {
   const rows = await db.prepare("SELECT id,title,description,level,skill,topic,tags,content,status,archived,kind,updated_at AS updatedAt FROM resources WHERE organization_id=? ORDER BY title").bind(organization).all<Omit<Resource, "tags"> & { tags: string; archived: number }>();
@@ -40,10 +41,13 @@ export async function content(url: URL, method: string, input: unknown, current:
     else await db.prepare("INSERT INTO resources(title,description,level,skill,topic,tags,content,status,archived,kind,updated_at,id,organization_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(...values, rid, current.organizationId).run();
     return reply({ resource: (await resources(db, current.organizationId)).find(r => r.id === rid) }, id ? 200 : 201);
   }
-  const rows = (await db.prepare(lessonQuery + " ORDER BY lv.position,u.position,l.position,l.id").bind(current.organizationId).all<LessonRow>()).results;
+  const courseFilter = url.searchParams.get("course");
+  if (courseFilter && !await db.prepare("SELECT id FROM courses WHERE id=? AND organization_id=?").bind(courseFilter, current.organizationId).first()) return reply({ error: "Curso no disponible." }, 404);
+  const rows = (await db.prepare(lessonQuery + (courseFilter ? " AND c.id=?" : "") + " ORDER BY c.title,COALESCE(cu.position,u.position),l.position,l.id").bind(current.organizationId, ...(courseFilter ? [courseFilter] : [])).all<LessonRow>()).results;
   if (id === "order" && method === "PUT") {
-    const v = input as { unitId?: string; ids?: string[] } | null;
-    const selected = rows.filter(r => r.unit_id === v?.unitId);
+    const v = input as { unitId?: string; courseUnitId?: string; ids?: string[] } | null;
+    if (!v?.unitId && !v?.courseUnitId) return reply({ error: "Selecciona una unidad." }, 400);
+    const selected = rows.filter(r => v?.courseUnitId ? r.course_unit_id === v.courseUnitId : r.unit_id === v?.unitId);
     if (!v || !Array.isArray(v.ids) || v.ids.length !== selected.length || new Set(v.ids).size !== selected.length || v.ids.some(x => !selected.some(r => r.id === x))) return reply({ error: "El orden debe incluir todas las lecciones de la unidad una sola vez." }, 400);
     await db.batch(v.ids.map((item, i) => db.prepare("UPDATE lessons SET position=? WHERE id=?").bind(i, item))); return reply({ ok: true });
   }
@@ -51,9 +55,10 @@ export async function content(url: URL, method: string, input: unknown, current:
   if (id && (!row || (method === "GET" && !draft && (!row.published_content || row.archived)))) return reply({ error: "Lección no disponible." }, 404);
   if (method === "GET") return id ? reply({ lesson: lessonView(row!, draft) }) : reply({ lessons: rows.filter(r => draft || (r.published_content && !r.archived)).map(r => lessonView(r, draft)) });
   if (path.endsWith("/publish") && row) {
+    if (row.course_id && !await db.prepare("SELECT c.id FROM courses c JOIN learning_units u ON u.course_id=c.id WHERE c.id=? AND u.id=? AND c.status='active' AND u.status='active'").bind(row.course_id, row.course_unit_id).first()) return reply({ error: "Restaura el curso y su unidad antes de publicar." }, 409);
     const lesson = JSON.parse(row.content) as Lesson;
     if (!lesson.title.trim() || !lesson.objective.trim() || !lesson.activities.length) return reply({ error: "Completa título, objetivo y al menos una actividad." }, 400);
-    const library = await resources(db, current.organizationId);
+    const library = [...await resources(db, current.organizationId), ...await materialsFor(db, current.organizationId)];
     const resourceIds = [...new Set(lesson.activities.flatMap(a => a.type === "resource" && a.resourceId ? [a.resourceId] : []))];
     if (resourceIds.some(rid => !library.some(r => r.id === rid))) return reply({ error: "Hay un recurso no disponible. Revisa las actividades." }, 400);
     if (row.archived) return reply({ error: "Restaura la lección antes de publicarla." }, 409);
@@ -64,38 +69,61 @@ export async function content(url: URL, method: string, input: unknown, current:
   if (method === "DELETE") return reply({ error: "Archiva la lección para conservar su historial." }, 409);
   if (!input || typeof input !== "object") return reply({ error: "Completa la lección." }, 400);
   const v = input as Record<string, unknown>;
-  const unit = await db.prepare("SELECT u.id,u.name FROM units u JOIN levels l ON l.id=u.level_id WHERE u.id=? AND l.organization_id=? AND u.status='active' AND l.status!='archived'").bind(String(v.unitId || ""), current.organizationId).first<{ id: string; name: string }>();
+  const generic = typeof v.courseUnitId === "string";
+  const unit = generic
+    ? await db.prepare("SELECT u.id,u.name,u.legacy_unit_id AS legacyUnitId,c.id AS courseId,c.legacy_program_id AS programId FROM learning_units u JOIN courses c ON c.id=u.course_id WHERE u.id=? AND c.organization_id=? AND u.status='active' AND c.status='active'").bind(String(v.courseUnitId), current.organizationId).first<{ id: string; name: string; courseId?: string; programId?: string; legacyUnitId?: string | null }>()
+    : await db.prepare("SELECT u.id,u.name FROM units u JOIN levels l ON l.id=u.level_id WHERE u.id=? AND l.organization_id=? AND u.status='active' AND l.status!='archived'").bind(String(v.unitId || ""), current.organizationId).first<{ id: string; name: string; courseId?: string; programId?: string; legacyUnitId?: string | null }>();
   if (!unit) return reply({ error: "Selecciona una unidad activa de tu organización." }, 400);
+  if (generic && ((v.courseId && v.courseId !== unit.courseId) || (row?.course_id && row.course_id !== unit.courseId))) return reply({ error: "La lección debe permanecer en su curso. Reutilizar entre cursos requiere una copia." }, 400);
   if (typeof v.title !== "string" || !v.title.trim() || v.title.length > 160 || typeof v.objective !== "string" || !v.objective.trim() || v.objective.length > 1000 || typeof v.instructions !== "string" || v.instructions.length > 8000) return reply({ error: "Completa título, objetivo e instrucciones dentro del límite." }, 400);
   const old = row ? JSON.parse(row.content) as Lesson : null;
   const lid = id || `lesson-${crypto.randomUUID()}`;
-  const lesson: Lesson = { id: lid, title: v.title.trim(), objective: v.objective.trim(), program: unit.name, unitId: unit.id, duration: typeof v.duration === "number" && v.duration > 0 && v.duration <= 300 ? v.duration : 20, materials: old?.materials || [], reflection: old?.reflection || "¿Qué palabras aprendiste?", activities: [{ title: "Instrucciones", minutes: 20, instructions: v.instructions }], publishedAt: old?.publishedAt || "", shareCode: old?.shareCode || (current.organizationId === "org-other" ? "O-" : "D-") + crypto.randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase() };
+  const lesson: Lesson = { id: lid, title: v.title.trim(), objective: v.objective.trim(), program: unit.name, ...(generic ? { courseId: unit.courseId, courseUnitId: unit.id } : { unitId: unit.id }), duration: typeof v.duration === "number" && v.duration > 0 && v.duration <= 300 ? v.duration : 20, materials: old?.materials || [], reflection: old?.reflection || "¿Qué aprendiste y cómo lo aplicarías?", activities: [{ title: "Instrucciones", minutes: 20, instructions: v.instructions }], publishedAt: old?.publishedAt || "", shareCode: old?.shareCode || (current.organizationId === "org-other" ? "O-" : "D-") + crypto.randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase() };
   const now = new Date().toISOString();
   if (v.activities !== undefined) {
     if (!validActivities(v.activities)) return reply({ error: "Revisa las actividades: título, instrucciones, tipo y posiciones consecutivas desde cero; cada pregunta requiere opciones distintas y una respuesta válida." }, 400);
     lesson.activities = (v.activities as Activity[]).map(a => ({ id: a.id, type: a.type, position: a.position, title: a.title, instructions: a.instructions, minutes: a.minutes, ...(a.type === "resource" ? { resourceId: a.resourceId } : {}), ...(a.type === "question" ? { options: a.options, answer: a.answer } : {}) }));
   } else if (old) lesson.activities = old.activities;
-  const library = await resources(db, current.organizationId);
+  const library = [...await resources(db, current.organizationId), ...await materialsFor(db, current.organizationId)];
   for (const activity of lesson.activities) {
     if (activity.type !== "resource") continue;
     const resource = library.find(r => r.id === activity.resourceId);
     const alreadyLinked = old?.activities.some(a => a.resourceId === activity.resourceId);
     if (!resource || (resource.status === "archived" && !alreadyLinked)) return reply({ error: "Selecciona un recurso activo de tu organización." }, 400);
+    if ("courseId" in resource && resource.courseId !== unit.courseId) return reply({ error: "El material pertenece a otro curso. No se puede vincular directamente." }, 400);
+  }
+  // Legacy authoring routes are retained during migration. Their IDs stay stable;
+  // resolve the explicit course/unit mapping instead of creating a course per level.
+  let programId = unit.programId;
+  let courseUnitId = generic ? unit.id : null;
+  if (!generic) {
+    const existing = row ? await db.prepare("SELECT program_id AS id FROM lessons WHERE id=?").bind(row.id).first<{ id: string }>() : await db.prepare("SELECT p.id FROM programs p JOIN courses c ON c.legacy_program_id=p.id WHERE p.organization_id=? AND c.id=\'course-\'||p.id ORDER BY CASE WHEN EXISTS(SELECT 1 FROM lessons l WHERE l.program_id=p.id AND l.unit_id=?) THEN 0 ELSE 1 END,p.id LIMIT 1").bind(current.organizationId, unit.id).first<{ id: string }>();
+    programId = existing?.id || `curriculum-${current.organizationId}`;
+    let course = await db.prepare("SELECT id,status FROM courses WHERE legacy_program_id=? AND organization_id=?").bind(programId, current.organizationId).first<{ id: string; status: string }>();
+    if (!course) {
+      course = { id: `course-${programId}`, status: "active" };
+      await db.batch([
+        db.prepare("INSERT OR IGNORE INTO programs(id,organization_id,title) VALUES (?,?,?)").bind(programId, current.organizationId, "Contenido existente"),
+        db.prepare("INSERT OR IGNORE INTO courses(id,organization_id,legacy_program_id,title,profile,unit_label,updated_at) SELECT ?,organization_id,id,title,'free','Unidades',? FROM programs WHERE id=?").bind(course.id, now, programId),
+      ]);
+    }
+    if (course.status === "archived") return reply({ error: "Restaura el curso antes de editar sus lecciones." }, 409);
+    courseUnitId = `${course.id}--${unit.id}`;
+    await db.prepare("INSERT OR IGNORE INTO learning_units(id,course_id,legacy_unit_id,name,objective,position,status,updated_at) SELECT ?,?,id,name,objective,(SELECT count(*) FROM learning_units WHERE course_id=?),status,updated_at FROM units WHERE id=?").bind(courseUnitId, course.id, course.id, unit.id).run();
+    lesson.courseId = course.id; lesson.courseUnitId = courseUnitId;
   }
   if (row) {
     if (v.draftVersion !== row.draft_version) return reply({ error: "Hay cambios más recientes. Recarga antes de guardar." }, 409);
-    const written = await db.prepare("UPDATE lessons SET content=?,unit_id=?,archived=?,draft_version=draft_version+1,updated_at=? WHERE id=? AND draft_version=? RETURNING id").bind(JSON.stringify(lesson), unit.id, v.status === "archived" ? 1 : 0, now, lid, row.draft_version).first();
+    const written = await db.prepare("UPDATE lessons SET content=?,unit_id=?,course_unit_id=?,archived=?,draft_version=draft_version+1,updated_at=? WHERE id=? AND draft_version=? RETURNING id").bind(JSON.stringify(lesson), generic ? unit.legacyUnitId || null : unit.id, courseUnitId, v.status === "archived" ? 1 : 0, now, lid, row.draft_version).first();
     if (!written) return reply({ error: "Hay cambios más recientes. Recarga antes de guardar." }, 409);
-    if (unit.id !== row.unit_id) {
+    if (courseUnitId !== row.course_unit_id) {
       await db.batch([
-        db.prepare("UPDATE lessons SET position=? WHERE id=?").bind(rows.filter(r => r.unit_id === unit.id).length, lid),
-        ...rows.filter(r => r.unit_id === row.unit_id && r.id !== lid).sort((a, b) => a.position - b.position).map((r, position) => db.prepare("UPDATE lessons SET position=? WHERE id=?").bind(position, r.id)),
+        db.prepare("UPDATE lessons SET position=? WHERE id=?").bind(rows.filter(r => r.course_unit_id === courseUnitId).length, lid),
+        ...rows.filter(r => r.course_unit_id === row.course_unit_id && r.id !== lid).sort((a, b) => a.position - b.position).map((r, position) => db.prepare("UPDATE lessons SET position=? WHERE id=?").bind(position, r.id)),
       ]);
     }
   } else {
-    let program = await db.prepare("SELECT id FROM programs WHERE organization_id=? LIMIT 1").bind(current.organizationId).first<{ id: string }>();
-    if (!program) { program = { id: `curriculum-${current.organizationId}` }; await db.prepare("INSERT OR IGNORE INTO programs VALUES (?,?,?)").bind(program.id, current.organizationId, "Happy Learners").run(); }
-    await db.prepare("INSERT INTO lessons(id,program_id,status,content,unit_id,position,updated_at) VALUES (?,?,'draft',?,?,?,?)").bind(lid, program.id, JSON.stringify(lesson), unit.id, rows.filter(r => r.unit_id === unit.id).length, now).run();
+    await db.prepare("INSERT INTO lessons(id,program_id,status,content,unit_id,course_unit_id,position,updated_at) VALUES (?,?,'draft',?,?,?,?,?)").bind(lid, programId!, JSON.stringify(lesson), generic ? unit.legacyUnitId || null : unit.id, courseUnitId, rows.filter(r => r.course_unit_id === courseUnitId).length, now).run();
   }
   const updated = await db.prepare(lessonQuery + " AND l.id=?").bind(current.organizationId, lid).first<LessonRow>();
   return reply({ lesson: lessonView(updated!, true) }, row ? 200 : 201);
