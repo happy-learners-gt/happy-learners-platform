@@ -53,7 +53,11 @@ export async function content(url: URL, method: string, input: unknown, current:
   if (path.endsWith("/publish") && row) {
     const lesson = JSON.parse(row.content) as Lesson;
     if (!lesson.title.trim() || !lesson.objective.trim() || !lesson.activities.length) return reply({ error: "Completa título, objetivo y al menos una actividad." }, 400);
-    const published = { ...lesson, publishedAt: new Date().toISOString(), revision: row.revision + 1 };
+    const library = await resources(db, current.organizationId);
+    const resourceIds = [...new Set(lesson.activities.flatMap(a => a.type === "resource" && a.resourceId ? [a.resourceId] : []))];
+    if (resourceIds.some(rid => !library.some(r => r.id === rid))) return reply({ error: "Hay un recurso no disponible. Revisa las actividades." }, 400);
+    if (row.archived) return reply({ error: "Restaura la lección antes de publicarla." }, 409);
+    const published = { ...lesson, resources: resourceIds.map(rid => library.find(r => r.id === rid)!), publishedAt: new Date().toISOString(), revision: row.revision + 1 };
     const written = await db.prepare("UPDATE lessons SET published_content=?,published_version=draft_version,revision=revision+1,status='published' WHERE id=? AND draft_version=? RETURNING id").bind(JSON.stringify(published), row.id, row.draft_version).first();
     return written ? reply({ lesson: published }) : reply({ error: "El borrador cambió. Recarga y vuelve a publicar." }, 409);
   }
@@ -71,6 +75,13 @@ export async function content(url: URL, method: string, input: unknown, current:
     if (!validActivities(v.activities)) return reply({ error: "Revisa las actividades: título, instrucciones, tipo y posiciones consecutivas desde cero; cada pregunta requiere opciones distintas y una respuesta válida." }, 400);
     lesson.activities = (v.activities as Activity[]).map(a => ({ id: a.id, type: a.type, position: a.position, title: a.title, instructions: a.instructions, minutes: a.minutes, ...(a.type === "resource" ? { resourceId: a.resourceId } : {}), ...(a.type === "question" ? { options: a.options, answer: a.answer } : {}) }));
   } else if (old) lesson.activities = old.activities;
+  const library = await resources(db, current.organizationId);
+  for (const activity of lesson.activities) {
+    if (activity.type !== "resource") continue;
+    const resource = library.find(r => r.id === activity.resourceId);
+    const alreadyLinked = old?.activities.some(a => a.resourceId === activity.resourceId);
+    if (!resource || (resource.status === "archived" && !alreadyLinked)) return reply({ error: "Selecciona un recurso activo de tu organización." }, 400);
+  }
   if (row) {
     if (v.draftVersion !== row.draft_version) return reply({ error: "Hay cambios más recientes. Recarga antes de guardar." }, 409);
     const written = await db.prepare("UPDATE lessons SET content=?,unit_id=?,archived=?,draft_version=draft_version+1,updated_at=? WHERE id=? AND draft_version=? RETURNING id").bind(JSON.stringify(lesson), unit.id, v.status === "archived" ? 1 : 0, now, lid, row.draft_version).first();
