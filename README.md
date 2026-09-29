@@ -41,3 +41,6 @@ Un build local con cambios sin commit informa el SHA base del checkout: no repre
 ```
 
 El contexto proviene del repositorio hermano `happy-learners-ops` (o `HL_OPS_REPO`). No cargar el backlog completo. La Definition of Done conserva su estado `proposed`.
+# Entrega v0.2.1
+
+[Empezar aquí](docs/sprint-2/00-EMPEZAR-AQUI.md): guías de usuario y demostración, arquitectura, Sprint Review y matriz Jira–código–pruebas.
