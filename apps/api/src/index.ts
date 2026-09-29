@@ -20,7 +20,6 @@ function json(data: unknown, status = 200, extra: Record<string, string> = {}) {
 async function body(request: Request): Promise<unknown> {
   if (!request.headers.get("content-type")?.startsWith("application/json")) throw new Error("INPUT");
   const limit = new URL(request.url).pathname === "/api/login" ? 2048 : 65536;
-  if (Number(request.headers.get("content-length")) > limit) throw new Error("INPUT");
   const reader = request.body?.getReader();
   if (!reader) throw new Error("INPUT");
   let text = ""; const decoder = new TextDecoder(); let size = 0;
@@ -45,7 +44,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     for (const [name, value] of Object.entries(headers)) result.headers.set(name, value);
     return result;
   }
-  const input = (["POST", "PUT"].includes(method) && !path.endsWith("/publish") && !path.endsWith("/complete") && path !== "/api/logout")
+  const input = (["POST", "PUT"].includes(method) && /^\/api\/(login|organization|members|levels|units|resources|lessons)(\/[a-z0-9-]+)?$/.test(path))
     ? await body(request) : undefined;
   let scope = sessionToken(request)?.startsWith("o_") ? "org-other" : "org-demo";
   if (path.startsWith("/api/share/")) scope = path.split("/")[3].startsWith("O-") ? "org-other" : "org-demo";

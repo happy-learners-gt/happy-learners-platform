@@ -37,7 +37,7 @@ test("Sprint 1: login, organization, mobile published lesson, privacy and logout
   await expect(page.getByRole("heading", { name: "Aprendamos algo nuevo." })).toBeVisible();
   await expect(page.getByRole("navigation").getByRole("button", { name: "Organización" })).toHaveCount(0);
   await page.screenshot({ path: `${folder}/03-workspace.png`, fullPage: true });
-  await page.getByRole("button", { name: /Abrir lección/ }).click();
+  await page.locator("article").filter({ has: page.getByRole("heading", { name: "Un mundo de colores" }) }).getByRole("button", { name: /Abrir lección/ }).click();
   await expect(page.getByRole("heading", { name: "Un mundo de colores" })).toBeVisible();
   await expect(page.getByText("Publicada · Solo lectura")).toBeVisible();
   await expect(page.getByRole("button", { name: /editar|guardar lección/i })).toHaveCount(0);

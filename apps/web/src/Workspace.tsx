@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
-import type { FormEvent, ReactNode } from "react";
+import { cloneElement, useEffect, useId, useState } from "react";
+import type { FormEvent, ReactElement } from "react";
 import type { Activity, Lesson, Level, Member, Resource, Unit } from "@happy-learners/contracts";
 import { api } from "./api";
 
 type Work = (job: () => Promise<void>, message?: string) => Promise<void>;
-function Field({ label, children }: { label: string; children: ReactNode }) { return <label>{label}{children}</label>; }
+function Field({ label, children }: { label: string; children: ReactElement<{ id?: string }> }) { const id = useId(); return <div className="field"><label htmlFor={id}>{label}</label>{cloneElement(children, { id })}</div>; }
 function Updated({ value }: { value?: string }) { return value ? <small>Actualizado: {new Date(value).toLocaleString("es-GT")}</small> : null; }
 function move<T>(rows: T[], index: number, delta: number) { const next = [...rows]; [next[index], next[index + delta]] = [next[index + delta], next[index]]; return next; }
 
