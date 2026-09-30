@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { Lesson, Material, Resource } from "@happy-learners/contracts";
 import { api, message } from "../api";
 import { OfficePreview } from "../OfficePreview";
-import { plural } from "../model";
+import { activityHue, activityTypeLabel, plural } from "../model";
 import { Icon } from "../ui/icons";
 const RichText = lazy(() => import("../RichText").then(module => ({ default: module.RichText })));
 
@@ -48,14 +48,14 @@ export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, on
     <PlayerBar title={lesson.title} step={step} total={total}/>
     {preview && <div className="preview-banner" role="note"><Icon name="eye" size={16}/><span>Vista previa del borrador. No se registra nada.</span>{onExit && <button type="button" className="button secondary small" onClick={onExit}>Volver a editar</button>}</div>}
     <main id={preview ? undefined : "main"} className="player-main">
-      {step === 0 && <article className="player-card">
+      {step === 0 && <article className="player-card player-intro">
         <span className="eyebrow">{lesson.program}</span>
         <h1 ref={heading} tabIndex={-1}>{lesson.title}</h1>
         <section className="player-objective"><h2>Lo que aprenderás</h2><p>{lesson.objective}</p></section>
         <p className="player-meta"><Icon name="clock" size={16}/>{lesson.duration} minutos · {plural(total, "actividad", "actividades")}</p>
       </article>}
-      {activity && <article className="player-card" aria-labelledby="activity-title">
-        <span className="eyebrow">Actividad {step} de {total} · {activity.minutes} min</span>
+      {activity && <article className={`player-card tone-${activityHue[activity.type || "text"]}`} aria-labelledby="activity-title">
+        <span className="player-chip">{activityTypeLabel[activity.type || "text"]} · Actividad {step} de {total} · {activity.minutes} min</span>
         <h1 id="activity-title" ref={heading} tabIndex={-1}>{activity.title}</h1>
         <div className="player-content">{activity.richContent ? <Suspense fallback={<p role="status">Abriendo contenido…</p>}><RichText value={activity.richContent} fallbackText={activity.instructions} editable={false}/></Suspense> : <p className="preserve-lines">{activity.instructions}</p>}</div>
         {activity.type === "resource" && library.filter(item => item.id === activity.resourceId).map(item => <section key={item.id} className="player-resource" aria-label={`Recurso: ${item.title}`}>

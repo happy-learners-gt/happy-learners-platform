@@ -128,15 +128,15 @@ function GlobalShell({ children }: { children: ReactNode }) {
   const sidebar: SidebarModel = {
     label: "Navegación principal",
     items: [
-      { href: "/inicio", label: "Inicio", icon: "home", active: path === "/" || path === "/inicio" },
-      { href: "/cursos", label: "Cursos", icon: "courses", active: path.startsWith("/cursos") },
-      { href: "/biblioteca", label: "Biblioteca", icon: "library", active: path === "/biblioteca" },
-      { href: "/ayuda", label: "Ayuda", icon: "help", active: path === "/ayuda" },
+      { href: "/inicio", label: "Inicio", icon: "home", hue: "violet", active: path === "/" || path === "/inicio" },
+      { href: "/cursos", label: "Cursos", icon: "courses", hue: "sky", active: path.startsWith("/cursos") },
+      { href: "/biblioteca", label: "Biblioteca", icon: "library", hue: "teal", active: path === "/biblioteca" },
+      { href: "/ayuda", label: "Ayuda", icon: "help", hue: "amber", active: path === "/ayuda" },
     ],
     ...(admin ? { secondary: { label: "Administración", items: [
-      { href: "/organizacion", label: "Organización", icon: "settings" as const, active: path === "/organizacion" },
-      { href: "/educadores", label: "Educadores", icon: "users" as const, active: path === "/educadores" },
-      { href: "/clasificaciones", label: "Clasificaciones", icon: "list" as const, active: path === "/clasificaciones" },
+      { href: "/organizacion", label: "Organización", icon: "settings" as const, hue: "coral" as const, active: path === "/organizacion" },
+      { href: "/educadores", label: "Educadores", icon: "users" as const, hue: "pink" as const, active: path === "/educadores" },
+      { href: "/clasificaciones", label: "Clasificaciones", icon: "list" as const, hue: "green" as const, active: path === "/clasificaciones" },
     ] } } : {}),
   };
   return <AppShell sidebar={sidebar}>{children}</AppShell>;
