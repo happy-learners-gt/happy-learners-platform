@@ -12,7 +12,7 @@ Happy Learners ayuda al equipo de San Gaspar a preparar materiales de inglés y 
 | Quien presenta el producto | [Demostración de cinco minutos](guia-de-demostracion.md) |
 | Sandra y equipo de seguimiento | [Sprint Review](sprint-review.md) y [roadmap](roadmap.md) |
 | Mantenimiento técnico | [Arquitectura](arquitectura.md) y [matriz de aceptación](matriz-jira-codigo-pruebas.md) |
-| Consulta de cambios | [Notas de v0.2.1](release-notes-v0.2.1.md) |
+| Consulta de cambios | [Notas de v0.2.2](release-notes-v0.2.2.md) |
 
 La demostración usa cuentas compartidas y contenido ficticio. No introduzcas nombres, fotografías ni datos reales de niños. Abre “Probar con datos ficticios” en la pantalla de acceso para consultar las credenciales de demostración.
 

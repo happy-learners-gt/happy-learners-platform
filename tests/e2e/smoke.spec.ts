@@ -35,14 +35,12 @@ test("production smoke: read content without changing the demo", async ({ page, 
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Cursos");
     await page.screenshot({ path: `${folder}/courses-list.png`, fullPage: true });
     await page.locator('.course-card a.secondary[href="/cursos/course-exploradores"]').click();
-    await expect(page.getByRole("navigation", { name: "Navegación del curso" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Espacios del curso" })).toBeVisible();
     await expect(page.locator(".course-unit").first()).toBeVisible();
     await page.screenshot({ path: `${folder}/course-content.png`, fullPage: true });
     await page.goto("/contenido/publicadas");
-    await page.getByRole("link", { name: /Abrir lección/ }).first().click();
-    await expect(page.getByText("Publicada · Solo lectura", { exact: true })).toBeVisible();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.screenshot({ path: `${folder}/redesign-published.png`, fullPage: true });
+    await expect(page).toHaveURL(/\/cursos$/);
+    await expect(page.getByRole("heading", { name: "Cursos", exact: true })).toBeVisible();
     // No completion POST: aggregate counts must not increase during monitoring.
     const student = await context.newPage();
     await student.goto("/?code=GREETINGS");

@@ -1,8 +1,10 @@
-# Rediseño: historial de la primera entrega visual
+# Archivo: primera iteración visual (reemplazada)
 
 29 de septiembre de 2026 · ST-041 / HL-44
 
-**Entrega vigente:** [Cursos para distintas disciplinas](cursos-implementacion.md), con [diagramas de base de datos](base-de-datos.md). El [diseño completo](modelo-educativo-generico.md) conserva los siguientes incrementos y los [wireframes](prototipo-cursos.html). El resto de esta página documenta la entrega visual anterior; su navegación, paleta y cifras de pruebas no describen la entrega vigente.
+**Entrega vigente:** [Happy Learners Studio: flujos de trabajo](studio-flujos-y-diseno.md), [Cursos para distintas disciplinas](cursos-implementacion.md) y [diagramas de base de datos](base-de-datos.md). El [diseño educativo genérico](modelo-educativo-generico.md) y los [wireframes](prototipo-cursos.html) conservan el alcance de siguientes incrementos.
+
+> Este documento registra una iteración anterior y no describe la navegación ni las funciones actuales. Para operar la plataforma, usa la [guía vigente de usuario](../sprint-2/guia-de-usuario.md). Esta primera propuesta tenía áreas separadas de Contenido y Biblioteca, formularios simples y no incluía asistencia ni texto enriquecido; esos puntos fueron sustituidos por el flujo por curso documentado en la entrega vigente.
 
 ## Aprobación
 

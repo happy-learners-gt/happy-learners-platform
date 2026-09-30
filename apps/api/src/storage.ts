@@ -6,10 +6,22 @@ import curriculumMigration from "../../../database/migrations/0004_curriculum.sq
 import editingMigration from "../../../database/migrations/0005_editing.sql";
 import greetingsMigration from "../../../database/migrations/0006_greetings_seed.sql";
 import coursesMigration from "../../../database/migrations/0007_courses.sql";
+import attendanceMigration from "../../../database/migrations/0008_classroom_attendance.sql";
+import filesMigration from "../../../database/migrations/0009_course_files.sql";
 
 type Statement = { sql: string; values: (string | number | null)[] };
 // One SQLite object per organization; only the Worker holds this binding.
 export class OrganizationStore extends DurableObject<Env> {
+  async authorizeCollaborator(organizationId: string, courseId: string, lessonId: string, userId: string, tokenHash: string): Promise<boolean> {
+    if (!/^[a-z0-9-]{1,80}$/.test(organizationId) || !/^[a-z0-9-]{1,100}$/.test(courseId) || !/^[a-z0-9-]{1,100}$/.test(lessonId) || !/^[a-z0-9-]{1,100}$/.test(userId) || !/^[a-f0-9]{64}$/.test(tokenHash)) return false;
+    const result = await this.query(organizationId, [{ sql: `SELECT s.user_id FROM sessions s
+      JOIN memberships m ON m.user_id=s.user_id AND m.organization_id=? AND m.active=1
+      JOIN courses c ON c.organization_id=m.organization_id AND c.id=? AND c.status='active'
+      JOIN lessons l ON l.id=? AND l.program_id=c.legacy_program_id AND l.archived=0
+      WHERE s.token_hash=? AND s.user_id=? AND s.expires_at>? AND CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END='educator'` , values: [organizationId, courseId, lessonId, tokenHash, userId, Date.now()] }]);
+    return result[0].length === 1;
+  }
+
   async query(scope: string, statements: Statement[], guard?: Statement): Promise<Record<string, SqlStorageValue>[][]> {
     if (!["org-demo", "org-other"].includes(scope)) throw new Error("Invalid organization");
     return this.ctx.storage.transactionSync(() => {
@@ -32,6 +44,8 @@ export class OrganizationStore extends DurableObject<Env> {
       if (!applied.length || applied[0].version < 5) { this.ctx.storage.sql.exec(editingMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (5,?)", scope); }
       if (!applied.length || applied[0].version < 6) { this.ctx.storage.sql.exec(greetingsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (6,?)", scope); }
       if (!applied.length || applied[0].version < 7) { this.ctx.storage.sql.exec(coursesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (7,?)", scope); }
+      if (!applied.length || applied[0].version < 8) { this.ctx.storage.sql.exec(attendanceMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (8,?)", scope); }
+      if (!applied.length || applied[0].version < 9) { this.ctx.storage.sql.exec(filesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (9,?)", scope); }
       // Compare-and-write plus dependent writes belong to one SQLite transaction.
       if (guard && !this.ctx.storage.sql.exec(guard.sql, ...guard.values).toArray().length) return [];
       return statements.map(statement => this.ctx.storage.sql.exec(statement.sql, ...statement.values).toArray());
