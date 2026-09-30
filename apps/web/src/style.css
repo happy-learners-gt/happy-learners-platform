@@ -648,9 +648,9 @@ tbody tr:hover { background: var(--color-surface-muted); }
   .mark-group { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .mark span { justify-content: center; width: 100%; padding: 0 4px; font-size: var(--text-xs); }
   .richtext-chrome { top: calc(var(--topbar-h) + 4px); }
-  .richtext-toolbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-  .richtext-toolbar::-webkit-scrollbar { display: none; }
-  .richtext-group { flex: none; }
+  .richtext-toolbar { gap: 0; padding: 3px; }
+  .richtext-group + .richtext-group { padding-left: 2px; margin-left: 0; }
+  .richtext-tool { min-width: 32px; height: 32px; padding: 0 4px; }
 }
 @media (max-width: 639px) {
   h1 { font-size: var(--text-xl); }
