@@ -42,6 +42,26 @@ class UpgradeTests(unittest.TestCase):
             db.execute("DELETE FROM taxonomy_terms WHERE id='discipline-org-demo-science'")
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
 
+    def test_attendance_is_course_scoped_and_demo_roster_is_synthetic(self):
+        db = self.migrated()
+        names = db.execute("SELECT display_name FROM group_learners WHERE group_id='group-demo-class' ORDER BY display_name").fetchall()
+        self.assertEqual(len(names), 5)
+        self.assertTrue(all(name[0].startswith("Participante de demostración ") for name in names))
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO course_groups(id,course_id,organization_id,name,created_at) VALUES(?,?,?,?,?)", ("foreign-group", "course-exploradores", "org-other", "Grupo inválido", "2026-09-29T00:00:00Z"))
+
+    def test_office_files_are_private_course_scoped_and_bounded(self):
+        db = self.migrated()
+        values = ("file-docx", "org-demo", "course-exploradores", "123e4567-e89b-12d3-a456-426614174000", "org-demo/course-exploradores/file-docx", "Guia.docx", "docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", 128, "a" * 64, "ready", "user-educator", "2026-09-29T00:00:00Z", "2026-09-29T00:00:00Z")
+        db.execute("INSERT INTO course_files VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", values)
+        self.assertEqual(db.execute("SELECT status,object_key FROM course_files WHERE id='file-docx'").fetchone(), ("ready", "org-demo/course-exploradores/file-docx"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO course_files VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", ("file-cross-org", "org-other", "course-exploradores", "123e4567-e89b-12d3-a456-426614174001", "org-other/course/file", "Guia.docx", "docx", values[7], 128, "b" * 64, "ready", "user-educator-demo", values[12], values[13]))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO course_files VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", ("file-too-large", *values[1:8], 15 * 1024 * 1024 + 1, *values[9:]))
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
     def test_existing_content_survives_additive_migrations(self):
         db = sqlite3.connect(":memory:")
         db.execute("PRAGMA foreign_keys=ON")

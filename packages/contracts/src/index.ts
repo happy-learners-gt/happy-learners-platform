@@ -4,7 +4,9 @@ export interface Member { id: string; username: string; role: "admin" | "educato
 export interface Organization { id: string; name: string | null; timezone: string; configured: boolean }
 export interface Level { id: string; name: string; description: string; position: number; status: "draft" | "active" | "archived"; updatedAt: string }
 export interface Unit { id: string; levelId: string; name: string; objective: string; position: number; status: "active" | "archived"; updatedAt: string }
-export interface Activity { id?: string; type?: "text" | "resource" | "question"; position?: number; title: string; minutes: number; instructions: string; resourceId?: string; options?: string[]; answer?: number }
+export interface RichTextNode { type: string; text?: string; attrs?: Record<string, string | number | boolean | null>; marks?: { type: string; attrs?: Record<string, string | number | boolean | null> }[]; content?: RichTextNode[] }
+export interface RichTextDocument { type: "doc"; content: RichTextNode[] }
+export interface Activity { id?: string; type?: "text" | "resource" | "question"; position?: number; title: string; minutes: number; instructions: string; richContent?: RichTextDocument; resourceId?: string; options?: string[]; answer?: number }
 export interface Lesson {
   id: string; title: string; program: string; duration: number; objective: string;
   materials: string[]; activities: Activity[];
@@ -31,6 +33,10 @@ export interface Vocabulary { id: string; name: string; status: "active" | "arch
 export interface TaxonomyTerm extends Vocabulary { vocabularyId: string }
 export interface Taxonomy { vocabularies: Vocabulary[]; terms: TaxonomyTerm[] }
 export interface Material {
-  id: string; courseId: string; title: string; description: string; kind: "text" | "link";
+  id: string; courseId: string; title: string; description: string; kind: "text" | "link" | "file";
   content: string; status: "draft" | "published" | "archived"; version: number; updatedAt: string; termIds: string[];
+  fileId?: string; fileName?: string; mediaType?: string; sizeBytes?: number; sha256?: string;
 }
+export interface ClassGroup { id: string; courseId: string; name: string; status: "active" | "archived"; learnerCount: number }
+export interface GroupLearner { id: string; groupId: string; displayName: string; status: "active" | "archived" }
+export interface ClassSession { id: string; groupId: string; courseId: string; lessonId?: string; sessionDate: string; groupName?: string; attendance?: { learnerId: string; status: "present" | "late" | "absent" | "excused" }[] }

@@ -2,6 +2,7 @@ import type { Activity, Lesson, Member, Resource } from "@happy-learners/contrac
 import { validActivities } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { materialsFor } from "./courses";
+import { filesFor } from "./files";
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
 type LessonRow = { id: string; content: string; published_content: string | null; unit_id: string | null; course_unit_id: string | null; course_id: string | null; position: number; status: "draft" | "published"; archived: number; revision: number; draft_version: number; published_version: number; updated_at: string; completions: number };
 const lessonQuery = "SELECT l.*,c.id AS course_id,(SELECT count(*) FROM lesson_completions lc WHERE lc.lesson_id=l.id) AS completions FROM lessons l JOIN programs p ON p.id=l.program_id LEFT JOIN courses c ON c.legacy_program_id=p.id LEFT JOIN learning_units cu ON cu.id=l.course_unit_id LEFT JOIN units u ON u.id=l.unit_id LEFT JOIN levels lv ON lv.id=u.level_id WHERE p.organization_id=?";
@@ -58,7 +59,7 @@ export async function content(url: URL, method: string, input: unknown, current:
     if (row.course_id && !await db.prepare("SELECT c.id FROM courses c JOIN learning_units u ON u.course_id=c.id WHERE c.id=? AND u.id=? AND c.status='active' AND u.status='active'").bind(row.course_id, row.course_unit_id).first()) return reply({ error: "Restaura el curso y su unidad antes de publicar." }, 409);
     const lesson = JSON.parse(row.content) as Lesson;
     if (!lesson.title.trim() || !lesson.objective.trim() || !lesson.activities.length) return reply({ error: "Completa título, objetivo y al menos una actividad." }, 400);
-    const library = [...await resources(db, current.organizationId), ...await materialsFor(db, current.organizationId)];
+    const library = [...await resources(db, current.organizationId), ...await materialsFor(db, current.organizationId), ...await filesFor(db, current.organizationId)];
     const resourceIds = [...new Set(lesson.activities.flatMap(a => a.type === "resource" && a.resourceId ? [a.resourceId] : []))];
     if (resourceIds.some(rid => !library.some(r => r.id === rid))) return reply({ error: "Hay un recurso no disponible. Revisa las actividades." }, 400);
     if (row.archived) return reply({ error: "Restaura la lección antes de publicarla." }, 409);
@@ -82,9 +83,9 @@ export async function content(url: URL, method: string, input: unknown, current:
   const now = new Date().toISOString();
   if (v.activities !== undefined) {
     if (!validActivities(v.activities)) return reply({ error: "Revisa las actividades: título, instrucciones, tipo y posiciones consecutivas desde cero; cada pregunta requiere opciones distintas y una respuesta válida." }, 400);
-    lesson.activities = (v.activities as Activity[]).map(a => ({ id: a.id, type: a.type, position: a.position, title: a.title, instructions: a.instructions, minutes: a.minutes, ...(a.type === "resource" ? { resourceId: a.resourceId } : {}), ...(a.type === "question" ? { options: a.options, answer: a.answer } : {}) }));
+    lesson.activities = (v.activities as Activity[]).map(a => ({ id: a.id, type: a.type, position: a.position, title: a.title, instructions: a.instructions, ...(a.richContent ? { richContent: a.richContent } : {}), minutes: a.minutes, ...(a.type === "resource" ? { resourceId: a.resourceId } : {}), ...(a.type === "question" ? { options: a.options, answer: a.answer } : {}) }));
   } else if (old) lesson.activities = old.activities;
-  const library = [...await resources(db, current.organizationId), ...await materialsFor(db, current.organizationId)];
+  const library = [...await resources(db, current.organizationId), ...await materialsFor(db, current.organizationId), ...await filesFor(db, current.organizationId)];
   for (const activity of lesson.activities) {
     if (activity.type !== "resource") continue;
     const resource = library.find(r => r.id === activity.resourceId);

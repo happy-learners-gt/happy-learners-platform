@@ -1,6 +1,6 @@
 # Base de datos: cursos y clasificación
 
-Esquema de la migración [0007_courses.sql](../../database/migrations/0007_courses.sql). Los diagramas de esta página representan tablas existentes y nuevas de esta entrega, no funcionalidades futuras.
+Esquema de las migraciones [0007_courses.sql](../../database/migrations/0007_courses.sql) y [0008_classroom_attendance.sql](../../database/migrations/0008_classroom_attendance.sql). Los diagramas de esta página representan tablas existentes y nuevas implementadas, no funcionalidades futuras.
 
 ## Persistencia y aislamiento
 
@@ -80,7 +80,9 @@ erDiagram
   units o|--o{ learning_units : origen_heredado
   learning_units o|--o{ lessons : agrupa
   courses ||--o{ materials : contiene
+  courses ||--o{ course_files : almacena
   lessons }o..o{ materials : referencia_JSON
+  lessons }o..o{ course_files : referencia_en_instantanea
   courses {
     TEXT id PK
     TEXT organization_id FK
@@ -108,8 +110,8 @@ erDiagram
     TEXT program_id FK "conservado"
     TEXT unit_id FK "nullable, compatibilidad"
     TEXT course_unit_id FK "nuevo, nullable en SQL"
-    TEXT content "actividades en JSON"
-    TEXT published_content "instantánea pública"
+    TEXT content "JSON; richContent estructurado por actividad"
+    TEXT published_content "instantánea pública independiente"
     INTEGER position
     INTEGER draft_version
     INTEGER published_version
@@ -127,7 +129,69 @@ erDiagram
     INTEGER version
     TEXT updated_at
   }
+  course_files {
+    TEXT id PK
+    TEXT organization_id FK
+    TEXT course_id FK
+    TEXT upload_key UK
+    TEXT object_key UK
+    TEXT original_name
+    TEXT extension
+    TEXT media_type
+    INTEGER size_bytes
+    TEXT sha256
+    TEXT status
+  }
 ```
+
+`course_files` contiene metadatos y referencias a objetos privados de R2, no el binario. La clave de objeto no se expone al navegador. El borrador referencia el ID del archivo en la actividad; al publicar, la instantánea registra el recurso autorizado y el endpoint público comprueba que el archivo siga vinculado a esa versión.
+
+La colaboración en tiempo real usa un Durable Object por lección, separado de las tablas de curso. SQLite de ese objeto guarda una instantánea Yjs y una secuencia acotada de actualizaciones; presencia y sockets son efímeros. El API comprueba membresía y sesión antes de conectar y mientras procesa mensajes.
+
+## Grupos, clases y asistencia
+
+```mermaid
+erDiagram
+  organizations ||--o{ courses : posee
+  courses ||--o{ course_groups : organiza
+  course_groups ||--o{ group_learners : contiene
+  course_groups ||--o{ class_sessions : reúne
+  courses ||--o{ class_sessions : programa
+  lessons o|--o{ class_sessions : apoya
+  class_sessions ||--o{ attendance_marks : registra
+  group_learners ||--o{ attendance_marks : recibe
+  course_groups {
+    TEXT id PK
+    TEXT course_id FK
+    TEXT organization_id FK
+    TEXT name
+    TEXT status
+  }
+  group_learners {
+    TEXT id PK
+    TEXT group_id FK
+    TEXT course_id FK
+    TEXT organization_id FK
+    TEXT display_name "único dato de lista"
+    TEXT status
+  }
+  class_sessions {
+    TEXT id PK
+    TEXT group_id FK
+    TEXT course_id FK
+    TEXT organization_id FK
+    TEXT lesson_id FK "nullable"
+    TEXT session_date
+  }
+  attendance_marks {
+    TEXT session_id PK,FK
+    TEXT learner_id PK,FK
+    TEXT status "present, late, absent, excused"
+    TEXT updated_at
+  }
+```
+
+La API autoriza consulta y escritura de asistencia al rol educador y verifica que grupo, participante, sesión, curso y organización coincidan. La clave primaria compuesta evita duplicar marcas para una persona dentro de una sesión. La migración incluye una lista sintética y no crea sesiones ni resultados históricos.
 
 Un curso puede existir sin unidades ni programa académico. Una lección nueva necesita una unidad activa del curso. No hay anidamiento ilimitado. Los perfiles cambian el vocabulario inicial; no crean reglas de evaluación ni requisitos inferidos.
 

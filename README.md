@@ -2,7 +2,7 @@
 
 Aplicación para preparar cursos y compartir lecciones de distintas disciplinas. Cada curso reúne sus unidades de aprendizaje, materiales y lecciones. Las clasificaciones son configurables y opcionales. Los estudiantes abren las publicaciones sin cuenta.
 
-La implementación del modelo genérico está aprobada. Consulta la [entrega de cursos](docs/redesign/cursos-implementacion.md), los [diagramas de base de datos](docs/redesign/base-de-datos.md) y el [diseño completo](docs/redesign/modelo-educativo-generico.md). El diseño distingue las capacidades implementadas de programas, requisitos y coedición, que siguen pendientes.
+Consulta la [entrega de cursos](docs/redesign/cursos-implementacion.md), los [diagramas de base de datos](docs/redesign/base-de-datos.md), el [flujo actual de Studio](docs/redesign/studio-flujos-y-diseno.md) y las [guías de operación](docs/sprint-2/00-EMPEZAR-AQUI.md). La coedición en vivo sincroniza el texto enriquecido; los cambios de estructura usan control de versión. Los documentos Office se guardan en un bucket R2 privado.
 
 ## Desarrollo local
 
@@ -26,10 +26,10 @@ npm run dev
 - `packages/contracts`: contratos compartidos de organización, recursos, currículo y lecciones.
 - `database/migrations`: migraciones acumulativas de la persistencia SQLite en Durable Objects.
 - `database/seeds`: contenido editorial aprobado; no se carga automáticamente en producción.
-- `infrastructure`: configuración de Workers Static Assets y documentación de entrega.
+- `infrastructure`: configuración de Workers Static Assets, Durable Objects y el bucket R2 privado de documentos.
 - `tests`: pruebas de interfaz, paquete construido y controles del workflow.
 
-DEC-008 / ADR-0003 en `happy-learners-ops` aprueban el stack. El lockfile se versiona y CI instala con `npm ci`. D1 y R2 quedan diferidos y no tienen bindings. El CI/CD de la aplicación vive aquí; la generación documental y las integraciones con Jira y OneDrive permanecen en `happy-learners-ops` (DEC-007).
+DEC-008 / ADR-0003 en `happy-learners-ops` aprueban el stack. El lockfile se versiona y CI instala con `npm ci`. Las cuentas de producción deben disponer del bucket `happy-learners-demo-course-files`; CI no crea cuentas ni activa facturación. El CI/CD de la aplicación vive aquí; la generación documental y las integraciones con Jira y OneDrive permanecen en `happy-learners-ops` (DEC-007).
 
 ## Entrega y versión
 
@@ -44,6 +44,6 @@ Un build local con cambios sin commit informa el SHA base del checkout: no repre
 ```
 
 El contexto proviene del repositorio hermano `happy-learners-ops` (o `HL_OPS_REPO`). No cargar el backlog completo. La Definition of Done conserva su estado `proposed`.
-# Entrega v0.2.1
+# Entrega v0.2.2
 
 [Empezar aquí](docs/sprint-2/00-EMPEZAR-AQUI.md): guías de usuario y demostración, arquitectura, Sprint Review y matriz Jira–código–pruebas.

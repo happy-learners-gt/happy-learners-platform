@@ -29,6 +29,10 @@
       {
         "name": "ORGANIZATIONS",
         "class_name": "OrganizationStore"
+      },
+      {
+        "name": "LESSON_ROOMS",
+        "class_name": "LessonCollaborationRoom"
       }
     ]
   },
@@ -38,6 +42,18 @@
       "new_sqlite_classes": [
         "OrganizationStore"
       ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": [
+        "LessonCollaborationRoom"
+      ]
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "COURSE_FILES",
+      "bucket_name": "happy-learners-demo-course-files"
     }
   ],
   "rules": [
