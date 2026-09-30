@@ -59,20 +59,29 @@ La hoja inicia en “Sin marcar”. Solo después de elegir un estado se guarda 
 
 ## Sistema visual
 
-Los tokens viven en `apps/web/src/style.css`: color, tipografía, espaciado, radios, sombras, estados, motion y breakpoints (640, 1024 y 1280 px).
+El tema completo vive en `apps/web/src/theme.css` (tokens) y `apps/web/src/style.css` (componentes, que solo leen tokens). Tipografías autoalojadas: Inter para texto y Plus Jakarta Sans para títulos.
 
-| Token | Color | Uso |
-| --- | --- | --- |
-| `--color-ink` | `#1D2624` | Texto y títulos |
-| `--color-muted` | `#5A6562` | Texto secundario (≥ 5.3:1) |
-| `--color-primary` | `#0F5C4F` | Acción principal, enlaces, selección |
-| `--color-primary-soft` | `#E4F0EC` | Selección y resaltado |
-| `--color-accent` | `#A3441F` | Foco y acento cálido |
-| `--color-canvas` | `#F7F5F0` | Fondo de trabajo |
-| `--color-surface` | `#FFFFFF` | Tarjetas, paneles, formularios |
-| `--color-border-strong` | `#858F8B` | Bordes de controles (≥ 3:1) |
+**Neutros:** tinta `#141729`, texto secundario `#5B6180` (≥ 5.3:1), lienzo `#F5F6FB`, superficie `#FFFFFF`, bordes de control `#8A8FA8` (≥ 3:1).
 
-Estados: éxito `#1D6A39`, advertencia `#874A0C`, información `#1C4F7C`, peligro `#A3261A`, cada uno sobre su fondo suave con contraste ≥ 5.7:1. Una acción principal por pantalla, controles de 44 px, ancho de lectura limitado a 46 rem y `prefers-reduced-motion` respetado. Las pruebas E2E auditan WCAG 2.2 A/AA con axe en todas las rutas principales.
+**Familias de tono.** Cada una tiene `vivid` (solo decoración), `ink` (texto e iconos, ≥ 5.3:1 sobre blanco y sobre su tinte), `soft` (fondo) y `solid` (relleno con texto blanco, ≥ 4.5:1). Una clase `tone-*` recolorea cualquier componente.
+
+| Tono | Ink | Soft | Uso principal |
+| --- | --- | --- | --- |
+| Violeta (marca) | `#4B36CC` | `#EEEBFF` | Acción principal, Inicio, Resumen, foco |
+| Cielo | `#1A5CC0` | `#E3F0FF` | Cursos, Contenido, actividad de contenido, recursos de texto |
+| Turquesa | `#0B6F66` | `#DDF7F3` | Biblioteca, actividad de recurso |
+| Rosa | `#AE2574` | `#FDE6F2` | Grupos, preguntas |
+| Coral | `#B2381C` | `#FFEDE7` | Asistencia, enlaces |
+| Ámbar | `#8A5200` | `#FFF3D6` | Ayuda, borradores, documentos (nunca con texto blanco) |
+| Verde | `#16703F` | `#E2F6EA` | Publicado, presente |
+
+Los cursos y unidades reciben un tono estable según su identificador, para reconocerlos de un vistazo. El color siempre acompaña a un texto o icono; nunca comunica solo. Degradado de marca: `#4B36CC → #7A2FC4 → #AE2574` (texto blanco ≥ 6.2:1).
+
+**Forma y espacio:** retícula de 4 px, radios 8/12/16/22 px, sombras suaves teñidas de violeta, controles de 42 px y objetivos táctiles de 44 px. **Movimiento:** 120/200/320 ms, desactivado con `prefers-reduced-motion`.
+
+**Editor de texto:** barra de herramientas tipo documento (deshacer/rehacer, estilos de párrafo, formato, listas, cita, enlace), navegable con flechas; el contenido se edita sobre una "hoja" blanca con ancho de lectura, marcador de posición y contador de palabras.
+
+Las pruebas E2E auditan WCAG 2.2 A/AA con axe en todas las rutas principales.
 
 ## Archivos de clase y coedición
 
