@@ -19,8 +19,8 @@ def api(path, payload):
 
 
 def event(mode, env, request=api):
-    if env['GITHUB_EVENT_NAME'] != 'push' or env['GITHUB_REF'] != 'refs/heads/main':
-        raise ValueError('Deployment events only run on push to main')
+    if env['GITHUB_EVENT_NAME'] not in ('push', 'workflow_dispatch') or env['GITHUB_REF'] != 'refs/heads/main':
+        raise ValueError('Deployment events only run on main')
     sha = env['GITHUB_SHA']
     if not re.fullmatch(r'[0-9a-f]{40}', sha):
         raise ValueError('Invalid deployment SHA')

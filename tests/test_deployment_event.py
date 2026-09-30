@@ -30,6 +30,13 @@ class DeploymentTests(unittest.TestCase):
         self.assertFalse(create['production_environment'])
         self.assertEqual(self.calls[1][1]['state'], 'in_progress')
 
+    def test_start_allows_manual_run_on_main(self):
+        self.env['GITHUB_EVENT_NAME'] = 'workflow_dispatch'
+        with tempfile.TemporaryDirectory() as folder:
+            self.env['GITHUB_OUTPUT'] = str(Path(folder) / 'output')
+            module.event('start', self.env, self.request)
+        self.assertEqual(self.calls[0][1]['ref'], 'a' * 40)
+
     def test_never_runs_for_pr(self):
         self.env['GITHUB_EVENT_NAME'] = 'pull_request'
         with self.assertRaises(ValueError):
