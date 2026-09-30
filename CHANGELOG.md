@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.4 — 2026-09-30
+
+Tema visual moderno (HL-44 / ST-041). Sin cambios de API ni datos.
+
+- Tema completo en `theme.css`: neutros fríos, violeta de marca y seis tonos (cielo, turquesa, rosa, coral, ámbar, verde) con variantes de texto, tinte y relleno, degradado de marca, tipografía, espaciado, radios, sombras y motion.
+- Color con sentido: cada sección, curso, unidad, tipo de actividad y tipo de recurso tiene su tono estable.
+- Tipografías autoalojadas: Inter y Plus Jakarta Sans.
+- Inicio con encabezado que resume el día y contadores de colores; tarjetas de curso con portada; espaciado más compacto.
+- Editor de texto tipo Docs: barra de iconos agrupada, enlace en línea, hoja con ancho de lectura, marcador de posición y contador de palabras.
+
 ## 0.2.3 — 2026-09-30
 
 Reconstrucción de la experiencia de producto (HL-44 / ST-041). La API, los contratos y los datos no cambian.
