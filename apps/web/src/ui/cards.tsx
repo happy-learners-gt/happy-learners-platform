@@ -6,12 +6,13 @@ import type { IconName } from "./icons";
 import { Menu } from "./Menu";
 import type { MenuItem } from "./Menu";
 import { Progress, StatusBadge, Updated } from "./primitives";
-import { plural, resourceKindLabel, resourceStatusLabel } from "../model";
+import { hueFor, plural, resourceHue, resourceKindLabel, resourceStatusLabel } from "../model";
 import type { CourseStats } from "../model";
 
 export function CourseCard({ course, stats, menu }: { course: Course; stats?: CourseStats; menu?: MenuItem[] }) {
   const href = `/cursos/${course.id}`;
-  return <article className="course-card">
+  return <article className={`course-card tone-${hueFor(course.id)}`}>
+    <div className="course-cover" aria-hidden="true"><span/><span/><span/></div>
     <div className="course-card-top">
       <span className="course-avatar" aria-hidden="true">{course.title.trim().charAt(0).toUpperCase()}</span>
       <div className="course-card-title">
@@ -31,7 +32,7 @@ const kindIcon: Record<Material["kind"], IconName> = { text: "text", link: "link
 export type LibraryItem = Material & { usedIn: number; courseTitle?: string; legacy?: boolean };
 export function ResourceCard({ item, menu, onOpen, extra }: { item: LibraryItem; menu?: MenuItem[]; onOpen: () => void; extra?: ReactNode }) {
   const kind = item.legacy ? "Texto" : item.kind === "file" && item.fileName ? item.fileName.split(".").pop()!.toUpperCase() : resourceKindLabel[item.kind];
-  return <article className={`resource-card kind-${item.kind}`}>
+  return <article className={`resource-card kind-${item.kind} tone-${resourceHue[item.kind]}`}>
     <span className="resource-icon" aria-hidden="true"><Icon name={kindIcon[item.kind] || "text"}/></span>
     <div className="resource-main">
       <h3><button type="button" className="card-link" aria-label={`Vista previa de ${item.title}`} onClick={onOpen}>{item.title}</button></h3>

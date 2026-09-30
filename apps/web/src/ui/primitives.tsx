@@ -4,6 +4,7 @@ import { Link } from "../navigation";
 import { Icon } from "./icons";
 import type { IconName } from "./icons";
 import { fullDate, timeAgo } from "../model";
+import type { Hue } from "../model";
 
 export type Crumb = { label: string; href?: string };
 export function Breadcrumbs({ items }: { items: Crumb[] }) {
@@ -74,6 +75,15 @@ export function Updated({ value, prefix = "Actualizado" }: { value?: string; pre
 export function Progress({ value, max, label }: { value: number; max: number; label: string }) {
   const percent = max ? Math.round((value / max) * 100) : 0;
   return <div className="progress"><div className="progress-text"><span>{label}</span><span>{max ? `${value} de ${max}` : "Sin lecciones"}</span></div><div className="progress-track" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={max || 1} aria-valuenow={value} aria-valuetext={max ? `${value} de ${max}` : "Sin lecciones"}><span style={{ width: `${percent}%` }}/></div></div>;
+}
+
+export type Stat = { label: string; value: number | string; icon: IconName; hue: Hue };
+/** Coloured counters: the icon chip carries the hue; label and value stay high-contrast text. */
+export function StatTiles({ items, className = "" }: { items: Stat[]; className?: string }) {
+  return <dl className={`stat-tiles ${className}`}>{items.map(item => <div key={item.label} className={`stat-tile tone-${item.hue}`}>
+    <span className="stat-icon" aria-hidden="true"><Icon name={item.icon} size={18}/></span>
+    <dt>{item.label}</dt><dd>{item.value}</dd>
+  </div>)}</dl>;
 }
 
 export function Section({ title, action, children, className = "" }: { title: string; action?: ReactNode; children: ReactNode; className?: string }) {

@@ -4,10 +4,11 @@ import { Link, useNavigation } from "../navigation";
 import { roleLabel, useSession } from "../session";
 import { Icon } from "./icons";
 import type { IconName } from "./icons";
+import type { Hue } from "../model";
 import { Menu } from "./Menu";
 
-export type NavItem = { href: string; label: string; icon: IconName; active: boolean };
-export type SidebarModel = { label: string; back?: { href: string; label: string }; title?: string; subtitle?: string; items: NavItem[]; secondary?: { label: string; items: NavItem[] } };
+export type NavItem = { href: string; label: string; icon: IconName; active: boolean; hue: Hue };
+export type SidebarModel = { label: string; back?: { href: string; label: string }; title?: string; subtitle?: string; hue?: Hue; items: NavItem[]; secondary?: { label: string; items: NavItem[] } };
 
 export function Brand() {
   return <Link href="/inicio" className="brand" aria-label="Happy Learners, ir a Inicio"><span className="brand-mark" aria-hidden="true">hl</span><span className="brand-name">Happy Learners</span></Link>;
@@ -74,10 +75,10 @@ function TopBar({ menuButton }: { menuButton: ReactNode }) {
 export function ContextSidebar({ model }: { model: SidebarModel }) {
   const { organization } = useSession();
   return <div className="sidebar-inner">
-    {model.title ? <div className="sidebar-context"><span className="sidebar-eyebrow">{model.subtitle}</span><strong>{model.title}</strong></div>
+    {model.title ? <div className={`sidebar-context tone-${model.hue || "violet"}`}><span className="context-avatar" aria-hidden="true">{model.title.trim().charAt(0).toUpperCase()}</span><span><span className="sidebar-eyebrow">{model.subtitle}</span><strong>{model.title}</strong></span></div>
       : organization?.name && <div className="sidebar-context mobile-only"><span className="sidebar-eyebrow">Organización</span><strong>{organization.name}</strong></div>}
-    <nav aria-label={model.label}>{model.back && <Link href={model.back.href} className="sidebar-back"><Icon name="back" size={18}/><span>{model.back.label}</span></Link>}<ul>{model.items.map(item => <li key={item.href}><Link href={item.href} aria-current={item.active ? "page" : undefined}><Icon name={item.icon} size={18}/><span>{item.label}</span></Link></li>)}</ul></nav>
-    {model.secondary && <nav aria-label={model.secondary.label} className="sidebar-secondary"><span className="sidebar-eyebrow">{model.secondary.label}</span><ul>{model.secondary.items.map(item => <li key={item.href}><Link href={item.href} aria-current={item.active ? "page" : undefined}><Icon name={item.icon} size={18}/><span>{item.label}</span></Link></li>)}</ul></nav>}
+    <nav aria-label={model.label}>{model.back && <Link href={model.back.href} className="sidebar-back"><Icon name="back" size={18}/><span>{model.back.label}</span></Link>}<ul>{model.items.map(item => <li key={item.href}><Link href={item.href} className={`tone-${item.hue}`} aria-current={item.active ? "page" : undefined}><span className="nav-icon"><Icon name={item.icon} size={18}/></span><span>{item.label}</span></Link></li>)}</ul></nav>
+    {model.secondary && <nav aria-label={model.secondary.label} className="sidebar-secondary"><span className="sidebar-eyebrow">{model.secondary.label}</span><ul>{model.secondary.items.map(item => <li key={item.href}><Link href={item.href} className={`tone-${item.hue}`} aria-current={item.active ? "page" : undefined}><span className="nav-icon"><Icon name={item.icon} size={18}/></span><span>{item.label}</span></Link></li>)}</ul></nav>}
     <p className="sidebar-note"><Icon name="shield" size={16}/><span>Demostración con datos ficticios</span></p>
   </div>;
 }

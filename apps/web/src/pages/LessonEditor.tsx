@@ -7,7 +7,7 @@ import { seedMissingFields } from "../collab-seed";
 import type { CollaborationStatus } from "../collaboration";
 import { Link, useNavigation, useUnsavedChanges } from "../navigation";
 import { useSession } from "../session";
-import { activityTypeLabel, draftOf, draftProblem, lessonBody, lessonState, lessonStateLabel, plural, timeAgo, usage } from "../model";
+import { activityHue, activityTypeLabel, draftOf, draftProblem, lessonBody, lessonState, lessonStateLabel, plural, timeAgo, usage } from "../model";
 import type { LessonDraft } from "../model";
 import { useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
@@ -228,12 +228,12 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     </header>
     <div className="editor-layout">
       <nav className="activity-outline" aria-label="Estructura de la lección">
-        <button type="button" className="outline-item" aria-current={selected === "details" ? "true" : undefined} onClick={() => setSelected("details")}><Icon name="info" size={18}/><span><strong>Detalles</strong><small>Objetivo, unidad y duración</small></span></button>
+        <button type="button" className="outline-item tone-violet" aria-current={selected === "details" ? "true" : undefined} onClick={() => setSelected("details")}><span className="outline-number type-chip" aria-hidden="true"><Icon name="info" size={16}/></span><span><strong>Detalles</strong><small>Objetivo, unidad y duración</small></span></button>
         <h2 className="outline-heading">Actividades <span className="muted">({draft.activities.length})</span></h2>
-        {draft.activities.length ? <ol className="activity-list">{draft.activities.map((activity, index) => <li key={activity.id} className={selected === activity.id ? "is-selected" : undefined}>
+        {draft.activities.length ? <ol className="activity-list">{draft.activities.map((activity, index) => <li key={activity.id} className={`tone-${activityHue[activity.type || "text"]}${selected === activity.id ? " is-selected" : ""}`}>
           <button type="button" className="outline-item" aria-current={selected === activity.id ? "true" : undefined} onClick={() => setSelected(activity.id!)}>
-            <span className="outline-number" aria-hidden="true">{index + 1}</span>
-            <span><strong>{activity.title || "Sin título"}</strong><small><Icon name={typeIcon[activity.type || "text"]} size={14}/>{activityTypeLabel[activity.type || "text"]} · {activity.minutes} min</small></span>
+            <span className="outline-number type-chip" aria-hidden="true"><Icon name={typeIcon[activity.type || "text"]} size={16}/></span>
+            <span><strong>{index + 1}. {activity.title || "Sin título"}</strong><small><Icon name={typeIcon[activity.type || "text"]} size={14}/>{activityTypeLabel[activity.type || "text"]} · {activity.minutes} min</small></span>
           </button>
           {writable && <span className="reorder">
             <button type="button" className="icon-button small" aria-label={`Subir actividad ${index + 1}: ${activity.title}`} disabled={index === 0} onClick={() => moveActivity(index, -1)}><Icon name="up" size={16}/></button>
@@ -289,7 +289,7 @@ function ActivityPanel({ activity, index, total, writable, resources, courseId, 
   const type = activity.type || "text";
   const options = activity.options || [];
   return <>
-    <div className="panel-title-row"><h2 id="panel-title">Actividad {index + 1} de {total}</h2>{writable && <Button variant="ghost" icon="close" onClick={onRemove}>Eliminar</Button>}</div>
+    <div className={`panel-title-row tone-${activityHue[type]}`}><h2 id="panel-title"><span className="type-chip" aria-hidden="true"><Icon name={typeIcon[type]} size={18}/></span>Actividad {index + 1} de {total}</h2>{writable && <Button variant="ghost" icon="close" onClick={onRemove}>Eliminar</Button>}</div>
     <fieldset className="stack" disabled={!writable}>
       <div className="field-row wide-first">
         <div className="field"><label htmlFor="activity-title">Título de la actividad</label><input id="activity-title" value={activity.title} maxLength={160} onChange={event => onChange({ title: event.target.value })}/></div>

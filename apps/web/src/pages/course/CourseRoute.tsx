@@ -4,6 +4,7 @@ import { AppShell } from "../../ui/Shell";
 import type { SidebarModel } from "../../ui/Shell";
 import { EmptyState, ErrorState, Loading, PageHeader } from "../../ui/primitives";
 import { Link } from "../../navigation";
+import { hueFor } from "../../model";
 import { CourseProvider, useCourseLoader } from "./context";
 import { Overview } from "./Overview";
 import { Content } from "./Content";
@@ -35,14 +36,15 @@ export function CourseRoute({ id, area, item }: { id: string; area: string; item
     back: { href: "/cursos", label: "Todos los cursos" },
     subtitle: course?.status === "archived" ? "Curso archivado" : "Curso",
     title: course?.title || "Cargando curso…",
+    hue: hueFor(id),
     items: [
-      { href: base, label: "Resumen", icon: "overview" as const, active: current === "" },
-      { href: `${base}/contenido`, label: "Contenido", icon: "content" as const, active: current === "contenido" },
-      { href: `${base}/biblioteca`, label: "Biblioteca del curso", icon: "library" as const, active: current === "biblioteca" },
+      { href: base, label: "Resumen", icon: "overview" as const, hue: "violet" as const, active: current === "" },
+      { href: `${base}/contenido`, label: "Contenido", icon: "content" as const, hue: "sky" as const, active: current === "contenido" },
+      { href: `${base}/biblioteca`, label: "Biblioteca del curso", icon: "library" as const, hue: "teal" as const, active: current === "biblioteca" },
       ...(educator ? [
-        { href: `${base}/grupos`, label: "Grupos", icon: "users" as const, active: current === "grupos" },
-        { href: `${base}/asistencia`, label: "Asistencia", icon: "calendar" as const, active: current === "asistencia" },
-        { href: `${base}/configuracion`, label: "Configuración", icon: "settings" as const, active: current === "configuracion" },
+        { href: `${base}/grupos`, label: "Grupos", icon: "users" as const, hue: "pink" as const, active: current === "grupos" },
+        { href: `${base}/asistencia`, label: "Asistencia", icon: "calendar" as const, hue: "coral" as const, active: current === "asistencia" },
+        { href: `${base}/configuracion`, label: "Configuración", icon: "settings" as const, hue: "amber" as const, active: current === "configuracion" },
       ] : []),
     ],
   };
