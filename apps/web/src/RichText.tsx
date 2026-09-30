@@ -8,18 +8,19 @@ import type * as Y from "yjs";
 import type { CollaborationProvider } from "./collaboration";
 
 const blank: RichTextDocument = { type: "doc", content: [{ type: "paragraph" }] };
-export function RichText({ value, fallbackText = "", onChange, label = "Contenido de la actividad", editable = true, collaboration, username }: { value?: RichTextDocument; fallbackText?: string; onChange?: (doc: RichTextDocument) => void; label?: string; editable?: boolean; collaboration?: { document: Y.Doc; field: string; provider: CollaborationProvider }; username?: string }) {
+export function RichText({ value, fallbackText = "", onChange, onRemoteChange, label = "Contenido de la actividad", editable = true, collaboration, username }: { value?: RichTextDocument; fallbackText?: string; onChange?: (doc: RichTextDocument) => void; onRemoteChange?: (doc: RichTextDocument) => void; label?: string; editable?: boolean; collaboration?: { document: Y.Doc; field: string; provider: CollaborationProvider }; username?: string }) {
   const initial = value || (fallbackText.trim() ? { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: fallbackText }] }] } as RichTextDocument : blank);
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [2, 3] }, link: { openOnClick: !editable }, undoRedo: collaboration ? false : undefined }),
-      ...(collaboration ? [Collaboration.configure({ document: collaboration.document, field: collaboration.field }), CollaborationCaret.configure({ provider: collaboration.provider, user: { name: username || "Educador", color: "#14594D" } })] : []),
+      ...(collaboration ? [Collaboration.configure({ document: collaboration.document, field: collaboration.field }), CollaborationCaret.configure({ provider: collaboration.provider, user: { name: username || "Educador", color: "#0F5C4F" } })] : []),
     ],
     content: collaboration ? undefined : initial,
     editable,
     immediatelyRender: false,
-    editorProps: { attributes: { "aria-label": label, "aria-multiline": "true", class: "richtext-content" } },
-    onUpdate: ({ editor: current, transaction }) => { if (!collaboration || !isChangeOrigin(transaction)) onChange?.(current.getJSON() as RichTextDocument); },
+    editorProps: { attributes: { role: "textbox", "aria-label": label, "aria-multiline": "true", ...(editable ? {} : { "aria-readonly": "true" }), class: "richtext-content" } },
+    // Remote collaborative edits refresh local state without marking this editor as the author of a change.
+    onUpdate: ({ editor: current, transaction }) => { const doc = current.getJSON() as RichTextDocument; if (collaboration && isChangeOrigin(transaction)) onRemoteChange?.(doc); else onChange?.(doc); },
   });
   if (!editor) return <div className="richtext-loading" role="status">Abriendo editor…</div>;
   const button = (name: string, action: () => void, pressed = false) => <button type="button" className="richtext-tool" aria-label={name} aria-pressed={pressed} onMouseDown={event => event.preventDefault()} onClick={action}>{name}</button>;
