@@ -29,7 +29,7 @@ Nivel → Unidad → Lección es la estructura visible. La tabla histórica de p
 
 Las sesiones están en servidor y se entregan mediante cookie HttpOnly, SameSite y Secure en producción. Las escrituras validan origen. Administrador gestiona organización y permisos; Educador gestiona contenido. Un cambio de permisos revoca las sesiones del miembro.
 
-La conexión colaborativa exige una sesión vigente y una membresía activa de Educador en el mismo curso. Cada mensaje vuelve a validar permisos. R2 no tiene dominio público; las respuestas de archivo son adjuntos `application/octet-stream`, `nosniff`, sin caché y con SHA-256. Las vistas previas Office se cargan bajo demanda y se procesan localmente con ZIP y tamaño acotados; el HTML generado se sanitiza antes de insertarse.
+La conexión colaborativa exige una sesión vigente y una membresía activa de Educador en el mismo curso. Cada mensaje vuelve a validar permisos. La presencia caduca al procesar actividad, sin mantener un temporizador en el Durable Object, para permitir que una sala sin editores entre en hibernación. R2 no tiene dominio público; las respuestas de archivo son adjuntos `application/octet-stream`, `nosniff`, sin caché y con SHA-256. Las vistas previas Office se cargan bajo demanda y se procesan localmente con ZIP y tamaño acotados; el HTML generado se sanitiza antes de insertarse.
 
 El acceso público exige un código de lección publicada. No recibe usuarios, credenciales ni borradores. Las preguntas se evalúan en el navegador. El servidor conserva únicamente el identificador de lección y la fecha del evento de finalización. Los conteos no equivalen a estudiantes únicos.
 
