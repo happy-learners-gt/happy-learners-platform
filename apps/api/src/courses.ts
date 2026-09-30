@@ -1,6 +1,7 @@
 import type { Course, LearningUnit, Material, Member, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
 import { cleanText, completeOrder, courseInput, materialInput, record } from "@happy-learners/domain";
 import type { Database } from "./storage";
+import { filesFor } from "./files";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
 const missing = () => reply({ error: "El elemento no está disponible en tu organización." }, 404);
@@ -68,7 +69,7 @@ export async function courses(path: string, method: string, input: unknown, curr
   if (id && !course) return missing();
   if (method === "GET") {
     if (!id) return reply({ courses: list.map(({ legacyProgramId: _, ...c }) => c) });
-    if (area === "materials") return reply({ materials: await materialsFor(db, current.organizationId, id) });
+    if (area === "materials") return reply({ materials: [...await materialsFor(db, current.organizationId, id), ...await filesFor(db, current.organizationId, id)] });
     const { legacyProgramId: _, ...view } = course!;
     return reply({ course: view, units: await unitsFor(db, id) });
   }
