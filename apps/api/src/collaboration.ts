@@ -5,6 +5,7 @@ import * as awarenessProtocol from "y-protocols/awareness";
 import * as syncProtocol from "y-protocols/sync";
 import * as Y from "yjs";
 import { richTextSnapshot } from "./rich-text";
+import { createHibernationAwareness, expireStaleAwareness } from "./collaboration-awareness";
 
 type RoomIdentity = { organizationId: string; courseId: string; lessonId: string };
 type SocketIdentity = RoomIdentity & { userId: string; username: string; tokenHash: string; awarenessClientId?: number; rateWindow?: number; rateCount?: number };
@@ -54,7 +55,7 @@ function colorFor(name: string): string {
 
 export class LessonCollaborationRoom extends DurableObject<Env> {
   private readonly doc = new Y.Doc();
-  private readonly awareness = new awarenessProtocol.Awareness(this.doc);
+  private readonly awareness = createHibernationAwareness(this.doc);
   private metadata: RoomMetadata | null = null;
   private hydrated: Promise<void>;
 
@@ -73,13 +74,13 @@ export class LessonCollaborationRoom extends DurableObject<Env> {
       for (const update of this.ctx.storage.sql.exec<{ payload: ArrayBuffer }>("SELECT payload FROM room_updates ORDER BY id").toArray()) Y.applyUpdate(this.doc, new Uint8Array(update.payload), "storage");
       this.doc.on("update", (update, origin) => this.persistAndBroadcast(update, origin));
       this.awareness.setLocalState(null);
-      this.awareness.on("update", ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }, origin: WebSocket) => {
+      this.awareness.on("update", ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }, origin: unknown) => {
         const ids = [...added, ...updated, ...removed];
         if (!ids.length) return;
         const message = encoding.createEncoder();
         encoding.writeVarUint(message, 1);
         encoding.writeVarUint8Array(message, awarenessProtocol.encodeAwarenessUpdate(this.awareness, ids));
-        this.broadcast(encoding.toUint8Array(message), origin);
+        this.broadcast(encoding.toUint8Array(message), origin instanceof WebSocket ? origin : undefined);
       });
     });
   }
@@ -122,6 +123,7 @@ export class LessonCollaborationRoom extends DurableObject<Env> {
     if (!socketIdentity.userId || !/^[a-f0-9]{64}$/.test(socketIdentity.tokenHash)) return denied(401, "Inicia sesión para editar.");
     if (!await this.authorized(socketIdentity)) return denied(403, "Tu sesión o permisos ya no permiten editar este curso.");
     if (this.ctx.getWebSockets().length >= maxSockets) return denied(429, "El documento alcanzó el límite de 20 editores simultáneos.");
+    expireStaleAwareness(this.awareness);
     const pair = new WebSocketPair();
     const client = pair[0], server = pair[1];
     this.ctx.acceptWebSocket(server);
@@ -140,6 +142,7 @@ export class LessonCollaborationRoom extends DurableObject<Env> {
   async webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const identity = socket.deserializeAttachment() as SocketIdentity | null;
     if (!identity || !await this.authorized(identity)) { socket.close(1008, "Permiso revocado"); return; }
+    expireStaleAwareness(this.awareness);
     const now = Date.now();
     if (!identity.rateWindow || now - identity.rateWindow >= rateWindowMs) { identity.rateWindow = now; identity.rateCount = 0; }
     identity.rateCount = (identity.rateCount || 0) + 1;
