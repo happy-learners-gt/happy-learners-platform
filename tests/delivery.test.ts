@@ -44,9 +44,28 @@ describe("delivery gate", () => {
     const config = JSON.parse(readFileSync("build/wrangler.json", "utf8"));
     expect(config.no_bundle).toBe(true);
     expect(config.assets.directory).toBe("web");
-    expect(config.durable_objects.bindings).toEqual([{ name: "ORGANIZATIONS", class_name: "OrganizationStore" }]);
-    expect(config.migrations).toEqual([{ tag: "v1", new_sqlite_classes: ["OrganizationStore"] }]);
-    expect(config.r2_buckets).toBeUndefined();
+    expect(config.durable_objects.bindings).toEqual([
+      { name: "ORGANIZATIONS", class_name: "OrganizationStore" },
+      { name: "LESSON_ROOMS", class_name: "LessonCollaborationRoom" },
+    ]);
+    expect(config.migrations).toEqual([
+      { tag: "v1", new_sqlite_classes: ["OrganizationStore"] },
+      { tag: "v2", new_sqlite_classes: ["LessonCollaborationRoom"] },
+    ]);
+    expect(config.r2_buckets).toEqual([{ binding: "COURSE_FILES", bucket_name: "happy-learners-demo-course-files" }]);
+    const deploySteps = workflow.jobs.deploy.steps;
+    const bucket = deploySteps.findIndex((step: { name?: string }) => step.name === "Ensure private course-file bucket exists");
+    const publish = deploySteps.findIndex((step: { name?: string }) => step.name === "Deploy verified package");
+    const start = deploySteps.findIndex((step: { id?: string }) => step.id === "deployment");
+    expect(bucket).toBeGreaterThan(-1);
+    expect(start).toBeLessThan(bucket);
+    expect(bucket).toBeLessThan(publish);
+    expect(deploySteps[bucket].run).toContain("wrangler r2 bucket list");
+    expect(deploySteps[bucket].run).toContain("wrangler r2 bucket create");
+    expect(deploySteps[bucket].env).toEqual({
+      CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}",
+      CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
+    });
   });
   it("reports deployment status with the repository token and maps demo to Jira testing", () => {
     expect(workflow.jobs.deploy.permissions).toEqual({ contents: "read", deployments: "write" });
@@ -57,7 +76,7 @@ describe("delivery gate", () => {
     expect(steps[start].env).toEqual({ GH_TOKEN: "${{ github.token }}" });
     const finish = steps[steps.length - 1];
     expect(finish.if).toBe("always() && steps.deployment.outputs.id != ''");
-    expect(finish.env.DEPLOY_OUTCOME).toBe("${{ steps.cloudflare.outcome }}");
+    expect(finish.env.DEPLOY_OUTCOME).toBe("${{ steps.cloudflare.outcome == 'skipped' && steps.bucket.outcome || steps.cloudflare.outcome }}");
     expect(finish.env.DEPLOYMENT_ID).toBe("${{ steps.deployment.outputs.id }}");
     const jira = parse(readFileSync(".jira/config.yml", "utf8"));
     expect(jira.deployments.environmentMapping.testing).toEqual(["demo"]);
