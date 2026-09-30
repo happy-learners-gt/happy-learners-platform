@@ -7,7 +7,7 @@ export const test = base.extend<{ localOnly: void }>({
     // Also prevent browser redirects or links from sending writes to a remote host.
     await context.route("**/*", route => {
       const request = route.request();
-      const local = new URL(request.url()).origin === "http://127.0.0.1:8789";
+    const local = new URL(request.url()).origin === `http://127.0.0.1:${Number(process.env.HL_E2E_PORT || 8789)}`;
       return local ? route.continue() : route.abort("blockedbyclient");
     });
     await use();

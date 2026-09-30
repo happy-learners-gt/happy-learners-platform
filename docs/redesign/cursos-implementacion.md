@@ -1,96 +1,54 @@
-# Cursos para distintas disciplinas
+# Cursos como espacio de aprendizaje
 
-Primera implementación del modelo educativo genérico aprobado. El curso sustituye a la biblioteca y al nivel de inglés como punto de partida del trabajo. La aprobación del usuario incluye la implementación y los diagramas de base de datos; no modifica la aceptación histórica de Sprint 2.
+El curso es el contexto principal para preparar e impartir una experiencia educativa. La estructura de agrupaciones es configurable; no presupone inglés, niveles escolares ni un sistema de acreditación.
 
-## Qué se puede hacer
+## Flujo de trabajo
 
-- Crear un curso libre, taller, curso escolar, preescolar, universitario o con laboratorio. Son perfiles de presentación, no sistemas de acreditación diferentes.
-- Definir el objetivo y elegir cómo llamar a sus agrupaciones: Temas, Experiencias, Unidades, Semanas, Módulos o Prácticas.
-- Crear, editar, ordenar y archivar agrupaciones; preparar sus lecciones.
-- Crear materiales de texto o enlace sin exigir nivel, habilidad de inglés ni tema predefinido.
-- Clasificar cursos y materiales con vocabularios configurados por administración.
-- Publicar una lección, compartir su enlace y mantener la última publicación visible mientras se edita el borrador.
-
-No se añaden servicios ni dependencias. Se mantiene React, el Worker y SQLite por organización; las transacciones y las comprobaciones de versión siguen las guías de Cloudflare para evitar sobrescrituras.
-
-## Recorrido del educador
+Desde el curso, el educador organiza la secuencia, redacta lecciones, reutiliza materiales, crea grupos y registra asistencia. “Contenido” y “Biblioteca” dejan de ser áreas de trabajo separadas; las rutas antiguas redirigen a Cursos y los registros existentes se conservan.
 
 ```mermaid
 flowchart LR
-  A[Cursos] --> B[Crear curso: propósito y perfil]
-  B --> C[Contenido: organizar agrupaciones]
-  C --> D[Preparar lección]
-  B --> E[Materiales del curso]
-  E -->|vincular| D
-  D --> F[Guardar borrador]
-  F --> G[Publicar]
-  G --> H[Compartir enlace]
+  C[Curso] --> P[Preparar secuencia]
+  P --> L[Editar lección]
+  M[Materiales del curso] --> L
+  L --> D[Guardar borrador estructurado]
+  D --> V[Vista previa]
+  V --> U[Publicar o republicar]
+  U --> S[Compartir con estudiantes]
+  C --> G[Grupos]
+  G --> A[Crear sesión y tomar asistencia]
 ```
 
-La navegación global muestra Inicio, Cursos y Ayuda. Administración también dispone de Organización, Educadores y Clasificaciones. Dentro de un curso, Contenido muestra la secuencia; Materiales contiene textos y enlaces; Lecciones permite editar; Configuración cambia objetivo, perfil y estado. No hay botones de grupos, programas ni revisión editorial antes de que esas funciones existan.
+La guía detallada, sus estados de publicación y asistencia, la identidad visual y sus límites están en [Flujos de trabajo de Studio](studio-flujos-y-diseno.md).
 
-### Demostración breve
+## Modelo y persistencia
 
-1. Iniciar sesión con el procedimiento de demostración existente y abrir **Cursos → Crear curso**.
-2. Escribir un título y objetivo de cualquier disciplina. Elegir un perfil y, si resulta útil, una clasificación.
-3. En Contenido, añadir una agrupación. En Materiales, guardar un texto o enlace.
-4. Volver a Contenido y seleccionar **Preparar lección aquí**. Definir el objetivo y las actividades; vincular el material del curso.
-5. Guardar, publicar y abrir el enlace público. Al modificar el borrador, la publicación no cambia hasta seleccionar **Republicar**.
+- Cursos y unidades de aprendizaje; cada curso define su objetivo y el nombre visible de sus agrupaciones.
+- Materiales de texto y enlaces asociados al curso.
+- Actividades de instrucción, material vinculado o selección única.
+- Texto enriquecido por nodos TipTap permitidos. La API valida tamaño, profundidad, tipos de nodo y enlaces; no almacena HTML arbitrario.
+- La lección publicada es una instantánea separada del borrador.
+- Grupos, listas mínimas, sesiones por fecha y marcas de asistencia.
+- Documentos DOCX, PPTX y XLSX en almacenamiento privado de R2. SQLite guarda la organización, el curso, nombre seguro, tipo, tamaño y SHA-256; nunca la ruta pública del objeto.
+- Edición colaborativa en vivo del contenido enriquecido de cada actividad. Yjs sincroniza cambios por WebSocket y conserva actualizaciones en el Durable Object de la lección. La presencia muestra a los educadores conectados.
 
-Los estudiantes no necesitan cuenta. La finalización es un conteo de uso, no evidencia de aprobación ni de estudiantes únicos. Las cuentas compartidas de demo solo admiten contenido sintético.
+Se conserva SQLite en el Durable Object de cada organización. Las migraciones son acumulativas; la [0008](../../database/migrations/0008_classroom_attendance.sql) agrega asistencia sin reescribir datos previos. Los diagramas de tablas, cardinalidades y claves están en [Base de datos](base-de-datos.md).
 
-## Estados realmente disponibles
+## Límites actuales
 
-```mermaid
-stateDiagram-v2
-  [*] --> Borrador
-  Borrador --> Publicada: publicar
-  Publicada --> PublicadaConBorrador: guardar cambios
-  PublicadaConBorrador --> Publicada: republicar
-  Borrador --> Archivada: archivar
-  Publicada --> Archivada: archivar lección
-  PublicadaConBorrador --> Archivada: archivar lección
-  Archivada --> Borrador: restaurar sin publicación previa
-  Archivada --> PublicadaConBorrador: restaurar con publicación previa
-```
+La biblioteca de materiales admite texto, enlaces y archivos Office de hasta 15 MB. Las vistas previas se procesan en el navegador; el original se descarga como archivo adjunto y no se publica por una URL de R2. Solo una lección publicada que vincule el archivo concede acceso al estudiante. Archivar impide nuevos vínculos, pero no rompe publicaciones anteriores.
 
-Son estados de interfaz derivados del borrador, la revisión pública y la marca de archivo. Al archivar **una lección**, su enlace deja de estar disponible. Archivar **un curso o una agrupación** detiene su autoría, pero conserva las lecciones ya publicadas. Archivar **un material** impide nuevos vínculos; las publicaciones conservan su copia. La UI explica esta diferencia.
+Los cuerpos de texto enriquecido se editan simultáneamente: los cambios y cursores se sincronizan entre educadores autorizados. El título, objetivo, orden y estructura de actividades siguen el control de versión del borrador; si alguien los guarda primero, la otra persona debe recargar antes de guardar. Los formularios estructurales no se fusionan en vivo.
 
-Los estados de revisión pedagógica, solicitud de cambios y aprobación del diseño general todavía no están implementados. Tampoco hay editor de texto enriquecido, coedición simultánea, programas académicos, requisitos, ediciones, inscripciones ni repositorio compartido entre cursos. No se infieren esas funciones a partir de taxonomías. La prevención de sobrescrituras mediante versiones no sustituye la coedición.
+El despliegue necesita el bucket privado `happy-learners-demo-course-files` en la cuenta de Cloudflare y el binding `COURSE_FILES`. Conserva la copia de seguridad de SQLite y el inventario/hash de objetos antes de una recuperación. Para revertir, publica una versión de Worker compatible hacia delante y restaura por separado SQLite/R2 solo si se confirmaron daños; no se borra un documento al archivarlo.
 
-## Diseño visual
+La asistencia guarda únicamente el nombre o identificador de lista, grupo, fecha y estado. No se solicitan datos de contacto, edad ni observaciones sensibles. Las cuentas de demostración son compartidas: usar participantes ficticios.
 
-| Uso | Color |
-| --- | --- |
-| Fondo | `#F4F6F5` |
-| Superficie | `#FFFFFF` |
-| Texto | `#162B33` |
-| Texto secundario | `#50636B` |
-| Acción principal | `#155E75` |
-| Selección suave | `#EAF3F5` |
-| Separadores | `#D5DEDC` |
-| Contorno de controles | `#788B90` |
-
-Tarjetas espaciadas, títulos de contexto, campos con etiquetas, foco visible y botones de orden accesibles. Sin arrastrar y soltar obligatorio. El recorrido se comprueba en 1365 px y 390 px; la vista de contenido también se verifica sin desbordamiento horizontal a 320 px. No equivale a una certificación de accesibilidad.
-
-Capturas verificadas de [escritorio](curso-escritorio.png) y [móvil](curso-movil.png). Muestran la aplicación y una base local aislada con un curso de fotografía, no producción. Los [wireframes](prototipo-cursos.html) conservan su función de diseño del producto completo.
-
-## Base de datos y compatibilidad
-
-Consultar los [diagramas de base de datos](base-de-datos.md): esquema anterior, curso y materiales, taxonomías, identidad, edición concurrente y modelo objetivo. Incluyen claves, cardinalidades, restricciones, migración y límites del rollback.
-
-Los contenidos y enlaces anteriores se conservan. Se puede entrar a Recursos heredados desde Cursos y a la organización anterior desde Ayuda. No se renombra ni elimina contenido de producción por patrones de nombres. El seed editorial aprobado sigue versionado, sin carga automática: la demo de pruebas no se convierte en datos de producción.
-
-## Comprobación
+## Verificación
 
 ```bash
 ./scripts/verify
 npm run test:e2e
-npm run test:smoke
 ```
 
-`verify` construye, comprueba tipos, reglas, migraciones y el paquete Workers sin desplegar. Los E2E incluyen cursos genéricos, permisos, aislamiento, edición desactualizada, publicación, recarga, móvil y los recorridos heredados. El smoke de producción permite lectura, inicio y cierre de sesión, pero bloquea la creación de cursos, contenidos y finalizaciones.
-
-La integración utiliza el PR de producto existente. CI publica únicamente su artefacto verificado y comprueba `/api/health`, `/api/version` y los recorridos de lectura. Los tags publicados no se mueven.
-
-Validación local: 28 pruebas Vitest, 16 pruebas Python, 14 pruebas E2E y 2 smoke de lectura aprobados. El recorrido anterior de publicación se conserva; las pruebas nuevas cubren también administración de taxonomías y dos guardados concurrentes sobre la misma versión. La migración compara los bytes publicados antes y después para detectar cambios involuntarios.
+La verificación automatizada no equivale a aceptación de producción. La funcionalidad de este cambio requiere integrar la rama, aplicar la migración en el despliegue autorizado y comprobar la UI/API allí antes de considerarla disponible en producción.
