@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.3 — 2026-09-30
+
+Reconstrucción de la experiencia de producto (HL-44 / ST-041). La API, los contratos y los datos no cambian.
+
+- Un solo sistema de navegación: barra superior (marca, organización, búsqueda, ayuda, perfil) y un sidebar que cambia de contexto al entrar en un curso; en móvil se abre como panel.
+- Inicio útil: continuar trabajando, cursos recientes, próximas clases, estado de las lecciones, acciones rápidas y actividad reciente.
+- Cursos con tarjetas compactas, progreso de publicación, búsqueda y menú para editar, duplicar o archivar.
+- Contenido unificado: unidades y lecciones en un outline con expandir, crear, renombrar en línea, reordenar con teclado y archivar.
+- Editor de lección con autosave visible, outline de actividades, vista previa y una acción principal por estado.
+- Biblioteca del curso y biblioteca global con búsqueda, filtros, uso en lecciones y vista previa; grupos → clases → asistencia con confirmación inmediata.
+- Lección del estudiante móvil primero: una actividad a la vez, avance y cierre claro.
+- Sesión expirada sin perder el trabajo en pantalla; errores que explican cómo recuperarse.
+- Corrección: las actividades antiguas sin ID ya no se vacían al guardar una lección colaborativa.
+- Sistema visual con tokens y primitivas propias; auditoría axe WCAG 2.2 AA en las pruebas E2E.
+
 ## 0.2.0 — 2026-09-29
 
 Primera versión utilizable para organizar materiales y preparar una clase.
