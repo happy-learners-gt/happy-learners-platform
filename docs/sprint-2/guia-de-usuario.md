@@ -1,43 +1,66 @@
 # Guía de usuario
 
+Versión vigente: v0.2.3. La navegación y los nombres se describen en la [arquitectura de información](../redesign/arquitectura-informacion-v0.2.3.md).
+
 ## Entrar al espacio
 
-Abre [Happy Learners](https://happy-learners-demo.lfmendoza-alvarez.workers.dev). La cuenta `admin-demo` configura la organización y los permisos. La cuenta `educador-demo` prepara y publica contenido. Las credenciales sintéticas están en “Probar con datos ficticios”. Cierra la sesión al terminar.
+Abre [Happy Learners](https://happy-learners-demo.lfmendoza-alvarez.workers.dev). La cuenta `educador-demo` prepara y publica cursos; `admin-demo` configura la organización y los permisos. Las credenciales sintéticas están en “Probar con cuentas de demostración”. Cierra la sesión desde el menú de perfil, arriba a la derecha.
 
-Los estudiantes no necesitan cuenta. Pueden abrir un enlace publicado o escribir el código en la pantalla de entrada.
+Los estudiantes no necesitan cuenta: abren el enlace publicado o escriben el código en “¿Eres estudiante?”.
 
-## Trabajar dentro de un curso
+## Cómo se organiza
 
-Abre **Mis cursos** y selecciona un curso. Allí encontrarás Preparar, Materiales, Editar lecciones, Grupos, Asistencia y Ajustes. Las rutas antiguas de Contenido y Biblioteca llevan a Mis cursos; no son espacios de trabajo separados.
+Curso → Unidades → Lecciones → Actividades → Recursos.
 
-En **Materiales**, registra recursos de texto o enlaces y organiza su clasificación. También puedes subir documentos DOCX, PPTX o XLSX de hasta 15 MB. Se guardan en privado; solo el equipo del curso puede abrirlos desde Materiales. La vista previa se procesa en tu navegador. Una publicación comparte únicamente los archivos vinculados a sus actividades. Archivar conserva el acceso de lecciones ya publicadas y evita que el documento se use en otras nuevas.
+- La barra superior tiene la búsqueda (tecla `/`), la ayuda y tu perfil.
+- Fuera de un curso, el menú lateral muestra Inicio, Cursos, Biblioteca y Ayuda.
+- Dentro de un curso, el mismo menú cambia a: Todos los cursos, Resumen, Contenido, Biblioteca del curso, Grupos, Asistencia y Configuración.
+- En teléfono y tableta, el menú se abre con el botón **Menú**.
 
-En **Preparar**, organiza las unidades de aprendizaje del curso y su orden. Las unidades pueden representar temas, semanas o prácticas según el diseño del curso; no implican que todo el producto sea un currículo de idiomas.
+## Preparar un curso
 
-## Preparar una lección
+1. En **Cursos**, selecciona **Crear curso**, escribe el nombre y el objetivo.
+2. En **Contenido**, crea una unidad y, dentro de ella, **Nueva lección** con su título y objetivo.
+3. Cada fila tiene un menú **⋯** para renombrar, mover arriba o abajo, ver una vista previa o archivar. También puedes hacer doble clic en un nombre para renombrarlo.
+4. **Mostrar archivadas** permite restaurar unidades o lecciones archivadas.
 
-En **Editar lecciones**, crea un borrador con título, objetivo, unidad y duración. Agrega actividades de contenido, material vinculado o pregunta de selección única. Cada actividad admite formato de texto enriquecido, título y duración. Si otra persona autorizada abre la misma lección, el texto enriquecido se sincroniza en vivo y muestra su presencia. Los cambios estructurales —como título, unidad, orden o tipo de actividad— se guardan con control de versión; si alguien los guardó antes que tú, recarga para continuar y evitar sobrescribirlos.
+Desde el listado de cursos puedes **Duplicar** un curso (unidades, recursos y lecciones como borrador; no copia grupos ni asistencia) o archivarlo. Un curso archivado se consulta pero no se edita; sus lecciones publicadas siguen disponibles.
 
-Las preguntas necesitan al menos dos opciones distintas y una respuesta correcta. Los recursos deben pertenecer a la misma organización. Usa los botones **Subir**, **Bajar** y **Eliminar actividad** para ajustar la secuencia; el recurso compartido se conserva al retirar su actividad.
+## Editar una lección
 
-## Publicar y revisar
+El editor muestra el título, el estado (Borrador, Publicada, Cambios sin publicar o Archivada) y el indicador de guardado.
 
-Selecciona **Guardar borrador** y después **Publicar**. Copia el enlace o código. Al editar una lección publicada, los cambios quedan en el borrador. El enlace sigue mostrando la revisión anterior hasta que selecciones **Republicar**. Cada republicación incrementa la revisión.
+- **Detalles**: objetivo, unidad, duración y, si ya está publicada, su código y enlace.
+- **Actividades**: selecciona una en la columna izquierda para editarla. Usa las flechas para cambiar su orden y **Agregar actividad** para sumar Contenido, Recurso de la biblioteca o Pregunta.
+- Los cambios se guardan solos un segundo después de escribir. Si falta algo obligatorio, el indicador dice qué falta y **Revisar** te lleva al lugar.
+- Si otra persona abre la misma lección, el texto se sincroniza en vivo y aparece “También editando”.
+- **Vista previa** muestra la lección como la verá el estudiante, sin registrar nada.
+- **Publicar** guarda lo pendiente y publica. Después de publicar, puedes seguir editando: los estudiantes ven la versión anterior hasta que eliges **Publicar cambios**. **Copiar enlace** copia la dirección para compartir.
 
-El editor muestra si la conexión colaborativa está activa o reconectándose. Guarda el borrador para fijar también el título, los tiempos y la estructura de actividades. Si pierdes la conexión, espera a que se restablezca antes de guardar; copia cualquier cambio local si aparece un conflicto de versión.
+Las preguntas necesitan entre dos y seis opciones distintas y una respuesta correcta marcada.
+
+## Biblioteca
+
+**Biblioteca del curso** reúne textos, enlaces y documentos DOCX, PPTX o XLSX (hasta 15 MB). Usa **Agregar recurso**, busca, filtra por tipo y cambia entre lista y cuadrícula. Cada recurso indica en cuántas lecciones se usa. Los documentos son privados: el estudiante solo los recibe dentro de una lección publicada que los usa. Archivar un recurso conserva las publicaciones anteriores.
+
+**Biblioteca**, en el menú principal, muestra los recursos de todos los cursos para encontrarlos rápido; se editan desde la biblioteca de su curso.
 
 ## Grupos y asistencia
 
-En **Grupos**, crea una lista para cada clase y agrega nombres o identificadores mínimos. En **Asistencia**, crea una sesión por fecha, vincúlala opcionalmente con una lección y marca presente, tarde, ausente o justificada. La lista es privada para el equipo docente; no agregues datos de contacto, fechas de nacimiento ni notas sensibles. Los nombres de demostración son ficticios.
+1. En **Grupos**, crea un grupo y agrega a sus participantes con un nombre de lista o un código.
+2. Selecciona **Registrar clase** en el grupo (o en **Asistencia**), confirma la fecha y, si quieres, la lección publicada.
+3. Marca a cada participante: Presente, Tarde, Ausente o Justificada. **Marcar pendientes como presente** ayuda en grupos grandes. **Guardar asistencia** confirma el resumen.
 
-## Consultar finalizaciones
+Solo el equipo docente del curso ve estos registros. No agregues correos, teléfonos, fechas de nacimiento ni notas personales.
 
-La lista de lecciones muestra el total de finalizaciones. No es un conteo de estudiantes únicos. Una cookie evita repetir el conteo de la misma lección en un navegador durante 30 días. Las respuestas a preguntas permanecen en memoria durante la visita; no se envían al servidor.
+## Para estudiantes
 
-## Administrar permisos
+La lección muestra una actividad a la vez con su avance. Usa **Anterior** y **Siguiente**; al final, **Terminar lección**. No se guardan nombres ni respuestas; solo se cuenta cuántas veces se terminó.
 
-Entra como administrador y selecciona **Educadores**. Cambia el rol o desactiva el acceso de una cuenta existente. Guardar revoca sus sesiones anteriores. La cuenta administradora inicial conserva su acceso. El educador no puede cambiar permisos ni la configuración de la organización.
+## Administración
 
-## Si una operación falla
+Con `admin-demo`, el menú muestra **Organización**, **Educadores** y **Clasificaciones**. Cambiar el rol o el acceso de una cuenta cierra sus sesiones abiertas.
 
-Revisa el mensaje y conserva el formulario. Comprueba tu conexión y vuelve a intentar. Si la sesión terminó, inicia sesión otra vez. El archivo sustituye al borrado para evitar perder material utilizado por otras lecciones.
+## Si algo falla
+
+Los mensajes explican cómo recuperarse. Si la sesión termina mientras trabajas, aparece un aviso para volver a entrar sin perder lo que tienes en pantalla; al continuar, el editor guarda lo pendiente.

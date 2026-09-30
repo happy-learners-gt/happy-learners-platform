@@ -22,6 +22,7 @@
     "test:critical": "node scripts/critical-flows.mjs"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.63.0",
     "@testing-library/react": "16.3.3",
     "@types/node": "24.13.5",
@@ -34,5 +35,5 @@
     "wrangler": "4.132.0",
     "yaml": "2.9.1"
   },
-  "version": "0.2.2"
+  "version": "0.2.3"
 }

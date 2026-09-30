@@ -6,20 +6,19 @@ La interfaz organiza el trabajo por curso, no por tipo de registro aislado. El e
 
 ```mermaid
 flowchart LR
-  H[Inicio] --> C[Mis cursos]
-  C --> P[Preparar]
-  P --> U[Unidades y secuencia]
-  U --> L[Editar lección]
+  H[Inicio] --> C[Cursos]
+  C --> R[Resumen del curso]
+  R --> K[Contenido: unidades y lecciones]
+  K --> L[Editor de lección]
   L --> E[Actividades con texto enriquecido]
-  E --> M[Materiales del curso]
-  L --> V[Vista del estudiante]
-  V --> R[Publicar o republicar]
-  C --> G[Grupos]
-  G --> A[Asistencia]
-  A --> S[Clase por fecha]
+  E --> M[Biblioteca del curso]
+  L --> V[Vista previa]
+  V --> P[Publicar o publicar cambios]
+  R --> G[Grupos]
+  G --> A[Asistencia: clase por fecha]
 ```
 
-“Biblioteca” y “Contenido” ya no son destinos de trabajo separados. Las rutas antiguas redirigen a Cursos; la compatibilidad de datos y los enlaces públicos existentes se conserva. Desde el curso se distinguen seis espacios: Preparar, Materiales, Editar lecciones, Grupos, Asistencia y Ajustes.
+Un solo sistema de navegación: el sidebar global (Inicio, Cursos, Biblioteca, Ayuda) cambia al entrar en un curso por Todos los cursos, Resumen, Contenido, Biblioteca del curso, Grupos, Asistencia y Configuración. Las rutas de v0.2.2 (Preparar, Materiales, Editar lecciones) redirigen a sus equivalentes. Detalle en la [arquitectura de información v0.2.3](arquitectura-informacion-v0.2.3.md).
 
 ## Publicación de una lección
 
@@ -60,18 +59,20 @@ La hoja inicia en “Sin marcar”. Solo después de elegir un estado se guarda 
 
 ## Sistema visual
 
+Los tokens viven en `apps/web/src/style.css`: color, tipografía, espaciado, radios, sombras, estados, motion y breakpoints (640, 1024 y 1280 px).
+
 | Token | Color | Uso |
 | --- | --- | --- |
-| Tinta | `#1C2828` | Texto y títulos |
-| Bosque | `#183B35` | Navegación, contexto del curso y marca |
-| Verde acción | `#14594D` | Acción principal y enlaces |
-| Lima suave | `#D9EF9E` | Selección y acento de marca |
-| Papel | `#F4F0E7` | Fondo de trabajo |
-| Superficie | `#FFFDF8` | Formularios y tarjetas |
-| Arcilla | `#A6482C` | Foco y acento secundario |
-| Borde | `#DDD7CA` | Separación de superficies |
+| `--color-ink` | `#1D2624` | Texto y títulos |
+| `--color-muted` | `#5A6562` | Texto secundario (≥ 5.3:1) |
+| `--color-primary` | `#0F5C4F` | Acción principal, enlaces, selección |
+| `--color-primary-soft` | `#E4F0EC` | Selección y resaltado |
+| `--color-accent` | `#A3441F` | Foco y acento cálido |
+| `--color-canvas` | `#F7F5F0` | Fondo de trabajo |
+| `--color-surface` | `#FFFFFF` | Tarjetas, paneles, formularios |
+| `--color-border-strong` | `#858F8B` | Bordes de controles (≥ 3:1) |
 
-El espacio de trabajo usa encabezados con contexto, una acción principal por tarea, separación visible entre bloques y controles táctiles de al menos 44 px. En pantallas estrechas, las áreas se apilan; la hoja de asistencia mantiene el nombre y el selector de estado juntos.
+Estados: éxito `#1D6A39`, advertencia `#874A0C`, información `#1C4F7C`, peligro `#A3261A`, cada uno sobre su fondo suave con contraste ≥ 5.7:1. Una acción principal por pantalla, controles de 44 px, ancho de lectura limitado a 46 rem y `prefers-reduced-motion` respetado. Las pruebas E2E auditan WCAG 2.2 A/AA con axe en todas las rutas principales.
 
 ## Archivos de clase y coedición
 

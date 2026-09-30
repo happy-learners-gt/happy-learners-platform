@@ -1,0 +1,78 @@
+import AxeBuilder from "@axe-core/playwright";
+import type { Page } from "@playwright/test";
+import { test, expect } from "./local-test";
+import { signIn } from "./helpers";
+
+const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
+async function audit(page: Page, label: string) {
+  await page.waitForLoadState("networkidle");
+  // Toasts fade in; wait so colours are measured at their final opacity.
+  await page.waitForTimeout(400);
+  const { violations } = await new AxeBuilder({ page }).withTags(wcag).analyze();
+  expect(violations.map(item => `${label}: ${item.id} · ${item.nodes.map(node => node.target.join(" ")).slice(0, 3).join(" | ")}`)).toEqual([]);
+}
+
+test("main routes have no WCAG 2.2 A/AA violations detectable by axe", async ({ page }) => {
+  await page.goto("/inicio");
+  await audit(page, "login");
+  await signIn(page, "educador-demo", "/inicio");
+  for (const [label, path] of [
+    ["inicio", "/inicio"], ["cursos", "/cursos"], ["nuevo curso", "/cursos/nuevo"], ["resumen", "/cursos/course-exploradores"],
+    ["contenido", "/cursos/course-exploradores/contenido"], ["editor", "/cursos/course-exploradores/lecciones/greetings-and-introductions"],
+    ["vista previa", "/cursos/course-exploradores/lecciones/greetings-and-introductions?vista=previa"], ["biblioteca del curso", "/cursos/course-exploradores/biblioteca"],
+    ["grupos", "/cursos/course-exploradores/grupos"], ["asistencia", "/cursos/course-exploradores/asistencia"], ["configuración", "/cursos/course-exploradores/configuracion"],
+    ["biblioteca", "/biblioteca"], ["buscar", "/buscar?q=greet"], ["ayuda", "/ayuda"],
+  ]) {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { level: 1 }).first()).toBeAttached();
+    await audit(page, label);
+  }
+  await page.goto("/cursos/course-exploradores/lecciones/greetings-and-introductions");
+  await page.getByRole("navigation", { name: "Estructura de la lección" }).getByRole("button", { name: /Choose a greeting/ }).first().click();
+  await audit(page, "editor pregunta");
+  await page.goto("/cursos/course-exploradores/biblioteca");
+  await page.getByRole("button", { name: "Agregar recurso" }).click();
+  await audit(page, "diálogo de recurso");
+  await page.goto("/aprender/GREETINGS");
+  await audit(page, "estudiante inicio");
+  await page.getByRole("button", { name: "Empezar" }).click();
+  await page.getByRole("button", { name: "Siguiente" }).click();
+  await page.getByRole("button", { name: "Siguiente" }).click();
+  await audit(page, "estudiante pregunta");
+});
+
+test("keyboard: skip link, visible focus, menus and dialogs work without a pointer", async ({ page }) => {
+  await signIn(page, "educador-demo", "/cursos");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Cursos");
+  await page.keyboard.press("Tab");
+  const skip = page.getByRole("link", { name: "Saltar al contenido" });
+  await expect(skip).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("main")).toBeFocused();
+  // "/" jumps to search from anywhere outside a field.
+  await page.locator("main").press("/");
+  await expect(page.getByLabel("Buscar cursos, lecciones y recursos")).toBeFocused();
+  await page.keyboard.type("greet");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Resultados para «greet»");
+  await page.goto("/cursos");
+  const menu = page.getByRole("button", { name: "Acciones del curso Exploradores" });
+  await menu.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("menuitem").first()).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("menuitem", { name: "Editar configuración" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(menu).toBeFocused();
+  const outline = await menu.evaluate(element => getComputedStyle(element).outlineStyle);
+  expect(outline).not.toBe("none");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "¿Archivar «Exploradores»?" });
+  await expect(dialog.getByRole("button", { name: "Cancelar" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator("article.course-card").filter({ hasText: "Exploradores" })).toBeVisible();
+});
