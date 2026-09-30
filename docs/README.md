@@ -10,7 +10,8 @@ Happy Learners ayuda a los equipos docentes a organizar cursos, convertir materi
 - Persistencia y relaciones: [diagramas de base de datos](redesign/base-de-datos.md).
 - Prototipos de interacción: [prototipo de cursos](redesign/prototipo-cursos.html).
 - Guía de usuario y demo: [guía de usuario](sprint-2/guia-de-usuario.md) · [guía de demostración](sprint-2/guia-de-demostracion.md).
-- Cambios actuales: [release notes v0.2.2](sprint-2/release-notes-v0.2.2.md). La [v0.2.1](sprint-2/release-notes-v0.2.1.md) se conserva como registro histórico.
+- Navegación y nombres: [arquitectura de información v0.2.3](redesign/arquitectura-informacion-v0.2.3.md).
+- Cambios actuales: [release notes v0.2.3](redesign/release-notes-v0.2.3.md). Las [v0.2.2](sprint-2/release-notes-v0.2.2.md) y [v0.2.1](sprint-2/release-notes-v0.2.1.md) se conservan como registro histórico.
 
 ## Datos y demostraciones
 
