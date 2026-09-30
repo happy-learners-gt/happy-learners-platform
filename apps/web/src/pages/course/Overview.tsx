@@ -5,7 +5,7 @@ import { Link } from "../../navigation";
 import { courseStats, lessonState, newest, plural, sessionDay, today } from "../../model";
 import { Icon } from "../../ui/icons";
 import { LessonBadge } from "../../ui/LessonOutline";
-import { EmptyState, PageHeader, PrimaryAction, Progress, Section, StatusBadge, Updated } from "../../ui/primitives";
+import { EmptyState, PageHeader, PrimaryAction, Progress, Section, StatTiles, StatusBadge, Updated } from "../../ui/primitives";
 import { useCourseActions } from "../Courses";
 import { useCourse } from "./context";
 import type { GroupView } from "./Groups";
@@ -40,12 +40,12 @@ export function Overview() {
     <div className="overview-grid">
       <Section title="Preparación" className="span-2">
         <Progress value={stats.published} max={stats.lessons} label="Lecciones publicadas"/>
-        <dl className="stat-list inline">
-          <div><dt>Unidades</dt><dd>{stats.units}</dd></div>
-          <div><dt>Lecciones</dt><dd>{stats.lessons}</dd></div>
-          <div><dt>Borradores</dt><dd>{stats.drafts}</dd></div>
-          <div><dt>Cambios sin publicar</dt><dd>{stats.changes}</dd></div>
-        </dl>
+        <StatTiles items={[
+          { label: "Unidades", value: stats.units, icon: "content", hue: "violet" },
+          { label: "Lecciones", value: stats.lessons, icon: "courses", hue: "sky" },
+          { label: "Borradores", value: stats.drafts, icon: "edit", hue: "amber" },
+          { label: "Cambios sin publicar", value: stats.changes, icon: "sparkles", hue: "pink" },
+        ]}/>
       </Section>
       <Section title="Publicación pendiente" action={pending.length > 0 && <span className="count-badge">{pending.length}</span>}>
         {pending.length ? <ul className="link-list">{pending.slice(0, 5).map(lesson => <li key={lesson.id}><Link href={`${base}/lecciones/${lesson.id}`}>{lesson.title}</Link><LessonBadge lesson={lesson}/></li>)}</ul>
@@ -66,7 +66,7 @@ export function Overview() {
       <Section title="Actividad reciente">
         {recent.length ? <ol className="activity-feed">{recent.map(item => <li key={item.id}><span className="feed-icon" aria-hidden="true"><Icon name={item.kind === "Lección" ? "content" : "library"} size={16}/></span><div><Link href={item.href}>{item.title}</Link><span>{item.kind}</span></div><Updated value={item.updatedAt} prefix=""/></li>)}</ol> : <p className="muted">Sin cambios recientes.</p>}
       </Section>
-      {writable && <Section title="Accesos rápidos">
+      {writable && <Section title="Accesos rápidos" className="span-2 quick-wide">
         <ul className="quick-actions">
           <li><Link href={`${base}/contenido`}><Icon name="plus" size={18}/>Nueva lección</Link></li>
           <li><Link href={`${base}/biblioteca`}><Icon name="upload" size={18}/>Agregar recurso</Link></li>
