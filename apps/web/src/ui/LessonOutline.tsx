@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { LearningUnit, Lesson } from "@happy-learners/contracts";
 import { Link } from "../navigation";
-import { lessonState, lessonStateLabel, plural } from "../model";
+import { hueAt, lessonState, lessonStateLabel, plural } from "../model";
 import type { LessonState } from "../model";
 import { Icon } from "./icons";
 import { Menu } from "./Menu";
@@ -59,11 +59,11 @@ export function LessonOutline({ courseId, units, lessons, writable, showArchived
     const open = expanded.has(unit.id), archived = unit.status === "archived";
     const position = units.indexOf(unit);
     const published = visible.filter(lesson => ["published", "changes"].includes(lessonState(lesson))).length;
-    return <li key={unit.id} className={`outline-unit${archived ? " is-archived" : ""}`} id={`unidad-${unit.id}`} data-focus={focusUnit === unit.id || undefined}>
+    return <li key={unit.id} className={`outline-unit tone-${hueAt(position)}${archived ? " is-archived" : ""}`} id={`unidad-${unit.id}`} data-focus={focusUnit === unit.id || undefined}>
       <div className="outline-unit-header">
         <button type="button" className="icon-button disclosure" aria-expanded={open} aria-controls={`lecciones-${unit.id}`} aria-label={`${open ? "Contraer" : "Expandir"} ${unit.name}`} onClick={() => toggle(unit.id)}><Icon name={open ? "chevronDown" : "chevronRight"} size={18}/></button>
         <div className="outline-unit-title">
-          <span className="outline-eyebrow">Unidad {index + 1}</span>
+          <span className="outline-eyebrow"><span className="unit-dot" aria-hidden="true"/>Unidad {index + 1}</span>
           {renaming === unit.id ? <InlineName value={unit.name} label={`Nombre de la unidad ${index + 1}`} onSave={name => actions.renameUnit(unit, name)} onDone={() => setRenaming(null)} className="unit"/>
             : <h2 onDoubleClick={() => writable && !archived && setRenaming(unit.id)}>{unit.name}</h2>}
           {unit.objective && open && <p>{unit.objective}</p>}

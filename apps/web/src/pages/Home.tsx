@@ -9,7 +9,7 @@ import { CourseCard } from "../ui/cards";
 import { Icon } from "../ui/icons";
 import type { IconName } from "../ui/icons";
 import { LessonBadge } from "../ui/LessonOutline";
-import { EmptyState, ErrorState, Loading, PageHeader, PrimaryAction, Section, Updated } from "../ui/primitives";
+import { EmptyState, ErrorState, Loading, PrimaryAction, Section, StatTiles, Updated } from "../ui/primitives";
 
 type Upcoming = ClassSession & { courseId: string; courseTitle: string };
 type Data = { courses: Course[]; lessons: Lesson[]; stats: Record<string, CourseStats>; units: Record<string, LearningUnit[]>; upcoming: Upcoming[] };
@@ -32,10 +32,19 @@ export function Home() {
     } catch (cause) { setError(message(cause)); }
   }
   useEffect(() => { void load(); }, []);
-  const header = <PageHeader title="Inicio" description={`Hola, ${member.username}.${organization?.name ? ` Estás en ${organization.name}.` : ""}`}
-    primary={educator ? <PrimaryAction href="/cursos/nuevo" icon="plus">Crear curso</PrimaryAction> : <PrimaryAction href="/educadores" icon="users">Administrar educadores</PrimaryAction>}/>;
-  if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
-  if (!data) return <>{header}<Loading label="Cargando tu espacio…" cards={3}/></>;
+  const todayLabel = new Date().toLocaleDateString("es-GT", { weekday: "long", day: "numeric", month: "long" });
+  // One primary action, inside the welcome banner.
+  const banner = (summary?: string) => <header className="welcome-banner">
+    <div className="welcome-text">
+      <span className="welcome-date">{todayLabel.charAt(0).toUpperCase() + todayLabel.slice(1)}{organization?.name ? ` · ${organization.name}` : ""}</span>
+      <h1>Inicio</h1>
+      <p>Hola, {member.username}. {summary || "Esto es lo que sigue en tu espacio."}</p>
+    </div>
+    {educator ? <PrimaryAction href="/cursos/nuevo" icon="plus" className="on-brand">Crear curso</PrimaryAction> : <PrimaryAction href="/educadores" icon="users" className="on-brand">Administrar educadores</PrimaryAction>}
+    <span className="welcome-shapes" aria-hidden="true"><span/><span/><span/></span>
+  </header>;
+  if (error) return <>{banner()}<ErrorState error={error} retry={() => void load()}/></>;
+  if (!data) return <>{banner()}<Loading label="Cargando tu espacio…" cards={3}/></>;
   const courseTitle = (id?: string) => data.courses.find(course => course.id === id)?.title || "Curso";
   const unitName = (lesson: Lesson) => data.units[lesson.courseId || ""]?.find(unit => unit.id === lesson.courseUnitId)?.name;
   const live = data.lessons.filter(lesson => lesson.status !== "archived" && data.courses.some(course => course.id === lesson.courseId && course.status === "active"));
@@ -48,8 +57,10 @@ export function Home() {
     ...data.courses.map(course => ({ id: course.id, title: course.title, detail: "Curso", href: `/cursos/${course.id}`, updatedAt: course.updatedAt, icon: "courses" as IconName })),
   ]).slice(0, 6);
   const continueLesson = pending[0];
+  const classesToday = data.upcoming.filter(session => session.sessionDate === today()).length;
+  const summary = [pending.length ? plural(pending.length, "lección espera publicación", "lecciones esperan publicación") : "Todo está publicado", classesToday ? plural(classesToday, "clase hoy", "clases hoy") : ""].filter(Boolean).join(" · ") + ".";
   return <>
-    {header}
+    {banner(educator ? summary : undefined)}
     {!organization?.configured && member.role === "admin" && <p className="notice"><Icon name="info" size={18}/>Configura el nombre de tu organización. <Link href="/organizacion">Abrir configuración</Link></p>}
     <div className="dashboard">
       <div className="dashboard-main">
@@ -86,11 +97,11 @@ export function Home() {
           </li>)}</ul> : <EmptyState compact icon="calendar" title="Sin clases próximas" action={firstCourse ? <Link className="button secondary small" href={`/cursos/${firstCourse.id}/asistencia`}>Registrar una clase</Link> : undefined}>Registra una clase para pasar lista ese día.</EmptyState>}
         </Section>}
         <Section title="Estado de las lecciones" className="order-3">
-          <dl className="stat-list">
-            <div><dt>Borradores</dt><dd>{counts.draft}</dd></div>
-            <div><dt>Cambios sin publicar</dt><dd>{counts.changes}</dd></div>
-            <div><dt>Publicadas</dt><dd>{counts.published}</dd></div>
-          </dl>
+          <StatTiles className="stack-tiles" items={[
+            { label: "Borradores", value: counts.draft, icon: "edit", hue: "amber" },
+            { label: "Cambios sin publicar", value: counts.changes, icon: "sparkles", hue: "sky" },
+            { label: "Publicadas", value: counts.published, icon: "check", hue: "green" },
+          ]}/>
           {educator && pending.length > 0 && <p className="muted small">{plural(pending.length, "lección espera", "lecciones esperan")} publicación.</p>}
         </Section>
         {educator && <Section title="Acciones rápidas" className="order-5">

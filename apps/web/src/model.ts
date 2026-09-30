@@ -13,6 +13,19 @@ export const resourceKindLabel: Record<Material["kind"] | "legacy", string> = { 
 export function resourceStatusLabel(status: Material["status"]) { return status === "archived" ? "Archivado" : status === "draft" ? "Borrador" : "Disponible"; }
 export const activityTypeLabel: Record<NonNullable<Activity["type"]>, string> = { text: "Contenido", resource: "Recurso", question: "Pregunta" };
 
+/** Colour families from theme.css. Colour always accompanies text or an icon; it never carries meaning alone. */
+export type Hue = "violet" | "coral" | "amber" | "teal" | "sky" | "pink" | "green";
+const hues: Hue[] = ["violet", "sky", "coral", "teal", "pink", "amber"];
+/** Stable colour for a course, unit or person: the same key always gets the same hue. */
+export function hueFor(key: string): Hue {
+  let hash = 0;
+  for (const char of key) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return hues[hash % hues.length];
+}
+export const hueAt = (index: number): Hue => hues[index % hues.length];
+export const activityHue: Record<NonNullable<Activity["type"]>, Hue> = { text: "sky", resource: "teal", question: "pink" };
+export const resourceHue: Record<Material["kind"], Hue> = { text: "sky", link: "coral", file: "amber" };
+
 const relative = new Intl.RelativeTimeFormat("es", { numeric: "auto" });
 /** "hace 5 minutos", "ayer", "el 12 sept 2026". */
 export function timeAgo(value?: string, now = Date.now()) {
