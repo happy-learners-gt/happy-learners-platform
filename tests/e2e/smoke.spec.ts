@@ -28,6 +28,13 @@ test("production smoke: read content without changing the demo", async ({ page, 
     await page.getByRole("button", { name: "Entrar", exact: true }).click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Inicio");
     await page.screenshot({ path: `${folder}/home.png`, fullPage: true });
+    // Read-only: the records an early E2E run left in the demo must stay gone (removed by migration 0010).
+    const names = await page.evaluate(async () => {
+      const get = async (path: string) => (await fetch(`/api${path}`)).json();
+      const [course, lessons, resources, curriculum] = await Promise.all([get("/courses/course-exploradores"), get("/lessons?drafts=1"), get("/resources"), get("/curriculum")]);
+      return [...course.units.map((u: { name: string }) => u.name), ...lessons.lessons.map((l: { title: string }) => l.title), ...resources.resources.map((r: { title: string }) => r.title), ...curriculum.levels.map((l: { name: string }) => l.name), ...curriculum.units.map((u: { name: string }) => u.name)];
+    });
+    expect(names.filter(name => /\b(?:desktop|mobile)-\d{13}$/.test(name))).toEqual([]);
     const menu = page.getByRole("button", { name: "Menú", exact: true });
     if (await menu.isVisible()) await menu.click();
     await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: "Cursos", exact: true }).click();
