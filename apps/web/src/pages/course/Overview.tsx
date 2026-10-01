@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ClassSession } from "@happy-learners/contracts";
+import { coverage } from "@happy-learners/domain";
 import { api } from "../../api";
 import { Link } from "../../navigation";
 import { courseStats, lessonState, newest, plural, sessionDay, today } from "../../model";
@@ -11,7 +12,7 @@ import { useCourse } from "./context";
 import type { GroupView } from "./Groups";
 
 export function Overview() {
-  const { course, units, lessons, materials, educator, writable, reload } = useCourse();
+  const { course, units, lessons, materials, curriculum, educator, writable, reload } = useCourse();
   const [groups, setGroups] = useState<GroupView[] | null>(null), [sessions, setSessions] = useState<ClassSession[]>([]);
   const actions = useCourseActions(reload);
   useEffect(() => {
@@ -27,6 +28,7 @@ export function Overview() {
     ...lessons.filter(lesson => lesson.status !== "archived").map(lesson => ({ id: lesson.id, title: lesson.title, kind: "Lección", href: educator ? `${base}/lecciones/${lesson.id}` : `${base}/contenido`, updatedAt: lesson.updatedAt })),
     ...materials.filter(item => item.status !== "archived").map(item => ({ id: item.id, title: item.title, kind: "Recurso", href: `${base}/biblioteca`, updatedAt: item.updatedAt })),
   ]).slice(0, 5);
+  const plan = coverage(curriculum, units, lessons);
   const next = sessions.filter(session => session.sessionDate >= today()).sort((a, b) => a.sessionDate.localeCompare(b.sessionDate))[0];
   const primary = !writable ? undefined : activeUnits.length
     ? <PrimaryAction href={`${base}/contenido`} icon="content">Ir al contenido</PrimaryAction>
@@ -50,6 +52,12 @@ export function Overview() {
       <Section title="Publicación pendiente" action={pending.length > 0 && <span className="count-badge">{pending.length}</span>}>
         {pending.length ? <ul className="link-list">{pending.slice(0, 5).map(lesson => <li key={lesson.id}><Link href={`${base}/lecciones/${lesson.id}`}>{lesson.title}</Link><LessonBadge lesson={lesson}/></li>)}</ul>
           : <EmptyState compact icon="check" title="Todo está publicado">{stats.lessons ? "Los estudiantes ven la última versión de cada lección." : "Cuando crees lecciones, las que falten por publicar aparecerán aquí."}</EmptyState>}
+      </Section>
+      <Section title="Plan curricular" action={<Link href={`${base}/plan`} className="section-link">Abrir el plan</Link>}>
+        {plan.summary.total ? <>
+          <Progress value={plan.summary.assessed} max={plan.summary.total} label="Resultados trabajados y evaluados"/>
+          <p className="muted small">{plural(plan.summary.taught, "resultado trabajado", "resultados trabajados")} en lecciones de {plan.summary.total}. {plan.summary.gaps ? <Link href={`${base}/plan`}>{plural(plan.summary.gaps, "resultado", "resultados")} con huecos por cubrir</Link> : "Sin huecos."}</p>
+        </> : <EmptyState compact icon="spark" title="Sin resultados de aprendizaje" action={writable && <Link className="button secondary small" href={`${base}/plan`}>Definir resultados</Link>}>Define qué podrán demostrar los estudiantes y alinea las lecciones a ello.</EmptyState>}
       </Section>
       <Section title="Contenido" action={<Link href={`${base}/contenido`} className="section-link">Abrir contenido</Link>}>
         {activeUnits.length ? <ol className="unit-summary">{activeUnits.map((unit, index) => {

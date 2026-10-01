@@ -1,6 +1,6 @@
 import { test, expect } from "./local-test";
 import { mp4Header, officePackage, pdfDocument } from "./office-fixture";
-import { activity, addActivity, createLesson, e2eName, saveStatus, signIn, toast } from "./helpers";
+import { activity, addActivity, createLesson, e2eName, saveStatus, signIn, toast, publish } from "./helpers";
 
 test("two open editors exchange rich text live and autosave the shared draft", async ({ page, context }, info) => {
   const url = "/cursos/course-exploradores/lecciones/greetings-and-introductions";
@@ -77,7 +77,7 @@ test("private Office documents preview in the course library and reach students 
   await linked.getByRole("button", { name: /Ver el archivo aquí/ }).click();
   await expect(linked.locator(".viewer-stage")).toContainText("Documento de demostración validado", { timeout: 20_000 });
   await expect(saveStatus(page)).toContainText("Borrador guardado", { timeout: 15_000 });
-  await page.getByRole("button", { name: "Publicar", exact: true }).click();
+  await publish(page);
   await expect(toast(page)).toContainText("Lección publicada");
   const code = (await page.locator(".share-row strong").textContent())!.trim();
   const student = await context.newPage();

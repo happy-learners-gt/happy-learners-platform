@@ -12,9 +12,10 @@ import { CourseLibrary } from "./CourseLibrary";
 import { Groups } from "./Groups";
 import { Attendance } from "./Attendance";
 import { Settings } from "./Settings";
+import { Plan } from "./Plan";
 const LessonEditor = lazy(() => import("../LessonEditor").then(module => ({ default: module.LessonEditor })));
 
-const areas = ["", "contenido", "biblioteca", "grupos", "asistencia", "configuracion", "lecciones"];
+const areas = ["", "plan", "contenido", "biblioteca", "grupos", "asistencia", "configuracion", "lecciones"];
 const educatorOnly = new Set(["grupos", "asistencia", "configuracion"]);
 
 export function CourseRoute({ id, area, item }: { id: string; area: string; item?: string }) {
@@ -39,6 +40,7 @@ export function CourseRoute({ id, area, item }: { id: string; area: string; item
     hue: hueFor(id),
     items: [
       { href: base, label: "Resumen", icon: "overview" as const, hue: "violet" as const, active: current === "" },
+      { href: `${base}/plan`, label: "Plan curricular", icon: "spark" as const, hue: "green" as const, active: current === "plan" },
       { href: `${base}/contenido`, label: "Contenido", icon: "content" as const, hue: "sky" as const, active: current === "contenido" },
       { href: `${base}/biblioteca`, label: "Biblioteca del curso", icon: "library" as const, hue: "teal" as const, active: current === "biblioteca" },
       ...(educator ? [
@@ -58,6 +60,7 @@ export function CourseRoute({ id, area, item }: { id: string; area: string; item
     const data = { ...state.data, educator, writable: educator && state.data.course.status === "active", reload: load };
     body = <CourseProvider data={data}>
       {area === "" && <Overview/>}
+      {area === "plan" && <Plan/>}
       {area === "contenido" && <Content/>}
       {area === "biblioteca" && <CourseLibrary/>}
       {area === "grupos" && <Groups/>}

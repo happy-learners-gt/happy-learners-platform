@@ -48,7 +48,7 @@ async function states(page, name, out) {
   await end.getByRole("button", { name: "Recurso", exact: true }).click();
   await shot(page, `${out}/44-editor-recurso.png`);
   await page.getByRole("group", { name: "Agregar a la actividad 1" }).getByRole("button", { name: "Nota para el docente", exact: true }).click();
-  await shot(page, `${out}/48-editor-momentos-bloques.png`);
+  await shot(page, `${out}/52-editor-momentos-bloques.png`);
   await page.goto(`${origin}/cursos/${course}/biblioteca`);
   await page.getByRole("button", { name: "Agregar recurso" }).click();
   await shot(page, `${out}/45-dialogo-recurso.png`);
@@ -56,6 +56,9 @@ async function states(page, name, out) {
   await page.getByRole("button", { name: "Vista previa de Introduce yourself" }).click();
   await shot(page, `${out}/46-vista-previa-recurso.png`);
   await page.keyboard.press("Escape");
+  await page.goto(`${origin}/cursos/${course}/plan`);
+  await page.getByRole("heading", { name: "Mapa de cobertura" }).waitFor();
+  await shot(page, `${out}/51-plan-curricular.png`);
   await page.goto(`${origin}/cursos/${course}/asistencia`);
   await page.getByRole("button", { name: "Registrar clase" }).first().click();
   await shot(page, `${out}/47-dialogo-clase.png`);
