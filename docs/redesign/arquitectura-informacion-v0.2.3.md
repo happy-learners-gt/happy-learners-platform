@@ -79,4 +79,4 @@ Primitivas propias (sin biblioteca externa): AppShell, ContextSidebar, PageHeade
 
 Las pruebas E2E que escriben datos usan una base local nueva por ejecución y el prefijo `E2E ·` en todo lo que crean; una prueba comprueba que ningún registro visible tenga el patrón de la contaminación anterior (`desktop-` o `mobile-` seguido de un timestamp de 13 dígitos) y que lo creado por la suite lleve el prefijo limpiable.
 
-**Pendiente:** producción conserva registros de una ejecución E2E antigua (unidades, lecciones, niveles y recursos con sufijo `desktop-1790700257067` / `mobile-1790700278802`). Su eliminación modifica datos compartidos y requiere una decisión explícita; esta entrega no la realiza.
+**Resuelto en v0.2.5:** la migración `0010_remove_legacy_e2e_records.sql` eliminó de producción los registros de una ejecución E2E antigua (sufijo `desktop-1790700257067` / `mobile-1790700278802`), con autorización del 2026-10-01 y copia previa adjunta a la release.
