@@ -66,8 +66,12 @@ export async function createLesson(page: Page, unit: string, title: string, obje
 export function activity(page: Page, title: string) {
   return page.getByRole("region", { name: new RegExp(`^Actividad \\d+: ${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`) });
 }
-/** Inserts an activity at the end of the lesson and returns its card (the newest card of that type). */
-export async function addActivity(page: Page, type: "Contenido" | "Recurso" | "Pregunta") {
-  await page.getByRole("group", { name: "Agregar al final de la lección" }).getByRole("button", { name: type, exact: true }).click();
-  return page.locator("section.activity-card").last();
+/**
+ * Adds an activity that starts with the given block, in a moment of the didactic sequence (by default the last
+ * one), and returns its card: the newest card of that moment.
+ */
+export async function addActivity(page: Page, type: "Contenido" | "Recurso" | "Pregunta", moment?: string) {
+  const section = moment ? page.locator(".phase-section").filter({ has: page.getByRole("heading", { name: moment, exact: true }) }) : page.locator(".phase-section").last();
+  await section.locator(".insert-bar").getByRole("button", { name: type, exact: true }).click();
+  return section.locator("section.activity-card").last();
 }

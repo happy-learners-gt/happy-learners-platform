@@ -1,5 +1,7 @@
-import { Fragment, lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import type { Activity, Lesson, Material, Resource, RichTextDocument } from "@happy-learners/contracts";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import type { Activity, ActivityBlock, Lesson, Material, Resource, RichTextDocument, SequenceTemplate } from "@happy-learners/contracts";
+import { blockKinds, groupings, phaseOf, purposes, resourceIdsOf, sequenceOf, sequenceTemplates, studentActivities } from "@happy-learners/domain";
+import type { Phase } from "@happy-learners/domain";
 import type { Editor } from "@tiptap/react";
 import * as Y from "yjs";
 import { api, ApiError, message, sessionExpired, sessionRestored } from "../api";
@@ -8,7 +10,7 @@ import { seedMissingFields } from "../collab-seed";
 import type { CollaborationStatus } from "../collaboration";
 import { Link, useNavigation, useUnsavedChanges } from "../navigation";
 import { useSession } from "../session";
-import { activityHue, activityTypeLabel, draftOf, draftProblem, lessonBody, lessonState, lessonStateLabel, plural, timeAgo, usage } from "../model";
+import { blockHue, blockKindLabel, changeSequence, draftOf, draftProblem, lessonBody, lessonState, lessonStateLabel, newBlock, orderByPhase, phaseHue, plural, timeAgo, usage } from "../model";
 import type { LessonDraft } from "../model";
 import { useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
@@ -23,7 +25,8 @@ const RichText = lazy(() => import("../RichText").then(module => ({ default: mod
 const RichToolbar = lazy(() => import("../RichText").then(module => ({ default: module.Toolbar })));
 
 type Save = { state: "saved" | "pending" | "saving" | "error"; at?: string; error?: string };
-const typeIcon: Record<NonNullable<Activity["type"]>, IconName> = { text: "text", resource: "library", question: "question" };
+export const kindIcon: Record<ActivityBlock["kind"], IconName> = { text: "text", resource: "library", question: "question", "teacher-note": "edit" };
+const newTitle: Record<ActivityBlock["kind"], string> = { text: "Nueva actividad", resource: "Recurso", question: "Pregunta", "teacher-note": "Nueva actividad" };
 const AUTOSAVE_MS = 1000;
 
 export function LessonEditor({ lessonId }: { lessonId: string }) {
@@ -149,26 +152,59 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     setDraft(current => current && { ...current, ...patch });
     setSave({ state: "pending" });
   }
+  const setActivities = (activities: Activity[]) => update({ activities: orderByPhase(activities, draft!.sequence) });
   function updateActivity(id: string, patch: Partial<Activity>) { update({ activities: draft!.activities.map(activity => activity.id === id ? { ...activity, ...patch } : activity) }); }
-  function addActivity(type: NonNullable<Activity["type"]>, index = draft!.activities.length) {
+  function updateBlock(activity: Activity, blockId: string, patch: Partial<ActivityBlock>) { updateActivity(activity.id!, { blocks: activity.blocks!.map(block => block.id === blockId ? { ...block, ...patch } : block) }); }
+  const focusCard = (id: string, selector = "[contenteditable=true]") => setTimeout(() => {
+    const card = document.getElementById(`card-${id}`);
+    card?.scrollIntoView({ behavior: "smooth", block: "center" });
+    [...card?.querySelectorAll<HTMLElement>(selector) || []].pop()?.focus({ preventScroll: true });
+  }, 120);
+  /** A new activity starts with one block in the chosen moment, after the activities already there. */
+  function addActivity(kind: ActivityBlock["kind"], phase: string) {
     const id = `activity-${crypto.randomUUID()}`;
-    const activity: Activity = { id, type, title: type === "question" ? "Pregunta" : type === "resource" ? "Recurso" : "Nueva actividad", instructions: "", minutes: 5, ...(type === "question" ? { options: ["", ""], answer: 0 } : {}) };
-    const list = [...draft!.activities];
-    list.splice(index, 0, activity);
-    update({ activities: list });
+    setActivities([...draft!.activities, { id, title: newTitle[kind], minutes: 5, instructions: "", phase, blocks: [newBlock(kind)] }]);
     setSelected(id);
-    // Land on the new card's content so writing can start right away.
-    setTimeout(() => {
-      const card = document.getElementById(`card-${id}`);
-      card?.scrollIntoView({ behavior: "smooth", block: "center" });
-      card?.querySelector<HTMLElement>("[contenteditable=true]")?.focus({ preventScroll: true });
-    }, 120);
+    focusCard(id);
+  }
+  function addBlock(activity: Activity, kind: ActivityBlock["kind"]) {
+    updateActivity(activity.id!, { blocks: [...activity.blocks!, newBlock(kind)] });
+    focusCard(activity.id!, kind === "resource" ? "select" : "[contenteditable=true]");
+  }
+  function moveBlock(activity: Activity, index: number, delta: number) {
+    const blocks = [...activity.blocks!];
+    [blocks[index], blocks[index + delta]] = [blocks[index + delta], blocks[index]];
+    updateActivity(activity.id!, { blocks });
+  }
+  async function removeBlock(activity: Activity, block: ActivityBlock) {
+    const filled = block.kind === "resource" ? !!block.resourceId : !!block.richContent || !!block.instructions?.trim();
+    if (filled && !await confirm({ title: `¿Quitar ${blockKindLabel[block.kind].toLowerCase()}?`, body: <p>Se quita de «{activity.title || "la actividad"}» en el borrador. La versión publicada no cambia hasta que publiques.</p>, confirm: "Quitar bloque", danger: true })) return;
+    updateActivity(activity.id!, { blocks: activity.blocks!.filter(item => item.id !== block.id) });
+  }
+  /** Up and down move inside a moment; at its edge the activity passes to the previous or next moment. */
+  function canMove(index: number, delta: number) {
+    const list = draft!.activities, phases = sequenceOf(draft!.sequence).phases.map(phase => phase.id);
+    const at = phases.indexOf(phaseOf(list[index], draft!.sequence));
+    return list[index + delta]?.phase === list[index].phase || (delta < 0 ? at > 0 : at < phases.length - 1);
   }
   function moveActivity(index: number, delta: number) {
-    const list = [...draft!.activities];
-    [list[index], list[index + delta]] = [list[index + delta], list[index]];
-    update({ activities: list });
-    toast({ tone: "info", message: `«${list[index + delta].title}» ahora es la actividad ${index + delta + 1} de ${list.length}.` });
+    const template = sequenceOf(draft!.sequence), list = [...draft!.activities], current = list[index];
+    if (list[index + delta]?.phase === current.phase) {
+      [list[index], list[index + delta]] = [list[index + delta], list[index]];
+      setActivities(list);
+      toast({ tone: "info", message: `«${current.title}» ahora es la actividad ${index + delta + 1} de ${list.length}.` });
+      return;
+    }
+    const target = template.phases[template.phases.findIndex(phase => phase.id === current.phase) + delta];
+    if (!target) return;
+    list[index] = { ...current, phase: target.id };
+    setActivities(list);
+    toast({ tone: "info", message: `«${current.title}» pasó a ${target.label}.` });
+  }
+  function moveToPhase(activity: Activity, phase: Phase) {
+    setActivities([...draft!.activities.filter(item => item.id !== activity.id), { ...activity, phase: phase.id }]);
+    toast({ tone: "info", message: `«${activity.title}» pasó al final de ${phase.label}.` });
+    focusCard(activity.id!, "input");
   }
   async function removeActivity(activity: Activity) {
     if (!await confirm({ title: `¿Eliminar «${activity.title || "actividad sin título"}»?`, body: <p>La actividad se quita del borrador. La versión publicada no cambia hasta que publiques.</p>, confirm: "Eliminar actividad", danger: true })) return;
@@ -176,6 +212,10 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     const list = draft!.activities.filter(item => item.id !== activity.id);
     update({ activities: list });
     setSelected(list[Math.max(0, index - 1)]?.id || "details");
+  }
+  function changeTemplate(sequence: SequenceTemplate) {
+    update({ sequence, activities: changeSequence(draft!.activities, draft!.sequence, sequence) });
+    if (draft!.activities.length) toast({ tone: "info", message: `Las actividades se ordenaron en los momentos de «${sequenceOf(sequence).label}». Revisa que cada una esté donde corresponde.` });
   }
   async function publish() {
     if (problem) { toast({ tone: "error", message: problem.message }); setSelected(problem.target === "title" ? "details" : problem.target); return; }
@@ -207,11 +247,15 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
   if (!lesson || !draft) return <Loading label="Abriendo lección…" lines={8}/>;
 
   const unit = units.find(item => item.id === draft.unitId);
-  const available = [...materials.filter(item => item.status !== "archived" || draft.activities.some(activity => activity.resourceId === item.id)), ...legacyResources.filter(item => usage(item.id, lessons).length || draft.activities.some(activity => activity.resourceId === item.id))];
+  const linked = resourceIdsOf(draft.activities);
+  const available = [...materials.filter(item => item.status !== "archived" || linked.includes(item.id)), ...legacyResources.filter(item => usage(item.id, lessons).length || linked.includes(item.id))];
   const unsaved = changes.current > 0 && save.state !== "saved";
   const serverState = lessonState(lesson);
   const state = draft.archived ? "archived" : serverState === "published" && unsaved ? "changes" : serverState;
-  const previewLesson: Lesson = { ...lesson, title: draft.title, objective: draft.objective, duration: draft.duration, program: unit?.name || lesson.program, activities: draft.activities };
+  const template = sequenceOf(draft.sequence), structured = template.value !== "free";
+  const minutes = draft.activities.reduce((sum, activity) => sum + (activity.minutes || 0), 0);
+  // Students never see teacher notes, in the preview either.
+  const previewLesson: Lesson = { ...lesson, title: draft.title, objective: draft.objective, duration: draft.duration, program: unit?.name || lesson.program, sequence: draft.sequence, activities: studentActivities(draft.activities) };
   if (preview) return <div className="editor-preview">
     <LessonPlayer lesson={previewLesson} preview resources={available} fileUrl={id => `/api/courses/${course.id}/files/${id}/content`} onExit={() => navigate(`${base}/lecciones/${lessonId}`, true)}/>
   </div>;
@@ -227,7 +271,7 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     if (focus) setTimeout(() => card?.querySelector<HTMLElement>("input, textarea, [contenteditable=true]")?.focus({ preventScroll: true }), 250);
   };
   const reviewProblem = () => problem && goTo(problem.target === "title" ? "details" : problem.target);
-  const insert = (index: number) => writable && <InsertBar index={index} total={draft.activities.length} onAdd={type => addActivity(type, index)}/>;
+  const phases = template.phases.map((phase, order) => ({ phase, order, activities: draft.activities.filter(activity => phaseOf(activity, draft.sequence) === phase.id) }));
   return <div className="editor">
     <header className="editor-header">
       <Breadcrumbs items={[{ label: "Cursos", href: "/cursos" }, { label: course.title, href: base }, { label: "Contenido", href: `${base}/contenido` }, ...(unit ? [{ label: unit.name, href: `${base}/contenido#unidad-${unit.id}` }] : []), { label: draft.title || "Lección sin título" }]}/>
@@ -254,18 +298,20 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     </header>
     <div className="editor-layout">
       <nav className="activity-outline" aria-label="Estructura de la lección">
-        <button type="button" className="outline-item tone-violet" aria-current={selected === "details" ? "true" : undefined} onClick={() => goTo("details")}><span className="outline-number type-chip" aria-hidden="true"><Icon name="info" size={16}/></span><span><strong>Detalles</strong><small>Objetivo, unidad y duración</small></span></button>
-        <h2 className="outline-heading">Actividades <span className="muted">({draft.activities.length})</span></h2>
-        {draft.activities.length ? <ol className="activity-list">{draft.activities.map((activity, index) => <li key={activity.id} className={`tone-${activityHue[activity.type || "text"]}${selected === activity.id ? " is-selected" : ""}`}>
-          <button type="button" className="outline-item" aria-current={selected === activity.id ? "true" : undefined} onClick={() => goTo(activity.id!)}>
-            <span className="outline-number type-chip" aria-hidden="true"><Icon name={typeIcon[activity.type || "text"]} size={16}/></span>
-            <span><strong>{index + 1}. {activity.title || "Sin título"}</strong><small>{activityTypeLabel[activity.type || "text"]} · {activity.minutes} min</small></span>
-          </button>
-          {writable && <span className="reorder">
-            <button type="button" className="icon-button small" aria-label={`Subir actividad ${index + 1}: ${activity.title}`} disabled={index === 0} onClick={() => moveActivity(index, -1)}><Icon name="up" size={16}/></button>
-            <button type="button" className="icon-button small" aria-label={`Bajar actividad ${index + 1}: ${activity.title}`} disabled={index === draft.activities.length - 1} onClick={() => moveActivity(index, 1)}><Icon name="down" size={16}/></button>
-          </span>}
-        </li>)}</ol> : <p className="muted small">Aún no hay actividades.</p>}
+        <button type="button" className="outline-item tone-violet" aria-current={selected === "details" ? "true" : undefined} onClick={() => goTo("details")}><span className="outline-number type-chip" aria-hidden="true"><Icon name="info" size={16}/></span><span><strong>Detalles</strong><small>Objetivo, secuencia y duración</small></span></button>
+        {phases.map(({ phase, order, activities }) => <div key={phase.id} className={`outline-phase tone-${phaseHue(order)}`}>
+          <h2 className="outline-heading">{structured ? phase.label : "Actividades"} <span className="muted">({activities.length})</span></h2>
+          {activities.length ? <ol className="activity-list">{activities.map(activity => { const index = draft.activities.indexOf(activity), first = activity.blocks![0]; return <li key={activity.id} className={selected === activity.id ? "is-selected" : undefined}>
+            <button type="button" className="outline-item" aria-current={selected === activity.id ? "true" : undefined} onClick={() => goTo(activity.id!)}>
+              <span className="outline-number type-chip" aria-hidden="true">{index + 1}</span>
+              <span><strong>{activity.title || "Sin título"}</strong><small><Icon name={kindIcon[first?.kind || "text"]} size={12}/>{purposes.find(item => item.value === activity.purpose)?.label || blockKindLabel[first?.kind || "text"]} · {activity.minutes} min</small></span>
+            </button>
+            {writable && <span className="reorder">
+              <button type="button" className="icon-button small" aria-label={`Subir actividad ${index + 1}: ${activity.title}`} disabled={!canMove(index, -1)} onClick={() => moveActivity(index, -1)}><Icon name="up" size={16}/></button>
+              <button type="button" className="icon-button small" aria-label={`Bajar actividad ${index + 1}: ${activity.title}`} disabled={!canMove(index, 1)} onClick={() => moveActivity(index, 1)}><Icon name="down" size={16}/></button>
+            </span>}
+          </li>; })}</ol> : <p className="muted small outline-empty">{structured ? "Sin actividades." : "Aún no hay actividades."}</p>}
+        </div>)}
       </nav>
       <div className="lesson-canvas">
         {writable && <div className="canvas-toolbar"><Suspense fallback={null}><RichToolbar editor={activeEditor}/></Suspense></div>}
@@ -273,9 +319,12 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
           <div className="card-head"><span className="type-chip" aria-hidden="true"><Icon name="info" size={16}/></span><h2 id="details-title">Detalles de la lección</h2></div>
           <fieldset className="stack" disabled={!writable}>
             <Field label="Objetivo" hint="Qué podrán hacer los estudiantes al terminar. Lo ven al abrir la lección."><textarea rows={2} maxLength={1000} value={draft.objective} onChange={event => update({ objective: event.target.value })}/></Field>
+            <Field label="Secuencia didáctica" hint={structured ? `${template.description} Momentos: ${template.phases.map(phase => phase.label).join(" → ")}.` : template.description}>
+              <select value={draft.sequence} onChange={event => changeTemplate(event.target.value as SequenceTemplate)}>{sequenceTemplates.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
+            </Field>
             <div className="field-row">
               <Field label="Unidad"><select value={draft.unitId} onChange={event => update({ unitId: event.target.value })}>{units.filter(item => item.status === "active" || item.id === draft.unitId).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
-              <Field label="Duración (minutos)"><input type="number" min={1} max={300} value={draft.duration} onChange={event => update({ duration: Math.max(1, Math.min(300, Number(event.target.value) || 1)) })}/></Field>
+              <Field label="Duración (minutos)" hint={draft.activities.length ? `Las actividades suman ${minutes} min.` : undefined}><input type="number" min={1} max={300} value={draft.duration} onChange={event => update({ duration: Math.max(1, Math.min(300, Number(event.target.value) || 1)) })}/></Field>
             </div>
           </fieldset>
           <div className="publish-info">
@@ -286,29 +335,34 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
             </> : <p className="muted">Es un borrador: todo se guarda solo y nadie lo ve hasta que publiques.</p>}
           </div>
         </section>
-        {insert(0)}
-        {draft.activities.map((activity, index) => <Fragment key={activity.id}>
-          <ActivityCard activity={activity} index={index} total={draft.activities.length} writable={writable} resources={available} courseId={course.id}
+        {phases.map(({ phase, order, activities }) => <section key={phase.id} className={`phase-section tone-${phaseHue(order)}${structured ? "" : " is-free"}`} aria-labelledby={`phase-${phase.id}`}>
+          <header className={structured ? "phase-head" : "sr-only"}>
+            {structured && <span className="phase-index" aria-hidden="true">{order + 1}</span>}
+            <div><h2 id={`phase-${phase.id}`}>{phase.label}</h2>{phase.hint && <p>{phase.hint}</p>}</div>
+            {structured && <span className="phase-meta">{plural(activities.length, "actividad", "actividades")} · {activities.reduce((sum, activity) => sum + activity.minutes, 0)} min</span>}
+          </header>
+          {activities.map(activity => { const index = draft.activities.indexOf(activity); return <ActivityCard key={activity.id} activity={activity} index={index} total={draft.activities.length} phase={structured ? phase : undefined} phases={structured ? template.phases : []} writable={writable} resources={available} courseId={course.id}
             collaboration={collaboration} username={member.username} onFocus={() => setSelected(activity.id!)} onEditorFocus={setActiveEditor}
-            onChange={patch => updateActivity(activity.id!, patch)} onRemote={doc => setDraft(value => value && { ...value, activities: value.activities.map(item => item.id === activity.id ? { ...item, richContent: doc } : item) })}
-            onMove={delta => moveActivity(index, delta)} onRemove={() => void removeActivity(activity)}/>
-          {insert(index + 1)}
-        </Fragment>)}
-        {!draft.activities.length && <EmptyState icon="content" title="Agrega la primera actividad">Empieza con un contenido para explicar, un recurso de la biblioteca o una pregunta para comprobar lo aprendido.</EmptyState>}
+            canMove={delta => canMove(index, delta)} onMove={delta => moveActivity(index, delta)} onMoveTo={target => moveToPhase(activity, target)}
+            onChange={patch => updateActivity(activity.id!, patch)} onBlock={(blockId, patch) => updateBlock(activity, blockId, patch)}
+            onRemote={(blockId, doc) => setDraft(value => value && { ...value, activities: value.activities.map(item => item.id === activity.id ? { ...item, blocks: item.blocks!.map(block => block.id === blockId ? { ...block, richContent: doc } : block) } : item) })}
+            onAddBlock={kind => addBlock(activity, kind)} onMoveBlock={(blockIndex, delta) => moveBlock(activity, blockIndex, delta)} onRemoveBlock={block => void removeBlock(activity, block)} onRemove={() => void removeActivity(activity)}/>; })}
+          {writable ? <AddActivity label={structured ? `Agregar actividad a ${phase.label}` : "Agregar actividad"} empty={!activities.length} onAdd={kind => addActivity(kind, phase.id)}/>
+            : !activities.length && <p className="muted small">Sin actividades en este momento.</p>}
+        </section>)}
+        {!draft.activities.length && !structured && <EmptyState icon="content" title="Agrega la primera actividad">Empieza con un texto para explicar, un recurso de la biblioteca o una pregunta para comprobar lo aprendido.</EmptyState>}
       </div>
     </div>
   </div>;
 }
 
-/** Between two activities: insert content, a library resource or a question at exactly that point. */
-function InsertBar({ index, total, onAdd }: { index: number; total: number; onAdd: (type: NonNullable<Activity["type"]>) => void }) {
-  const last = index === total;
-  return <div className={`insert-bar${last ? " is-last" : ""}`} role="group" aria-label={last ? "Agregar al final de la lección" : `Agregar antes de la actividad ${index + 1}`}>
-    <span className="insert-line" aria-hidden="true"/>
-    {(["text", "resource", "question"] as const).map(type => <button key={type} type="button" className={`insert-option tone-${activityHue[type]}`} onClick={() => onAdd(type)}>
-      <Icon name={typeIcon[type]} size={16}/><span>{type === "text" ? "Contenido" : type === "resource" ? "Recurso" : "Pregunta"}</span>
+/** Each moment ends with a way to add an activity there, starting from the kind of block it needs first. */
+function AddActivity({ label, empty, onAdd }: { label: string; empty: boolean; onAdd: (kind: ActivityBlock["kind"]) => void }) {
+  return <div className={`insert-bar${empty ? " is-empty" : ""}`} role="group" aria-label={label}>
+    <span className="insert-label"><Icon name="plus" size={16}/>{empty ? "Empieza con" : "Agregar"}</span>
+    {(["text", "resource", "question"] as const).map(kind => <button key={kind} type="button" className={`insert-option tone-${blockHue[kind]}`} onClick={() => onAdd(kind)}>
+      <Icon name={kindIcon[kind]} size={16}/><span>{kind === "text" ? "Contenido" : blockKindLabel[kind]}</span>
     </button>)}
-    <span className="insert-line" aria-hidden="true"/>
   </div>;
 }
 
@@ -324,57 +378,100 @@ function SaveIndicator({ save, published, problem, waiting, failed, onReview, on
   return <div className="save-indicator" role="status" aria-live="polite">{content}</div>;
 }
 
-function ActivityCard({ activity, index, total, writable, resources, courseId, collaboration, username, onFocus, onEditorFocus, onChange, onRemote, onMove, onRemove }: {
-  activity: Activity; index: number; total: number; writable: boolean; resources: (Material | Resource)[]; courseId: string;
+type CardProps = {
+  activity: Activity; index: number; total: number; phase?: Phase; phases: Phase[]; writable: boolean; resources: (Material | Resource)[]; courseId: string;
   collaboration: CollaborationProvider | null; username: string; onFocus: () => void; onEditorFocus: (editor: Editor) => void;
-  onChange: (patch: Partial<Activity>) => void; onRemote: (doc: RichTextDocument) => void; onMove: (delta: number) => void; onRemove: () => void;
-}) {
-  const type = activity.type || "text";
-  const options = activity.options || [];
-  const number = index + 1;
-  const [showFile, setShowFile] = useState(false);
-  const resource = resources.find(item => item.id === activity.resourceId);
-  const convert = (value: NonNullable<Activity["type"]>) => onChange({ type: value, ...(value === "question" && !activity.options?.length ? { options: ["", ""], answer: 0 } : {}) });
-  return <section id={`card-${activity.id}`} className={`canvas-card activity-card tone-${activityHue[type]}`} aria-label={`Actividad ${number}: ${activity.title || "sin título"}`} onFocusCapture={onFocus}>
+  canMove: (delta: number) => boolean; onMove: (delta: number) => void; onMoveTo: (phase: Phase) => void;
+  onChange: (patch: Partial<Activity>) => void; onBlock: (blockId: string, patch: Partial<ActivityBlock>) => void; onRemote: (blockId: string, doc: RichTextDocument) => void;
+  onAddBlock: (kind: ActivityBlock["kind"]) => void; onMoveBlock: (index: number, delta: number) => void; onRemoveBlock: (block: ActivityBlock) => void; onRemove: () => void;
+};
+
+/**
+ * An activity is one thing the class does: what for (purpose), how (grouping), how long, and its ordered blocks:
+ * text, a library resource, a question or a note only the teacher sees.
+ */
+function ActivityCard({ activity, index, total, phase, phases, writable, resources, courseId, collaboration, username, onFocus, onEditorFocus, canMove, onMove, onMoveTo, onChange, onBlock, onRemote, onAddBlock, onMoveBlock, onRemoveBlock, onRemove }: CardProps) {
+  const number = index + 1, blocks = activity.blocks || [];
+  const learnerBlocks = blocks.filter(block => block.kind !== "teacher-note").length;
+  return <section id={`card-${activity.id}`} className="canvas-card activity-card" aria-label={`Actividad ${number}: ${activity.title || "sin título"}`} onFocusCapture={onFocus}>
     <div className="card-head">
-      <span className="type-chip" aria-hidden="true"><Icon name={typeIcon[type]} size={16}/></span>
-      <span className="card-kind">{activityTypeLabel[type]} · {number} de {total}</span>
+      <span className="type-chip" aria-hidden="true">{number}</span>
+      <span className="card-kind">{phase ? `${phase.label} · ` : ""}Actividad {number} de {total}</span>
       <label className="sr-only" htmlFor={`title-${activity.id}`}>Título de la actividad {number}</label>
       <input id={`title-${activity.id}`} className="card-title" value={activity.title} maxLength={160} readOnly={!writable} placeholder="Título de la actividad" onChange={event => onChange({ title: event.target.value })}/>
       <label className="card-minutes"><input type="number" min={1} max={120} value={activity.minutes} readOnly={!writable} aria-label={`Minutos de la actividad ${number}`} onChange={event => onChange({ minutes: Math.max(1, Math.min(120, Number(event.target.value) || 1)) })}/><span aria-hidden="true">min</span></label>
       {writable && <Menu label={`Acciones de la actividad ${number}`} items={[
-        { label: "Mover arriba", icon: "up", disabled: index === 0, onSelect: () => onMove(-1) },
-        { label: "Mover abajo", icon: "down", disabled: index === total - 1, onSelect: () => onMove(1) },
-        "separator",
-        ...(["text", "resource", "question"] as const).filter(value => value !== type).map(value => ({ label: `Convertir en ${activityTypeLabel[value].toLowerCase()}`, icon: typeIcon[value], onSelect: () => convert(value) })),
+        { label: "Mover arriba", icon: "up", disabled: !canMove(-1), onSelect: () => onMove(-1) },
+        { label: "Mover abajo", icon: "down", disabled: !canMove(1), onSelect: () => onMove(1) },
+        ...(phases.length ? ["separator" as const, ...phases.filter(item => item.id !== phase?.id).map(item => ({ label: `Mover a ${item.label}`, icon: "arrowRight" as const, onSelect: () => onMoveTo(item) }))] : []),
         "separator",
         { label: "Eliminar actividad", icon: "close", danger: true, onSelect: onRemove },
       ]}/>}
     </div>
-    <Suspense fallback={<p role="status">Cargando editor…</p>}>
-      <RichText key={activity.id} value={activity.richContent} fallbackText={activity.instructions} label={`${type === "question" ? "Pregunta" : "Contenido"} de la actividad ${number}`} editable={writable} toolbar={false} onEditorFocus={onEditorFocus}
-        placeholder={type === "question" ? "Escribe la pregunta…" : type === "resource" ? "Explica qué deben hacer con el recurso…" : "Escribe las instrucciones o el contenido…"}
-        collaboration={collaboration && activity.id ? { document: collaboration.doc, field: activity.id, provider: collaboration } : undefined} username={username}
-        onChange={richContent => onChange({ richContent, instructions: "" })} onRemoteChange={onRemote}/>
-    </Suspense>
-    {type === "resource" && <div className="card-resource">
-      {resources.length ? <Field label={`Recurso de la actividad ${number}`} hint={<>El estudiante lo ve dentro de esta actividad. <Link href={`/cursos/${courseId}/biblioteca`}>Abrir la biblioteca del curso</Link></>}>
-        <select value={activity.resourceId || ""} disabled={!writable} onChange={event => { setShowFile(false); onChange({ resourceId: event.target.value }); }}><option value="">Elige un recurso</option>{resources.map(item => <option key={item.id} value={item.id}>{item.title}{item.status === "archived" ? " (archivado)" : item.status === "draft" ? " (borrador)" : ""}</option>)}</select>
+    <div className="activity-meta">
+      <label className="meta-select"><span>Propósito</span><select value={activity.purpose || ""} disabled={!writable} aria-label={`Propósito de la actividad ${number}`} onChange={event => onChange({ purpose: (event.target.value || undefined) as Activity["purpose"] })}><option value="">Sin indicar</option>{purposes.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+      <label className="meta-select"><span>Organización</span><select value={activity.grouping || ""} disabled={!writable} aria-label={`Organización de la actividad ${number}`} onChange={event => onChange({ grouping: (event.target.value || undefined) as Activity["grouping"] })}><option value="">Sin indicar</option>{groupings.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+    </div>
+    <ol className="block-list">{blocks.map((block, blockIndex) => <li key={block.id}>
+      <BlockEditor block={block} number={number} position={blockIndex} count={blocks.length} removable={blocks.length > 1 && (block.kind === "teacher-note" || learnerBlocks > 1)} writable={writable} resources={resources} courseId={courseId}
+        collaboration={collaboration} username={username} onEditorFocus={onEditorFocus} onChange={patch => onBlock(block.id, patch)} onRemote={doc => onRemote(block.id, doc)}
+        onMove={delta => onMoveBlock(blockIndex, delta)} onRemove={() => onRemoveBlock(block)}/>
+    </li>)}</ol>
+    {writable && blocks.length < 12 && <div className="add-block" role="group" aria-label={`Agregar a la actividad ${number}`}>
+      <span className="insert-label">Agregar bloque</span>
+      {blockKinds.map(kind => <button key={kind.value} type="button" className={`insert-option tone-${blockHue[kind.value]}`} onClick={() => onAddBlock(kind.value)}><Icon name={kindIcon[kind.value]} size={16}/><span>{kind.label}</span></button>)}
+    </div>}
+  </section>;
+}
+
+const blockPlaceholder: Record<ActivityBlock["kind"], string> = {
+  text: "Escribe las instrucciones o el contenido…", resource: "Indica qué hacer con el recurso (opcional)…",
+  question: "Escribe la pregunta…", "teacher-note": "Indicaciones para quien da la clase: materiales, tiempos, errores frecuentes…",
+};
+
+function BlockEditor({ block, number, position, count, removable, writable, resources, courseId, collaboration, username, onEditorFocus, onChange, onRemote, onMove, onRemove }: {
+  block: ActivityBlock; number: number; position: number; count: number; removable: boolean; writable: boolean; resources: (Material | Resource)[]; courseId: string;
+  collaboration: CollaborationProvider | null; username: string; onEditorFocus: (editor: Editor) => void;
+  onChange: (patch: Partial<ActivityBlock>) => void; onRemote: (doc: RichTextDocument) => void; onMove: (delta: number) => void; onRemove: () => void;
+}) {
+  const [showFile, setShowFile] = useState(false);
+  const options = block.options || [];
+  const resource = resources.find(item => item.id === block.resourceId);
+  const suffix = position > 0 ? ` (bloque ${position + 1})` : "";
+  const label = { text: `Contenido de la actividad ${number}`, resource: `Indicación del recurso de la actividad ${number}`, question: `Pregunta de la actividad ${number}`, "teacher-note": `Nota para el docente de la actividad ${number}` }[block.kind] + suffix;
+  return <div className={`block block-${block.kind} tone-${blockHue[block.kind]}`}>
+    <div className="block-head">
+      <Icon name={kindIcon[block.kind]} size={16}/><span className="block-kind">{blockKindLabel[block.kind]}</span>
+      {block.kind === "teacher-note" && <span className="block-private"><Icon name="eye" size={14}/>Solo docentes: los estudiantes no la ven</span>}
+      {writable && count > 1 && <span className="block-actions">
+        <button type="button" className="icon-button small" aria-label={`Subir ${blockKindLabel[block.kind].toLowerCase()} de la actividad ${number}${suffix}`} disabled={position === 0} onClick={() => onMove(-1)}><Icon name="up" size={16}/></button>
+        <button type="button" className="icon-button small" aria-label={`Bajar ${blockKindLabel[block.kind].toLowerCase()} de la actividad ${number}${suffix}`} disabled={position === count - 1} onClick={() => onMove(1)}><Icon name="down" size={16}/></button>
+        <button type="button" className="icon-button small" aria-label={`Quitar ${blockKindLabel[block.kind].toLowerCase()} de la actividad ${number}${suffix}`} disabled={!removable} onClick={onRemove}><Icon name="close" size={16}/></button>
+      </span>}
+    </div>
+    {block.kind === "resource" && <div className="card-resource">
+      {resources.length ? <Field label={`Recurso de la actividad ${number}${suffix}`} hint={<>El estudiante lo ve dentro de esta actividad. <Link href={`/cursos/${courseId}/biblioteca`}>Abrir la biblioteca del curso</Link></>}>
+        <select value={block.resourceId || ""} disabled={!writable} onChange={event => { setShowFile(false); onChange({ resourceId: event.target.value }); }}><option value="">Elige un recurso</option>{resources.map(item => <option key={item.id} value={item.id}>{item.title}{item.status === "archived" ? " (archivado)" : item.status === "draft" ? " (borrador)" : ""}</option>)}</select>
       </Field> : <p className="notice"><Icon name="library" size={18}/>La biblioteca del curso está vacía. <Link href={`/cursos/${courseId}/biblioteca`}>Agrega un recurso</Link> y vuelve a esta actividad.</p>}
       {resource && (resource.kind === "file" && "fileId" in resource && resource.fileId
         ? showFile ? <FileViewer url={`/api/courses/${courseId}/files/${resource.fileId}/content`} name={resource.fileName || resource.title}/> : <button type="button" className="resource-peek" onClick={() => setShowFile(true)}><Icon name="eye" size={18}/><span><strong>{resource.fileName || resource.title}</strong><small>Ver el archivo aquí</small></span></button>
         : resource.kind === "link" ? <a className="resource-peek" href={resource.content} target="_blank" rel="noopener noreferrer"><Icon name="link" size={18}/><span><strong>{resource.title}</strong><small>{resource.content}</small></span></a>
         : <div className="resource-peek is-text"><Icon name="text" size={18}/><span><strong>{resource.title}</strong><small className="preserve-lines">{resource.content}</small></span></div>)}
     </div>}
-    {type === "question" && <fieldset className="options" disabled={!writable}><legend>Opciones de respuesta</legend>
+    <Suspense fallback={<p role="status">Cargando editor…</p>}>
+      <RichText key={block.id} value={block.richContent} fallbackText={block.instructions} label={label} editable={writable} toolbar={false} onEditorFocus={onEditorFocus} placeholder={blockPlaceholder[block.kind]}
+        collaboration={collaboration ? { document: collaboration.doc, field: block.id, provider: collaboration } : undefined} username={username}
+        onChange={richContent => onChange({ richContent, instructions: "" })} onRemoteChange={onRemote}/>
+    </Suspense>
+    {block.kind === "question" && <fieldset className="options" disabled={!writable}><legend>Opciones de respuesta</legend>
       <p className="muted small">Marca la respuesta correcta. Entre 2 y 6 opciones.</p>
       <ol>{options.map((option, choice) => <li key={choice}>
-        <label className="correct"><input type="radio" name={`correct-${activity.id}`} checked={activity.answer === choice} onChange={() => onChange({ answer: choice })}/><span className="sr-only">Respuesta correcta: opción {choice + 1}</span></label>
-        <label htmlFor={`option-${activity.id}-${choice}`} className="sr-only">Opción {choice + 1}</label>
-        <input id={`option-${activity.id}-${choice}`} value={option} maxLength={200} placeholder={`Opción ${choice + 1}`} onChange={event => onChange({ options: options.map((item, i) => i === choice ? event.target.value : item) })}/>
-        <button type="button" className="icon-button small" aria-label={`Quitar opción ${choice + 1}`} disabled={options.length <= 2} onClick={() => onChange({ options: options.filter((_, i) => i !== choice), answer: activity.answer === choice ? 0 : (activity.answer || 0) > choice ? (activity.answer || 0) - 1 : activity.answer })}><Icon name="close" size={16}/></button>
+        <label className="correct"><input type="radio" name={`correct-${block.id}`} checked={block.answer === choice} onChange={() => onChange({ answer: choice })}/><span className="sr-only">Respuesta correcta: opción {choice + 1}</span></label>
+        <label htmlFor={`option-${block.id}-${choice}`} className="sr-only">Opción {choice + 1}</label>
+        <input id={`option-${block.id}-${choice}`} value={option} maxLength={200} placeholder={`Opción ${choice + 1}`} onChange={event => onChange({ options: options.map((item, i) => i === choice ? event.target.value : item) })}/>
+        <button type="button" className="icon-button small" aria-label={`Quitar opción ${choice + 1}`} disabled={options.length <= 2} onClick={() => onChange({ options: options.filter((_, i) => i !== choice), answer: block.answer === choice ? 0 : (block.answer || 0) > choice ? (block.answer || 0) - 1 : block.answer })}><Icon name="close" size={16}/></button>
       </li>)}</ol>
       {options.length < 6 && <button type="button" className="button ghost small" onClick={() => onChange({ options: [...options, ""] })}><Icon name="plus" size={16}/>Agregar opción</button>}
     </fieldset>}
-  </section>;
+  </div>;
 }

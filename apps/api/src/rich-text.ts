@@ -1,6 +1,7 @@
 import { getSchema } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import type { Activity, RichTextDocument } from "@happy-learners/contracts";
+import { blocksOf } from "@happy-learners/domain";
 import * as Y from "yjs";
 import { prosemirrorJSONToYXmlFragment, yXmlFragmentToProsemirrorJSON } from "y-prosemirror";
 
@@ -16,9 +17,10 @@ function initialDocument(activity: Activity): RichTextDocument {
 
 export function encodeLessonDraft(activities: Activity[]): Uint8Array {
   const doc = new Y.Doc();
-  for (const activity of activities) {
-    if (!activity.id) continue;
-    prosemirrorJSONToYXmlFragment(schema, initialDocument(activity), doc.getXmlFragment(activity.id));
+  // One collaborative field per block; older single-body activities use the activity id.
+  for (const activity of activities) for (const block of blocksOf(activity)) {
+    if (!block.id) continue;
+    prosemirrorJSONToYXmlFragment(schema, initialDocument({ ...activity, instructions: block.instructions || "", richContent: block.richContent }), doc.getXmlFragment(block.id));
   }
   return Y.encodeStateAsUpdate(doc);
 }

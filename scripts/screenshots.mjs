@@ -42,11 +42,13 @@ async function states(page, name, out) {
   await shot(page, `${out}/41-editor-actividad-vacia.png`);
   await page.locator("section.activity-card .richtext-content").first().fill("Saluda a tu compañero con una sonrisa.");
   await page.getByText("Borrador guardado").first().waitFor();
-  const end = page.getByRole("group", { name: "Agregar al final de la lección" });
+  const end = page.locator(".phase-section .insert-bar").last();
   await end.getByRole("button", { name: "Pregunta", exact: true }).click();
   await shot(page, `${out}/43-editor-pregunta-incompleta.png`);
   await end.getByRole("button", { name: "Recurso", exact: true }).click();
   await shot(page, `${out}/44-editor-recurso.png`);
+  await page.getByRole("group", { name: "Agregar a la actividad 1" }).getByRole("button", { name: "Nota para el docente", exact: true }).click();
+  await shot(page, `${out}/48-editor-momentos-bloques.png`);
   await page.goto(`${origin}/cursos/${course}/biblioteca`);
   await page.getByRole("button", { name: "Agregar recurso" }).click();
   await shot(page, `${out}/45-dialogo-recurso.png`);

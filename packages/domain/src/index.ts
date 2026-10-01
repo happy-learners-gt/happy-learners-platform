@@ -1,5 +1,7 @@
 export const timezones = ["America/Guatemala", "America/Mexico_City", "America/Bogota"] as const;
 export { courseInput, materialInput, courseProfiles, unitLabels, record, cleanText, validTermIds, completeOrder } from "./courses";
+export { sequenceTemplates, defaultSequence, sequenceOf, purposes, groupings, blockKinds, blocksOf, phaseOf, studentActivities, resourceIdsOf, richTextFieldsOf, hasText } from "./sequences";
+export type { Phase } from "./sequences";
 export function organizationInput(value: unknown): { name: string; timezone: string } | null {
   if (!value || typeof value !== "object") return null;
   const { name, timezone } = value as Record<string, unknown>;
@@ -9,15 +11,49 @@ export function organizationInput(value: unknown): { name: string; timezone: str
   if (!timezones.some(item => item === timezone)) return null;
   return { name: clean, timezone };
 }
+const purposeValues = new Set(["explain", "explore", "practice", "assess", "reflect"]);
+const groupingValues = new Set(["individual", "pairs", "teams", "whole-class"]);
+const blockKindValues = new Set(["text", "resource", "question", "teacher-note"]);
+const idPattern = /^[a-zA-Z0-9-]{1,80}$/;
+function validQuestion(options: unknown, answer: unknown) {
+  return Array.isArray(options) && options.length >= 2 && options.length <= 6 && options.every(o => typeof o === "string" && o.trim() && o.length <= 200) && new Set(options).size === options.length && Number.isInteger(answer) && (answer as number) >= 0 && (answer as number) < options.length;
+}
+function hasBody(item: Record<string, unknown>) {
+  const instructions = item.instructions === undefined ? "" : item.instructions;
+  if (typeof instructions !== "string" || instructions.length > 4000) return false;
+  if (item.richContent !== undefined && !validRichText(item.richContent)) return false;
+  return !!instructions.trim() || validRichText(item.richContent);
+}
+/**
+ * Lesson activities. An activity has a title, minutes, an optional moment, purpose and grouping, and either
+ * ordered blocks (text, resource, question, teacher note) or the older single typed body.
+ */
 export function validActivities(input: unknown): boolean {
   if (!Array.isArray(input) || input.length > 30) return false;
-  const ids = new Set();
+  // Activity IDs are unique among activities and block IDs among blocks (they name collaborative fields);
+  // the first block of an older activity keeps the activity's ID so its live text is not lost.
+  const unique = (seen: Set<string>) => (id: unknown) => typeof id === "string" && idPattern.test(id) && !seen.has(id) && !!seen.add(id);
+  const uniqueId = unique(new Set()), uniqueBlockId = unique(new Set());
   return input.every((item, position) => {
-    if (!item || typeof item !== "object" || typeof item.id !== "string" || !/^[a-zA-Z0-9-]{1,80}$/.test(item.id) || ids.has(item.id) || item.position !== position) return false;
-    ids.add(item.id);
-    if (!["text", "resource", "question"].includes(item.type) || typeof item.title !== "string" || !item.title.trim() || item.title.length > 160 || typeof item.instructions !== "string" || item.instructions.length > 4000 || (!item.instructions.trim() && !validRichText(item.richContent)) || (item.richContent !== undefined && !validRichText(item.richContent)) || !Number.isInteger(item.minutes) || item.minutes < 1 || item.minutes > 120) return false;
+    if (!item || typeof item !== "object" || !uniqueId(item.id) || item.position !== position) return false;
+    if (typeof item.title !== "string" || !item.title.trim() || item.title.length > 160 || !Number.isInteger(item.minutes) || item.minutes < 1 || item.minutes > 120) return false;
+    if (item.phase !== undefined && (typeof item.phase !== "string" || !/^[a-z-]{1,40}$/.test(item.phase))) return false;
+    if (item.purpose !== undefined && !purposeValues.has(item.purpose)) return false;
+    if (item.grouping !== undefined && !groupingValues.has(item.grouping)) return false;
+    if (item.blocks !== undefined) {
+      if (!Array.isArray(item.blocks) || !item.blocks.length || item.blocks.length > 12) return false;
+      const blocks = item.blocks as Record<string, unknown>[];
+      if (!blocks.some(block => block?.kind !== "teacher-note")) return false;
+      return blocks.every(block => {
+        if (!block || typeof block !== "object" || !uniqueBlockId(block.id) || !blockKindValues.has(String(block.kind))) return false;
+        if (block.kind === "resource") return typeof block.resourceId === "string" && !!block.resourceId && (block.instructions === undefined || (typeof block.instructions === "string" && block.instructions.length <= 4000)) && (block.richContent === undefined || validRichText(block.richContent));
+        if (block.kind === "question") return hasBody(block) && validQuestion(block.options, block.answer);
+        return hasBody(block);
+      });
+    }
+    if (!["text", "resource", "question"].includes(item.type) || typeof item.instructions !== "string" || item.instructions.length > 4000 || (!item.instructions.trim() && !validRichText(item.richContent)) || (item.richContent !== undefined && !validRichText(item.richContent))) return false;
     if (item.type === "resource" && (typeof item.resourceId !== "string" || !item.resourceId)) return false;
-    if (item.type === "question" && (!Array.isArray(item.options) || item.options.length < 2 || item.options.length > 6 || item.options.some((o: unknown) => typeof o !== "string" || !o.trim() || o.length > 200) || new Set(item.options).size !== item.options.length || !Number.isInteger(item.answer) || item.answer < 0 || item.answer >= item.options.length)) return false;
+    if (item.type === "question" && !validQuestion(item.options, item.answer)) return false;
     return true;
   });
 }

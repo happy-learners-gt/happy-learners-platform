@@ -11,7 +11,7 @@ Happy Learners ayuda a los equipos docentes a organizar cursos, convertir materi
 - Prototipos de interacción: [prototipo de cursos](redesign/prototipo-cursos.html).
 - Guía de usuario y demo: [guía de usuario](sprint-2/guia-de-usuario.md) · [guía de demostración](sprint-2/guia-de-demostracion.md).
 - Navegación y nombres: [arquitectura de información v0.2.3](redesign/arquitectura-informacion-v0.2.3.md).
-- Cambios actuales: [release notes v0.2.3](redesign/release-notes-v0.2.3.md). Las [v0.2.2](sprint-2/release-notes-v0.2.2.md) y [v0.2.1](sprint-2/release-notes-v0.2.1.md) se conservan como registro histórico.
+- Cambios actuales: [release notes v0.3.0](redesign/release-notes-v0.3.0.md) (secuencia didáctica y actividades compuestas). Anteriores: [v0.2.6](redesign/release-notes-v0.2.6.md), [v0.2.4](redesign/release-notes-v0.2.4.md), [v0.2.3](redesign/release-notes-v0.2.3.md), [v0.2.2](sprint-2/release-notes-v0.2.2.md) y [v0.2.1](sprint-2/release-notes-v0.2.1.md).
 
 ## Datos y demostraciones
 
