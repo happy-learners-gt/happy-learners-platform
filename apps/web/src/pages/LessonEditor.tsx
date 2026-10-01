@@ -2,7 +2,7 @@ import { Fragment, lazy, Suspense, useCallback, useEffect, useRef, useState } fr
 import type { Activity, Lesson, Material, Resource, RichTextDocument } from "@happy-learners/contracts";
 import type { Editor } from "@tiptap/react";
 import * as Y from "yjs";
-import { api, ApiError, message, sessionRestored } from "../api";
+import { api, ApiError, message, sessionExpired, sessionRestored } from "../api";
 import { CollaborationProvider } from "../collaboration";
 import { seedMissingFields } from "../collab-seed";
 import type { CollaborationStatus } from "../collaboration";
@@ -115,6 +115,15 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     const timer = setTimeout(() => { inFlight.current = persist().finally(() => { inFlight.current = null; }) as Promise<boolean>; }, AUTOSAVE_MS);
     return () => clearTimeout(timer);
   }, [draft, save.state, problem, collabReady, persist]);
+  // A live-editing connection refused because the session ended never reports a 401 to the page:
+  // if changes wait too long for it, check the session so the sign-in prompt appears.
+  useEffect(() => {
+    if (save.state !== "pending" || problem || collabReady) return;
+    const timer = setTimeout(() => {
+      void fetch("/api/session", { credentials: "same-origin", cache: "no-store" }).then(response => { if (response.status === 401) dispatchEvent(new CustomEvent(sessionExpired)); }).catch(() => undefined);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [save.state, problem, collabReady]);
   useEffect(() => {
     const retry = () => setSave(current => current.state === "error" ? { state: "pending" } : current);
     addEventListener(sessionRestored, retry);

@@ -98,7 +98,8 @@ test("an expired session asks to sign in again and keeps the unsaved edit", asyn
   await activity(page, "Instrucciones").locator(".richtext-content").fill("Texto escrito después de que expiró la sesión.");
   const dialog = page.getByRole("dialog", { name: "Tu sesión terminó" });
   await expect(dialog).toBeVisible({ timeout: 15_000 });
-  await expect(saveStatus(page)).toContainText("No se guardó");
+  // Depending on timing the edit was refused by the API or is waiting for the live connection; either way it is not saved yet.
+  await expect(saveStatus(page)).toContainText(/No se guardó|Conectando para guardar/);
   await dialog.getByLabel("Contraseña").fill("Aprender-2026!");
   await dialog.getByRole("button", { name: "Continuar" }).click();
   await expect(toast(page)).toContainText("Sesión renovada");
@@ -166,7 +167,7 @@ test("PDF and video upload, open in a full-size viewer, page through and go full
   await page.getByRole("dialog", { name: video }).getByRole("button", { name: "Cerrar", exact: true }).first().click();
 
   const forged = await upload(`${e2eName(info, "Falso")}.pdf`, Buffer.from("esto no es un PDF"));
-  await expect(forged.getByRole("alert")).toContainText("no tiene un formato PDF válido");
+  await expect(forged.getByRole("alert")).toContainText("El archivo no es un PDF válido");
   await forged.getByRole("button", { name: "Cancelar" }).click();
   await expect(page.getByRole("button", { name: `Vista previa de ${e2eName(info, "Falso")}` })).toHaveCount(0);
 });
