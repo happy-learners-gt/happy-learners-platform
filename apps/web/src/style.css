@@ -568,8 +568,8 @@ tbody tr:hover { background: var(--color-surface-muted); }
 .insert-label { display: inline-flex; align-items: center; gap: 4px; margin-right: var(--space-1); color: var(--color-muted); font-size: var(--text-sm); font-weight: var(--weight-medium); }
 .insert-option { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 14px; border: 1px solid var(--color-border); border-radius: var(--radius-pill); background: var(--color-surface); color: var(--tone-ink); font-size: var(--text-sm); font-weight: var(--weight-medium); box-shadow: var(--shadow-xs); transition: background var(--motion-fast), border-color var(--motion-fast), transform var(--motion-fast); }
 .insert-option:hover { background: var(--tone-soft); border-color: var(--tone-vivid); transform: translateY(-1px); }
-.add-block { padding-top: var(--space-1); border-top: 1px solid var(--color-border); }
-.add-block .insert-option { min-height: 32px; padding: 0 12px; box-shadow: none; }
+.add-block { gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--color-border); }
+.add-block .insert-option { min-height: 36px; padding: 0 12px; box-shadow: none; }
 .outline-phase { display: grid; gap: 2px; }
 .outline-phase .outline-heading { color: var(--tone-ink); }
 .outline-empty { padding: 0 var(--space-2); }

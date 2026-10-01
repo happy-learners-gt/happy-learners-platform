@@ -168,11 +168,16 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     updateActivities(list => list.map(activity => activity.id === id ? { ...activity, ...(typeof patch === "function" ? patch(activity) : patch) } : activity));
   const updateBlocks = (id: string, change: (blocks: ActivityBlock[]) => ActivityBlock[]) => updateActivity(id, activity => ({ blocks: change(activity.blocks || []) }));
   const updateBlock = (activity: Activity, blockId: string, patch: Partial<ActivityBlock>) => updateBlocks(activity.id!, blocks => blocks.map(block => block.id === blockId ? { ...block, ...patch } : block));
-  const focusCard = (id: string, selector = "[contenteditable=true]") => setTimeout(() => {
-    const card = document.getElementById(`card-${id}`);
-    card?.scrollIntoView({ behavior: "smooth", block: "center" });
-    [...card?.querySelectorAll<HTMLElement>(selector) || []].pop()?.focus({ preventScroll: true });
-  }, 120);
+  /** Brings a new card or block into view and focuses it, unless focus already moved (typing elsewhere wins). */
+  const focusCard = (id: string, selector = "[contenteditable=true]") => {
+    const origin = document.activeElement;
+    setTimeout(() => {
+      const card = document.getElementById(`card-${id}`);
+      card?.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (document.activeElement !== origin && document.activeElement !== document.body) return;
+      [...card?.querySelectorAll<HTMLElement>(selector) || []].pop()?.focus({ preventScroll: true });
+    }, 120);
+  };
   /** A new activity starts with one block in the chosen moment, after the activities already there. */
   function addActivity(kind: ActivityBlock["kind"], phase: string) {
     const id = `activity-${crypto.randomUUID()}`;
