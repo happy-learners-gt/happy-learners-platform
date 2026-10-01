@@ -1,5 +1,5 @@
 import type { Activity, Lesson, Member, Organization, Resource } from "@happy-learners/contracts";
-import { organizationInput } from "@happy-learners/domain";
+import { hasText, organizationInput, richTextFieldsOf } from "@happy-learners/domain";
 import { sha } from "./generated/version";
 import { database } from "./storage";
 import type { Database } from "./storage";
@@ -25,7 +25,9 @@ function json(data: unknown, status = 200, extra: Record<string, string> = {}) {
 }
 async function body(request: Request): Promise<unknown> {
   if (!request.headers.get("content-type")?.startsWith("application/json")) throw new Error("INPUT");
-  const limit = new URL(request.url).pathname === "/api/login" ? 2048 : 65536;
+  const pathname = new URL(request.url).pathname;
+  // Lessons carry rich text for every block; other bodies stay small.
+  const limit = pathname === "/api/login" ? 2048 : /^\/api\/lessons(\/|$)/.test(pathname) ? 262144 : 65536;
   const reader = request.body?.getReader();
   if (!reader) throw new Error("INPUT");
   let text = ""; const decoder = new TextDecoder(); let size = 0;
@@ -164,8 +166,12 @@ async function route(request: Request, env: Env): Promise<Response> {
     const activities = Array.isArray(value.activities) ? value.activities as Activity[] : [];
     const course = await db.prepare("SELECT c.id AS courseId FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id JOIN courses c ON c.id=u.course_id WHERE l.id=? AND c.organization_id=?").bind(lessonUpdate[1], current.organizationId).first<{ courseId: string }>();
     if (course && activities.length) {
-      const snapshot = await env.LESSON_ROOMS.getByName(`${current.organizationId}:${lessonUpdate[1]}`).snapshot({ organizationId: current.organizationId, courseId: course.courseId, lessonId: lessonUpdate[1] }, activities.map(activity => activity.id || ""));
-      input = { ...value, activities: activities.map(activity => activity.id && snapshot[activity.id] ? { ...activity, richContent: snapshot[activity.id] as Activity["richContent"], instructions: "" } : activity) };
+      const snapshot = await env.LESSON_ROOMS.getByName(`${current.organizationId}:${lessonUpdate[1]}`).snapshot({ organizationId: current.organizationId, courseId: course.courseId, lessonId: lessonUpdate[1] }, richTextFieldsOf(activities));
+      // Live text wins only where the room actually holds text; an empty or missing field never erases what the client sent.
+      const live = (id: string | undefined) => { const doc = id ? snapshot[id] as Activity["richContent"] : undefined; return doc && hasText(doc) ? doc : undefined; };
+      input = { ...value, activities: activities.map(activity => activity.blocks
+        ? { ...activity, blocks: activity.blocks.map(block => { const doc = live(block.id); return doc ? { ...block, richContent: doc, instructions: "" } : block; }) }
+        : (() => { const doc = live(activity.id); return doc ? { ...activity, richContent: doc, instructions: "" } : activity; })()) };
     }
   }
   return content(url, method, input, current, db);
@@ -176,7 +182,7 @@ export default {
     catch (error) {
       if (error instanceof Error && error.message === "INPUT") return json({ error: "Revisa los datos del formulario." }, 400);
       const cause = error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 240) : "Unknown error";
-      console.error(JSON.stringify({ event: "request_failed", code: "DEPENDENCY_UNAVAILABLE", release: "0.2.7", sha, cause }));
+      console.error(JSON.stringify({ event: "request_failed", code: "DEPENDENCY_UNAVAILABLE", release: "0.3.0", sha, cause }));
       return json({ error: "El servicio no está disponible. Vuelve a intentar en un momento." }, 503, { "Retry-After": "30" });
     }
   },
