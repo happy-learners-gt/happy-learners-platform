@@ -59,7 +59,9 @@ export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, on
       {step === 0 && <article className="player-card player-intro">
         <span className="eyebrow">{lesson.program}</span>
         <h1 ref={heading} tabIndex={-1}>{lesson.title}</h1>
-        <section className="player-objective"><h2>Lo que aprenderás</h2><p>{lesson.objective}</p></section>
+        <section className="player-objective"><h2>Lo que aprenderás</h2><p>{lesson.objective}</p>
+          {!!lesson.outcomes?.length && <><p className="player-outcomes-intro">Al terminar podrás:</p><ul className="player-outcomes">{lesson.outcomes.map(outcome => <li key={outcome.id}><Icon name="check" size={16}/>{outcome.statement}</li>)}</ul></>}
+        </section>
         {moments.length > 0 && <section className="player-moments" aria-labelledby="moments-title"><h2 id="moments-title">Así será la lección</h2>
           <ol>{moments.map(({ phase, count }) => <li key={phase.id} className={`tone-${phaseHue(template.phases.indexOf(phase))}`}><strong>{phase.label}</strong><span>{plural(count, "actividad", "actividades")}</span></li>)}</ol>
         </section>}

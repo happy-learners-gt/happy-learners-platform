@@ -1,5 +1,5 @@
 import { test, expect } from "./local-test";
-import { activity, addActivity, createLesson, e2eName, origin, saveStatus, signIn, toast } from "./helpers";
+import { activity, addActivity, createLesson, e2eName, origin, saveStatus, signIn, toast, publish } from "./helpers";
 
 test("didactic sequence: moments, composite activities and private teacher notes", async ({ page, browser }, info) => {
   const title = e2eName(info, "Secuencia PPP"), note = "Nota privada: repasa la pronunciación antes de empezar.";
@@ -40,7 +40,7 @@ test("didactic sequence: moments, composite activities and private teacher notes
 
   await page.reload();
   await expect(activity(page, "Escuchamos el modelo").getByRole("textbox", { name: /^Nota para el docente/ })).toContainText(note);
-  await page.getByRole("button", { name: "Publicar", exact: true }).click();
+  await publish(page);
   await expect(toast(page)).toContainText("Lección publicada");
   const code = (await page.locator(".share-row strong").textContent())!;
 

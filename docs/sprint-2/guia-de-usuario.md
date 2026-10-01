@@ -24,7 +24,18 @@ Curso → Unidades → Lecciones → Actividades → Recursos.
 3. Cada fila tiene un menú **⋯** para renombrar, mover arriba o abajo, ver una vista previa o archivar. También puedes hacer doble clic en un nombre para renombrarlo.
 4. **Mostrar archivadas** permite restaurar unidades o lecciones archivadas.
 
-Desde el listado de cursos puedes **Duplicar** un curso (unidades, recursos y lecciones como borrador; no copia grupos ni asistencia) o archivarlo. Un curso archivado se consulta pero no se edita; sus lecciones publicadas siguen disponibles.
+Desde el listado de cursos puedes **Duplicar** un curso (unidades, plan curricular, recursos y lecciones como borrador; no copia grupos ni asistencia) o archivarlo. Un curso archivado se consulta pero no se edita; sus lecciones publicadas siguen disponibles.
+
+## Plan curricular
+
+El **Plan curricular** del curso responde qué se desarrolla y si el curso lo cubre:
+
+1. **Competencias:** capacidades amplias que el curso desarrolla (por ejemplo, Comunicación oral).
+2. **Resultados de aprendizaje:** lo que cada estudiante podrá demostrar al terminar, con su nivel de pensamiento (Recordar, Comprender, Aplicar, Analizar, Evaluar, Crear) y su evidencia. Reciben códigos en orden: RA1, RA2…
+3. **Mapa de cobertura:** cada fila es un resultado y cada columna una unidad. Marca **Planificar** donde se trabajará. Una lección alineada cuenta como *trabajado*; una pregunta o una actividad con propósito Evaluar, como *evaluado*.
+4. La columna **Estado** dice qué falta y ofrece la acción: **Crear lección** (queda alineada al resultado y en su unidad) o **Agregar evaluación** en la lección que ya lo trabaja. La fila **Pendiente en la unidad** muestra lo planificado que ninguna lección de la unidad trabaja todavía.
+
+Archivar un resultado lo saca de la cobertura y de las lecciones nuevas; las lecciones que ya lo nombran lo conservan.
 
 ## Editar una lección
 
@@ -33,11 +44,14 @@ El editor muestra el título, el estado (Borrador, Publicada, Cambios sin public
 - La lección es un lienzo: **Detalles** (objetivo, secuencia didáctica, unidad, duración y publicación) y después los **momentos** de la secuencia con sus actividades.
 - La **secuencia didáctica** ordena la clase: Inicio · Desarrollo · Cierre, 5E, Presentación · Práctica · Producción, Demostración · Práctica guiada · Práctica independiente, o Libre. Cada momento explica para qué sirve y suma sus minutos.
 - Al final de cada momento puedes agregar una actividad que empieza con **Contenido**, **Recurso** o **Pregunta**. Las flechas del índice suben o bajan la actividad y la pasan al momento anterior o siguiente; el menú **⋯** la mueve a cualquier momento o la elimina.
-- Cada actividad tiene **Propósito**, **Organización**, minutos y bloques. Con **Agregar bloque** sumas texto, un recurso, una pregunta o una **Nota para el docente**. Las notas nunca llegan a los estudiantes.
+- En **Detalles**, **Resultados de aprendizaje** alinea la lección con el plan del curso; se indica cuáles están planificados en su unidad.
+- Cada actividad tiene **Propósito**, **Organización**, minutos y bloques. Si la lección tiene resultados, **Trabaja** indica cuáles desarrolla esa actividad (sin marcar: todos los de la lección). Con **Agregar bloque** sumas texto, un recurso, una pregunta o una **Nota para el docente**. Las notas nunca llegan a los estudiantes.
 - La barra de formato de arriba actúa sobre el texto que estés editando.
 - Todo se guarda solo como **borrador** ("Borrador guardado"). Si falta algo obligatorio, el indicador dice qué falta y **Revisar** te lleva al lugar.
 - Si otra persona abre la misma lección, el texto se sincroniza en vivo y aparece “También editando”.
 - **Vista previa** muestra la lección como la verá el estudiante, sin registrar nada.
+- **Antes de publicar** revisa cuatro recomendaciones: alineación a resultados, momentos con actividades, una forma de comprobar lo aprendido y minutos acordes a la duración. Si alguna está pendiente, al publicar se pregunta si continuar o revisar.
+- Al elegir un recurso, primero aparecen los **sugeridos**: los que usan otras lecciones con los mismos resultados.
 - **Publicar** guarda lo pendiente y publica. Después de publicar, puedes seguir editando: los estudiantes ven la versión anterior hasta que eliges **Publicar cambios**. **Copiar enlace** copia la dirección para compartir.
 
 Las preguntas necesitan entre dos y seis opciones distintas y una respuesta correcta marcada.
@@ -58,7 +72,7 @@ Solo el equipo docente del curso ve estos registros. No agregues correos, teléf
 
 ## Para estudiantes
 
-La lección empieza con lo que aprenderás y sus momentos, y después muestra una actividad a la vez con su momento, propósito y avance. Usa **Anterior** y **Siguiente**; al final, **Terminar lección**. No se guardan nombres ni respuestas; solo se cuenta cuántas veces se terminó.
+La lección empieza con lo que aprenderás (el objetivo y, si la lección está alineada, lo que podrás hacer al terminar) y sus momentos, y después muestra una actividad a la vez con su momento, propósito y avance. Usa **Anterior** y **Siguiente**; al final, **Terminar lección**. No se guardan nombres ni respuestas; solo se cuenta cuántas veces se terminó.
 
 ## Administración
 

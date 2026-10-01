@@ -134,3 +134,26 @@ class UpgradeTests(unittest.TestCase):
             db.execute("INSERT INTO course_files VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", ("file-exe", *office[1:3], "123e4567-e89b-12d3-a456-426614174004", "k-exe", "x.exe", "exe", "application/octet-stream", 10, "f" * 64, "ready", "user-1", "t", "t"))
         self.assertEqual(db.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='course_files' AND name='course_files_course'").fetchall(), [("course_files_course",)])
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_curricular_framework_is_course_scoped_and_leaves_lessons_unchanged(self):
+        """0012 adds competencies, outcomes and unit planning; lesson bytes stay identical."""
+        db = sqlite3.connect(":memory:")
+        db.setlimit(sqlite3.SQLITE_LIMIT_LIKE_PATTERN_LENGTH, 50)
+        db.execute("PRAGMA foreign_keys=ON")
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        framework = [path for path in migrations if path.name.startswith("0012_")][0]
+        for path in migrations[:migrations.index(framework)]:
+            db.executescript(path.read_text())
+        before = db.execute("SELECT id,content,published_content,draft_version,revision FROM lessons ORDER BY id").fetchall()
+        db.executescript(framework.read_text())
+        self.assertEqual(before, db.execute("SELECT id,content,published_content,draft_version,revision FROM lessons ORDER BY id").fetchall())
+        self.assertEqual(db.execute("SELECT count(*) FROM course_competencies WHERE course_id='course-exploradores'").fetchone()[0], 2)
+        self.assertEqual(db.execute("SELECT id FROM course_outcomes ORDER BY position").fetchall(), [("outcome-exploradores-introduce",), ("outcome-exploradores-understand",), ("outcome-exploradores-colors",)])
+        self.assertEqual(db.execute("SELECT count(*) FROM unit_outcomes").fetchone()[0], 2)
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO course_outcomes(id,course_id,organization_id,statement,level,position,updated_at) VALUES(?,?,?,?,?,?,?)", ("outcome-foreign", "course-exploradores", "org-other", "Otra organización", "apply", 3, "t"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO course_outcomes(id,course_id,organization_id,statement,level,position,updated_at) VALUES(?,?,?,?,?,?,?)", ("outcome-bad-level", "course-exploradores", "org-demo", "Nivel inválido", "memorize", 3, "t"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO unit_outcomes VALUES(?,?,?)", ("course-exploradores--unit-org-demo", "outcome-missing", "course-exploradores"))
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
