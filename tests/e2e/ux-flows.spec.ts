@@ -1,5 +1,5 @@
 import { test, expect } from "./local-test";
-import { courseNav, createLesson, e2eName, E2E_PREFIX, legacyContamination, openCourse, openNavigation, saveStatus, selectActivity, sessionToken, signIn, signInWithForm, toast } from "./helpers";
+import { activity, addActivity, courseNav, createLesson, e2eName, E2E_PREFIX, legacyContamination, openCourse, openNavigation, saveStatus, sessionToken, signIn, signInWithForm, toast } from "./helpers";
 
 test("1 · login → course → content, with one navigation system and working Back", async ({ page }) => {
   const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
@@ -70,31 +70,29 @@ test("3 · edit with autosave, then publish", async ({ page }, info) => {
   await signIn(page, "educador-demo", "/cursos/course-exploradores/contenido");
   await createLesson(page, unitTitle, title, "Seguir una explicación organizada.");
   // A fresh activity cannot be saved empty; the indicator explains why.
-  await selectActivity(page, /Instrucciones/);
-  await expect(saveStatus(page)).toContainText(/Guardado/);
-  const editor = page.locator(".richtext-content");
+  await expect(saveStatus(page)).toContainText(/Borrador guardado/);
+  const editor = activity(page, "Instrucciones").locator(".richtext-content");
   await editor.fill("Paso uno");
   await editor.press("Control+a");
   await page.getByRole("button", { name: "Negrita", exact: true }).click();
-  await expect(saveStatus(page)).toContainText("Guardado", { timeout: 10_000 });
-  await page.getByRole("button", { name: /Agregar actividad/ }).click();
-  await page.getByRole("menuitem", { name: "Pregunta" }).click();
+  await expect(saveStatus(page)).toContainText("Borrador guardado", { timeout: 10_000 });
+  const question = await addActivity(page, "Pregunta");
   await expect(saveStatus(page)).toContainText("Sin guardar");
-  await page.getByLabel("Título de la actividad").fill("¿Cómo saludas?");
-  await page.locator(".richtext-content").fill("Elige el saludo correcto.");
-  await page.getByLabel("Opción 1", { exact: true }).fill("Hello!");
-  await page.getByLabel("Opción 2", { exact: true }).fill("Goodbye!");
-  await expect(saveStatus(page)).toContainText("Guardado", { timeout: 10_000 });
+  await question.getByLabel(/^Título de la actividad/).fill("¿Cómo saludas?");
+  await question.locator(".richtext-content").fill("Elige el saludo correcto.");
+  await question.getByLabel("Opción 1", { exact: true }).fill("Hello!");
+  await question.getByLabel("Opción 2", { exact: true }).fill("Goodbye!");
+  await expect(saveStatus(page)).toContainText("Borrador guardado", { timeout: 10_000 });
   await page.reload();
-  await selectActivity(page, /Instrucciones/);
-  await expect(page.locator(".richtext-content strong")).toContainText("Paso uno");
+  await expect(activity(page, "Instrucciones").locator(".richtext-content strong")).toContainText("Paso uno");
+  await expect(activity(page, "¿Cómo saludas?")).toBeVisible();
   await page.getByRole("button", { name: "Publicar", exact: true }).click();
   await expect(toast(page)).toContainText("Lección publicada");
   await expect(page.locator(".editor-header .badge")).toHaveText("Publicada");
   await expect(page.getByRole("button", { name: "Copiar enlace", exact: true }).first()).toBeVisible();
   // Editing after publishing becomes "Cambios sin publicar" until republished.
   await page.getByLabel("Título de la lección").fill(`${title} ✓`);
-  await expect(saveStatus(page)).toContainText("Guardado", { timeout: 10_000 });
+  await expect(saveStatus(page)).toContainText("Borrador guardado", { timeout: 10_000 });
   await expect(page.locator(".editor-header .badge")).toHaveText("Cambios sin publicar");
   await page.getByRole("button", { name: "Publicar cambios", exact: true }).click();
   await expect(page.locator(".editor-header .badge")).toHaveText("Publicada");

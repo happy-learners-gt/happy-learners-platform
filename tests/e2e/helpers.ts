@@ -62,6 +62,12 @@ export async function createLesson(page: Page, unit: string, title: string, obje
   await expect(page.getByLabel("Título de la lección")).toHaveValue(title);
 }
 
-export async function selectActivity(page: Page, name: RegExp | string) {
-  await page.getByRole("navigation", { name: "Estructura de la lección" }).getByRole("button", { name }).first().click();
+/** The card of an activity on the lesson canvas, found by its title. */
+export function activity(page: Page, title: string) {
+  return page.getByRole("region", { name: new RegExp(`^Actividad \\d+: ${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`) });
+}
+/** Inserts an activity at the end of the lesson and returns its card (the newest card of that type). */
+export async function addActivity(page: Page, type: "Contenido" | "Recurso" | "Pregunta") {
+  await page.getByRole("group", { name: "Agregar al final de la lección" }).getByRole("button", { name: type, exact: true }).click();
+  return page.locator("section.activity-card").last();
 }
