@@ -75,3 +75,14 @@ export async function addActivity(page: Page, type: "Contenido" | "Recurso" | "P
   await section.locator(".insert-bar").getByRole("button", { name: type, exact: true }).click();
   return section.locator("section.activity-card").last();
 }
+/**
+ * Publishes the open lesson. Open recommendations ask for confirmation first; `expectReview` says whether
+ * that dialog must appear (true), must not (false) or may (undefined).
+ */
+export async function publish(page: Page, label = "Publicar", expectReview?: boolean) {
+  await page.getByRole("button", { name: label, exact: true }).click();
+  const review = page.getByRole("dialog", { name: "¿Publicar con recomendaciones pendientes?" });
+  const shown = await review.waitFor({ timeout: 2000 }).then(() => true, () => false);
+  if (expectReview !== undefined) expect(shown).toBe(expectReview);
+  if (shown) await review.getByRole("button", { name: "Publicar de todos modos" }).click();
+}

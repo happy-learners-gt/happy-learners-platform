@@ -2,6 +2,9 @@ export const timezones = ["America/Guatemala", "America/Mexico_City", "America/B
 export { courseInput, materialInput, courseProfiles, unitLabels, record, cleanText, validTermIds, completeOrder } from "./courses";
 export { sequenceTemplates, defaultSequence, sequenceOf, purposes, groupings, blockKinds, blocksOf, phaseOf, studentActivities, resourceIdsOf, richTextFieldsOf, hasText } from "./sequences";
 export type { Phase } from "./sequences";
+export { cognitiveLevels, competencyInput, outcomeInput, validOutcomeIds, outcomeCodes, activityOutcomes, assesses, lessonOutcomes, coverage, suggestedResources, publishChecklist, outcomeLimit, competencyLimit } from "./outcomes";
+export type { Gap, OutcomeCoverage, UnitCoverage, CheckItem } from "./outcomes";
+import { validOutcomeIds } from "./outcomes";
 export function organizationInput(value: unknown): { name: string; timezone: string } | null {
   if (!value || typeof value !== "object") return null;
   const { name, timezone } = value as Record<string, unknown>;
@@ -40,6 +43,7 @@ export function validActivities(input: unknown): boolean {
     if (item.phase !== undefined && (typeof item.phase !== "string" || !/^[a-z-]{1,40}$/.test(item.phase))) return false;
     if (item.purpose !== undefined && !purposeValues.has(item.purpose)) return false;
     if (item.grouping !== undefined && !groupingValues.has(item.grouping)) return false;
+    if (item.outcomeIds !== undefined && !validOutcomeIds(item.outcomeIds)) return false;
     if (item.blocks !== undefined) {
       if (!Array.isArray(item.blocks) || !item.blocks.length || item.blocks.length > 12) return false;
       const blocks = item.blocks as Record<string, unknown>[];

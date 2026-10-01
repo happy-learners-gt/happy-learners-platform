@@ -1,5 +1,5 @@
 import { test, expect } from "./local-test";
-import { activity, addActivity, courseNav, createLesson, e2eName, E2E_PREFIX, legacyContamination, openCourse, openNavigation, saveStatus, sessionToken, signIn, signInWithForm, toast } from "./helpers";
+import { activity, addActivity, courseNav, createLesson, e2eName, E2E_PREFIX, legacyContamination, openCourse, openNavigation, saveStatus, sessionToken, signIn, signInWithForm, toast, publish } from "./helpers";
 
 test("1 · login → course → content, with one navigation system and working Back", async ({ page }) => {
   const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
@@ -86,7 +86,7 @@ test("3 · edit with autosave, then publish", async ({ page }, info) => {
   await page.reload();
   await expect(activity(page, "Instrucciones").locator(".richtext-content strong")).toContainText("Paso uno");
   await expect(activity(page, "¿Cómo saludas?")).toBeVisible();
-  await page.getByRole("button", { name: "Publicar", exact: true }).click();
+  await publish(page);
   await expect(toast(page)).toContainText("Lección publicada");
   await expect(page.locator(".editor-header .badge")).toHaveText("Publicada");
   await expect(page.getByRole("button", { name: "Copiar enlace", exact: true }).first()).toBeVisible();
@@ -94,7 +94,7 @@ test("3 · edit with autosave, then publish", async ({ page }, info) => {
   await page.getByLabel("Título de la lección").fill(`${title} ✓`);
   await expect(saveStatus(page)).toContainText("Borrador guardado", { timeout: 10_000 });
   await expect(page.locator(".editor-header .badge")).toHaveText("Cambios sin publicar");
-  await page.getByRole("button", { name: "Publicar cambios", exact: true }).click();
+  await publish(page, "Publicar cambios");
   await expect(page.locator(".editor-header .badge")).toHaveText("Publicada");
 });
 

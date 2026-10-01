@@ -1,4 +1,4 @@
-import type { Activity, ActivityBlock, Course, LearningUnit, Lesson, Material, RichTextDocument, RichTextNode, SequenceTemplate } from "@happy-learners/contracts";
+import type { Activity, ActivityBlock, Course, Curriculum, LearningUnit, Lesson, Material, RichTextDocument, RichTextNode, SequenceTemplate } from "@happy-learners/contracts";
 import { blocksOf, phaseOf, resourceIdsOf, sequenceOf } from "@happy-learners/domain";
 import { api, uploadCourseFile } from "./api";
 
@@ -92,14 +92,14 @@ export function changeSequence(activities: Activity[], from: SequenceTemplate, t
 }
 export const newBlock = (kind: ActivityBlock["kind"]): ActivityBlock => ({ id: `block-${crypto.randomUUID()}`, kind, ...(kind === "question" ? { options: ["", ""], answer: 0 } : {}) });
 
-export type LessonDraft = { title: string; objective: string; duration: number; unitId: string; archived: boolean; sequence: SequenceTemplate; activities: Activity[] };
+export type LessonDraft = { title: string; objective: string; duration: number; unitId: string; archived: boolean; sequence: SequenceTemplate; outcomeIds: string[]; activities: Activity[] };
 export function draftOf(lesson: Lesson, fallback: SequenceTemplate = "free"): LessonDraft {
   const sequence = lesson.sequence || fallback;
-  return { title: lesson.title, objective: lesson.objective, duration: lesson.duration || 20, unitId: lesson.courseUnitId || "", archived: lesson.status === "archived", sequence, activities: normalizeActivities(lesson.activities || [], sequence) };
+  return { title: lesson.title, objective: lesson.objective, duration: lesson.duration || 20, unitId: lesson.courseUnitId || "", archived: lesson.status === "archived", sequence, outcomeIds: lesson.outcomeIds || [], activities: normalizeActivities(lesson.activities || [], sequence) };
 }
 export function lessonBody(courseId: string, draft: LessonDraft, draftVersion?: number) {
   const activities = draft.activities.map((activity, position) => ({ ...activity, position }));
-  return { title: draft.title, objective: draft.objective, courseId, courseUnitId: draft.unitId, duration: draft.duration, draftVersion, status: draft.archived ? "archived" : "draft", sequence: draft.sequence, instructions: "", activities };
+  return { title: draft.title, objective: draft.objective, courseId, courseUnitId: draft.unitId, duration: draft.duration, draftVersion, status: draft.archived ? "archived" : "draft", sequence: draft.sequence, outcomeIds: draft.outcomeIds, instructions: "", activities };
 }
 const blockLabel: Record<ActivityBlock["kind"], string> = { text: "el texto", resource: "el recurso", question: "la pregunta", "teacher-note": "la nota para el docente" };
 
@@ -152,8 +152,8 @@ export function newest<T extends { updatedAt?: string }>(rows: T[]) { return [..
  * Returns the new course ID; if a step fails the partial copy remains and the error explains it.
  */
 export async function duplicateCourse(course: Course, onProgress?: (step: string) => void) {
-  const [{ units }, { lessons }, { materials }] = await Promise.all([
-    api<{ units: LearningUnit[] }>(`/courses/${course.id}`),
+  const [{ units, curriculum }, { lessons }, { materials }] = await Promise.all([
+    api<{ units: LearningUnit[]; curriculum: Curriculum }>(`/courses/${course.id}`),
     api<{ lessons: Lesson[] }>(`/lessons?drafts=1&course=${course.id}`),
     api<{ materials: Material[] }>(`/courses/${course.id}/materials`),
   ]);
@@ -165,6 +165,21 @@ export async function duplicateCourse(course: Course, onProgress?: (step: string
     const created = await api<{ id: string }>(`/courses/${id}/units`, "POST", { name: unit.name, objective: unit.objective, status: "active", version });
     unitMap.set(unit.id, created.id); version++;
   }
+  onProgress?.("Copiando el plan curricular…");
+  const competencyMap = new Map<string, string>(), outcomeMap = new Map<string, string>();
+  for (const competency of curriculum.competencies.filter(item => item.status === "active")) {
+    const created = await api<{ id: string }>(`/courses/${id}/competencies`, "POST", { name: competency.name, description: competency.description, status: "active", version });
+    competencyMap.set(competency.id, created.id); version++;
+  }
+  for (const outcome of curriculum.outcomes.filter(item => item.status === "active")) {
+    const created = await api<{ id: string }>(`/courses/${id}/outcomes`, "POST", { statement: outcome.statement, level: outcome.level, evidence: outcome.evidence, competencyId: outcome.competencyId && competencyMap.get(outcome.competencyId) || null, status: "active", version });
+    outcomeMap.set(outcome.id, created.id); version++;
+  }
+  for (const [from, to] of unitMap) {
+    const outcomeIds = curriculum.unitOutcomes.filter(link => link.unitId === from && outcomeMap.has(link.outcomeId)).map(link => outcomeMap.get(link.outcomeId)!);
+    if (outcomeIds.length) { await api(`/courses/${id}/units/${to}/outcomes`, "PUT", { outcomeIds, version }); version++; }
+  }
+  const remap = (ids?: string[]) => (ids || []).flatMap(item => outcomeMap.has(item) ? [outcomeMap.get(item)!] : []);
   onProgress?.("Copiando recursos…");
   const resourceMap = new Map<string, string>();
   for (const material of materials.filter(item => item.status !== "archived")) {
@@ -179,14 +194,14 @@ export async function duplicateCourse(course: Course, onProgress?: (step: string
   }
   onProgress?.("Copiando lecciones…");
   for (const lesson of lessons.filter(item => item.status !== "archived" && item.courseUnitId && unitMap.has(item.courseUnitId))) {
-    const activities = normalizeActivities(lesson.activities, lesson.sequence).map(activity => ({ ...activity, blocks: activity.blocks!.map(block => {
+    const activities = normalizeActivities(lesson.activities, lesson.sequence).map(activity => ({ ...activity, outcomeIds: remap(activity.outcomeIds), blocks: activity.blocks!.map(block => {
       if (block.kind !== "resource" || !block.resourceId) return block;
       const mapped = resourceMap.get(block.resourceId);
       if (mapped) return { ...block, resourceId: mapped };
       // Archived course resources are not copied: leave a visible note instead of a broken link.
       return materials.some(item => item.id === block.resourceId) ? { id: block.id, kind: "text" as const, instructions: "Recurso no copiado: estaba archivado en el curso original." } : block;
     }) }));
-    await api("/lessons", "POST", lessonBody(id, { ...draftOf(lesson), unitId: unitMap.get(lesson.courseUnitId!)!, archived: false, activities }));
+    await api("/lessons", "POST", lessonBody(id, { ...draftOf(lesson), unitId: unitMap.get(lesson.courseUnitId!)!, archived: false, outcomeIds: remap(lesson.outcomeIds), activities }));
   }
   return id;
 }

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import type { Activity, ActivityBlock, Lesson, Material, Resource, RichTextDocument, SequenceTemplate } from "@happy-learners/contracts";
-import { blockKinds, groupings, phaseOf, purposes, resourceIdsOf, sequenceOf, sequenceTemplates, studentActivities } from "@happy-learners/domain";
+import type { Activity, ActivityBlock, LearningOutcome, Lesson, Material, Resource, RichTextDocument, SequenceTemplate } from "@happy-learners/contracts";
+import { blockKinds, groupings, outcomeCodes, phaseOf, publishChecklist, purposes, resourceIdsOf, sequenceOf, sequenceTemplates, studentActivities, suggestedResources } from "@happy-learners/domain";
+import type { CheckItem } from "@happy-learners/domain";
 import type { Phase } from "@happy-learners/domain";
 import type { Editor } from "@tiptap/react";
 import * as Y from "yjs";
@@ -28,9 +29,11 @@ type Save = { state: "saved" | "pending" | "saving" | "error"; at?: string; erro
 export const kindIcon: Record<ActivityBlock["kind"], IconName> = { text: "text", resource: "library", question: "question", "teacher-note": "edit" };
 const newTitle: Record<ActivityBlock["kind"], string> = { text: "Nueva actividad", resource: "Recurso", question: "Pregunta", "teacher-note": "Nueva actividad" };
 const AUTOSAVE_MS = 1000;
+/** Jumps instead of animating for people who ask the system for reduced motion. */
+const scrollBehavior = (): ScrollBehavior => matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
 
 export function LessonEditor({ lessonId }: { lessonId: string }) {
-  const { course, units, lessons, materials, legacyResources, writable, reload } = useCourse();
+  const { course, units, lessons, materials, legacyResources, curriculum, writable, reload } = useCourse();
   const { member } = useSession();
   const { url, navigate } = useNavigation();
   const { toast, confirm } = useFeedback();
@@ -173,7 +176,7 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     const origin = document.activeElement;
     setTimeout(() => {
       const card = document.getElementById(`card-${id}`);
-      card?.scrollIntoView({ behavior: "smooth", block: "center" });
+      card?.scrollIntoView({ behavior: scrollBehavior(), block: "center" });
       if (document.activeElement !== origin && document.activeElement !== document.body) return;
       [...card?.querySelectorAll<HTMLElement>(selector) || []].pop()?.focus({ preventScroll: true });
     }, 120);
@@ -236,6 +239,9 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
   async function publish() {
     if (problem) { toast({ tone: "error", message: problem.message }); setSelected(problem.target === "title" ? "details" : problem.target); return; }
     if (!draft!.activities.length) { toast({ tone: "error", message: "Agrega al menos una actividad antes de publicar." }); return; }
+    // Recommendations do not block: some lessons (a review, an outing) legitimately skip one.
+    const open = publishChecklist(draftLesson(), curriculum).filter(item => !item.ok);
+    if (open.length && !await confirm({ title: "¿Publicar con recomendaciones pendientes?", body: <><p>Antes de publicar, revisa:</p><ul className="check-list">{open.map(item => <li key={item.id}><Icon name="info" size={16}/><span><strong>{item.label}.</strong> {item.hint}</span></li>)}</ul></>, confirm: "Publicar de todos modos", cancel: "Revisar" })) { goTo("details"); return; }
     setPublishing(true);
     try {
       if (!await flush()) throw new Error("No pudimos guardar los últimos cambios.");
@@ -257,6 +263,14 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     setTimeout(() => { void flush().then(ok => ok && toast({ message: archived ? "Lección archivada." : "Lección restaurada como borrador." })); }, 0);
   }
 
+  function draftLesson(): Lesson { return { ...lesson!, title: draft!.title, objective: draft!.objective, duration: draft!.duration, sequence: draft!.sequence, outcomeIds: draft!.outcomeIds, activities: draft!.activities, courseUnitId: draft!.unitId }; }
+  function toggleOutcome(id: string) {
+    const outcomeIds = draft!.outcomeIds.includes(id) ? draft!.outcomeIds.filter(item => item !== id) : [...draft!.outcomeIds, id];
+    // Activities can only name outcomes of their lesson.
+    update({ outcomeIds });
+    if (!outcomeIds.includes(id)) updateActivities(list => list.map(activity => activity.outcomeIds?.includes(id) ? { ...activity, outcomeIds: activity.outcomeIds.filter(item => item !== id) } : activity));
+  }
+
   if (loadError) return loadError.status === 404
     ? <EmptyState icon="content" title="No encontramos esta lección" action={<Link className="button primary" href={`${base}/contenido`}>Volver al contenido</Link>}>Puede que se haya movido a otro curso.</EmptyState>
     : <ErrorState title="No pudimos abrir la lección" error={loadError.message} retry={() => void open()}/>;
@@ -264,6 +278,12 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
 
   const unit = units.find(item => item.id === draft.unitId);
   const linked = resourceIdsOf(draft.activities);
+  const codes = outcomeCodes(curriculum.outcomes);
+  // Outcomes a lesson can choose: the active ones, plus archived ones it already names.
+  const choosable = curriculum.outcomes.filter(o => codes.has(o.id) || draft.outcomeIds.includes(o.id)).sort((a, b) => a.position - b.position);
+  const plannedHere = new Set(curriculum.unitOutcomes.filter(link => link.unitId === draft.unitId).map(link => link.outcomeId));
+  const checklist = publishChecklist(draftLesson(), curriculum);
+  const suggested = suggestedResources(draftLesson(), lessons, resourceIdsOf);
   const available = [...materials.filter(item => item.status !== "archived" || linked.includes(item.id)), ...legacyResources.filter(item => usage(item.id, lessons).length || linked.includes(item.id))];
   const unsaved = changes.current > 0 && save.state !== "saved";
   const serverState = lessonState(lesson);
@@ -271,7 +291,8 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
   const template = sequenceOf(draft.sequence), structured = template.value !== "free";
   const minutes = draft.activities.reduce((sum, activity) => sum + (activity.minutes || 0), 0);
   // Students never see teacher notes, in the preview either.
-  const previewLesson: Lesson = { ...lesson, title: draft.title, objective: draft.objective, duration: draft.duration, program: unit?.name || lesson.program, sequence: draft.sequence, activities: studentActivities(draft.activities) };
+  const previewLesson: Lesson = { ...draftLesson(), program: unit?.name || lesson.program, activities: studentActivities(draft.activities),
+    outcomes: draft.outcomeIds.filter(id => codes.has(id)).map(id => ({ id, code: codes.get(id)!, statement: curriculum.outcomes.find(o => o.id === id)!.statement })).sort((a, b) => a.code.localeCompare(b.code, "es", { numeric: true })) };
   if (preview) return <div className="editor-preview">
     <LessonPlayer lesson={previewLesson} preview resources={available} fileUrl={id => `/api/courses/${course.id}/files/${id}/content`} onExit={() => navigate(`${base}/lecciones/${lessonId}`, true)}/>
   </div>;
@@ -283,7 +304,7 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
   const goTo = (id: string, focus = true) => {
     setSelected(id);
     const card = document.getElementById(id === "details" ? "lesson-details" : `card-${id}`);
-    card?.scrollIntoView({ behavior: "smooth", block: "start" });
+    card?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
     if (focus) setTimeout(() => card?.querySelector<HTMLElement>("input, textarea, [contenteditable=true]")?.focus({ preventScroll: true }), 250);
   };
   const reviewProblem = () => problem && goTo(problem.target === "title" ? "details" : problem.target);
@@ -342,7 +363,19 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
               <Field label="Unidad"><select value={draft.unitId} onChange={event => update({ unitId: event.target.value })}>{units.filter(item => item.status === "active" || item.id === draft.unitId).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
               <Field label="Duración (minutos)" hint={draft.activities.length ? `Las actividades suman ${minutes} min.` : undefined}><input type="number" min={1} max={300} value={draft.duration} onChange={event => update({ duration: Math.max(1, Math.min(300, Number(event.target.value) || 1)) })}/></Field>
             </div>
+            <fieldset className="outcome-picker">
+              <legend>Resultados de aprendizaje</legend>
+              {choosable.length ? <>
+                <p className="muted small">Qué resultados del curso desarrolla esta lección. Los estudiantes los ven al empezar.</p>
+                <ul>{choosable.map(outcome => <li key={outcome.id}><label className={draft.outcomeIds.includes(outcome.id) ? "is-selected" : undefined}>
+                  <input type="checkbox" checked={draft.outcomeIds.includes(outcome.id)} onChange={() => toggleOutcome(outcome.id)}/>
+                  <span className="outcome-code" aria-hidden="true">{codes.get(outcome.id) || "—"}</span>
+                  <span><span className="sr-only">{codes.get(outcome.id) || "Archivado"}: </span>{outcome.statement}{plannedHere.has(outcome.id) && <small className="planned-tag">Planificado en esta unidad</small>}{!codes.has(outcome.id) && <small className="planned-tag">Archivado</small>}</span>
+                </label></li>)}</ul>
+              </> : <p className="muted small">El curso aún no tiene resultados de aprendizaje. <Link href={`${base}/plan`}>Defínelos en el plan curricular</Link> para alinear esta lección.</p>}
+            </fieldset>
           </fieldset>
+          {writable && <Checklist items={checklist} planHref={`${base}/plan`}/>}
           <div className="publish-info">
             {lesson.revision && lesson.shareCode ? <>
               <p><strong>Publicación {lesson.revision}.</strong> {state === "changes" ? "Tienes cambios en borrador que los estudiantes aún no ven." : "Los estudiantes ven esta versión."}</p>
@@ -357,7 +390,8 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
             <div><h2 id={`phase-${phase.id}`}>{phase.label}</h2>{phase.hint && <p>{phase.hint}</p>}</div>
             {structured && <span className="phase-meta">{plural(activities.length, "actividad", "actividades")} · {activities.reduce((sum, activity) => sum + activity.minutes, 0)} min</span>}
           </header>
-          {activities.map(activity => { const index = draft.activities.indexOf(activity); return <ActivityCard key={activity.id} activity={activity} index={index} total={draft.activities.length} phase={structured ? phase : undefined} phases={structured ? template.phases : []} writable={writable} resources={available} courseId={course.id}
+          {activities.map(activity => { const index = draft.activities.indexOf(activity); return <ActivityCard key={activity.id} activity={activity} index={index} total={draft.activities.length} phase={structured ? phase : undefined} phases={structured ? template.phases : []} writable={writable} resources={available} suggested={suggested} courseId={course.id}
+            outcomes={draft.outcomeIds.flatMap(id => { const outcome = curriculum.outcomes.find(o => o.id === id); return outcome ? [{ outcome, code: codes.get(id) || "—" }] : []; })}
             collaboration={collaboration} username={member.username} onFocus={() => setSelected(activity.id!)} onEditorFocus={setActiveEditor}
             canMove={delta => canMove(index, delta)} onMove={delta => moveActivity(index, delta)} onMoveTo={target => moveToPhase(activity, target)}
             onChange={patch => updateActivity(activity.id!, patch)} onBlock={(blockId, patch) => updateBlock(activity, blockId, patch)}
@@ -395,7 +429,8 @@ function SaveIndicator({ save, published, problem, waiting, failed, onReview, on
 }
 
 type CardProps = {
-  activity: Activity; index: number; total: number; phase?: Phase; phases: Phase[]; writable: boolean; resources: (Material | Resource)[]; courseId: string;
+  activity: Activity; index: number; total: number; phase?: Phase; phases: Phase[]; writable: boolean; resources: (Material | Resource)[]; suggested: string[]; courseId: string;
+  outcomes: { outcome: LearningOutcome; code: string }[];
   collaboration: CollaborationProvider | null; username: string; onFocus: () => void; onEditorFocus: (editor: Editor) => void;
   canMove: (delta: number) => boolean; onMove: (delta: number) => void; onMoveTo: (phase: Phase) => void;
   onChange: (patch: Partial<Activity>) => void; onBlock: (blockId: string, patch: Partial<ActivityBlock>) => void; onRemote: (blockId: string, doc: RichTextDocument) => void;
@@ -406,7 +441,7 @@ type CardProps = {
  * An activity is one thing the class does: what for (purpose), how (grouping), how long, and its ordered blocks:
  * text, a library resource, a question or a note only the teacher sees.
  */
-function ActivityCard({ activity, index, total, phase, phases, writable, resources, courseId, collaboration, username, onFocus, onEditorFocus, canMove, onMove, onMoveTo, onChange, onBlock, onRemote, onAddBlock, onMoveBlock, onRemoveBlock, onRemove }: CardProps) {
+function ActivityCard({ activity, index, total, phase, phases, writable, resources, suggested, outcomes, courseId, collaboration, username, onFocus, onEditorFocus, canMove, onMove, onMoveTo, onChange, onBlock, onRemote, onAddBlock, onMoveBlock, onRemoveBlock, onRemove }: CardProps) {
   const number = index + 1, blocks = activity.blocks || [];
   const learnerBlocks = blocks.filter(block => block.kind !== "teacher-note").length;
   return <section id={`card-${activity.id}`} className="canvas-card activity-card" aria-label={`Actividad ${number}: ${activity.title || "sin título"}`} onFocusCapture={onFocus}>
@@ -427,9 +462,15 @@ function ActivityCard({ activity, index, total, phase, phases, writable, resourc
     <div className="activity-meta">
       <label className="meta-select"><span>Propósito</span><select value={activity.purpose || ""} disabled={!writable} aria-label={`Propósito de la actividad ${number}`} onChange={event => onChange({ purpose: (event.target.value || undefined) as Activity["purpose"] })}><option value="">Sin indicar</option>{purposes.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
       <label className="meta-select"><span>Organización</span><select value={activity.grouping || ""} disabled={!writable} aria-label={`Organización de la actividad ${number}`} onChange={event => onChange({ grouping: (event.target.value || undefined) as Activity["grouping"] })}><option value="">Sin indicar</option>{groupings.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+      {outcomes.length > 0 && <div className="meta-outcomes" role="group" aria-label={`Resultados que trabaja la actividad ${number}`}>
+        <span>Trabaja</span>
+        {outcomes.map(({ outcome, code }) => { const on = !!activity.outcomeIds?.includes(outcome.id); return <button key={outcome.id} type="button" className="outcome-chip" aria-pressed={on} disabled={!writable} title={outcome.statement}
+          aria-label={`${code}: ${outcome.statement}`} onClick={() => onChange({ outcomeIds: on ? activity.outcomeIds!.filter(id => id !== outcome.id) : [...activity.outcomeIds || [], outcome.id] })}>{on && <Icon name="check" size={12}/>}{code}</button>; })}
+        {!activity.outcomeIds?.length && <span className="muted small">Todos los de la lección</span>}
+      </div>}
     </div>
     <ol className="block-list">{blocks.map((block, blockIndex) => <li key={block.id}>
-      <BlockEditor block={block} number={number} position={blockIndex} count={blocks.length} removable={blocks.length > 1 && (block.kind === "teacher-note" || learnerBlocks > 1)} writable={writable} resources={resources} courseId={courseId}
+      <BlockEditor block={block} number={number} position={blockIndex} count={blocks.length} removable={blocks.length > 1 && (block.kind === "teacher-note" || learnerBlocks > 1)} writable={writable} resources={resources} suggested={suggested} courseId={courseId}
         collaboration={collaboration} username={username} onEditorFocus={onEditorFocus} onChange={patch => onBlock(block.id, patch)} onRemote={doc => onRemote(block.id, doc)}
         onMove={delta => onMoveBlock(blockIndex, delta)} onRemove={() => onRemoveBlock(block)}/>
     </li>)}</ol>
@@ -445,8 +486,8 @@ const blockPlaceholder: Record<ActivityBlock["kind"], string> = {
   question: "Escribe la pregunta…", "teacher-note": "Indicaciones para quien da la clase: materiales, tiempos, errores frecuentes…",
 };
 
-function BlockEditor({ block, number, position, count, removable, writable, resources, courseId, collaboration, username, onEditorFocus, onChange, onRemote, onMove, onRemove }: {
-  block: ActivityBlock; number: number; position: number; count: number; removable: boolean; writable: boolean; resources: (Material | Resource)[]; courseId: string;
+function BlockEditor({ block, number, position, count, removable, writable, resources, suggested, courseId, collaboration, username, onEditorFocus, onChange, onRemote, onMove, onRemove }: {
+  block: ActivityBlock; number: number; position: number; count: number; removable: boolean; writable: boolean; resources: (Material | Resource)[]; suggested: string[]; courseId: string;
   collaboration: CollaborationProvider | null; username: string; onEditorFocus: (editor: Editor) => void;
   onChange: (patch: Partial<ActivityBlock>) => void; onRemote: (doc: RichTextDocument) => void; onMove: (delta: number) => void; onRemove: () => void;
 }) {
@@ -467,7 +508,12 @@ function BlockEditor({ block, number, position, count, removable, writable, reso
     </div>
     {block.kind === "resource" && <div className="card-resource">
       {resources.length ? <Field label={`Recurso de la actividad ${number}${suffix}`} hint={<>El estudiante lo ve dentro de esta actividad. <Link href={`/cursos/${courseId}/biblioteca`}>Abrir la biblioteca del curso</Link></>}>
-        <select value={block.resourceId || ""} disabled={!writable} onChange={event => { setShowFile(false); onChange({ resourceId: event.target.value }); }}><option value="">Elige un recurso</option>{resources.map(item => <option key={item.id} value={item.id}>{item.title}{item.status === "archived" ? " (archivado)" : item.status === "draft" ? " (borrador)" : ""}</option>)}</select>
+        <select value={block.resourceId || ""} disabled={!writable} onChange={event => { setShowFile(false); onChange({ resourceId: event.target.value }); }}><option value="">Elige un recurso</option>{(() => {
+          const option = (item: Material | Resource) => <option key={item.id} value={item.id}>{item.title}{item.status === "archived" ? " (archivado)" : item.status === "draft" ? " (borrador)" : ""}</option>;
+          const top = suggested.flatMap(id => resources.filter(item => item.id === id && item.status !== "archived"));
+          // Suggestions: resources other lessons use for the same outcomes.
+          return top.length ? <><optgroup label="Sugeridos por los resultados de la lección">{top.map(option)}</optgroup><optgroup label="Biblioteca del curso">{resources.filter(item => !top.includes(item)).map(option)}</optgroup></> : resources.map(option);
+        })()}</select>
       </Field> : <p className="notice"><Icon name="library" size={18}/>La biblioteca del curso está vacía. <Link href={`/cursos/${courseId}/biblioteca`}>Agrega un recurso</Link> y vuelve a esta actividad.</p>}
       {resource && (resource.kind === "file" && "fileId" in resource && resource.fileId
         ? showFile ? <FileViewer url={`/api/courses/${courseId}/files/${resource.fileId}/content`} name={resource.fileName || resource.title}/> : <button type="button" className="resource-peek" onClick={() => setShowFile(true)}><Icon name="eye" size={18}/><span><strong>{resource.fileName || resource.title}</strong><small>Ver el archivo aquí</small></span></button>
@@ -490,4 +536,17 @@ function BlockEditor({ block, number, position, count, removable, writable, reso
       {options.length < 6 && <button type="button" className="button ghost small" onClick={() => onChange({ options: [...options, ""] })}><Icon name="plus" size={16}/>Agregar opción</button>}
     </fieldset>}
   </div>;
+}
+
+/** Recommendations before publishing; each open item says what to do. */
+function Checklist({ items, planHref }: { items: CheckItem[]; planHref: string }) {
+  const done = items.filter(item => item.ok).length;
+  return <section className="checklist" aria-labelledby="checklist-title">
+    <h3 id="checklist-title">Antes de publicar <span className="muted">· {done} de {items.length}</span></h3>
+    <ul>{items.map(item => <li key={item.id} className={item.ok ? "is-ok" : "is-open"}>
+      <Icon name={item.ok ? "check" : "info"} size={16}/>
+      <span><strong>{item.label}</strong><span className="muted small"> · {item.hint}</span>{!item.ok && item.id === "outcomes" && item.hint.includes("plan curricular") && <> <Link href={planHref}>Abrir el plan</Link></>}</span>
+      <span className="sr-only">{item.ok ? "Listo" : "Pendiente"}</span>
+    </li>)}</ul>
+  </section>;
 }
