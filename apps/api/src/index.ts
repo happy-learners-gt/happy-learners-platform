@@ -17,7 +17,7 @@ export { LessonCollaborationRoom };
 
 const headers = {
   "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer",
-  "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' wss: ws:; frame-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+  "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' wss: ws:; frame-src 'self' blob:; media-src 'self' blob:; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 };
 function json(data: unknown, status = 200, extra: Record<string, string> = {}) {
@@ -176,7 +176,7 @@ export default {
     catch (error) {
       if (error instanceof Error && error.message === "INPUT") return json({ error: "Revisa los datos del formulario." }, 400);
       const cause = error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 240) : "Unknown error";
-      console.error(JSON.stringify({ event: "request_failed", code: "DEPENDENCY_UNAVAILABLE", release: "0.2.5", sha, cause }));
+      console.error(JSON.stringify({ event: "request_failed", code: "DEPENDENCY_UNAVAILABLE", release: "0.2.6", sha, cause }));
       return json({ error: "El servicio no está disponible. Vuelve a intentar en un momento." }, 503, { "Retry-After": "30" });
     }
   },
