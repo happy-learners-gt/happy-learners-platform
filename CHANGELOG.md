@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.5 — 2026-10-01
+
+- Migración `0010_remove_legacy_e2e_records.sql`: elimina de la demo pública los registros de una ejecución E2E antigua (2 unidades, 2 lecciones con sus 2 finalizaciones, 2 niveles, 2 módulos y 2 recursos con sufijo `desktop-1790700257067` / `mobile-1790700278802`). Borrado autorizado el 2026-10-01; la copia previa se adjunta a la release.
+
 ## 0.2.4 — 2026-09-30
 
 Tema visual moderno (HL-44 / ST-041). Sin cambios de API ni datos.

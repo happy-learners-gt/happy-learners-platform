@@ -8,6 +8,7 @@ import greetingsMigration from "../../../database/migrations/0006_greetings_seed
 import coursesMigration from "../../../database/migrations/0007_courses.sql";
 import attendanceMigration from "../../../database/migrations/0008_classroom_attendance.sql";
 import filesMigration from "../../../database/migrations/0009_course_files.sql";
+import legacyE2eMigration from "../../../database/migrations/0010_remove_legacy_e2e_records.sql";
 
 type Statement = { sql: string; values: (string | number | null)[] };
 // One SQLite object per organization; only the Worker holds this binding.
@@ -46,6 +47,7 @@ export class OrganizationStore extends DurableObject<Env> {
       if (!applied.length || applied[0].version < 7) { this.ctx.storage.sql.exec(coursesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (7,?)", scope); }
       if (!applied.length || applied[0].version < 8) { this.ctx.storage.sql.exec(attendanceMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (8,?)", scope); }
       if (!applied.length || applied[0].version < 9) { this.ctx.storage.sql.exec(filesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (9,?)", scope); }
+      if (!applied.length || applied[0].version < 10) { this.ctx.storage.sql.exec(legacyE2eMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (10,?)", scope); }
       // Compare-and-write plus dependent writes belong to one SQLite transaction.
       if (guard && !this.ctx.storage.sql.exec(guard.sql, ...guard.values).toArray().length) return [];
       return statements.map(statement => this.ctx.storage.sql.exec(statement.sql, ...statement.values).toArray());
