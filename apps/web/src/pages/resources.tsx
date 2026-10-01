@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { Lesson, Material, Resource, Taxonomy } from "@happy-learners/contracts";
-import { api, message, officeAccept, uploadCourseFile } from "../api";
+import { api, fileAccept, message, uploadCourseFile } from "../api";
 import { Link } from "../navigation";
 import { resourceStatusLabel } from "../model";
-import { OfficePreview } from "../OfficePreview";
+import { FileViewer } from "../FileViewer";
 import type { LibraryItem } from "../ui/cards";
 import { Modal } from "../ui/feedback";
 import { Icon } from "../ui/icons";
@@ -17,14 +17,14 @@ export function legacyItem(resource: Resource, usedIn: number): LibraryItem {
 
 export function ResourcePreview({ item, lessons, onClose, onEdit }: { item: LibraryItem; lessons: Lesson[]; onClose: () => void; onEdit?: () => void }) {
   const fileUrl = item.fileId ? `/api/courses/${item.courseId}/files/${item.fileId}/content` : "";
-  return <Modal title={item.title} onClose={onClose} wide footer={<>
-    {item.fileId && <a className="button secondary" href={fileUrl} download={item.fileName}><Icon name="download" size={18}/>Descargar original</a>}
+  const isFile = item.kind === "file" && !!item.fileId;
+  return <Modal title={item.title} onClose={onClose} wide size={isFile ? "viewer" : undefined} footer={<>
     {item.kind === "link" && <a className="button secondary" href={item.content} target="_blank" rel="noopener noreferrer"><Icon name="link" size={18}/>Abrir enlace</a>}
     {onEdit && <button type="button" className="button secondary" onClick={onEdit}><Icon name="edit" size={18}/>Editar</button>}
     <button type="button" className="button primary" onClick={onClose}>Cerrar</button>
   </>}>
     {item.description && item.kind !== "file" && <p className="muted">{item.description}</p>}
-    {item.kind === "file" && item.fileId ? <OfficePreview url={fileUrl} name={item.fileName || item.title} mediaType={item.mediaType}/>
+    {isFile ? <FileViewer url={fileUrl} name={item.fileName || item.title} fill/>
       : item.kind === "link" ? <p className="preview-link"><Icon name="link" size={18}/><span>{item.content}</span></p>
       : <div className="preview-text">{item.content}</div>}
     <div className="usage"><h3>Uso en lecciones</h3>{lessons.length ? <ul>{lessons.map(lesson => <li key={lesson.id}><Link href={`/cursos/${lesson.courseId}/lecciones/${lesson.id}`}>{lesson.title}</Link></li>)}</ul> : <p className="muted">Aún no se usa en ninguna lección. Agrégalo como actividad “Recurso” desde el editor de lección.</p>}</div>
@@ -45,7 +45,7 @@ export function ResourceForm({ courseId, item, onClose, onSaved }: { courseId: s
     try {
       if (kind === "file") {
         const file = data.get("file");
-        if (!(file instanceof File) || !file.size) throw new Error("Elige un archivo DOCX, PPTX o XLSX.");
+        if (!(file instanceof File) || !file.size) throw new Error("Elige un archivo para subir.");
         await uploadCourseFile(courseId, file, file.name);
         await onSaved(`«${file.name}» se agregó a la biblioteca del curso.`);
       } else {
@@ -63,7 +63,7 @@ export function ResourceForm({ courseId, item, onClose, onSaved }: { courseId: s
         {([["text", "Texto"], ["link", "Enlace"], ["file", "Documento"]] as const).map(([value, label]) => <label key={value}><input type="radio" name="kind" checked={kind === value} onChange={() => setKind(value)}/><span>{label}</span></label>)}
       </div></fieldset>}
       <fieldset disabled={busy} className="stack">
-        {kind === "file" ? <Field label="Archivo" hint="DOCX, PPTX o XLSX de hasta 15 MB. Es privado: solo lo reciben estudiantes si forma parte de una lección publicada."><input name="file" type="file" accept={officeAccept} required/></Field> : <>
+        {kind === "file" ? <Field label="Archivo" hint="Presentaciones, documentos y hojas (PPTX, DOCX, XLSX) hasta 15 MB; PDF hasta 25 MB; video MP4 o WebM hasta 100 MB. Es privado: solo lo reciben estudiantes dentro de una lección publicada."><input name="file" type="file" accept={fileAccept} required/></Field> : <>
           <Field label="Título"><input name="title" required maxLength={160} defaultValue={item?.title}/></Field>
           <Field label="Descripción breve"><input name="description" required maxLength={1000} defaultValue={item?.description} placeholder="Para qué sirve en clase"/></Field>
           {kind === "link"

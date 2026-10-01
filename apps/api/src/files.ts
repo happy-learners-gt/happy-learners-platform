@@ -9,11 +9,41 @@ const formats = {
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  pdf: "application/pdf",
+  mp4: "video/mp4",
+  webm: "video/webm",
 } as const;
 type Extension = keyof typeof formats;
+type StreamedExtension = "pdf" | "mp4" | "webm";
+/** PDF and video are streamed to R2 without buffering; R2 verifies the client-computed SHA-256. */
+const streamedLimits: Record<StreamedExtension, number> = { pdf: 25 * 1024 * 1024, mp4: 100 * 1024 * 1024, webm: 100 * 1024 * 1024 };
+const isStreamed = (extension: Extension): extension is StreamedExtension => extension in streamedLimits;
+/** Leading bytes each format must start with: "%PDF-", an ISO-BMFF "ftyp" box, or the EBML header. */
+function validSignature(extension: StreamedExtension, head: Uint8Array) {
+  if (extension === "pdf") return head.length >= 5 && String.fromCharCode(...head.subarray(0, 5)) === "%PDF-";
+  if (extension === "mp4") return head.length >= 8 && String.fromCharCode(...head.subarray(4, 8)) === "ftyp";
+  return head.length >= 4 && head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3;
+}
+/** Passes chunks through unchanged after checking the leading bytes, so the Worker never copies the body. */
+function signatureCheck(extension: StreamedExtension) {
+  let head = new Uint8Array(0), checked = false;
+  return new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      if (!checked) {
+        const joined = new Uint8Array(head.length + chunk.length); joined.set(head); joined.set(chunk, head.length); head = joined.subarray(0, 16);
+        if (joined.length >= 8 || (extension === "webm" && joined.length >= 4) || (extension === "pdf" && joined.length >= 5)) {
+          checked = true;
+          if (!validSignature(extension, joined)) { controller.error(new Error("SIGNATURE")); return; }
+        }
+      }
+      controller.enqueue(chunk);
+    },
+    flush(controller) { if (!checked && !validSignature(extension, head)) controller.error(new Error("SIGNATURE")); },
+  });
+}
 type FileRow = { id: string; course_id: string; courseId: string; title: string; original_name: string; extension: Extension; media_type: string; size_bytes: number; sha256: string; status: "uploading" | "ready" | "archived"; created_at: string; updated_at: string; object_key: string };
 const fileColumns = "id,course_id AS courseId,substr(original_name,1,length(original_name)-length(extension)-1) AS title,original_name,extension,media_type,size_bytes,sha256,status,created_at,updated_at";
-const contentTypes: Record<Extension, string> = {
+const contentTypes: Record<"docx" | "pptx" | "xlsx", string> = {
   docx: "word/document.xml",
   pptx: "ppt/presentation.xml",
   xlsx: "xl/workbook.xml",
@@ -50,7 +80,7 @@ async function readBounded(request: Request): Promise<Uint8Array | null> {
   return bytes;
 }
 
-function validateOfficeZip(bytes: Uint8Array, extension: Extension): boolean {
+function validateOfficeZip(bytes: Uint8Array, extension: "docx" | "pptx" | "xlsx"): boolean {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const start = Math.max(0, bytes.length - 22 - 65_535);
   let eocd = -1;
@@ -105,7 +135,8 @@ export async function courseFiles(path: string, method: string, request: Request
     const uploadKey = request.headers.get("Idempotency-Key") || "";
     const mediaType = request.headers.get("Content-Type") || "";
     const extension = name?.split(".").pop()?.toLowerCase() as Extension | undefined;
-    if (!name || !extension || !(extension in formats) || formats[extension] !== mediaType || !/^[0-9a-f-]{36}$/i.test(uploadKey)) return reply({ error: "Sube un archivo DOCX, PPTX o XLSX válido e inténtalo de nuevo." }, 400);
+    if (!name || !extension || !(extension in formats) || formats[extension] !== mediaType || !/^[0-9a-f-]{36}$/i.test(uploadKey)) return reply({ error: "Sube un archivo DOCX, PPTX, XLSX, PDF, MP4 o WebM válido e inténtalo de nuevo." }, 400);
+    if (isStreamed(extension)) return streamedUpload(request, { courseId, name, extension, mediaType, uploadKey }, current, db, bucket);
     const bytes = await readBounded(request);
     if (!bytes || !validateOfficeZip(bytes, extension)) return reply({ error: "El archivo no es un paquete Office válido, supera el límite de 15 MB o contiene partes no permitidas." }, 400);
     const hashBytes = await crypto.subtle.digest("SHA-256", bytes);
@@ -149,6 +180,41 @@ export async function courseFiles(path: string, method: string, request: Request
   if (!object) return reply({ error: "No se encontró el archivo almacenado." }, 404);
   if (object.size !== row.size_bytes || object.customMetadata?.sha256 !== row.sha256 || object.customMetadata?.courseId !== courseId || object.customMetadata?.organizationId !== current.organizationId) return reply({ error: "La copia almacenada no pasó la verificación de integridad." }, 503);
   return new Response(object.body, { headers: { "Cache-Control": "private, no-store", "Content-Type": "application/octet-stream", "Content-Length": String(row.size_bytes), "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(row.original_name)}`, "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "sandbox; default-src 'none'", "Cross-Origin-Resource-Policy": "same-origin", "X-File-SHA256": row.sha256 } });
+}
+
+async function streamedUpload(request: Request, file: { courseId: string; name: string; extension: StreamedExtension; mediaType: string; uploadKey: string }, current: Member, db: Database, bucket: R2Bucket): Promise<Response> {
+  const { courseId, name, extension, mediaType, uploadKey } = file;
+  const limit = streamedLimits[extension];
+  const size = Number(request.headers.get("Content-Length"));
+  const sha256 = (request.headers.get("X-File-SHA256") || "").toLowerCase();
+  const label = extension === "pdf" ? "El PDF" : "El video";
+  if (!Number.isSafeInteger(size) || size < 1 || size > limit || !request.body) return reply({ error: `${label} debe pesar como máximo ${limit / 1024 / 1024} MB.` }, 400);
+  if (!/^[0-9a-f]{64}$/.test(sha256)) return reply({ error: "Falta la huella del archivo. Recarga la página e inténtalo de nuevo." }, 400);
+  const existing = await db.prepare(`SELECT ${fileColumns},object_key FROM course_files WHERE course_id=? AND upload_key=? AND organization_id=?`).bind(courseId, uploadKey, current.organizationId).first<FileRow>();
+  if (existing && (existing.sha256 !== sha256 || existing.original_name !== name)) return reply({ error: "La clave de carga ya se usó para otro archivo." }, 409);
+  if (existing?.status === "ready") return reply({ file: fileView(existing) });
+  const now = new Date().toISOString();
+  const id = existing?.id || `course-file-${crypto.randomUUID()}`, objectKey = existing?.object_key || `${current.organizationId}/${courseId}/${crypto.randomUUID()}`;
+  if (!existing) {
+    const reserved = await db.guardedBatch(
+      db.prepare("SELECT 1 AS within_quota WHERE COALESCE((SELECT SUM(size_bytes) FROM course_files WHERE organization_id=?),0)+?<=?").bind(current.organizationId, size, MAX_ORGANIZATION_BYTES),
+      [db.prepare("INSERT INTO course_files(id,organization_id,course_id,upload_key,object_key,original_name,extension,media_type,size_bytes,sha256,status,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,'uploading',?,?,?) ON CONFLICT(course_id,upload_key) DO NOTHING RETURNING id")
+        .bind(id, current.organizationId, courseId, uploadKey, objectKey, name, extension, mediaType, size, sha256, current.id, now, now)],
+    );
+    if (!reserved) return reply({ error: "El curso alcanzó el límite de 4 GiB de archivos. Archiva o revisa el espacio disponible antes de cargar más." }, 413);
+  }
+  const body = new FixedLengthStream(size);
+  const piping = request.body.pipeThrough(signatureCheck(extension)).pipeTo(body.writable);
+  try {
+    await Promise.all([piping, bucket.put(objectKey, body.readable, { sha256, httpMetadata: { contentType: "application/octet-stream" }, customMetadata: { sha256, courseId, organizationId: current.organizationId } })]);
+  } catch (error) {
+    await db.prepare("DELETE FROM course_files WHERE id=? AND organization_id=? AND status='uploading'").bind(id, current.organizationId).run();
+    const signature = error instanceof Error && error.message === "SIGNATURE";
+    return reply({ error: signature ? `El archivo no es un ${extension === "pdf" ? "PDF" : `video ${extension.toUpperCase()}`} válido. Revisa que no esté dañado o renombrado.` : "No se pudo guardar el archivo: el contenido no coincide con su huella o la carga se interrumpió. Vuelve a intentarlo." }, 400);
+  }
+  const saved = await db.prepare(`UPDATE course_files SET status='ready',updated_at=? WHERE id=? AND organization_id=? AND sha256=? RETURNING ${fileColumns},object_key`).bind(new Date().toISOString(), id, current.organizationId, sha256).first<FileRow>();
+  if (!saved) return reply({ error: "El archivo se almacenó, pero no se pudo confirmar. Reintenta con la misma clave de carga." }, 503);
+  return reply({ file: fileView(saved) }, existing ? 200 : 201);
 }
 
 export async function filesFor(db: Database, organizationId: string, courseId?: string): Promise<Material[]> {

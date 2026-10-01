@@ -41,7 +41,7 @@ export function useFeedback() {
 }
 
 /** Modal built on the native dialog element: focus is contained, Escape cancels and focus returns afterwards. */
-export function Modal({ title, children, onClose, footer, wide }: { title: string; children: ReactNode; onClose: () => void; footer?: ReactNode; wide?: boolean }) {
+export function Modal({ title, children, onClose, footer, wide, size }: { title: string; children: ReactNode; onClose: () => void; footer?: ReactNode; wide?: boolean; size?: "viewer" }) {
   const ref = useRef<HTMLDialogElement>(null), titleId = useId();
   useEffect(() => {
     const element = ref.current, previous = document.activeElement as HTMLElement | null;
@@ -51,7 +51,7 @@ export function Modal({ title, children, onClose, footer, wide }: { title: strin
     element?.querySelector<HTMLElement>("[data-autofocus], .modal-body input:not([type=hidden]), .modal-body select, .modal-body textarea")?.focus();
     return () => { previous?.focus?.(); };
   }, []);
-  return <dialog ref={ref} className={`modal${wide ? " wide" : ""}`} aria-labelledby={titleId} onCancel={event => { event.preventDefault(); onClose(); }}>
+  return <dialog ref={ref} className={`modal${wide ? " wide" : ""}${size ? ` ${size}` : ""}`} aria-labelledby={titleId} onCancel={event => { event.preventDefault(); onClose(); }}>
     <div className="modal-header"><h2 id={titleId}>{title}</h2><button type="button" className="icon-button" aria-label="Cerrar" onClick={onClose}><Icon name="close"/></button></div>
     <div className="modal-body">{children}</div>
     {footer && <div className="modal-footer">{footer}</div>}
