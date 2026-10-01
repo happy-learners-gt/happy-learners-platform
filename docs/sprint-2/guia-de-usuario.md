@@ -30,8 +30,10 @@ Desde el listado de cursos puedes **Duplicar** un curso (unidades, recursos y le
 
 El editor muestra el título, el estado (Borrador, Publicada, Cambios sin publicar o Archivada) y el indicador de guardado.
 
-- La lección es un lienzo: **Detalles** (objetivo, unidad, duración y publicación) y después todas las actividades, una debajo de otra.
-- Entre dos actividades, y al final, puedes insertar **Contenido**, **Recurso** o **Pregunta** justo en ese punto. El menú **⋯** de cada actividad la mueve, la convierte en otro tipo o la elimina; el índice de la izquierda lleva a cada una.
+- La lección es un lienzo: **Detalles** (objetivo, secuencia didáctica, unidad, duración y publicación) y después los **momentos** de la secuencia con sus actividades.
+- La **secuencia didáctica** ordena la clase: Inicio · Desarrollo · Cierre, 5E, Presentación · Práctica · Producción, Demostración · Práctica guiada · Práctica independiente, o Libre. Cada momento explica para qué sirve y suma sus minutos.
+- Al final de cada momento puedes agregar una actividad que empieza con **Contenido**, **Recurso** o **Pregunta**. Las flechas del índice suben o bajan la actividad y la pasan al momento anterior o siguiente; el menú **⋯** la mueve a cualquier momento o la elimina.
+- Cada actividad tiene **Propósito**, **Organización**, minutos y bloques. Con **Agregar bloque** sumas texto, un recurso, una pregunta o una **Nota para el docente**. Las notas nunca llegan a los estudiantes.
 - La barra de formato de arriba actúa sobre el texto que estés editando.
 - Todo se guarda solo como **borrador** ("Borrador guardado"). Si falta algo obligatorio, el indicador dice qué falta y **Revisar** te lleva al lugar.
 - Si otra persona abre la misma lección, el texto se sincroniza en vivo y aparece “También editando”.
@@ -56,7 +58,7 @@ Solo el equipo docente del curso ve estos registros. No agregues correos, teléf
 
 ## Para estudiantes
 
-La lección muestra una actividad a la vez con su avance. Usa **Anterior** y **Siguiente**; al final, **Terminar lección**. No se guardan nombres ni respuestas; solo se cuenta cuántas veces se terminó.
+La lección empieza con lo que aprenderás y sus momentos, y después muestra una actividad a la vez con su momento, propósito y avance. Usa **Anterior** y **Siguiente**; al final, **Terminar lección**. No se guardan nombres ni respuestas; solo se cuenta cuántas veces se terminó.
 
 ## Administración
 

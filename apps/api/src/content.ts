@@ -1,5 +1,5 @@
 import type { Activity, Lesson, Member, Resource } from "@happy-learners/contracts";
-import { validActivities } from "@happy-learners/domain";
+import { blocksOf, resourceIdsOf, sequenceTemplates, studentActivities, validActivities } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { materialsFor } from "./courses";
 import { filesFor } from "./files";
@@ -60,10 +60,11 @@ export async function content(url: URL, method: string, input: unknown, current:
     const lesson = JSON.parse(row.content) as Lesson;
     if (!lesson.title.trim() || !lesson.objective.trim() || !lesson.activities.length) return reply({ error: "Completa título, objetivo y al menos una actividad." }, 400);
     const library = [...await resources(db, current.organizationId), ...await materialsFor(db, current.organizationId), ...await filesFor(db, current.organizationId)];
-    const resourceIds = [...new Set(lesson.activities.flatMap(a => a.type === "resource" && a.resourceId ? [a.resourceId] : []))];
+    const resourceIds = resourceIdsOf(lesson.activities);
     if (resourceIds.some(rid => !library.some(r => r.id === rid))) return reply({ error: "Hay un recurso no disponible. Revisa las actividades." }, 400);
     if (row.archived) return reply({ error: "Restaura la lección antes de publicarla." }, 409);
-    const published = { ...lesson, resources: resourceIds.map(rid => library.find(r => r.id === rid)!), publishedAt: new Date().toISOString(), revision: row.revision + 1 };
+    // Teacher notes stay in the draft; students only receive what is meant for them.
+    const published = { ...lesson, activities: studentActivities(lesson.activities), resources: resourceIds.map(rid => library.find(r => r.id === rid)!), publishedAt: new Date().toISOString(), revision: row.revision + 1 };
     const written = await db.prepare("UPDATE lessons SET published_content=?,published_version=draft_version,revision=revision+1,status='published' WHERE id=? AND draft_version=? RETURNING id").bind(JSON.stringify(published), row.id, row.draft_version).first();
     return written ? reply({ lesson: published }) : reply({ error: "El borrador cambió. Recarga y vuelve a publicar." }, 409);
   }
@@ -80,16 +81,25 @@ export async function content(url: URL, method: string, input: unknown, current:
   const old = row ? JSON.parse(row.content) as Lesson : null;
   const lid = id || `lesson-${crypto.randomUUID()}`;
   const lesson: Lesson = { id: lid, title: v.title.trim(), objective: v.objective.trim(), program: unit.name, ...(generic ? { courseId: unit.courseId, courseUnitId: unit.id } : { unitId: unit.id }), duration: typeof v.duration === "number" && v.duration > 0 && v.duration <= 300 ? v.duration : 20, materials: old?.materials || [], reflection: old?.reflection || "¿Qué aprendiste y cómo lo aplicarías?", activities: [{ title: "Instrucciones", minutes: 20, instructions: v.instructions }], publishedAt: old?.publishedAt || "", shareCode: old?.shareCode || (current.organizationId === "org-other" ? "O-" : "D-") + crypto.randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase() };
+  // The didactic sequence is a known template or, when not sent, the one the lesson already had.
+  const sequence = sequenceTemplates.some(template => template.value === v.sequence) ? v.sequence as Lesson["sequence"] : old?.sequence;
+  if (sequence) lesson.sequence = sequence;
   const now = new Date().toISOString();
   if (v.activities !== undefined) {
     if (!validActivities(v.activities)) return reply({ error: "Revisa las actividades: título, instrucciones, tipo y posiciones consecutivas desde cero; cada pregunta requiere opciones distintas y una respuesta válida." }, 400);
-    lesson.activities = (v.activities as Activity[]).map(a => ({ id: a.id, type: a.type, position: a.position, title: a.title, instructions: a.instructions, ...(a.richContent ? { richContent: a.richContent } : {}), minutes: a.minutes, ...(a.type === "resource" ? { resourceId: a.resourceId } : {}), ...(a.type === "question" ? { options: a.options, answer: a.answer } : {}) }));
+    // Only known fields are stored, whatever else the client sends.
+    lesson.activities = (v.activities as Activity[]).map(a => ({
+      id: a.id, position: a.position, title: a.title, minutes: a.minutes,
+      ...(a.phase ? { phase: a.phase } : {}), ...(a.purpose ? { purpose: a.purpose } : {}), ...(a.grouping ? { grouping: a.grouping } : {}),
+      ...(a.blocks ? { instructions: "", blocks: a.blocks.map(b => ({ id: b.id, kind: b.kind, ...(b.instructions ? { instructions: b.instructions } : {}), ...(b.richContent ? { richContent: b.richContent } : {}), ...(b.kind === "resource" ? { resourceId: b.resourceId } : {}), ...(b.kind === "question" ? { options: b.options, answer: b.answer } : {}) })) }
+        : { type: a.type, instructions: a.instructions, ...(a.richContent ? { richContent: a.richContent } : {}), ...(a.type === "resource" ? { resourceId: a.resourceId } : {}), ...(a.type === "question" ? { options: a.options, answer: a.answer } : {}) }),
+    }));
   } else if (old) lesson.activities = old.activities;
   const library = [...await resources(db, current.organizationId), ...await materialsFor(db, current.organizationId), ...await filesFor(db, current.organizationId)];
-  for (const activity of lesson.activities) {
-    if (activity.type !== "resource") continue;
-    const resource = library.find(r => r.id === activity.resourceId);
-    const alreadyLinked = old?.activities.some(a => a.resourceId === activity.resourceId);
+  const previouslyLinked = new Set(old ? resourceIdsOf(old.activities) : []);
+  for (const resourceId of resourceIdsOf(lesson.activities)) {
+    const resource = library.find(r => r.id === resourceId);
+    const alreadyLinked = previouslyLinked.has(resourceId);
     if (!resource || (resource.status === "archived" && !alreadyLinked)) return reply({ error: "Selecciona un recurso activo de tu organización." }, 400);
     if ("courseId" in resource && resource.courseId !== unit.courseId) return reply({ error: "El material pertenece a otro curso. No se puede vincular directamente." }, 400);
   }
