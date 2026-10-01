@@ -56,6 +56,21 @@ it("serves the exact checkout SHA even for browser navigation", async () => {
   expect(response.headers.get("cache-control")).toBe("no-store");
   expect(await response.json()).toEqual({ sha: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim() });
 });
+it("pages carry the same security headers as the API, including deep links", async () => {
+  const api = await fetch(`${origin}/api/health`);
+  const policy = api.headers.get("content-security-policy");
+  expect(policy).toContain("default-src 'self'");
+  for (const path of ["/", "/inicio", "/cursos/course-exploradores/contenido", "/aprender/GREETINGS"]) {
+    const page = await fetch(origin + path, { headers: { "Sec-Fetch-Mode": "navigate" } });
+    expect(page.headers.get("content-type"), path).toContain("text/html");
+    expect(page.headers.get("content-security-policy"), path).toBe(policy);
+    expect(page.headers.get("x-content-type-options"), path).toBe("nosniff");
+    expect(page.headers.get("referrer-policy"), path).toBe("no-referrer");
+    expect(page.headers.get("x-frame-options"), path).toBe("DENY");
+  }
+  // The headers file configures responses; it is never served as content.
+  expect((await fetch(`${origin}/_headers`)).headers.get("content-type")).toContain("text/html");
+});
 it("serves HTML and its built JavaScript and CSS through Static Assets", async () => {
   const response = await fetch(origin);
   expect(response.status).toBe(200);
