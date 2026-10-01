@@ -210,7 +210,7 @@ async function streamedUpload(request: Request, file: { courseId: string; name: 
   } catch (error) {
     await db.prepare("DELETE FROM course_files WHERE id=? AND organization_id=? AND status='uploading'").bind(id, current.organizationId).run();
     const signature = error instanceof Error && error.message === "SIGNATURE";
-    return reply({ error: signature ? `${label} no tiene un formato ${extension.toUpperCase()} válido.` : "No se pudo guardar el archivo: el contenido no coincide con su huella o la carga se interrumpió. Vuelve a intentarlo." }, 400);
+    return reply({ error: signature ? `El archivo no es un ${extension === "pdf" ? "PDF" : `video ${extension.toUpperCase()}`} válido. Revisa que no esté dañado o renombrado.` : "No se pudo guardar el archivo: el contenido no coincide con su huella o la carga se interrumpió. Vuelve a intentarlo." }, 400);
   }
   const saved = await db.prepare(`UPDATE course_files SET status='ready',updated_at=? WHERE id=? AND organization_id=? AND sha256=? RETURNING ${fileColumns},object_key`).bind(new Date().toISOString(), id, current.organizationId, sha256).first<FileRow>();
   if (!saved) return reply({ error: "El archivo se almacenó, pero no se pudo confirmar. Reintenta con la misma clave de carga." }, 503);
