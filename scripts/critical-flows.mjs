@@ -14,7 +14,8 @@ try {
   await check("anonymous_denied", async () => assert((await call("/api/organization")).status === 401));
   await check("login", async () => { const response = await call("/api/login", "POST", { username: "instructor-demo", password: "Aprender-2026!" }); assert(response.ok); const value = response.headers.get("set-cookie"); assert(value?.includes("HttpOnly") && value.includes("Secure")); cookie = value.split(";")[0]; });
   await check("organization", async () => { const data = await (await call("/api/organization")).json(); assert(data.organization.id === "org-demo"); });
-  await check("published_lesson", async () => { const response = await call("/api/lessons/colores-en-equipo"); assert(response.ok); assert((await response.json()).lesson.activities.length === 3); });
+  // Educators edit the demo lesson in production, so check its shape, not a fixed number of activities.
+  await check("published_lesson", async () => { const response = await call("/api/lessons/colores-en-equipo"); assert(response.ok); const { lesson } = await response.json(); assert(lesson.revision >= 1 && lesson.activities.length >= 1 && lesson.activities.every(activity => typeof activity.title === "string" && activity.title)); });
   await check("errors", async () => assert((await call("/api/not-found")).status === 404));
   await check("logout_revocation", async () => { assert((await call("/api/logout", "POST")).ok); assert((await call("/api/session")).status === 401); cookie = ""; });
   success = true;
