@@ -11,6 +11,12 @@ Secuencia didáctica y actividades compuestas (HL-44 / ST-041). Primera de dos f
 - El estudiante ve los momentos de la lección al empezar, el momento de cada actividad, su propósito y organización, y todos los bloques en orden.
 - Compatibilidad: las actividades anteriores se leen como un bloque que conserva su ID, su texto colaborativo y su recurso; no hay migración de datos.
 
+## 0.2.7 — 2026-10-01
+
+- Seguridad: las páginas HTML reciben la misma Content-Security-Policy y cabeceras de seguridad que la API (`apps/web/public/_headers`). Antes, Workers Static Assets servía las páginas sin CSP porque solo `/api/*` pasa por el Worker.
+- `font-src 'self' data:` permite las subfuentes que el build incrusta.
+- Las pruebas E2E fallan si el navegador bloquea algo por CSP, y una prueba del paquete exige que la política de páginas y API sea idéntica.
+
 ## 0.2.6 — 2026-10-01
 
 - Editor de lección como lienzo continuo: todas las actividades una tras otra, con puntos para insertar contenido, recurso o pregunta en cualquier posición y una sola barra de formato fija. El autoguardado indica "Borrador guardado"; los estudiantes ven la versión publicada hasta que publiques.
