@@ -6,7 +6,21 @@ export interface Level { id: string; name: string; description: string; position
 export interface Unit { id: string; levelId: string; name: string; objective: string; position: number; status: "active" | "archived"; updatedAt: string }
 export interface RichTextNode { type: string; text?: string; attrs?: Record<string, string | number | boolean | null>; marks?: { type: string; attrs?: Record<string, string | number | boolean | null> }[]; content?: RichTextNode[] }
 export interface RichTextDocument { type: "doc"; content: RichTextNode[] }
-export interface Activity { id?: string; type?: "text" | "resource" | "question"; position?: number; title: string; minutes: number; instructions: string; richContent?: RichTextDocument; resourceId?: string; options?: string[]; answer?: number }
+/** One piece of an activity. Teacher notes guide the educator and are never published to students. */
+export interface ActivityBlock { id: string; kind: "text" | "resource" | "question" | "teacher-note"; instructions?: string; richContent?: RichTextDocument; resourceId?: string; options?: string[]; answer?: number }
+export type ActivityPurpose = "explain" | "explore" | "practice" | "assess" | "reflect";
+export type ActivityGrouping = "individual" | "pairs" | "teams" | "whole-class";
+export type SequenceTemplate = "free" | "start-develop-close" | "five-e" | "ppp" | "workshop";
+/**
+ * A step of a lesson: what learners do, why (purpose), how (grouping) and in which moment of the sequence.
+ * Older activities have a single typed body (type, instructions, richContent, resourceId, options, answer);
+ * they are read as one block whose id is the activity id.
+ */
+export interface Activity {
+  id?: string; position?: number; title: string; minutes: number;
+  phase?: string; purpose?: ActivityPurpose; grouping?: ActivityGrouping; blocks?: ActivityBlock[];
+  type?: "text" | "resource" | "question"; instructions: string; richContent?: RichTextDocument; resourceId?: string; options?: string[]; answer?: number;
+}
 export interface Lesson {
   id: string; title: string; program: string; duration: number; objective: string;
   materials: string[]; activities: Activity[];
@@ -15,6 +29,7 @@ export interface Lesson {
   revision?: number; draftVersion?: number; hasDraft?: boolean; updatedAt?: string; shareCode?: string; completions?: number;
   resources?: (Resource | Material)[];
   courseId?: string; courseUnitId?: string;
+  sequence?: SequenceTemplate;
 }
 export type ResourceSkill = "lectura" | "escritura" | "escucha" | "conversación";
 export interface Resource { id: string; title: string; description: string; level: string; skill: ResourceSkill; topic: string; tags: string[]; content: string; status: "draft" | "published" | "archived"; kind?: "text" | "link"; updatedAt?: string; }

@@ -1,3 +1,4 @@
+import { defaultSequence } from "@happy-learners/domain";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { LearningUnit, Lesson } from "@happy-learners/contracts";
@@ -63,7 +64,7 @@ export function Content() {
     },
     createLesson: async (unit, title, objective) => {
       try {
-        const { lesson } = await api<{ lesson: Lesson }>("/lessons", "POST", { title, objective, courseId: course.id, courseUnitId: unit.id, duration: 20, instructions: "" });
+        const { lesson } = await api<{ lesson: Lesson }>("/lessons", "POST", { title, objective, courseId: course.id, courseUnitId: unit.id, duration: 20, instructions: "", sequence: defaultSequence[course.profile] });
         await reload();
         toast({ message: "Lección creada como borrador. Agrega sus actividades." });
         navigate(`${base}/lecciones/${lesson.id}`);

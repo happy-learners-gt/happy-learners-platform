@@ -1,4 +1,5 @@
-import type { Activity, Course, LearningUnit, Lesson, Material, RichTextDocument, RichTextNode } from "@happy-learners/contracts";
+import type { Activity, ActivityBlock, Course, LearningUnit, Lesson, Material, RichTextDocument, RichTextNode, SequenceTemplate } from "@happy-learners/contracts";
+import { blocksOf, phaseOf, resourceIdsOf, sequenceOf } from "@happy-learners/domain";
 import { api, uploadCourseFile } from "./api";
 
 export type LessonState = "draft" | "published" | "changes" | "archived";
@@ -11,7 +12,7 @@ export const lessonStateLabel: Record<LessonState, string> = { draft: "Borrador"
 
 export const resourceKindLabel: Record<Material["kind"] | "legacy", string> = { text: "Texto", link: "Enlace", file: "Documento", legacy: "Texto" };
 export function resourceStatusLabel(status: Material["status"]) { return status === "archived" ? "Archivado" : status === "draft" ? "Borrador" : "Disponible"; }
-export const activityTypeLabel: Record<NonNullable<Activity["type"]>, string> = { text: "Contenido", resource: "Recurso", question: "Pregunta" };
+export const blockKindLabel: Record<ActivityBlock["kind"], string> = { text: "Texto", resource: "Recurso", question: "Pregunta", "teacher-note": "Nota para el docente" };
 
 /** Colour families from theme.css. Colour always accompanies text or an icon; it never carries meaning alone. */
 export type Hue = "violet" | "coral" | "amber" | "teal" | "sky" | "pink" | "green";
@@ -23,7 +24,9 @@ export function hueFor(key: string): Hue {
   return hues[hash % hues.length];
 }
 export const hueAt = (index: number): Hue => hues[index % hues.length];
-export const activityHue: Record<NonNullable<Activity["type"]>, Hue> = { text: "sky", resource: "teal", question: "pink" };
+export const blockHue: Record<ActivityBlock["kind"], Hue> = { text: "sky", resource: "teal", question: "pink", "teacher-note": "amber" };
+/** Moments of a sequence take colours in order, so the editor, outline and player show the same moment alike. */
+export const phaseHue = (index: number): Hue => (["violet", "sky", "teal", "coral", "green"] as const)[index % 5];
 export const resourceHue: Record<Material["kind"], Hue> = { text: "sky", link: "coral", file: "amber" };
 
 const relative = new Intl.RelativeTimeFormat("es", { numeric: "auto" });
@@ -66,21 +69,39 @@ export function plainText(node?: RichTextDocument | RichTextNode): string {
 }
 
 /**
- * Older lessons stored activities without IDs or types; the editor and the API require both.
- * Missing IDs are derived from the position so every editor and every visit uses the same collaborative field.
+ * The editor always works with composite activities: an ID, a moment of the sequence and ordered blocks.
+ * Older activities (one typed body, sometimes without ID) become one block that keeps the activity ID, so
+ * their collaborative text and public links are preserved. Missing IDs come from the position.
  */
-export function normalizeActivities(activities: Activity[]): Activity[] {
-  return activities.map((activity, position) => ({ ...activity, id: activity.id || `activity-${position + 1}`, type: activity.type || "text", position }));
+export function normalizeActivities(activities: Activity[], sequence?: SequenceTemplate): Activity[] {
+  return orderByPhase(activities.map((activity, position) => {
+    const id = activity.id || `activity-${position + 1}`;
+    const { type: _type, richContent: _rich, resourceId: _resource, options: _options, answer: _answer, ...rest } = activity;
+    return { ...rest, id, position, instructions: "", phase: phaseOf(activity, sequence), blocks: blocksOf({ ...activity, id }) };
+  }), sequence);
 }
+/** Activities in the order of the moments; inside a moment they keep their order. */
+export function orderByPhase(activities: Activity[], sequence?: SequenceTemplate) {
+  const ids = sequenceOf(sequence).phases.map(phase => phase.id);
+  return activities.map((activity, index) => ({ activity, index })).sort((a, b) => ids.indexOf(phaseOf(a.activity, sequence)) - ids.indexOf(phaseOf(b.activity, sequence)) || a.index - b.index).map(item => item.activity);
+}
+/** Switching templates keeps each activity in the moment at the same position (or the last one), so order survives. */
+export function changeSequence(activities: Activity[], from: SequenceTemplate, to: SequenceTemplate) {
+  const before = sequenceOf(from).phases.map(phase => phase.id), after = sequenceOf(to).phases.map(phase => phase.id);
+  return orderByPhase(activities.map(activity => ({ ...activity, phase: after[Math.min(Math.max(0, before.indexOf(phaseOf(activity, from))), after.length - 1)] })), to);
+}
+export const newBlock = (kind: ActivityBlock["kind"]): ActivityBlock => ({ id: `block-${crypto.randomUUID()}`, kind, ...(kind === "question" ? { options: ["", ""], answer: 0 } : {}) });
 
-export type LessonDraft = { title: string; objective: string; duration: number; unitId: string; archived: boolean; activities: Activity[] };
-export function draftOf(lesson: Lesson): LessonDraft {
-  return { title: lesson.title, objective: lesson.objective, duration: lesson.duration || 20, unitId: lesson.courseUnitId || "", archived: lesson.status === "archived", activities: normalizeActivities(lesson.activities || []) };
+export type LessonDraft = { title: string; objective: string; duration: number; unitId: string; archived: boolean; sequence: SequenceTemplate; activities: Activity[] };
+export function draftOf(lesson: Lesson, fallback: SequenceTemplate = "free"): LessonDraft {
+  const sequence = lesson.sequence || fallback;
+  return { title: lesson.title, objective: lesson.objective, duration: lesson.duration || 20, unitId: lesson.courseUnitId || "", archived: lesson.status === "archived", sequence, activities: normalizeActivities(lesson.activities || [], sequence) };
 }
 export function lessonBody(courseId: string, draft: LessonDraft, draftVersion?: number) {
   const activities = draft.activities.map((activity, position) => ({ ...activity, position }));
-  return { title: draft.title, objective: draft.objective, courseId, courseUnitId: draft.unitId, duration: draft.duration, draftVersion, status: draft.archived ? "archived" : "draft", instructions: activities[0]?.instructions || "", activities };
+  return { title: draft.title, objective: draft.objective, courseId, courseUnitId: draft.unitId, duration: draft.duration, draftVersion, status: draft.archived ? "archived" : "draft", sequence: draft.sequence, instructions: "", activities };
 }
+const blockLabel: Record<ActivityBlock["kind"], string> = { text: "el texto", resource: "el recurso", question: "la pregunta", "teacher-note": "la nota para el docente" };
 
 /** Mirrors the server rules so autosave only sends drafts it can accept, and explains what is missing. */
 export function draftProblem(draft: LessonDraft): { message: string; target: string } | null {
@@ -91,14 +112,20 @@ export function draftProblem(draft: LessonDraft): { message: string; target: str
   for (const [index, activity] of draft.activities.entries()) {
     const target = activity.id || String(index), name = `la actividad ${index + 1}`;
     if (!activity.title.trim()) return { message: `Escribe el título de ${name} para guardar.`, target };
-    if (!activity.instructions.trim() && !richTextLength(activity.richContent)) return { message: `Escribe el contenido de ${name} para guardar.`, target };
     if (!Number.isInteger(activity.minutes) || activity.minutes < 1 || activity.minutes > 120) return { message: `Indica entre 1 y 120 minutos para ${name}.`, target };
-    if (activity.type === "resource" && !activity.resourceId) return { message: `Elige el recurso de ${name} para guardar.`, target };
-    if (activity.type === "question") {
-      const options = activity.options || [];
-      if (options.length < 2 || options.some(option => !option.trim())) return { message: `Completa al menos dos opciones en ${name}.`, target };
-      if (new Set(options.map(option => option.trim())).size !== options.length) return { message: `Las opciones de ${name} deben ser distintas.`, target };
-      if (!Number.isInteger(activity.answer) || activity.answer! < 0 || activity.answer! >= options.length) return { message: `Marca la respuesta correcta de ${name}.`, target };
+    const blocks = activity.blocks || [];
+    if (!blocks.some(block => block.kind !== "teacher-note")) return { message: `Agrega a ${name} algo para los estudiantes: texto, recurso o pregunta.`, target };
+    if (blocks.length > 12) return { message: `${name[0].toUpperCase()}${name.slice(1)} admite hasta 12 bloques.`, target };
+    for (const block of blocks) {
+      const where = `${blockLabel[block.kind]} de ${name}`;
+      if (block.kind === "resource") { if (!block.resourceId) return { message: `Elige ${where} para guardar.`, target }; continue; }
+      if (!(block.instructions || "").trim() && !richTextLength(block.richContent)) return { message: `Escribe ${where} para guardar.`, target };
+      if (block.kind === "question") {
+        const options = block.options || [];
+        if (options.length < 2 || options.some(option => !option.trim())) return { message: `Completa al menos dos opciones en ${where}.`, target };
+        if (new Set(options.map(option => option.trim())).size !== options.length) return { message: `Las opciones de ${where} deben ser distintas.`, target };
+        if (!Number.isInteger(block.answer) || block.answer! < 0 || block.answer! >= options.length) return { message: `Marca la respuesta correcta de ${where}.`, target };
+      }
     }
   }
   return null;
@@ -116,7 +143,7 @@ export function courseStats(units: LearningUnit[], lessons: Lesson[]): CourseSta
   return { units: units.filter(unit => unit.status === "active").length, lessons: active.length, published: states.filter(state => state !== "draft").length, drafts: states.filter(state => state === "draft").length, changes: states.filter(state => state === "changes").length };
 }
 export function usage(resourceId: string, lessons: Lesson[]) {
-  return lessons.filter(lesson => lesson.status !== "archived" && lesson.activities.some(activity => activity.type === "resource" && activity.resourceId === resourceId));
+  return lessons.filter(lesson => lesson.status !== "archived" && resourceIdsOf(lesson.activities).includes(resourceId));
 }
 export function newest<T extends { updatedAt?: string }>(rows: T[]) { return [...rows].sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || "")); }
 
@@ -152,12 +179,13 @@ export async function duplicateCourse(course: Course, onProgress?: (step: string
   }
   onProgress?.("Copiando lecciones…");
   for (const lesson of lessons.filter(item => item.status !== "archived" && item.courseUnitId && unitMap.has(item.courseUnitId))) {
-    const activities = normalizeActivities(lesson.activities).map(activity => {
-      if (activity.type !== "resource" || !activity.resourceId) return activity;
-      const mapped = resourceMap.get(activity.resourceId);
-      if (mapped) return { ...activity, resourceId: mapped };
-      return materials.some(item => item.id === activity.resourceId) ? { ...activity, type: "text" as const, resourceId: undefined } : activity;
-    });
+    const activities = normalizeActivities(lesson.activities, lesson.sequence).map(activity => ({ ...activity, blocks: activity.blocks!.map(block => {
+      if (block.kind !== "resource" || !block.resourceId) return block;
+      const mapped = resourceMap.get(block.resourceId);
+      if (mapped) return { ...block, resourceId: mapped };
+      // Archived course resources are not copied: leave a visible note instead of a broken link.
+      return materials.some(item => item.id === block.resourceId) ? { id: block.id, kind: "text" as const, instructions: "Recurso no copiado: estaba archivado en el curso original." } : block;
+    }) }));
     await api("/lessons", "POST", lessonBody(id, { ...draftOf(lesson), unitId: unitMap.get(lesson.courseUnitId!)!, archived: false, activities }));
   }
   return id;

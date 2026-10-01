@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import type { Lesson, Material, Resource } from "@happy-learners/contracts";
+import type { ActivityBlock, Lesson, Material, Resource } from "@happy-learners/contracts";
+import { blocksOf, groupings, phaseOf, purposes, sequenceOf } from "@happy-learners/domain";
 import { api, message } from "../api";
 import { FileViewer } from "../FileViewer";
-import { activityHue, activityTypeLabel, plural } from "../model";
+import { blockHue, phaseHue, plural } from "../model";
 import { Icon } from "../ui/icons";
 const RichText = lazy(() => import("../RichText").then(module => ({ default: module.RichText })));
 
@@ -29,7 +30,7 @@ function PlayerBar({ title, step, total }: { title?: string; step?: number; tota
  * In preview mode nothing is recorded and resources come from the course library.
  */
 export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, onExit }: { lesson: Lesson; fileUrl: (fileId: string) => string; complete?: () => Promise<void>; preview?: boolean; resources?: (Material | Resource)[]; onExit?: () => void }) {
-  const [step, setStep] = useState(0), [answers, setAnswers] = useState<Record<number, number>>({});
+  const [step, setStep] = useState(0), [answers, setAnswers] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [done, setDone] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null), first = useRef(true);
   const total = lesson.activities.length;
@@ -43,9 +44,14 @@ export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, on
     finally { setBusy(false); }
   }
   const activity = step >= 1 && step <= total ? lesson.activities[step - 1] : null;
+  const template = sequenceOf(lesson.sequence), structured = template.value !== "free";
+  // Teacher notes are removed before publishing; filtering again keeps older snapshots and previews safe.
+  const blocks = activity ? blocksOf(activity).filter(block => block.kind !== "teacher-note") : [];
+  const phaseIndex = activity ? template.phases.findIndex(phase => phase.id === phaseOf(activity, lesson.sequence)) : -1;
   // Documents, presentations and video get the full width of the screen instead of the reading column.
-  const wide = !!activity && activity.type === "resource" && library.some(item => item.id === activity.resourceId && item.kind === "file");
-  const index = step - 1;
+  const wide = blocks.some(block => block.kind === "resource" && library.some(item => item.id === block.resourceId && item.kind === "file"));
+  const moments = structured ? template.phases.map(phase => ({ phase, count: lesson.activities.filter(item => phaseOf(item, lesson.sequence) === phase.id).length })).filter(item => item.count) : [];
+  const tags = activity ? [purposes.find(item => item.value === activity.purpose)?.label, groupings.find(item => item.value === activity.grouping)?.label].filter(Boolean) : [];
   return <div className={`player${preview ? " is-preview" : ""}`}>
     <PlayerBar title={lesson.title} step={step} total={total}/>
     {preview && <div className="preview-banner" role="note"><Icon name="eye" size={16}/><span>Vista previa del borrador. No se registra nada.</span>{onExit && <button type="button" className="button secondary small" onClick={onExit}>Volver a editar</button>}</div>}
@@ -54,22 +60,16 @@ export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, on
         <span className="eyebrow">{lesson.program}</span>
         <h1 ref={heading} tabIndex={-1}>{lesson.title}</h1>
         <section className="player-objective"><h2>Lo que aprenderás</h2><p>{lesson.objective}</p></section>
+        {moments.length > 0 && <section className="player-moments" aria-labelledby="moments-title"><h2 id="moments-title">Así será la lección</h2>
+          <ol>{moments.map(({ phase, count }) => <li key={phase.id} className={`tone-${phaseHue(template.phases.indexOf(phase))}`}><strong>{phase.label}</strong><span>{plural(count, "actividad", "actividades")}</span></li>)}</ol>
+        </section>}
         <p className="player-meta"><Icon name="clock" size={16}/>{lesson.duration} minutos · {plural(total, "actividad", "actividades")}</p>
       </article>}
-      {activity && <article className={`player-card tone-${activityHue[activity.type || "text"]}`} aria-labelledby="activity-title">
-        <span className="player-chip">{activityTypeLabel[activity.type || "text"]} · Actividad {step} de {total} · {activity.minutes} min</span>
+      {activity && <article className={`player-card tone-${structured ? phaseHue(phaseIndex) : blockHue[blocks[0]?.kind || "text"]}`} aria-labelledby="activity-title">
+        <span className="player-chip">{structured ? `${template.phases[phaseIndex].label} · ` : ""}Actividad {step} de {total} · {activity.minutes} min</span>
         <h1 id="activity-title" ref={heading} tabIndex={-1}>{activity.title}</h1>
-        <div className="player-content">{activity.richContent ? <Suspense fallback={<p role="status">Abriendo contenido…</p>}><RichText value={activity.richContent} fallbackText={activity.instructions} editable={false}/></Suspense> : <p className="preserve-lines">{activity.instructions}</p>}</div>
-        {activity.type === "resource" && library.filter(item => item.id === activity.resourceId).map(item => <section key={item.id} className="player-resource" aria-label={`Recurso: ${item.title}`}>
-          <h2>{item.title}</h2>{item.description && ("fileId" in item ? !item.fileId : true) && <p className="muted">{item.description}</p>}
-          {item.kind === "link" ? <a className="button secondary" href={item.content} target="_blank" rel="noopener noreferrer"><Icon name="link" size={18}/>Abrir el recurso en otra pestaña</a>
-            : "fileId" in item && item.kind === "file" && item.fileId ? <FileViewer url={fileUrl(item.fileId)} name={item.fileName || item.title}/>
-            : <p className="preserve-lines player-text">{item.content}</p>}
-        </section>)}
-        {activity.type === "question" && <fieldset className="player-question"><legend>Elige una respuesta</legend>
-          {activity.options?.map((option, choice) => <label key={choice} className={answers[index] === choice ? "is-selected" : undefined}><input type="radio" name={`answer-${index}`} checked={answers[index] === choice} onChange={() => setAnswers({ ...answers, [index]: choice })}/><span>{option}</span></label>)}
-          {answers[index] !== undefined && <p role="status" className={`answer-feedback ${answers[index] === activity.answer ? "correct" : "retry"}`}><Icon name={answers[index] === activity.answer ? "check" : "info"} size={18}/>{answers[index] === activity.answer ? "¡Correcto!" : "Todavía no. Vuelve a leer e intenta otra vez."}</p>}
-        </fieldset>}
+        {tags.length > 0 && <p className="player-tags">{tags.map(tag => <span key={tag}>{tag}</span>)}</p>}
+        {blocks.map(block => <PlayerBlock key={block.id} block={block} library={library} fileUrl={fileUrl} answer={answers[block.id]} onAnswer={choice => setAnswers({ ...answers, [block.id]: choice })}/>)}
       </article>}
       {step > total && <article className="player-card player-center">
         <span className="done-icon" aria-hidden="true"><Icon name="check" size={32}/></span>
@@ -87,4 +87,25 @@ export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, on
         : <button type="button" className="button primary" disabled={busy} onClick={() => void finish()}>{busy ? "Guardando…" : "Terminar lección"}<Icon name="check" size={18}/></button>}
     </nav>}
   </div>;
+}
+
+function PlayerBlock({ block, library, fileUrl, answer, onAnswer }: { block: ActivityBlock; library: (Material | Resource)[]; fileUrl: (fileId: string) => string; answer?: number; onAnswer: (choice: number) => void }) {
+  const text = block.richContent ? <Suspense fallback={<p role="status">Abriendo contenido…</p>}><RichText value={block.richContent} fallbackText={block.instructions} editable={false}/></Suspense>
+    : block.instructions?.trim() ? <p className="preserve-lines">{block.instructions}</p> : null;
+  if (block.kind === "question") return <fieldset className="player-question">
+    <legend className="sr-only">Pregunta</legend>
+    {text && <div className="player-content">{text}</div>}
+    <p className="player-question-hint">Elige una respuesta</p>
+    {block.options?.map((option, choice) => <label key={choice} className={answer === choice ? "is-selected" : undefined}><input type="radio" name={`answer-${block.id}`} checked={answer === choice} onChange={() => onAnswer(choice)}/><span>{option}</span></label>)}
+    {answer !== undefined && <p role="status" className={`answer-feedback ${answer === block.answer ? "correct" : "retry"}`}><Icon name={answer === block.answer ? "check" : "info"} size={18}/>{answer === block.answer ? "¡Correcto!" : "Todavía no. Vuelve a leer e intenta otra vez."}</p>}
+  </fieldset>;
+  return <>
+    {text && <div className="player-content">{text}</div>}
+    {block.kind === "resource" && library.filter(item => item.id === block.resourceId).map(item => <section key={item.id} className="player-resource" aria-label={`Recurso: ${item.title}`}>
+      <h2>{item.title}</h2>{item.description && ("fileId" in item ? !item.fileId : true) && <p className="muted">{item.description}</p>}
+      {item.kind === "link" ? <a className="button secondary" href={item.content} target="_blank" rel="noopener noreferrer"><Icon name="link" size={18}/>Abrir el recurso en otra pestaña</a>
+        : "fileId" in item && item.kind === "file" && item.fileId ? <FileViewer url={fileUrl(item.fileId)} name={item.fileName || item.title}/>
+        : <p className="preserve-lines player-text">{item.content}</p>}
+    </section>)}
+  </>;
 }

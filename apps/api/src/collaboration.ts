@@ -104,7 +104,7 @@ export class LessonCollaborationRoom extends DurableObject<Env> {
   async snapshot(identity: RoomIdentity, activityIds: string[]): Promise<Record<string, unknown>> {
     await this.hydrated;
     if (!this.metadata) return {};
-    if (!this.matches(identity) || !Array.isArray(activityIds) || activityIds.length > 30) throw new Error("Collaboration document unavailable");
+    if (!this.matches(identity) || !Array.isArray(activityIds) || activityIds.length > 360) throw new Error("Collaboration document unavailable");
     return richTextSnapshot(this.doc, activityIds);
   }
 
