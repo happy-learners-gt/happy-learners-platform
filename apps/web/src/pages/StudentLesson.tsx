@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { Lesson, Material, Resource } from "@happy-learners/contracts";
 import { api, message } from "../api";
-import { OfficePreview } from "../OfficePreview";
+import { FileViewer } from "../FileViewer";
 import { activityHue, activityTypeLabel, plural } from "../model";
 import { Icon } from "../ui/icons";
 const RichText = lazy(() => import("../RichText").then(module => ({ default: module.RichText })));
@@ -43,11 +43,13 @@ export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, on
     finally { setBusy(false); }
   }
   const activity = step >= 1 && step <= total ? lesson.activities[step - 1] : null;
+  // Documents, presentations and video get the full width of the screen instead of the reading column.
+  const wide = !!activity && activity.type === "resource" && library.some(item => item.id === activity.resourceId && item.kind === "file");
   const index = step - 1;
   return <div className={`player${preview ? " is-preview" : ""}`}>
     <PlayerBar title={lesson.title} step={step} total={total}/>
     {preview && <div className="preview-banner" role="note"><Icon name="eye" size={16}/><span>Vista previa del borrador. No se registra nada.</span>{onExit && <button type="button" className="button secondary small" onClick={onExit}>Volver a editar</button>}</div>}
-    <main id={preview ? undefined : "main"} className="player-main">
+    <main id={preview ? undefined : "main"} className={`player-main${wide ? " is-wide" : ""}`}>
       {step === 0 && <article className="player-card player-intro">
         <span className="eyebrow">{lesson.program}</span>
         <h1 ref={heading} tabIndex={-1}>{lesson.title}</h1>
@@ -61,7 +63,7 @@ export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, on
         {activity.type === "resource" && library.filter(item => item.id === activity.resourceId).map(item => <section key={item.id} className="player-resource" aria-label={`Recurso: ${item.title}`}>
           <h2>{item.title}</h2>{item.description && ("fileId" in item ? !item.fileId : true) && <p className="muted">{item.description}</p>}
           {item.kind === "link" ? <a className="button secondary" href={item.content} target="_blank" rel="noopener noreferrer"><Icon name="link" size={18}/>Abrir el recurso en otra pestaña</a>
-            : "fileId" in item && item.kind === "file" && item.fileId ? <OfficePreview url={fileUrl(item.fileId)} name={item.fileName || item.title} mediaType={item.mediaType}/>
+            : "fileId" in item && item.kind === "file" && item.fileId ? <FileViewer url={fileUrl(item.fileId)} name={item.fileName || item.title}/>
             : <p className="preserve-lines player-text">{item.content}</p>}
         </section>)}
         {activity.type === "question" && <fieldset className="player-question"><legend>Elige una respuesta</legend>

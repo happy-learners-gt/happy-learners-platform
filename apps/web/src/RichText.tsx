@@ -15,7 +15,7 @@ import type { IconName } from "./ui/icons";
 
 const blank: RichTextDocument = { type: "doc", content: [{ type: "paragraph" }] };
 
-export function RichText({ value, fallbackText = "", onChange, onRemoteChange, label = "Contenido de la actividad", editable = true, collaboration, username, placeholder = "Escribe las instrucciones o el contenido de la actividad…" }: { value?: RichTextDocument; fallbackText?: string; onChange?: (doc: RichTextDocument) => void; onRemoteChange?: (doc: RichTextDocument) => void; label?: string; editable?: boolean; collaboration?: { document: Y.Doc; field: string; provider: CollaborationProvider }; username?: string; placeholder?: string }) {
+export function RichText({ value, fallbackText = "", onChange, onRemoteChange, onEditorFocus, label = "Contenido de la actividad", editable = true, toolbar = true, collaboration, username, placeholder = "Escribe las instrucciones o el contenido de la actividad…" }: { value?: RichTextDocument; fallbackText?: string; onChange?: (doc: RichTextDocument) => void; onRemoteChange?: (doc: RichTextDocument) => void; onEditorFocus?: (editor: Editor) => void; label?: string; editable?: boolean; toolbar?: boolean; collaboration?: { document: Y.Doc; field: string; provider: CollaborationProvider }; username?: string; placeholder?: string }) {
   const initial = value || (fallbackText.trim() ? { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: fallbackText }] }] } as RichTextDocument : blank);
   const editor = useEditor({
     extensions: [
@@ -29,12 +29,14 @@ export function RichText({ value, fallbackText = "", onChange, onRemoteChange, l
     editable,
     immediatelyRender: false,
     editorProps: { attributes: { role: "textbox", "aria-label": label, "aria-multiline": "true", ...(editable ? {} : { "aria-readonly": "true" }), class: "richtext-content" } },
+    // A shared toolbar (lesson canvas) follows whichever editor has focus.
+    onFocus: ({ editor: current }) => onEditorFocus?.(current as Editor),
     // Remote collaborative edits refresh local state without marking this editor as the author of a change.
     onUpdate: ({ editor: current, transaction }) => { const doc = current.getJSON() as RichTextDocument; if (collaboration && isChangeOrigin(transaction)) onRemoteChange?.(doc); else onChange?.(doc); },
   });
   if (!editor) return <div className="richtext-loading" role="status">Abriendo editor…</div>;
   return <div className={`richtext ${editable ? "is-editable" : "is-readonly"}`}>
-    {editable && <Toolbar editor={editor}/>}
+    {editable && toolbar && <Toolbar editor={editor}/>}
     <div className="richtext-page"><EditorContent editor={editor}/></div>
     {editable && <Footer editor={editor}/>}
   </div>;
@@ -42,11 +44,14 @@ export function RichText({ value, fallbackText = "", onChange, onRemoteChange, l
 
 type Tool = { label: string; icon?: IconName; glyph?: ReactNode; active?: boolean; disabled?: boolean; run: () => void };
 
-/** Docs-style toolbar: grouped icon buttons, one tab stop, arrow keys move between tools (WAI-ARIA toolbar). */
-function Toolbar({ editor }: { editor: Editor }) {
+/**
+ * Docs-style toolbar: grouped icon buttons, one tab stop, arrow keys move between tools (WAI-ARIA toolbar).
+ * Without an editor (nothing focused yet) it stays visible and disabled.
+ */
+export function Toolbar({ editor }: { editor: Editor | null }) {
   const state = useEditorState({
     editor,
-    selector: ({ editor: e }) => ({
+    selector: ({ editor: e }) => !e ? null : ({
       bold: e.isActive("bold"), italic: e.isActive("italic"), underline: e.isActive("underline"), strike: e.isActive("strike"),
       h2: e.isActive("heading", { level: 2 }), h3: e.isActive("heading", { level: 3 }), paragraph: e.isActive("paragraph"),
       bullet: e.isActive("bulletList"), ordered: e.isActive("orderedList"), quote: e.isActive("blockquote"), link: e.isActive("link"),
@@ -55,6 +60,7 @@ function Toolbar({ editor }: { editor: Editor }) {
   });
   const [linking, setLinking] = useState(false), [href, setHref] = useState(""), [current, setCurrent] = useState(0);
   const bar = useRef<HTMLDivElement>(null);
+  if (!editor || !state) return <div className="richtext-chrome"><div className="richtext-toolbar is-idle" role="toolbar" aria-label="Formato del texto" aria-disabled="true"><span className="toolbar-hint"><Icon name="edit" size={16}/>Haz clic en el texto de una actividad para darle formato.</span></div></div>;
   const chain = () => editor.chain().focus();
   const groups: Tool[][] = [
     [{ label: "Deshacer", icon: "undo", disabled: !state.undo, run: () => chain().undo().run() },

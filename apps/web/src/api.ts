@@ -20,21 +20,29 @@ export async function api<T>(path: string, method = "GET", data?: unknown): Prom
   return parse<T>(response, path);
 }
 
-const officeTypes: Record<string, string> = {
-  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+/** Formats a course can store, with the size limit the Worker enforces for each. */
+export const fileTypes: Record<string, { mediaType: string; limitMb: number }> = {
+  docx: { mediaType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", limitMb: 15 },
+  pptx: { mediaType: "application/vnd.openxmlformats-officedocument.presentationml.presentation", limitMb: 15 },
+  xlsx: { mediaType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", limitMb: 15 },
+  pdf: { mediaType: "application/pdf", limitMb: 25 },
+  mp4: { mediaType: "video/mp4", limitMb: 100 },
+  webm: { mediaType: "video/webm", limitMb: 100 },
 };
-export const officeAccept = `.docx,.pptx,.xlsx,${Object.values(officeTypes).join(",")}`;
+export const fileAccept = Object.entries(fileTypes).flatMap(([extension, type]) => [`.${extension}`, type.mediaType]).join(",");
+const hex = (buffer: ArrayBuffer) => [...new Uint8Array(buffer)].map(value => value.toString(16).padStart(2, "0")).join("");
 
-/** Uploads a DOCX, PPTX or XLSX to the private course repository. */
+/** Uploads a document, PDF or video to the private course repository. */
 export async function uploadCourseFile<T>(courseId: string, file: Blob, name: string): Promise<T> {
   const extension = name.split(".").pop()?.toLowerCase() || "";
-  if (!officeTypes[extension]) throw new ApiError("Elige un archivo DOCX, PPTX o XLSX.", 400);
-  if (file.size < 1 || file.size > 15 * 1024 * 1024) throw new ApiError("El archivo debe pesar como máximo 15 MB.", 400);
+  const type = fileTypes[extension];
+  if (!type) throw new ApiError("Elige un archivo DOCX, PPTX, XLSX, PDF, MP4 o WebM.", 400);
+  if (file.size < 1 || file.size > type.limitMb * 1024 * 1024) throw new ApiError(`Este tipo de archivo puede pesar como máximo ${type.limitMb} MB.`, 400);
   const path = `/courses/${courseId}/files`;
+  // PDF and video are streamed by the Worker; storage verifies this fingerprint while saving.
+  const fingerprint: Record<string, string> = ["pdf", "mp4", "webm"].includes(extension) ? { "X-File-SHA256": hex(await crypto.subtle.digest("SHA-256", await file.arrayBuffer())) } : {};
   let response: Response;
-  try { response = await fetch(`/api${path}`, { method: "POST", credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(45000), headers: { "Content-Type": officeTypes[extension], "X-File-Name": encodeURIComponent(name), "Idempotency-Key": crypto.randomUUID() }, body: file }); }
+  try { response = await fetch(`/api${path}`, { method: "POST", credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(type.limitMb > 15 ? 300000 : 45000), headers: { "Content-Type": type.mediaType, "X-File-Name": encodeURIComponent(name), "Idempotency-Key": crypto.randomUUID(), ...fingerprint }, body: file }); }
   catch { throw new ApiError("No pudimos subir el archivo. Comprueba tu conexión y vuelve a intentar.", 0); }
   return parse<T>(response, path);
 }

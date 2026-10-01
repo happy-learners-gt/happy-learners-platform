@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.6 — 2026-10-01
+
+- Editor de lección como lienzo continuo: todas las actividades una tras otra, con puntos para insertar contenido, recurso o pregunta en cualquier posición y una sola barra de formato fija. El autoguardado indica "Borrador guardado"; los estudiantes ven la versión publicada hasta que publiques.
+- Visor de archivos que ocupa todo el espacio disponible, con paginado y pantalla completa; las presentaciones se muestran diapositiva a diapositiva.
+- Nuevos formatos: PDF (hasta 25 MB) y video MP4/WebM (hasta 100 MB). Se suben en streaming y R2 verifica su huella SHA-256; la firma de cada formato se valida. Migración `0011_pdf_video_files.sql`.
+- Diseño estándar de página: el contenido empieza junto al menú lateral con un margen compacto.
+
 ## 0.2.5 — 2026-10-01
 
 - Migración `0010_remove_legacy_e2e_records.sql`: elimina de la demo pública los registros de una ejecución E2E antigua (2 unidades, 2 lecciones con sus 2 finalizaciones, 2 niveles, 2 módulos y 2 recursos con sufijo `desktop-1790700257067` / `mobile-1790700278802`). Borrado autorizado el 2026-10-01; la copia previa se adjunta a la release.
