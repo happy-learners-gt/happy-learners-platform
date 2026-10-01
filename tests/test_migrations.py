@@ -110,4 +110,3 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual(db.execute("SELECT name,position FROM learning_units WHERE course_id='course-exploradores' ORDER BY position").fetchall(), [("Greetings", 0)])
         self.assertEqual(db.execute("SELECT name FROM levels WHERE organization_id='org-demo'").fetchall(), [("Beginner",)])
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
-
