@@ -8,6 +8,8 @@ async function audit(page: Page, label: string) {
   await page.waitForLoadState("networkidle");
   // Toasts fade in; wait so colours are measured at their final opacity.
   await page.waitForTimeout(400);
+  // Smooth scrolling (outline links) can leave a control briefly under the sticky toolbar; measure once it stops.
+  await page.waitForFunction(() => new Promise(resolve => { const y = scrollY; setTimeout(() => resolve(scrollY === y), 150); }));
   const { violations } = await new AxeBuilder({ page }).withTags(wcag).analyze();
   expect(violations.map(item => `${label}: ${item.id} · ${item.nodes.map(node => node.target.join(" ")).slice(0, 3).join(" | ")}`)).toEqual([]);
 }
