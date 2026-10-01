@@ -152,9 +152,22 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     setDraft(current => current && { ...current, ...patch });
     setSave({ state: "pending" });
   }
-  const setActivities = (activities: Activity[]) => update({ activities: orderByPhase(activities, draft!.sequence) });
-  function updateActivity(id: string, patch: Partial<Activity>) { update({ activities: draft!.activities.map(activity => activity.id === id ? { ...activity, ...patch } : activity) }); }
-  function updateBlock(activity: Activity, blockId: string, patch: Partial<ActivityBlock>) { updateActivity(activity.id!, { blocks: activity.blocks!.map(block => block.id === blockId ? { ...block, ...patch } : block) }); }
+  /**
+   * Activity changes apply to the latest draft, not the one of the last render: editors report changes
+   * asynchronously (collaboration sync, late input), and a stale copy would undo edits made meanwhile.
+   */
+  function updateActivities(change: (activities: Activity[]) => Activity[]) {
+    if (!writable) return;
+    dirtyKeys.current.add("activities");
+    changes.current++;
+    setDraft(current => current && { ...current, activities: orderByPhase(change(current.activities), current.sequence) });
+    setSave({ state: "pending" });
+  }
+  const setActivities = (activities: Activity[]) => updateActivities(() => activities);
+  const updateActivity = (id: string, patch: Partial<Activity> | ((activity: Activity) => Partial<Activity>)) =>
+    updateActivities(list => list.map(activity => activity.id === id ? { ...activity, ...(typeof patch === "function" ? patch(activity) : patch) } : activity));
+  const updateBlocks = (id: string, change: (blocks: ActivityBlock[]) => ActivityBlock[]) => updateActivity(id, activity => ({ blocks: change(activity.blocks || []) }));
+  const updateBlock = (activity: Activity, blockId: string, patch: Partial<ActivityBlock>) => updateBlocks(activity.id!, blocks => blocks.map(block => block.id === blockId ? { ...block, ...patch } : block));
   const focusCard = (id: string, selector = "[contenteditable=true]") => setTimeout(() => {
     const card = document.getElementById(`card-${id}`);
     card?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -168,18 +181,16 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     focusCard(id);
   }
   function addBlock(activity: Activity, kind: ActivityBlock["kind"]) {
-    updateActivity(activity.id!, { blocks: [...activity.blocks!, newBlock(kind)] });
+    updateBlocks(activity.id!, blocks => [...blocks, newBlock(kind)]);
     focusCard(activity.id!, kind === "resource" ? "select" : "[contenteditable=true]");
   }
   function moveBlock(activity: Activity, index: number, delta: number) {
-    const blocks = [...activity.blocks!];
-    [blocks[index], blocks[index + delta]] = [blocks[index + delta], blocks[index]];
-    updateActivity(activity.id!, { blocks });
+    updateBlocks(activity.id!, current => { const blocks = [...current]; [blocks[index], blocks[index + delta]] = [blocks[index + delta], blocks[index]]; return blocks; });
   }
   async function removeBlock(activity: Activity, block: ActivityBlock) {
     const filled = block.kind === "resource" ? !!block.resourceId : !!block.richContent || !!block.instructions?.trim();
     if (filled && !await confirm({ title: `¿Quitar ${blockKindLabel[block.kind].toLowerCase()}?`, body: <p>Se quita de «{activity.title || "la actividad"}» en el borrador. La versión publicada no cambia hasta que publiques.</p>, confirm: "Quitar bloque", danger: true })) return;
-    updateActivity(activity.id!, { blocks: activity.blocks!.filter(item => item.id !== block.id) });
+    updateBlocks(activity.id!, blocks => blocks.filter(item => item.id !== block.id));
   }
   /** Up and down move inside a moment; at its edge the activity passes to the previous or next moment. */
   function canMove(index: number, delta: number) {
@@ -210,7 +221,7 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     if (!await confirm({ title: `¿Eliminar «${activity.title || "actividad sin título"}»?`, body: <p>La actividad se quita del borrador. La versión publicada no cambia hasta que publiques.</p>, confirm: "Eliminar actividad", danger: true })) return;
     const index = draft!.activities.indexOf(activity);
     const list = draft!.activities.filter(item => item.id !== activity.id);
-    update({ activities: list });
+    updateActivities(current => current.filter(item => item.id !== activity.id));
     setSelected(list[Math.max(0, index - 1)]?.id || "details");
   }
   function changeTemplate(sequence: SequenceTemplate) {
