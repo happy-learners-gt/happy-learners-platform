@@ -30,9 +30,10 @@ Desde el listado de cursos puedes **Duplicar** un curso (unidades, recursos y le
 
 El editor muestra el título, el estado (Borrador, Publicada, Cambios sin publicar o Archivada) y el indicador de guardado.
 
-- **Detalles**: objetivo, unidad, duración y, si ya está publicada, su código y enlace.
-- **Actividades**: selecciona una en la columna izquierda para editarla. Usa las flechas para cambiar su orden y **Agregar actividad** para sumar Contenido, Recurso de la biblioteca o Pregunta.
-- Los cambios se guardan solos un segundo después de escribir. Si falta algo obligatorio, el indicador dice qué falta y **Revisar** te lleva al lugar.
+- La lección es un lienzo: **Detalles** (objetivo, unidad, duración y publicación) y después todas las actividades, una debajo de otra.
+- Entre dos actividades, y al final, puedes insertar **Contenido**, **Recurso** o **Pregunta** justo en ese punto. El menú **⋯** de cada actividad la mueve, la convierte en otro tipo o la elimina; el índice de la izquierda lleva a cada una.
+- La barra de formato de arriba actúa sobre el texto que estés editando.
+- Todo se guarda solo como **borrador** ("Borrador guardado"). Si falta algo obligatorio, el indicador dice qué falta y **Revisar** te lleva al lugar.
 - Si otra persona abre la misma lección, el texto se sincroniza en vivo y aparece “También editando”.
 - **Vista previa** muestra la lección como la verá el estudiante, sin registrar nada.
 - **Publicar** guarda lo pendiente y publica. Después de publicar, puedes seguir editando: los estudiantes ven la versión anterior hasta que eliges **Publicar cambios**. **Copiar enlace** copia la dirección para compartir.
@@ -41,7 +42,7 @@ Las preguntas necesitan entre dos y seis opciones distintas y una respuesta corr
 
 ## Biblioteca
 
-**Biblioteca del curso** reúne textos, enlaces y documentos DOCX, PPTX o XLSX (hasta 15 MB). Usa **Agregar recurso**, busca, filtra por tipo y cambia entre lista y cuadrícula. Cada recurso indica en cuántas lecciones se usa. Los documentos son privados: el estudiante solo los recibe dentro de una lección publicada que los usa. Archivar un recurso conserva las publicaciones anteriores.
+**Biblioteca del curso** reúne textos, enlaces, documentos DOCX, PPTX o XLSX (hasta 15 MB), PDF (hasta 25 MB) y video MP4 o WebM (hasta 100 MB). El visor ocupa todo el espacio; **Presentar** o **Pantalla completa** muestran el archivo en toda la pantalla y las flechas ← → avanzan diapositivas o páginas. Usa **Agregar recurso**, busca, filtra por tipo y cambia entre lista y cuadrícula. Cada recurso indica en cuántas lecciones se usa. Los documentos son privados: el estudiante solo los recibe dentro de una lección publicada que los usa. Archivar un recurso conserva las publicaciones anteriores.
 
 **Biblioteca**, en el menú principal, muestra los recursos de todos los cursos para encontrarlos rápido; se editan desde la biblioteca de su curso.
 
