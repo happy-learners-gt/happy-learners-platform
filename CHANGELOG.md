@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0 — 2026-10-01
+
+Marco curricular (HL-44 / ST-041). Segunda fase del rediseño curricular.
+
+- **Plan curricular** del curso: competencias, resultados de aprendizaje con nivel de pensamiento y evidencia, códigos RA1, RA2… en orden y archivado sin perder historial.
+- **Mapa de cobertura:** resultados por unidad (planificado, trabajado en lecciones, evaluado), lo pendiente en cada unidad y una acción para cada hueco: crear una lección ya alineada o agregar evaluación donde ya se trabaja.
+- **Alineación en el editor:** resultados de la lección (marcando los planificados en su unidad) y de cada actividad; recursos sugeridos por los resultados; recomendaciones antes de publicar con confirmación si quedan pendientes.
+- **Estudiantes:** "Lo que aprenderás" muestra lo que podrán hacer al terminar, con el texto vigente al publicar.
+- Resumen del curso con el estado del plan; duplicar un curso copia también su plan.
+- Migración `0012_curricular_framework.sql`: tablas `course_competencies`, `course_outcomes` y `unit_outcomes`, limitadas al curso y su organización, y un plan de ejemplo para el curso de demostración (2 competencias y 3 resultados). No modifica lecciones.
+
 ## 0.3.0 — 2026-10-01
 
 Secuencia didáctica y actividades compuestas (HL-44 / ST-041). Primera de dos fases del rediseño curricular.

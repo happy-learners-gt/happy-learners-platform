@@ -1,5 +1,5 @@
-import type { Course, LearningUnit, Material, Member, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
-import { cleanText, completeOrder, courseInput, materialInput, record } from "@happy-learners/domain";
+import type { Competency, Course, Curriculum, LearningOutcome, LearningUnit, Material, Member, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
+import { cleanText, competencyInput, competencyLimit, completeOrder, courseInput, materialInput, outcomeInput, outcomeLimit, record, validOutcomeIds } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { filesFor } from "./files";
 
@@ -14,6 +14,18 @@ export async function coursesFor(db: Database, organization: string): Promise<St
 }
 export async function unitsFor(db: Database, courseId: string) {
   return (await db.prepare("SELECT id,course_id AS courseId,name,objective,position,status,updated_at AS updatedAt FROM learning_units WHERE course_id=? ORDER BY position,id").bind(courseId).all<LearningUnit>()).results;
+}
+export async function curriculumFor(db: Database, courseId: string): Promise<Curriculum> {
+  const [competencies, outcomes, unitOutcomes] = await db.batch([
+    db.prepare("SELECT id,course_id AS courseId,name,description,position,status,updated_at AS updatedAt FROM course_competencies WHERE course_id=? ORDER BY position,id").bind(courseId),
+    db.prepare("SELECT id,course_id AS courseId,competency_id AS competencyId,statement,level,evidence,position,status,updated_at AS updatedAt FROM course_outcomes WHERE course_id=? ORDER BY position,id").bind(courseId),
+    db.prepare("SELECT unit_id AS unitId,outcome_id AS outcomeId FROM unit_outcomes WHERE course_id=? ORDER BY unit_id,outcome_id").bind(courseId),
+  ]);
+  return {
+    competencies: competencies as unknown as Competency[],
+    outcomes: (outcomes as unknown as (LearningOutcome & { competencyId: string | null })[]).map(({ competencyId, ...outcome }) => competencyId ? { ...outcome, competencyId } : outcome),
+    unitOutcomes: unitOutcomes as unknown as Curriculum["unitOutcomes"],
+  };
 }
 export async function materialsFor(db: Database, organization: string, courseId?: string): Promise<Material[]> {
   const rows = (await db.prepare("SELECT id,course_id AS courseId,title,description,kind,content,status,version,updated_at AS updatedAt FROM materials WHERE organization_id=?" + (courseId ? " AND course_id=?" : "") + " ORDER BY title,id").bind(organization, ...(courseId ? [courseId] : [])).all<Material>()).results;
@@ -71,7 +83,7 @@ export async function courses(path: string, method: string, input: unknown, curr
     if (!id) return reply({ courses: list.map(({ legacyProgramId: _, ...c }) => c) });
     if (area === "materials") return reply({ materials: [...await materialsFor(db, current.organizationId, id), ...await filesFor(db, current.organizationId, id)] });
     const { legacyProgramId: _, ...view } = course!;
-    return reply({ course: view, units: await unitsFor(db, id) });
+    return reply({ course: view, units: await unitsFor(db, id), curriculum: await curriculumFor(db, id) });
   }
   if (current.role !== "educator") return reply({ error: "Solo educadores pueden preparar cursos y materiales." }, 403);
   const v = record(input);
@@ -99,6 +111,49 @@ export async function courses(path: string, method: string, input: unknown, curr
       ]);
     }
     return reply({ id: cid }, id ? 200 : 201);
+  }
+  if (area === "competencies") {
+    const { competencies } = await curriculumFor(db, id);
+    if (itemId && !competencies.some(c => c.id === itemId)) return missing();
+    const data = competencyInput(v);
+    if (!data) return reply({ error: "Escribe el nombre de la competencia (hasta 120 caracteres) y, si quieres, una descripción de hasta 600." }, 400);
+    if (!itemId && competencies.length >= competencyLimit) return reply({ error: `Un curso admite hasta ${competencyLimit} competencias.` }, 400);
+    if (competencies.some(c => c.id !== itemId && c.name.toLocaleLowerCase("es") === data.name.toLocaleLowerCase("es"))) return reply({ error: "Ya hay una competencia con ese nombre en este curso." }, 409);
+    const cid = itemId || `competency-${crypto.randomUUID()}`;
+    const statement = itemId
+      ? db.prepare("UPDATE course_competencies SET name=?,description=?,status=?,updated_at=? WHERE id=? AND course_id=?").bind(data.name, data.description, data.status, now, cid, id)
+      : db.prepare("INSERT INTO course_competencies(id,course_id,organization_id,name,description,position,status,updated_at) VALUES (?,?,?,?,?,?,?,?)").bind(cid, id, current.organizationId, data.name, data.description, competencies.length, data.status, now);
+    if (!await db.guardedBatch(guard(), [statement])) return conflict();
+    return reply({ id: cid }, itemId ? 200 : 201);
+  }
+  if (area === "outcomes") {
+    const { competencies, outcomes } = await curriculumFor(db, id);
+    if (itemId === "order") {
+      if (!completeOrder(v.ids, outcomes.map(o => o.id))) return reply({ error: "Incluye todos los resultados una sola vez, también los archivados." }, 400);
+      if (!await db.guardedBatch(guard(), v.ids.map((oid, position) => db.prepare("UPDATE course_outcomes SET position=?,updated_at=? WHERE id=? AND course_id=?").bind(position, now, oid, id)))) return conflict();
+      return reply({ ok: true });
+    }
+    const old = outcomes.find(o => o.id === itemId);
+    if (itemId && !old) return missing();
+    const data = outcomeInput(v);
+    if (!data) return reply({ error: "Escribe el resultado (hasta 400 caracteres), su nivel y, si quieres, cómo se evidencia." }, 400);
+    if (data.competencyId && !competencies.some(c => c.id === data.competencyId && (c.status === "active" || c.id === old?.competencyId))) return reply({ error: "Elige una competencia activa de este curso." }, 400);
+    if (!itemId && outcomes.length >= outcomeLimit) return reply({ error: `Un curso admite hasta ${outcomeLimit} resultados de aprendizaje.` }, 400);
+    const oid = itemId || `outcome-${crypto.randomUUID()}`;
+    const statement = itemId
+      ? db.prepare("UPDATE course_outcomes SET competency_id=?,statement=?,level=?,evidence=?,status=?,updated_at=? WHERE id=? AND course_id=?").bind(data.competencyId, data.statement, data.level, data.evidence, data.status, now, oid, id)
+      : db.prepare("INSERT INTO course_outcomes(id,course_id,organization_id,competency_id,statement,level,evidence,position,status,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(oid, id, current.organizationId, data.competencyId, data.statement, data.level, data.evidence, outcomes.length, data.status, now);
+    if (!await db.guardedBatch(guard(), [statement])) return conflict();
+    return reply({ id: oid }, itemId ? 200 : 201);
+  }
+  if (area === "units" && itemId && path.split("/")[6] === "outcomes") {
+    const [units, { outcomes, unitOutcomes }] = await Promise.all([unitsFor(db, id), curriculumFor(db, id)]);
+    if (!units.some(u => u.id === itemId)) return missing();
+    const previous = unitOutcomes.filter(link => link.unitId === itemId).map(link => link.outcomeId);
+    if (!validOutcomeIds(v.outcomeIds) || v.outcomeIds.some(oid => !outcomes.some(o => o.id === oid && (o.status === "active" || previous.includes(oid))))) return reply({ error: "Elige resultados de aprendizaje activos de este curso." }, 400);
+    const changes = [db.prepare("DELETE FROM unit_outcomes WHERE unit_id=? AND course_id=?").bind(itemId, id), ...v.outcomeIds.map(oid => db.prepare("INSERT INTO unit_outcomes(unit_id,outcome_id,course_id) VALUES (?,?,?)").bind(itemId, oid, id))];
+    if (!await db.guardedBatch(guard(), changes)) return conflict();
+    return reply({ ok: true });
   }
   if (area === "units") {
     const units = await unitsFor(db, id);

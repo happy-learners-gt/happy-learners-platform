@@ -1,7 +1,7 @@
 import type { Activity, Lesson, Member, Resource } from "@happy-learners/contracts";
-import { blocksOf, resourceIdsOf, sequenceTemplates, studentActivities, validActivities } from "@happy-learners/domain";
+import { lessonOutcomes, outcomeCodes, resourceIdsOf, sequenceTemplates, studentActivities, validActivities, validOutcomeIds } from "@happy-learners/domain";
 import type { Database } from "./storage";
-import { materialsFor } from "./courses";
+import { curriculumFor, materialsFor } from "./courses";
 import { filesFor } from "./files";
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
 type LessonRow = { id: string; content: string; published_content: string | null; unit_id: string | null; course_unit_id: string | null; course_id: string | null; position: number; status: "draft" | "published"; archived: number; revision: number; draft_version: number; published_version: number; updated_at: string; completions: number };
@@ -63,8 +63,12 @@ export async function content(url: URL, method: string, input: unknown, current:
     const resourceIds = resourceIdsOf(lesson.activities);
     if (resourceIds.some(rid => !library.some(r => r.id === rid))) return reply({ error: "Hay un recurso no disponible. Revisa las actividades." }, 400);
     if (row.archived) return reply({ error: "Restaura la lección antes de publicarla." }, 409);
+    // Students see the wording of the outcomes as it is today; later edits to the plan need a new publication.
+    const outcomes = row.course_id ? (await curriculumFor(db, row.course_id)).outcomes : [];
+    const codes = outcomeCodes(outcomes);
+    const learning = lessonOutcomes(lesson).filter(oid => codes.has(oid)).sort((a, b) => codes.get(a)!.localeCompare(codes.get(b)!, "es", { numeric: true })).map(oid => ({ id: oid, code: codes.get(oid)!, statement: outcomes.find(o => o.id === oid)!.statement }));
     // Teacher notes stay in the draft; students only receive what is meant for them.
-    const published = { ...lesson, activities: studentActivities(lesson.activities), resources: resourceIds.map(rid => library.find(r => r.id === rid)!), publishedAt: new Date().toISOString(), revision: row.revision + 1 };
+    const published = { ...lesson, outcomes: learning, activities: studentActivities(lesson.activities), resources: resourceIds.map(rid => library.find(r => r.id === rid)!), publishedAt: new Date().toISOString(), revision: row.revision + 1 };
     const written = await db.prepare("UPDATE lessons SET published_content=?,published_version=draft_version,revision=revision+1,status='published' WHERE id=? AND draft_version=? RETURNING id").bind(JSON.stringify(published), row.id, row.draft_version).first();
     return written ? reply({ lesson: published }) : reply({ error: "El borrador cambió. Recarga y vuelve a publicar." }, 409);
   }
@@ -90,11 +94,21 @@ export async function content(url: URL, method: string, input: unknown, current:
     // Only known fields are stored, whatever else the client sends.
     lesson.activities = (v.activities as Activity[]).map(a => ({
       id: a.id, position: a.position, title: a.title, minutes: a.minutes,
-      ...(a.phase ? { phase: a.phase } : {}), ...(a.purpose ? { purpose: a.purpose } : {}), ...(a.grouping ? { grouping: a.grouping } : {}),
+      ...(a.phase ? { phase: a.phase } : {}), ...(a.purpose ? { purpose: a.purpose } : {}), ...(a.grouping ? { grouping: a.grouping } : {}), ...(a.outcomeIds?.length ? { outcomeIds: a.outcomeIds } : {}),
       ...(a.blocks ? { instructions: "", blocks: a.blocks.map(b => ({ id: b.id, kind: b.kind, ...(b.instructions ? { instructions: b.instructions } : {}), ...(b.richContent ? { richContent: b.richContent } : {}), ...(b.kind === "resource" ? { resourceId: b.resourceId } : {}), ...(b.kind === "question" ? { options: b.options, answer: b.answer } : {}) })) }
         : { type: a.type, instructions: a.instructions, ...(a.richContent ? { richContent: a.richContent } : {}), ...(a.type === "resource" ? { resourceId: a.resourceId } : {}), ...(a.type === "question" ? { options: a.options, answer: a.answer } : {}) }),
     }));
   } else if (old) lesson.activities = old.activities;
+  // Outcomes come from the lesson's own course; archived ones may stay where they were already named.
+  if (v.outcomeIds !== undefined) {
+    if (!validOutcomeIds(v.outcomeIds)) return reply({ error: "Elige hasta 12 resultados de aprendizaje distintos." }, 400);
+    lesson.outcomeIds = v.outcomeIds;
+  } else if (old?.outcomeIds) lesson.outcomeIds = old.outcomeIds;
+  if (lessonOutcomes(lesson).length) {
+    const outcomes = generic && unit.courseId ? (await curriculumFor(db, unit.courseId)).outcomes : [];
+    const before = new Set(old ? lessonOutcomes(old) : []);
+    if (lessonOutcomes(lesson).some(oid => !outcomes.some(o => o.id === oid && (o.status === "active" || before.has(oid))))) return reply({ error: "Elige resultados de aprendizaje activos del curso de esta lección." }, 400);
+  }
   const library = [...await resources(db, current.organizationId), ...await materialsFor(db, current.organizationId), ...await filesFor(db, current.organizationId)];
   const previouslyLinked = new Set(old ? resourceIdsOf(old.activities) : []);
   for (const resourceId of resourceIdsOf(lesson.activities)) {

@@ -42,3 +42,42 @@ it("never publishes teacher notes and falls back to the first moment of a templa
   expect(phaseOf(activity, "start-develop-close")).toBe("start");
   expect(sequenceOf(undefined).value).toBe("free");
 });
+
+import { competencyInput, coverage, outcomeCodes, outcomeInput, publishChecklist, suggestedResources } from "../packages/domain/src/index";
+import type { Curriculum, LearningOutcome, LearningUnit, Lesson } from "../packages/contracts/src/index";
+const outcome = (id: string, position: number, status: LearningOutcome["status"] = "active"): LearningOutcome => ({ id, courseId: "c", statement: `Resultado ${id}`, level: "apply", evidence: "", position, status, updatedAt: "t" });
+const unit = (id: string, position: number): LearningUnit => ({ id, courseId: "c", name: id, objective: "", position, status: "active", updatedAt: "t" });
+const lesson = (id: string, unitId: string, extra: Partial<Lesson> = {}): Lesson => ({ id, title: id, program: "", duration: 20, objective: "o", materials: [], reflection: "", publishedAt: "", courseUnitId: unitId, status: "draft", activities: [], ...extra });
+const curriculum: Curriculum = { competencies: [], outcomes: [outcome("a", 0), outcome("old", 1, "archived"), outcome("b", 2), outcome("c", 3)], unitOutcomes: [{ unitId: "u1", outcomeId: "a" }, { unitId: "u1", outcomeId: "b" }] };
+
+it("validates competencies and outcomes and codes active outcomes in order", () => {
+  expect(competencyInput({ name: " Comunicación ", status: "active" })).toEqual({ name: "Comunicación", description: "", status: "active" });
+  expect(competencyInput({ name: "", status: "active" })).toBeNull();
+  expect(outcomeInput({ statement: "Saluda", level: "apply", status: "active" })).toEqual({ statement: "Saluda", evidence: "", level: "apply", status: "active", competencyId: null });
+  expect(outcomeInput({ statement: "Saluda", level: "memorize", status: "active" })).toBeNull();
+  expect([...outcomeCodes(curriculum.outcomes)]).toEqual([["a", "RA1"], ["b", "RA2"], ["c", "RA3"]]);
+});
+it("maps coverage: planned, taught and assessed, with the gaps to close", () => {
+  const lessons = [
+    lesson("l1", "u1", { outcomeIds: ["a"], activities: [{ id: "x", title: "Quiz", minutes: 5, instructions: "", outcomeIds: ["a"], blocks: [{ id: "q", kind: "question", instructions: "¿?", options: ["1", "2"], answer: 0 }] }] }),
+    lesson("l2", "u2", { outcomeIds: ["b"], activities: [{ id: "y", title: "Leer", minutes: 5, instructions: "", purpose: "explain", blocks: [{ id: "t", kind: "text", instructions: "Hola" }] }] }),
+    lesson("gone", "u1", { status: "archived", outcomeIds: ["c"] }),
+  ];
+  const map = coverage(curriculum, [unit("u1", 0), unit("u2", 1)], lessons);
+  expect(map.outcomes.map(item => [item.code, item.units, item.lessons, item.assessedIn, item.gaps])).toEqual([
+    ["RA1", ["u1"], ["l1"], ["l1"], []],
+    ["RA2", ["u1"], ["l2"], [], ["no-assessment"]],
+    ["RA3", [], [], [], ["no-unit", "no-lesson"]],
+  ]);
+  expect(map.units.map(item => [item.unit.id, item.missing])).toEqual([["u1", ["b"]], ["u2", []]]);
+  expect(map.summary).toEqual({ total: 3, taught: 2, assessed: 1, gaps: 2 });
+});
+it("recommends before publishing and suggests resources from lessons with the same outcomes", () => {
+  const draft = lesson("l1", "u1", { sequence: "start-develop-close", duration: 20, activities: [{ id: "x", title: "Inicio", minutes: 5, instructions: "", phase: "start", blocks: [{ id: "t", kind: "text", instructions: "Hola" }] }] });
+  expect(publishChecklist(draft, curriculum).map(item => [item.id, item.ok])).toEqual([["outcomes", false], ["moments", false], ["assessment", false], ["time", false]]);
+  const ready = { ...draft, outcomeIds: ["a"], activities: ["start", "develop", "close"].map((phase, i) => ({ id: `a${i}`, title: phase, minutes: 6, instructions: "", phase, purpose: i === 2 ? "assess" as const : undefined, blocks: [{ id: `b${i}`, kind: "text" as const, instructions: "x" }] })) };
+  expect(publishChecklist(ready, curriculum).every(item => item.ok)).toBe(true);
+  const other = lesson("l2", "u1", { outcomeIds: ["a"], activities: [{ id: "r", title: "Video", minutes: 5, instructions: "", blocks: [{ id: "rb", kind: "resource", resourceId: "video-1" }] }] });
+  expect(suggestedResources(ready, [ready, other], resourceIdsOf)).toEqual(["video-1"]);
+  expect(suggestedResources({ ...ready, outcomeIds: [] , activities: [] }, [other], resourceIdsOf)).toEqual([]);
+});

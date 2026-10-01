@@ -70,7 +70,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/courses$/.test(path)) methods[path] = ["GET", "POST"];
   if (/^\/api\/courses\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET", "PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/(units|materials)$/.test(path)) methods[path] = ["GET", "POST"];
-  if (/^\/api\/courses\/[a-z0-9-]+\/(units|materials)\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/(units|materials|competencies|outcomes)\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/(competencies|outcomes)$/.test(path)) methods[path] = ["POST"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/units\/[a-z0-9-]+\/outcomes$/.test(path)) methods[path] = ["PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/files$/.test(path)) methods[path] = ["GET", "POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/files\/[a-z0-9-]+\/content$/.test(path)) methods[path] = ["GET"];
   if (/^\/api\/courses\/[a-z0-9-]+\/files\/[a-z0-9-]+\/archive$/.test(path)) methods[path] = ["POST"];
@@ -182,7 +184,7 @@ export default {
     catch (error) {
       if (error instanceof Error && error.message === "INPUT") return json({ error: "Revisa los datos del formulario." }, 400);
       const cause = error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 240) : "Unknown error";
-      console.error(JSON.stringify({ event: "request_failed", code: "DEPENDENCY_UNAVAILABLE", release: "0.3.0", sha, cause }));
+      console.error(JSON.stringify({ event: "request_failed", code: "DEPENDENCY_UNAVAILABLE", release: "0.4.0", sha, cause }));
       return json({ error: "El servicio no está disponible. Vuelve a intentar en un momento." }, 503, { "Retry-After": "30" });
     }
   },

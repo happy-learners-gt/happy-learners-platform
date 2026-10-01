@@ -19,6 +19,8 @@ export type SequenceTemplate = "free" | "start-develop-close" | "five-e" | "ppp"
 export interface Activity {
   id?: string; position?: number; title: string; minutes: number;
   phase?: string; purpose?: ActivityPurpose; grouping?: ActivityGrouping; blocks?: ActivityBlock[];
+  /** Learning outcomes this activity works on; when empty it works on those of its lesson. */
+  outcomeIds?: string[];
   type?: "text" | "resource" | "question"; instructions: string; richContent?: RichTextDocument; resourceId?: string; options?: string[]; answer?: number;
 }
 export interface Lesson {
@@ -30,6 +32,10 @@ export interface Lesson {
   resources?: (Resource | Material)[];
   courseId?: string; courseUnitId?: string;
   sequence?: SequenceTemplate;
+  /** Course learning outcomes the lesson develops. */
+  outcomeIds?: string[];
+  /** Published lessons carry the wording students see, frozen at publication. */
+  outcomes?: { id: string; code: string; statement: string }[];
 }
 export type ResourceSkill = "lectura" | "escritura" | "escucha" | "conversación";
 export interface Resource { id: string; title: string; description: string; level: string; skill: ResourceSkill; topic: string; tags: string[]; content: string; status: "draft" | "published" | "archived"; kind?: "text" | "link"; updatedAt?: string; }
@@ -55,3 +61,13 @@ export interface Material {
 export interface ClassGroup { id: string; courseId: string; name: string; status: "active" | "archived"; learnerCount: number }
 export interface GroupLearner { id: string; groupId: string; displayName: string; status: "active" | "archived" }
 export interface ClassSession { id: string; groupId: string; courseId: string; lessonId?: string; sessionDate: string; groupName?: string; attendance?: { learnerId: string; status: "present" | "late" | "absent" | "excused" }[] }
+
+/** What a course develops over time; groups learning outcomes. */
+export interface Competency { id: string; courseId: string; name: string; description: string; position: number; status: "active" | "archived"; updatedAt: string }
+export type CognitiveLevel = "remember" | "understand" | "apply" | "analyze" | "evaluate" | "create";
+/** What learners will be able to show at the end of the course, and how it is evidenced. */
+export interface LearningOutcome {
+  id: string; courseId: string; competencyId?: string; statement: string; level: CognitiveLevel; evidence: string;
+  position: number; status: "active" | "archived"; updatedAt: string;
+}
+export interface Curriculum { competencies: Competency[]; outcomes: LearningOutcome[]; unitOutcomes: { unitId: string; outcomeId: string }[] }

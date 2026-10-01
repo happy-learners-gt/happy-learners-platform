@@ -19,7 +19,7 @@ test("main routes have no WCAG 2.2 A/AA violations detectable by axe", async ({ 
   await audit(page, "login");
   await signIn(page, "educador-demo", "/inicio");
   for (const [label, path] of [
-    ["inicio", "/inicio"], ["cursos", "/cursos"], ["nuevo curso", "/cursos/nuevo"], ["resumen", "/cursos/course-exploradores"],
+    ["inicio", "/inicio"], ["cursos", "/cursos"], ["nuevo curso", "/cursos/nuevo"], ["resumen", "/cursos/course-exploradores"], ["plan curricular", "/cursos/course-exploradores/plan"],
     ["contenido", "/cursos/course-exploradores/contenido"], ["editor", "/cursos/course-exploradores/lecciones/greetings-and-introductions"],
     ["vista previa", "/cursos/course-exploradores/lecciones/greetings-and-introductions?vista=previa"], ["biblioteca del curso", "/cursos/course-exploradores/biblioteca"],
     ["grupos", "/cursos/course-exploradores/grupos"], ["asistencia", "/cursos/course-exploradores/asistencia"], ["configuración", "/cursos/course-exploradores/configuracion"],
