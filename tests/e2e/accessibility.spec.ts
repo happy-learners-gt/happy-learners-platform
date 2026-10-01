@@ -29,6 +29,8 @@ test("main routes have no WCAG 2.2 A/AA violations detectable by axe", async ({ 
     await expect(page.getByRole("heading", { level: 1 }).first()).toBeAttached();
     await audit(page, label);
   }
+  // With reduced motion the outline jumps instead of scrolling smoothly, so axe measures the settled page.
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/cursos/course-exploradores/lecciones/greetings-and-introductions");
   await page.getByRole("navigation", { name: "Estructura de la lección" }).getByRole("button", { name: /Choose a greeting/ }).first().click();
   await audit(page, "editor pregunta");

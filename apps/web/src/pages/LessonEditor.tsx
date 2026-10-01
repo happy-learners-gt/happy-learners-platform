@@ -29,6 +29,8 @@ type Save = { state: "saved" | "pending" | "saving" | "error"; at?: string; erro
 export const kindIcon: Record<ActivityBlock["kind"], IconName> = { text: "text", resource: "library", question: "question", "teacher-note": "edit" };
 const newTitle: Record<ActivityBlock["kind"], string> = { text: "Nueva actividad", resource: "Recurso", question: "Pregunta", "teacher-note": "Nueva actividad" };
 const AUTOSAVE_MS = 1000;
+/** Jumps instead of animating for people who ask the system for reduced motion. */
+const scrollBehavior = (): ScrollBehavior => matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
 
 export function LessonEditor({ lessonId }: { lessonId: string }) {
   const { course, units, lessons, materials, legacyResources, curriculum, writable, reload } = useCourse();
@@ -174,7 +176,7 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     const origin = document.activeElement;
     setTimeout(() => {
       const card = document.getElementById(`card-${id}`);
-      card?.scrollIntoView({ behavior: "smooth", block: "center" });
+      card?.scrollIntoView({ behavior: scrollBehavior(), block: "center" });
       if (document.activeElement !== origin && document.activeElement !== document.body) return;
       [...card?.querySelectorAll<HTMLElement>(selector) || []].pop()?.focus({ preventScroll: true });
     }, 120);
@@ -302,7 +304,7 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
   const goTo = (id: string, focus = true) => {
     setSelected(id);
     const card = document.getElementById(id === "details" ? "lesson-details" : `card-${id}`);
-    card?.scrollIntoView({ behavior: "smooth", block: "start" });
+    card?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
     if (focus) setTimeout(() => card?.querySelector<HTMLElement>("input, textarea, [contenteditable=true]")?.focus({ preventScroll: true }), 250);
   };
   const reviewProblem = () => problem && goTo(problem.target === "title" ? "details" : problem.target);
