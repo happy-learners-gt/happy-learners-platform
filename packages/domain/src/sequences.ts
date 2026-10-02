@@ -1,4 +1,4 @@
-import type { Activity, ActivityBlock, ActivityGrouping, ActivityPurpose, CourseProfile, RichTextDocument, SequenceTemplate } from "@happy-learners/contracts";
+import type { Activity, ActivityBlock, ActivityGrouping, ActivityPurpose, RichTextDocument, SequenceTemplate } from "@happy-learners/contracts";
 
 /**
  * Didactic sequences. A lesson follows one template; its moments order the activities and say what each
@@ -30,7 +30,6 @@ export const sequenceTemplates: { value: SequenceTemplate; label: string; descri
   ] },
   { value: "free", label: "Libre", description: "Actividades en orden, sin momentos.", phases: [{ id: "main", label: "Actividades", hint: "" }] },
 ];
-export const defaultSequence: Record<CourseProfile, SequenceTemplate> = { free: "start-develop-close", preschool: "start-develop-close", school: "start-develop-close", university: "start-develop-close", workshop: "workshop", laboratory: "five-e" };
 export function sequenceOf(value?: string) { return sequenceTemplates.find(template => template.value === value) || sequenceTemplates.find(template => template.value === "free")!; }
 
 export const purposes: { value: ActivityPurpose; label: string }[] = [

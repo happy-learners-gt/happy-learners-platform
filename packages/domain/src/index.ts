@@ -1,6 +1,8 @@
 export const timezones = ["America/Guatemala", "America/Mexico_City", "America/Bogota"] as const;
-export { courseInput, materialInput, courseProfiles, unitLabels, record, cleanText, validTermIds, completeOrder } from "./courses";
-export { sequenceTemplates, defaultSequence, sequenceOf, purposes, groupings, blockKinds, blocksOf, phaseOf, studentActivities, resourceIdsOf, richTextFieldsOf, hasText } from "./sequences";
+export { materialInput, record, cleanText, validTermIds, completeOrder } from "./courses";
+export { educationTypes, educationLevels, knowledgeAreas, areaLabel, courseFormats, modalities, pacings, moduleLabels, moduleNoun, settingDefinitions, derivedSettings, sourceLabel, effectiveProfile, resolveSettings, settingsInput, profileInput, courseInput, programInput, coursePresets, labelOf } from "./academic";
+export type { ModuleNoun, SettingKey, SettingSource } from "./academic";
+export { sequenceTemplates, sequenceOf, purposes, groupings, blockKinds, blocksOf, phaseOf, studentActivities, resourceIdsOf, richTextFieldsOf, hasText } from "./sequences";
 export type { Phase } from "./sequences";
 export { cognitiveLevels, competencyInput, outcomeInput, validOutcomeIds, outcomeCodes, activityOutcomes, assesses, lessonOutcomes, coverage, suggestedResources, publishChecklist, outcomeLimit, competencyLimit } from "./outcomes";
 export type { Gap, OutcomeCoverage, UnitCoverage, CheckItem } from "./outcomes";

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { ModuleNoun } from "@happy-learners/domain";
 import type { FormEvent } from "react";
 import type { LearningUnit, Lesson } from "@happy-learners/contracts";
 import { Link } from "../navigation";
@@ -46,8 +47,8 @@ export type OutlineActions = {
   openLesson: (lesson: Lesson) => void;
 };
 
-export function LessonOutline({ courseId, units, lessons, writable, showArchived, actions, expanded, setExpanded, focusUnit }: {
-  courseId: string; units: LearningUnit[]; lessons: Lesson[]; writable: boolean; showArchived: boolean; actions: OutlineActions;
+export function LessonOutline({ courseId, units, lessons, writable, showArchived, actions, expanded, setExpanded, focusUnit, noun }: {
+  courseId: string; noun: ModuleNoun; units: LearningUnit[]; lessons: Lesson[]; writable: boolean; showArchived: boolean; actions: OutlineActions;
   expanded: Set<string>; setExpanded: (ids: Set<string>) => void; focusUnit?: string;
 }) {
   const [renaming, setRenaming] = useState<string | null>(null), [creating, setCreating] = useState<string | null>(null);
@@ -63,19 +64,19 @@ export function LessonOutline({ courseId, units, lessons, writable, showArchived
       <div className="outline-unit-header">
         <button type="button" className="icon-button disclosure" aria-expanded={open} aria-controls={`lecciones-${unit.id}`} aria-label={`${open ? "Contraer" : "Expandir"} ${unit.name}`} onClick={() => toggle(unit.id)}><Icon name={open ? "chevronDown" : "chevronRight"} size={18}/></button>
         <div className="outline-unit-title">
-          <span className="outline-eyebrow"><span className="unit-dot" aria-hidden="true"/>Unidad {index + 1}</span>
-          {renaming === unit.id ? <InlineName value={unit.name} label={`Nombre de la unidad ${index + 1}`} onSave={name => actions.renameUnit(unit, name)} onDone={() => setRenaming(null)} className="unit"/>
+          <span className="outline-eyebrow"><span className="unit-dot" aria-hidden="true"/>{noun.One} {index + 1}</span>
+          {renaming === unit.id ? <InlineName value={unit.name} label={`Nombre ${noun.ofThe} ${index + 1}`} onSave={name => actions.renameUnit(unit, name)} onDone={() => setRenaming(null)} className="unit"/>
             : <h2 onDoubleClick={() => writable && !archived && setRenaming(unit.id)}>{unit.name}</h2>}
           {unit.objective && open && <p>{unit.objective}</p>}
         </div>
         <span className="outline-count">{visible.length ? `${published} de ${plural(visible.length, "lección publicada", "lecciones publicadas")}` : "Sin lecciones"}</span>
         {archived && <StatusBadge>Archivada</StatusBadge>}
-        {writable && <Menu label={`Acciones de la unidad ${unit.name}`} items={[
+        {writable && <Menu label={`Acciones ${noun.ofThe} ${unit.name}`} items={[
           ...(!archived ? [{ label: "Renombrar", icon: "edit" as const, onSelect: () => setRenaming(unit.id) }, { label: "Editar nombre y objetivo", icon: "text" as const, onSelect: () => actions.editUnit(unit) }, { label: "Nueva lección", icon: "plus" as const, onSelect: () => { setExpanded(new Set([...expanded, unit.id])); setCreating(unit.id); } }] : []),
           { label: "Mover arriba", icon: "up", onSelect: () => actions.moveUnit(unit, -1), disabled: position === 0 },
           { label: "Mover abajo", icon: "down", onSelect: () => actions.moveUnit(unit, 1), disabled: position === units.length - 1 },
           "separator",
-          { label: archived ? "Restaurar unidad" : "Archivar unidad", icon: "archive", onSelect: () => actions.archiveUnit(unit), danger: !archived },
+          { label: archived ? `Restaurar ${noun.one}` : `Archivar ${noun.one}`, icon: "archive", onSelect: () => actions.archiveUnit(unit), danger: !archived },
         ]}/>}
       </div>
       {open && <div id={`lecciones-${unit.id}`} className="outline-lessons">
@@ -102,7 +103,7 @@ export function LessonOutline({ courseId, units, lessons, writable, showArchived
               ] : []),
             ]}/>
           </li>;
-        })}</ol> : <p className="outline-empty">Esta unidad aún no tiene lecciones.</p>}
+        })}</ol> : <p className="outline-empty">{noun.This} aún no tiene lecciones.</p>}
         {writable && !archived && (creating === unit.id
           ? <NewLessonForm unit={unit} onCancel={() => setCreating(null)} onCreate={async (title, objective) => { const done = await actions.createLesson(unit, title, objective); if (done) setCreating(null); return done; }}/>
           : <button type="button" className="button ghost add-lesson" onClick={() => setCreating(unit.id)}><Icon name="plus" size={18}/><span>Nueva lección<span className="sr-only"> en {unit.name}</span></span></button>)}

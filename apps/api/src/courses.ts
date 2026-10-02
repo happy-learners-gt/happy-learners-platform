@@ -1,5 +1,5 @@
-import type { Competency, Course, Curriculum, LearningOutcome, LearningUnit, Material, Member, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
-import { cleanText, competencyInput, competencyLimit, completeOrder, courseInput, materialInput, outcomeInput, outcomeLimit, record, validOutcomeIds } from "@happy-learners/domain";
+import type { Competency, Course, CourseFormat, CourseSettings, Curriculum, EducationLevel, LearningOutcome, LearningUnit, Material, Member, StudyProgram, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
+import { cleanText, competencyInput, competencyLimit, completeOrder, courseInput, materialInput, outcomeInput, outcomeLimit, programInput, record, resolveSettings, validOutcomeIds } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { filesFor } from "./files";
 
@@ -7,10 +7,33 @@ const reply = (value: unknown, status = 200) => Response.json(value, { status })
 const missing = () => reply({ error: "El elemento no está disponible en tu organización." }, 404);
 const conflict = () => reply({ error: "Hay cambios más recientes. Recarga antes de guardar; tu borrador no se ha sobrescrito." }, 409);
 type StoredCourse = Course & { legacyProgramId: string };
+type Row<T> = Omit<T, "settings" | "area" | "programId" | "locked"> & { settings: string; area: string | null; programId?: string | null; locked?: string };
+const courseColumns = "id,title,objective,program_id AS programId,education_type AS educationType,level,format,modality,pacing,area,settings,status,version,updated_at AS updatedAt";
+function courseView<T extends Course>(row: Row<T>): T {
+  const { programId, area, settings, ...rest } = row;
+  return { ...rest, ...(programId ? { programId } : {}), ...(area ? { area } : {}), settings: JSON.parse(settings) as CourseSettings } as unknown as T;
+}
 export async function coursesFor(db: Database, organization: string): Promise<StoredCourse[]> {
-  const rows = (await db.prepare("SELECT id,title,objective,profile,unit_label AS unitLabel,status,version,updated_at AS updatedAt,legacy_program_id AS legacyProgramId FROM courses WHERE organization_id=? ORDER BY title,id").bind(organization).all<StoredCourse>()).results;
-  const terms = (await db.prepare("SELECT course_id,term_id FROM course_terms WHERE organization_id=?").bind(organization).all<{ course_id: string; term_id: string }>()).results;
-  return rows.map(row => ({ ...row, termIds: terms.filter(t => t.course_id === row.id).map(t => t.term_id) }));
+  const rows = (await db.prepare(`SELECT ${courseColumns},legacy_program_id AS legacyProgramId FROM courses WHERE organization_id=? ORDER BY title,id`).bind(organization).all<Row<StoredCourse>>()).results;
+  return rows.map(courseView);
+}
+export async function programsFor(db: Database, organization: string): Promise<StudyProgram[]> {
+  const rows = (await db.prepare("SELECT p.id,p.name,p.description,p.education_type AS educationType,p.level,p.format,p.modality,p.pacing,p.area,p.settings,p.locked,p.status,p.version,p.updated_at AS updatedAt,(SELECT count(*) FROM courses c WHERE c.program_id=p.id AND c.status='active') AS courseCount FROM study_programs p WHERE p.organization_id=? ORDER BY p.name,p.id").bind(organization).all<Row<StudyProgram>>()).results;
+  return rows.map(({ area, settings, locked, ...rest }) => ({ ...rest, ...(area ? { area } : {}), settings: JSON.parse(settings), locked: JSON.parse(locked || "[]") }) as StudyProgram);
+}
+/** A course with its program and resolved settings: what the course actually does. */
+export async function configurationOf(db: Database, organization: string, courseId: string) {
+  const course = (await coursesFor(db, organization)).find(item => item.id === courseId);
+  if (!course) return null;
+  const program = course.programId ? (await programsFor(db, organization)).find(item => item.id === course.programId) || null : null;
+  return { course, program, settings: resolveSettings(course, program).values };
+}
+/** The former profile column is still NOT NULL; keep it coherent for anything that reads history. */
+function legacyProfile(format: CourseFormat, level: EducationLevel) {
+  if (format === "workshop" || format === "laboratory") return format;
+  if (level === "early-childhood" || level === "pre-primary") return "preschool";
+  if (["short-tertiary", "bachelor", "master", "doctoral"].includes(level)) return "university";
+  return level === "unspecified" ? "free" : "school";
 }
 export async function unitsFor(db: Database, courseId: string) {
   return (await db.prepare("SELECT id,course_id AS courseId,name,objective,position,status,updated_at AS updatedAt FROM learning_units WHERE course_id=? ORDER BY position,id").bind(courseId).all<LearningUnit>()).results;
@@ -93,21 +116,23 @@ export async function courses(path: string, method: string, input: unknown, curr
   if (area && course?.status === "archived") return reply({ error: "Restaura el curso antes de modificarlo. Sus enlaces publicados se conservan." }, 409);
   if (!area) {
     const data = courseInput(v);
-    if (!data) return reply({ error: "Revisa el título, objetivo, perfil, agrupaciones y clasificaciones del curso." }, 400);
-    if (!await validTerms(db, current.organizationId, data.termIds, course?.termIds)) return reply({ error: "Hay clasificaciones ajenas a tu organización o archivadas." }, 400);
+    if (!data) return reply({ error: "Revisa el nombre, el objetivo y la configuración académica del curso: la educación formal necesita un nivel." }, 400);
+    // Inside a program the course takes its type, level, modality and pacing, and cannot change fixed settings.
+    if (data.programId) {
+      const program = (await programsFor(db, current.organizationId)).find(item => item.id === data.programId);
+      if (!program || (program.status !== "active" && program.id !== course?.programId)) return reply({ error: "Elige un programa activo de tu organización." }, 400);
+      Object.assign(data, { educationType: program.educationType, level: program.level, modality: program.modality, pacing: program.pacing });
+      for (const key of program.locked) delete data.settings[key];
+    }
     const cid = id || `course-${crypto.randomUUID()}`;
-    const relationships = [
-      db.prepare("DELETE FROM course_terms WHERE course_id=? AND organization_id=?").bind(cid, current.organizationId),
-      ...data.termIds.map(term => db.prepare("INSERT INTO course_terms VALUES (?,?,?)").bind(cid, term, current.organizationId)),
-    ];
+    const values = [data.title, data.objective, legacyProfile(data.format, data.level), data.programId, data.educationType, data.level, data.format, data.modality, data.pacing, data.area || null, JSON.stringify(data.settings), data.status, now] as const;
     if (course) {
-      const updated = await db.guardedBatch(db.prepare("UPDATE courses SET title=?,objective=?,profile=?,unit_label=?,status=?,version=version+1,updated_at=? WHERE id=? AND organization_id=? AND version=? RETURNING id").bind(data.title, data.objective, data.profile, data.unitLabel, data.status, now, cid, current.organizationId, Number.isInteger(v.version) ? Number(v.version) : -1), relationships);
+      const updated = await db.prepare("UPDATE courses SET title=?,objective=?,profile=?,program_id=?,education_type=?,level=?,format=?,modality=?,pacing=?,area=?,settings=?,status=?,updated_at=?,version=version+1 WHERE id=? AND organization_id=? AND version=? RETURNING id").bind(...values, cid, current.organizationId, Number.isInteger(v.version) ? Number(v.version) : -1).first();
       if (!updated) return conflict();
     } else {
       await db.batch([
         db.prepare("INSERT INTO programs(id,organization_id,title) VALUES (?,?,?)").bind(cid, current.organizationId, data.title),
-        db.prepare("INSERT INTO courses(id,organization_id,legacy_program_id,title,objective,profile,unit_label,status,updated_at) VALUES (?,?,?,?,?,?,?,?,?)").bind(cid, current.organizationId, cid, data.title, data.objective, data.profile, data.unitLabel, data.status, now),
-        ...relationships,
+        db.prepare("INSERT INTO courses(title,objective,profile,program_id,education_type,level,format,modality,pacing,area,settings,status,updated_at,id,organization_id,legacy_program_id,unit_label) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'Módulos')").bind(...values, cid, current.organizationId, cid),
       ]);
     }
     return reply({ id: cid }, id ? 200 : 201);
@@ -198,4 +223,32 @@ export async function courses(path: string, method: string, input: unknown, curr
     return reply({ material: (await materialsFor(db, current.organizationId, id)).find(m => m.id === mid) }, itemId ? 200 : 201);
   }
   return missing();
+}
+
+/** Study programs: shared configuration for a set of courses. Everyone reads them; administration manages them. */
+export async function programs(path: string, method: string, input: unknown, current: Member, db: Database) {
+  const id = path.split("/")[3];
+  const list = await programsFor(db, current.organizationId);
+  const old = list.find(item => item.id === id);
+  if (id && !old) return missing();
+  if (method === "GET") return reply(id ? { program: old } : { programs: list });
+  if (current.role !== "admin") return reply({ error: "Solo administración puede configurar programas." }, 403);
+  const v = record(input);
+  const data = programInput(v);
+  if (!v || !data) return reply({ error: "Revisa el nombre y la configuración del programa: la educación formal necesita un nivel y solo se fijan ajustes con valor." }, 400);
+  const nameKey = data.name.toLocaleLowerCase("es");
+  if (list.some(item => item.id !== id && item.name.toLocaleLowerCase("es") === nameKey)) return reply({ error: "Ya existe un programa con ese nombre." }, 409);
+  const now = new Date().toISOString(), pid = id || `program-${crypto.randomUUID()}`;
+  const values = [data.name, nameKey, data.description, data.educationType, data.level, data.format, data.modality, data.pacing, data.area || null, JSON.stringify(data.settings), JSON.stringify(data.locked), data.status, now] as const;
+  if (old) {
+    // Courses of the program follow its type, level, modality and pacing.
+    const ok = await db.guardedBatch(
+      db.prepare("UPDATE study_programs SET name=?,name_key=?,description=?,education_type=?,level=?,format=?,modality=?,pacing=?,area=?,settings=?,locked=?,status=?,updated_at=?,version=version+1 WHERE id=? AND organization_id=? AND version=? RETURNING id").bind(...values, pid, current.organizationId, Number.isInteger(v.version) ? Number(v.version) : -1),
+      [db.prepare("UPDATE courses SET education_type=?,level=?,modality=?,pacing=?,version=version+1,updated_at=? WHERE program_id=? AND organization_id=?").bind(data.educationType, data.level, data.modality, data.pacing, now, pid, current.organizationId)]);
+    if (!ok) return conflict();
+  } else {
+    const created = await db.prepare("INSERT INTO study_programs(name,name_key,description,education_type,level,format,modality,pacing,area,settings,locked,status,updated_at,id,organization_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(organization_id,name_key) DO NOTHING RETURNING id").bind(...values, pid, current.organizationId).first();
+    if (!created) return reply({ error: "Ese nombre ya fue registrado. Actualiza la lista." }, 409);
+  }
+  return reply({ id: pid, programs: await programsFor(db, current.organizationId) }, id ? 200 : 201);
 }

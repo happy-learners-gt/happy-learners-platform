@@ -1,7 +1,7 @@
 import type { Activity, Lesson, Member, Resource } from "@happy-learners/contracts";
-import { lessonOutcomes, outcomeCodes, resourceIdsOf, sequenceTemplates, studentActivities, validActivities, validOutcomeIds } from "@happy-learners/domain";
+import { assesses, lessonOutcomes, outcomeCodes, resourceIdsOf, sequenceTemplates, studentActivities, validActivities, validOutcomeIds } from "@happy-learners/domain";
 import type { Database } from "./storage";
-import { curriculumFor, materialsFor } from "./courses";
+import { configurationOf, curriculumFor, materialsFor } from "./courses";
 import { filesFor } from "./files";
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
 type LessonRow = { id: string; content: string; published_content: string | null; unit_id: string | null; course_unit_id: string | null; course_id: string | null; position: number; status: "draft" | "published"; archived: number; revision: number; draft_version: number; published_version: number; updated_at: string; completions: number };
@@ -66,6 +66,10 @@ export async function content(url: URL, method: string, input: unknown, current:
     // Students see the wording of the outcomes as it is today; later edits to the plan need a new publication.
     const outcomes = row.course_id ? (await curriculumFor(db, row.course_id)).outcomes : [];
     const codes = outcomeCodes(outcomes);
+    // What the course's configuration requires before publishing.
+    const settings = row.course_id ? (await configurationOf(db, current.organizationId, row.course_id))?.settings : undefined;
+    if (settings?.outcomesRequired && !lessonOutcomes(lesson).some(oid => codes.has(oid))) return reply({ error: "Este curso exige que la lección trabaje al menos un resultado de aprendizaje antes de publicarla." }, 400);
+    if (settings?.assessmentRequired && !lesson.activities.some(assesses)) return reply({ error: "Este curso exige una pregunta o una actividad de evaluación antes de publicar." }, 400);
     const learning = lessonOutcomes(lesson).filter(oid => codes.has(oid)).sort((a, b) => codes.get(a)!.localeCompare(codes.get(b)!, "es", { numeric: true })).map(oid => ({ id: oid, code: codes.get(oid)!, statement: outcomes.find(o => o.id === oid)!.statement }));
     // Teacher notes stay in the draft; students only receive what is meant for them.
     const published = { ...lesson, outcomes: learning, activities: studentActivities(lesson.activities), resources: resourceIds.map(rid => library.find(r => r.id === rid)!), publishedAt: new Date().toISOString(), revision: row.revision + 1 };
