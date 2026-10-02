@@ -15,6 +15,7 @@ import { CourseRoute } from "./pages/course/CourseRoute";
 import { Library } from "./pages/Library";
 import { Search } from "./pages/Search";
 import { Help, NotFound } from "./pages/Help";
+import { StyleGuide } from "./pages/StyleGuide";
 import { Members, OrganizationSettings, AcademicSettings } from "./pages/admin";
 const StudentLesson = lazy(() => import("./pages/StudentLesson").then(module => ({ default: module.StudentLesson })));
 
@@ -113,6 +114,7 @@ function page(first: string, second?: string) {
     case "biblioteca": return <Library/>;
     case "buscar": return <Search/>;
     case "ayuda": return <Help/>;
+    case "guia-de-estilo": return <StyleGuide/>;
     case "organizacion": return <OrganizationSettings/>;
     case "educadores": return <Members/>;
     case "configuracion-academica": return <AcademicSettings/>;

@@ -22,6 +22,8 @@ export function Help() {
       <h2>Datos y privacidad</h2>
       <p>La asistencia guarda solo el nombre de lista, el grupo, la fecha y el estado. No pide correo, teléfono, fecha de nacimiento ni notas. Solo el equipo docente del curso la consulta.</p>
       <p>Las lecciones publicadas se abren sin cuenta. Solo se cuenta cuántas veces se terminó una lección; no se guardan nombres ni respuestas. La sesión del equipo dura hasta ocho horas.</p>
+      <h2>Diseño</h2>
+      <p>La interfaz sigue Fluent Design de Microsoft. La <Link href="/guia-de-estilo">guía de estilo</Link> muestra sus principios y todos los componentes.</p>
       <h2>Esta demostración</h2>
       <p>Las cuentas de demostración son compartidas. Usa datos ficticios y no escribas información personal real.</p>
       <h2>Si algo no responde</h2>
