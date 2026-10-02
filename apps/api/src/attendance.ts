@@ -1,6 +1,7 @@
 import type { ClassGroup, ClassSession, GroupLearner, Member } from "@happy-learners/contracts";
 import type { Database } from "./storage";
 import { configurationOf } from "./courses";
+import { event, recordEvent } from "./team";
 
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
 const unavailable = () => reply({ error: "El grupo o la clase no está disponible en este curso." }, 404);
@@ -25,7 +26,7 @@ export async function classroom(path: string, method: string, input: unknown, cu
     const name = typeof value?.name === "string" ? value.name.trim() : "";
     if (!name || name.length > 100) return reply({ error: "Escribe un nombre de grupo de hasta 100 caracteres." }, 400);
     const id = `group-${crypto.randomUUID()}`;
-    await db.prepare("INSERT INTO course_groups(id,course_id,organization_id,name,created_at) VALUES (?,?,?,?,?)").bind(id, courseId, current.organizationId, name, now).run();
+    await db.batch([db.prepare("INSERT INTO course_groups(id,course_id,organization_id,name,created_at) VALUES (?,?,?,?,?)").bind(id, courseId, current.organizationId, name, now), event(db, current, { action: "created", targetType: "group", targetId: id, courseId, summary: `Creó el grupo «${name}»` })]);
     return reply({ id }, 201);
   }
   if (parts[4] === "groups" && parts[6] === "learners" && method === "POST") {
@@ -54,7 +55,7 @@ export async function classroom(path: string, method: string, input: unknown, cu
     const lessonId = typeof value?.lessonId === "string" && value.lessonId ? value.lessonId : null;
     if (lessonId && !await db.prepare("SELECT l.id FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id WHERE l.id=? AND u.course_id=?").bind(lessonId, courseId).first()) return reply({ error: "La lección seleccionada no pertenece a este curso." }, 400);
     const id = `class-${crypto.randomUUID()}`;
-    await db.prepare("INSERT INTO class_sessions(id,group_id,course_id,organization_id,lesson_id,session_date,created_at) VALUES (?,?,?,?,?,?,?)").bind(id, groupId, courseId, current.organizationId, lessonId, date, now).run();
+    await db.batch([db.prepare("INSERT INTO class_sessions(id,group_id,course_id,organization_id,lesson_id,session_date,created_at) VALUES (?,?,?,?,?,?,?)").bind(id, groupId, courseId, current.organizationId, lessonId, date, now), event(db, current, { action: "recorded", targetType: "session", targetId: id, courseId, summary: `Registró la clase del ${date}` })]);
     return reply({ id }, 201);
   }
   if (parts[4] === "sessions" && parts[5]) {
@@ -73,6 +74,8 @@ export async function classroom(path: string, method: string, input: unknown, cu
     const roster = await db.prepare("SELECT id FROM group_learners WHERE group_id=? AND status='active'").bind(session.groupId).all<{ id: string }>();
     if (marks.length !== roster.results.length || marks.some(mark => !roster.results.some(learner => learner.id === mark.learnerId))) return reply({ error: "La lista cambió. Recárgala antes de guardar." }, 409);
     await db.batch(marks.map(mark => db.prepare("INSERT INTO attendance_marks(session_id,learner_id,status,updated_at) VALUES (?,?,?,?) ON CONFLICT(session_id,learner_id) DO UPDATE SET status=excluded.status,updated_at=excluded.updated_at").bind(sessionId, String(mark.learnerId), String(mark.status), now)));
+    const present = marks.filter(mark => mark.status === "present" || mark.status === "late").length;
+    await recordEvent(db, current, { action: "recorded", targetType: "session", targetId: sessionId, courseId, summary: `Pasó lista del ${session.sessionDate}: ${present} de ${marks.length} presentes` });
     return reply({ saved: marks.length });
   }
   return reply({ error: "Ruta no disponible." }, 404);

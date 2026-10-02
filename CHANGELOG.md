@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.7.0 — 2026-10-02
+
+Organización de demostración completa, equipos docentes e historial de actividad (HL-44 / ST-041).
+
+- **Equipo docente:** cada curso tiene una persona responsable y colaboradores. Se ve en las tarjetas y el resumen del curso, se gestiona en **Configuración → Equipo docente** y se filtra en **Cursos** por responsable. Quien crea un curso queda como responsable.
+- **Historial de actividad:** se registra quién creó o actualizó cursos, programas, módulos, competencias, resultados, recursos y lecciones; quién planificó, publicó, archivó o subió archivos; y quién registró clases y pasó lista. Aparece con autor en Inicio (*Actividad en mis cursos*), en el resumen del curso y en Educadores.
+- **Avance:** *Mis cursos* en Inicio muestra lecciones publicadas, resultados evaluados y asistencia de los cursos en que participas. **Educadores** muestra, por persona, cursos, lecciones creadas, publicaciones, clases registradas y última actividad, junto al avance de cada curso.
+- **Nombres visibles** de las personas en la barra superior, los equipos y la actividad.
+- **Seed de demostración** (`0015_demo_organization.sql`, generado por `scripts/seed/build.mjs`):
+  - Colegio Horizonte con 6 personas (1 coordinación y 5 educadores) y 3 programas.
+  - 6 cursos con plan curricular, módulos, 32 lecciones con actividades compuestas y notas docentes, y 15 recursos etiquetados.
+  - 7 grupos con 102 participantes ficticios, 76 clases con 884 registros de asistencia, 447 finalizaciones y 224 eventos de historial.
+  - Incluye estados variados: borradores, cambios sin publicar, un hueco curricular y un curso archivado.
+  - Guía en `docs/demo/organizacion-demo.md`.
+- **Migraciones:** `0014_course_teams_activity.sql` (nombres, `course_members` con un único responsable, `activity_events`). Las migraciones grandes se ejecutan por partes para respetar el límite de longitud SQL de Durable Objects.
+- **Correcciones móviles:** las cuadrículas, pilas y paneles ya no desbordan en pantallas de 390 px.
+
 ## 0.6.0 — 2026-10-01
 
 Rediseño con Fluent Design de Microsoft (HL-44 / ST-041). Sin cambios de API ni de datos.

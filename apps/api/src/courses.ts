@@ -2,6 +2,7 @@ import type { Competency, Course, CourseFormat, CourseSettings, Curriculum, Educ
 import { cleanText, competencyInput, competencyLimit, completeOrder, courseInput, materialInput, outcomeInput, outcomeLimit, programInput, record, resolveSettings, validOutcomeIds } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { filesFor } from "./files";
+import { event, recordEvent, teamsFor, updateTeam } from "./team";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
 const missing = () => reply({ error: "El elemento no está disponible en tu organización." }, 404);
@@ -103,10 +104,11 @@ export async function courses(path: string, method: string, input: unknown, curr
   const course = list.find(c => c.id === id);
   if (id && !course) return missing();
   if (method === "GET") {
-    if (!id) return reply({ courses: list.map(({ legacyProgramId: _, ...c }) => c) });
+    const teams = await teamsFor(db, current.organizationId);
+    if (!id) return reply({ courses: list.map(({ legacyProgramId: _, ...c }) => ({ ...c, team: teams.get(c.id) || [] })) });
     if (area === "materials") return reply({ materials: [...await materialsFor(db, current.organizationId, id), ...await filesFor(db, current.organizationId, id)] });
     const { legacyProgramId: _, ...view } = course!;
-    return reply({ course: view, units: await unitsFor(db, id), curriculum: await curriculumFor(db, id) });
+    return reply({ course: { ...view, team: teams.get(view.id) || [] }, units: await unitsFor(db, id), curriculum: await curriculumFor(db, id) });
   }
   if (current.role !== "educator") return reply({ error: "Solo educadores pueden preparar cursos y materiales." }, 403);
   const v = record(input);
@@ -114,6 +116,7 @@ export async function courses(path: string, method: string, input: unknown, curr
   const now = new Date().toISOString();
   const guard = () => db.prepare("UPDATE courses SET version=version+1,updated_at=? WHERE id=? AND organization_id=? AND version=? AND status='active' RETURNING id").bind(now, id, current.organizationId, Number.isInteger(v.version) ? Number(v.version) : -1);
   if (area && course?.status === "archived") return reply({ error: "Restaura el curso antes de modificarlo. Sus enlaces publicados se conservan." }, 409);
+  if (area === "team") return updateTeam(id, Number.isInteger(v.version) ? Number(v.version) : -1, v, current, db);
   if (!area) {
     const data = courseInput(v);
     if (!data) return reply({ error: "Revisa el nombre, el objetivo y la configuración académica del curso: la educación formal necesita un nivel." }, 400);
@@ -130,12 +133,18 @@ export async function courses(path: string, method: string, input: unknown, curr
       const updated = await db.prepare("UPDATE courses SET title=?,objective=?,profile=?,program_id=?,education_type=?,level=?,format=?,modality=?,pacing=?,area=?,settings=?,status=?,updated_at=?,version=version+1 WHERE id=? AND organization_id=? AND version=? RETURNING id").bind(...values, cid, current.organizationId, Number.isInteger(v.version) ? Number(v.version) : -1).first();
       if (!updated) return conflict();
     } else {
+      // Whoever creates a course leads it until the team changes.
       await db.batch([
         db.prepare("INSERT INTO programs(id,organization_id,title) VALUES (?,?,?)").bind(cid, current.organizationId, data.title),
         db.prepare("INSERT INTO courses(title,objective,profile,program_id,education_type,level,format,modality,pacing,area,settings,status,updated_at,id,organization_id,legacy_program_id,unit_label) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'Módulos')").bind(...values, cid, current.organizationId, cid),
+        db.prepare("INSERT INTO course_members(course_id,organization_id,user_id,role,added_at) VALUES (?,?,?,'lead',?)").bind(cid, current.organizationId, current.id, now),
+        event(db, current, { action: "created", targetType: "course", targetId: cid, courseId: cid, summary: `Creó el curso «${data.title}»` }),
       ]);
+      return reply({ id: cid }, 201);
     }
-    return reply({ id: cid }, id ? 200 : 201);
+    const statusChanged = course.status !== data.status;
+    await recordEvent(db, current, { action: statusChanged ? (data.status === "archived" ? "archived" : "restored") : "updated", targetType: "course", targetId: cid, courseId: cid, summary: statusChanged ? `${data.status === "archived" ? "Archivó" : "Restauró"} el curso «${data.title}»` : `Actualizó la configuración de «${data.title}»` });
+    return reply({ id: cid }, 200);
   }
   if (area === "competencies") {
     const { competencies } = await curriculumFor(db, id);
@@ -148,7 +157,7 @@ export async function courses(path: string, method: string, input: unknown, curr
     const statement = itemId
       ? db.prepare("UPDATE course_competencies SET name=?,description=?,status=?,updated_at=? WHERE id=? AND course_id=?").bind(data.name, data.description, data.status, now, cid, id)
       : db.prepare("INSERT INTO course_competencies(id,course_id,organization_id,name,description,position,status,updated_at) VALUES (?,?,?,?,?,?,?,?)").bind(cid, id, current.organizationId, data.name, data.description, competencies.length, data.status, now);
-    if (!await db.guardedBatch(guard(), [statement])) return conflict();
+    if (!await db.guardedBatch(guard(), [statement, event(db, current, { action: itemId ? (data.status === "archived" ? "archived" : "updated") : "created", targetType: "competency", targetId: cid, courseId: id, summary: `${itemId ? "Actualizó" : "Agregó"} la competencia «${data.name}»` })])) return conflict();
     return reply({ id: cid }, itemId ? 200 : 201);
   }
   if (area === "outcomes") {
@@ -168,7 +177,7 @@ export async function courses(path: string, method: string, input: unknown, curr
     const statement = itemId
       ? db.prepare("UPDATE course_outcomes SET competency_id=?,statement=?,level=?,evidence=?,status=?,updated_at=? WHERE id=? AND course_id=?").bind(data.competencyId, data.statement, data.level, data.evidence, data.status, now, oid, id)
       : db.prepare("INSERT INTO course_outcomes(id,course_id,organization_id,competency_id,statement,level,evidence,position,status,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(oid, id, current.organizationId, data.competencyId, data.statement, data.level, data.evidence, outcomes.length, data.status, now);
-    if (!await db.guardedBatch(guard(), [statement])) return conflict();
+    if (!await db.guardedBatch(guard(), [statement, event(db, current, { action: itemId ? (data.status === "archived" ? "archived" : "updated") : "created", targetType: "outcome", targetId: oid, courseId: id, summary: `${itemId ? "Actualizó" : "Definió"} el resultado «${data.statement.slice(0, 120)}»` })])) return conflict();
     return reply({ id: oid }, itemId ? 200 : 201);
   }
   if (area === "units" && itemId && path.split("/")[6] === "outcomes") {
@@ -177,7 +186,8 @@ export async function courses(path: string, method: string, input: unknown, curr
     const previous = unitOutcomes.filter(link => link.unitId === itemId).map(link => link.outcomeId);
     if (!validOutcomeIds(v.outcomeIds) || v.outcomeIds.some(oid => !outcomes.some(o => o.id === oid && (o.status === "active" || previous.includes(oid))))) return reply({ error: "Elige resultados de aprendizaje activos de este curso." }, 400);
     const changes = [db.prepare("DELETE FROM unit_outcomes WHERE unit_id=? AND course_id=?").bind(itemId, id), ...v.outcomeIds.map(oid => db.prepare("INSERT INTO unit_outcomes(unit_id,outcome_id,course_id) VALUES (?,?,?)").bind(itemId, oid, id))];
-    if (!await db.guardedBatch(guard(), changes)) return conflict();
+    const unitName = units.find(u => u.id === itemId)!.name;
+    if (!await db.guardedBatch(guard(), [...changes, event(db, current, { action: "planned", targetType: "module", targetId: itemId, courseId: id, summary: `Planificó ${v.outcomeIds.length} ${v.outcomeIds.length === 1 ? "resultado" : "resultados"} en «${unitName}»` })])) return conflict();
     return reply({ ok: true });
   }
   if (area === "units") {
@@ -195,7 +205,7 @@ export async function courses(path: string, method: string, input: unknown, curr
     const statement = itemId
       ? db.prepare("UPDATE learning_units SET name=?,objective=?,status=?,updated_at=? WHERE id=? AND course_id=?").bind(name, objective, String(v.status), now, uid, id)
       : db.prepare("INSERT INTO learning_units(id,course_id,name,objective,position,status,updated_at) VALUES (?,?,?,?,?,?,?)").bind(uid, id, name, objective, units.length, String(v.status), now);
-    if (!await db.guardedBatch(guard(), [statement])) return conflict();
+    if (!await db.guardedBatch(guard(), [statement, event(db, current, { action: itemId ? (String(v.status) === "archived" ? "archived" : "updated") : "created", targetType: "module", targetId: uid, courseId: id, summary: `${itemId ? "Actualizó" : "Creó"} «${name}»` })])) return conflict();
     return reply({ id: uid }, itemId ? 200 : 201);
   }
   if (area === "materials") {
@@ -220,6 +230,7 @@ export async function courses(path: string, method: string, input: unknown, curr
     } else {
       await db.batch([db.prepare("INSERT INTO materials(id,course_id,organization_id,title,description,content,kind,status,updated_at) VALUES (?,?,?,?,?,?,?,?,?)").bind(mid, id, current.organizationId, data.title, data.description, data.content, data.kind, data.status, now), ...relationships]);
     }
+    await recordEvent(db, current, { action: itemId ? (data.status === "archived" ? "archived" : "updated") : "created", targetType: "resource", targetId: mid, courseId: id, summary: `${itemId ? "Actualizó" : "Agregó"} el recurso «${data.title}»` });
     return reply({ material: (await materialsFor(db, current.organizationId, id)).find(m => m.id === mid) }, itemId ? 200 : 201);
   }
   return missing();
@@ -250,5 +261,6 @@ export async function programs(path: string, method: string, input: unknown, cur
     const created = await db.prepare("INSERT INTO study_programs(name,name_key,description,education_type,level,format,modality,pacing,area,settings,locked,status,updated_at,id,organization_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(organization_id,name_key) DO NOTHING RETURNING id").bind(...values, pid, current.organizationId).first();
     if (!created) return reply({ error: "Ese nombre ya fue registrado. Actualiza la lista." }, 409);
   }
+  await recordEvent(db, current, { action: old ? (data.status !== old.status ? (data.status === "archived" ? "archived" : "restored") : "updated") : "created", targetType: "program", targetId: pid, summary: `${old ? "Actualizó" : "Creó"} el programa «${data.name}»` });
   return reply({ id: pid, programs: await programsFor(db, current.organizationId) }, id ? 200 : 201);
 }

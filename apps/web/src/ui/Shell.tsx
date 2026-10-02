@@ -63,7 +63,7 @@ function TopBar({ menuButton }: { menuButton: ReactNode }) {
     </form>
     <div className="topbar-actions">
       <Link href="/ayuda" className="icon-button" aria-label="Ayuda"><Icon name="help"/></Link>
-      <Menu label={`Perfil de ${member.username}`} icon="user" text={member.username} items={[
+      <Menu label={`Perfil de ${member.displayName || member.username}`} icon="user" text={member.displayName || member.username} items={[
         { label: `${roleLabel(member)}${organization?.name ? ` · ${organization.name}` : ""}`, icon: "shield", onSelect: () => {}, disabled: true },
         "separator",
         { label: "Cerrar sesión", icon: "logout", onSelect: logout },

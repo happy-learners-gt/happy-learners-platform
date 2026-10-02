@@ -10,6 +10,7 @@ import { Icon } from "../ui/icons";
 import type { IconName } from "../ui/icons";
 import { LessonBadge } from "../ui/LessonOutline";
 import { EmptyState, ErrorState, Loading, PrimaryAction, Section, StatTiles, Updated } from "../ui/primitives";
+import { ActivityFeed, CourseProgressList, useProgress } from "../ui/progress";
 
 type Upcoming = ClassSession & { courseId: string; courseTitle: string };
 type Data = { courses: Course[]; lessons: Lesson[]; stats: Record<string, CourseStats>; units: Record<string, LearningUnit[]>; upcoming: Upcoming[] };
@@ -17,6 +18,8 @@ type Data = { courses: Course[]; lessons: Lesson[]; stats: Record<string, Course
 export function Home() {
   const { member, organization } = useSession();
   const educator = isEducator(member);
+  const progress = useProgress();
+  const mine = progress.courses?.filter(item => item.team.some(person => person.userId === member.id));
   const [data, setData] = useState<Data | null>(null), [error, setError] = useState("");
   async function load() {
     setError("");
@@ -38,7 +41,7 @@ export function Home() {
     <div className="welcome-text">
       <span className="welcome-date">{todayLabel.charAt(0).toUpperCase() + todayLabel.slice(1)}{organization?.name ? ` · ${organization.name}` : ""}</span>
       <h1>Inicio</h1>
-      <p>Hola, {member.username}. {summary || "Esto es lo que sigue en tu espacio."}</p>
+      <p>Hola, {member.displayName || member.username}. {summary || "Esto es lo que sigue en tu espacio."}</p>
     </div>
     {educator ? <PrimaryAction href="/cursos/nuevo" icon="plus" className="on-brand">Crear curso</PrimaryAction> : <PrimaryAction href="/educadores" icon="users" className="on-brand">Administrar educadores</PrimaryAction>}
     <span className="welcome-shapes" aria-hidden="true"><span/><span/><span/></span>
@@ -80,13 +83,14 @@ export function Home() {
             <Link href={`/cursos/${lesson.courseId}/lecciones/${lesson.id}`}>{lesson.title}</Link><span className="link-list-meta">{courseTitle(lesson.courseId)} · {timeAgo(lesson.updatedAt)}</span><LessonBadge lesson={lesson}/>
           </li>)}</ul>}
         </Section>
-        <Section title="Cursos recientes" className="order-4" action={<Link href="/cursos" className="section-link">Ver todos</Link>}>
-          {recentCourses.length ? <div className="card-grid">{recentCourses.map(course => <CourseCard key={course.id} course={course} stats={data.stats[course.id]}/>)}</div>
-            : <EmptyState compact icon="courses" title="Sin cursos activos" action={educator ? <PrimaryAction href="/cursos/nuevo" icon="plus">Crear curso</PrimaryAction> : undefined}/>}
+        <Section title={educator && mine?.length ? "Mis cursos" : "Avance de los cursos"} className="order-4" action={<Link href="/cursos" className="section-link">Ver todos</Link>}>
+          {/* An educator sees the courses they teach; administration (or someone without courses) sees all. */}
+          {progress.error ? <p className="form-alert" role="alert">{progress.error}</p> : !progress.courses ? <Loading label="Calculando avance…" lines={3}/>
+            : <CourseProgressList courses={educator && mine?.length ? mine : progress.courses} userId={educator && mine?.length ? member.id : undefined}/>}
+          {!recentCourses.length && <EmptyState compact icon="courses" title="Sin cursos activos" action={educator ? <PrimaryAction href="/cursos/nuevo" icon="plus">Crear curso</PrimaryAction> : undefined}/>}
         </Section>
-        <Section title="Actividad reciente" className="order-6">
-          {activity.length ? <ol className="activity-feed">{activity.map(item => <li key={item.id}><span className="feed-icon" aria-hidden="true"><Icon name={item.icon} size={16}/></span><div><Link href={item.href}>{item.title}</Link><span>{item.detail}</span></div><Updated value={item.updatedAt} prefix=""/></li>)}</ol>
-            : <p className="muted">Todavía no hay cambios.</p>}
+        <Section title={educator && mine?.length ? "Actividad en mis cursos" : "Actividad reciente"} className="order-6">
+          <ActivityFeed limit={8} mine={!!(educator && mine?.length)} courseTitles={Object.fromEntries(data.courses.map(course => [course.id, course.title]))}/>
         </Section>
       </div>
       <div className="dashboard-side">

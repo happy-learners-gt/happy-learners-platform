@@ -9,6 +9,7 @@ import { roles } from "./roles";
 import { curriculum } from "./curriculum";
 import { content, shared } from "./content";
 import { courses, programs, taxonomy } from "./courses";
+import { activity, people, progress } from "./team";
 import { classroom } from "./attendance";
 import { courseFiles, sharedFile } from "./files";
 import { LessonCollaborationRoom } from "./collaboration";
@@ -42,7 +43,7 @@ async function body(request: Request): Promise<unknown> {
 async function member(request: Request, db: Database): Promise<Member | null> {
   const token = sessionToken(request);
   if (!token) return null;
-  return db.prepare("SELECT u.id, u.username, CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END AS role, m.organization_id AS organizationId FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND m.active=1")
+  return db.prepare("SELECT u.id, u.username, COALESCE(u.display_name,u.username) AS displayName, CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END AS role, m.organization_id AS organizationId FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND m.active=1")
     .bind(await digest(token), Date.now()).first<Member>();
 }
 async function route(request: Request, env: Env): Promise<Response> {
@@ -73,6 +74,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/courses\/[a-z0-9-]+\/(units|materials|competencies|outcomes)\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/(competencies|outcomes)$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/units\/[a-z0-9-]+\/outcomes$/.test(path)) methods[path] = ["PUT"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/team$/.test(path)) methods[path] = ["PUT"];
+  if (path === "/api/activity" || path === "/api/progress" || path === "/api/people") methods[path] = ["GET"];
   if (/^\/api\/courses\/[a-z0-9-]+\/files$/.test(path)) methods[path] = ["GET", "POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/files\/[a-z0-9-]+\/content$/.test(path)) methods[path] = ["GET"];
   if (/^\/api\/courses\/[a-z0-9-]+\/files\/[a-z0-9-]+\/archive$/.test(path)) methods[path] = ["POST"];
@@ -151,6 +154,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions)(\/|$)/.test(path)) return classroom(path, method, input, current, db);
   if (/^\/api\/courses(\/|$)/.test(path)) return courses(path, method, input, current, db);
   if (/^\/api\/programs(\/|$)/.test(path)) return programs(path, method, input, current, db);
+  if (path === "/api/activity") return activity(url, current, db);
+  if (path === "/api/progress") return progress(current, db);
+  if (path === "/api/people") return people(current, db);
   if (path.startsWith("/api/members")) return roles(path, method, input, current, db);
   if (/^\/api\/(curriculum|levels|units)(\/|$)/.test(path)) return curriculum(path, method, input, current, db);
   if (!["GET", "HEAD"].includes(method) && path !== "/api/organization" && current.role !== "educator") return json({ error: "Solo educadores pueden modificar contenido." }, 403);
@@ -187,7 +193,7 @@ export default {
     catch (error) {
       if (error instanceof Error && error.message === "INPUT") return json({ error: "Revisa los datos del formulario." }, 400);
       const cause = error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 240) : "Unknown error";
-      console.error(JSON.stringify({ event: "request_failed", code: "DEPENDENCY_UNAVAILABLE", release: "0.6.0", sha, cause }));
+      console.error(JSON.stringify({ event: "request_failed", code: "DEPENDENCY_UNAVAILABLE", release: "0.7.0", sha, cause }));
       return json({ error: "El servicio no está disponible. Vuelve a intentar en un momento." }, 503, { "Retry-After": "30" });
     }
   },
