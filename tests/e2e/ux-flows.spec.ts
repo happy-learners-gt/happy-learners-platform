@@ -1,4 +1,6 @@
 import { test, expect } from "./local-test";
+// @ts-expect-error — plain ESM script without type declarations
+import { courses as seedCourses } from "../../scripts/seed/build.mjs";
 import { activity, addActivity, courseNav, createLesson, e2eName, E2E_PREFIX, legacyContamination, openCourse, openNavigation, saveStatus, sessionToken, signIn, signInWithForm, toast, publish } from "./helpers";
 
 test("1 · login → course → content, with one navigation system and working Back", async ({ page }) => {
@@ -207,7 +209,10 @@ test("7 · no E2E contamination is visible: only curated data or cleanable E2E-p
     }
     names.push(...(await (await api.get("/api/lessons?drafts=1")).json()).lessons.map((lesson: { title: string }) => lesson.title));
     names.push(...(await (await api.get("/api/resources")).json()).resources.map((item: { title: string }) => item.title));
-    const curated = new Set(["Exploradores", "Greetings", "Greetings and Introductions", "Un mundo de colores", "Colores en clase", "Grupo de demostración", "Colors around us", "Greetings song", "Introduce yourself"]);
+    // Curated names: the original demo plus everything the demo organization seed defines.
+    const seeded = (seedCourses as { title: string; resources: { title: string }[]; groups: { name: string }[]; modules: { name: string; lessons: { title: string }[] }[] }[])
+      .flatMap(course => [course.title, ...course.resources.map(item => item.title), ...course.groups.map(item => item.name), ...course.modules.flatMap(module => [module.name, ...module.lessons.map(lesson => lesson.title)])]);
+    const curated = new Set(["Exploradores", "Greetings", "Greetings and Introductions", "Un mundo de colores", "Colores en clase", "Grupo de demostración", "Colors around us", "Greetings song", "Introduce yourself", ...seeded]);
     expect(names.filter(name => legacyContamination.test(name))).toEqual([]);
     const unexpected = names.filter(name => !curated.has(name) && !name.startsWith(E2E_PREFIX));
     expect(unexpected, "records created by E2E must carry the E2E prefix").toEqual([]);

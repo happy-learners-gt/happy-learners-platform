@@ -8,6 +8,7 @@ import { Icon } from "../../ui/icons";
 import { LessonBadge } from "../../ui/LessonOutline";
 import { EmptyState, PageHeader, PrimaryAction, Progress, Section, StatTiles, StatusBadge, Updated } from "../../ui/primitives";
 import { useCourseActions } from "../Courses";
+import { ActivityFeed, Avatar, roleLabel } from "../../ui/progress";
 import { useCourse } from "./context";
 import type { GroupView } from "./Groups";
 
@@ -73,8 +74,12 @@ export function Overview() {
           {next ? <p className="muted small">Próxima clase: {sessionDay(next.sessionDate)} · {next.groupName}</p> : <p className="muted small">No hay clases próximas. <Link href={`${base}/asistencia`}>Registrar una clase</Link></p>}
         </> : <EmptyState compact icon="users" title="Sin grupos" action={writable && <Link className="button secondary small" href={`${base}/grupos`}>Crear grupo</Link>}>Crea un grupo para registrar la asistencia de cada clase.</EmptyState>}
       </Section>}
+      <Section title="Equipo docente" action={writable && <Link href={`${base}/configuracion#equipo`} className="section-link">Gestionar equipo</Link>}>
+        {course.team?.length ? <ul className="team-list">{course.team.map(person => <li key={person.userId}><Avatar name={person.name} size={32}/><div><strong>{person.name}</strong><span className="muted small">@{person.username}</span></div><StatusBadge tone={person.role === "lead" ? "info" : "neutral"}>{roleLabel[person.role]}</StatusBadge></li>)}</ul>
+          : <EmptyState compact icon="users" title="Sin equipo asignado" action={writable && <Link className="button secondary small" href={`${base}/configuracion#equipo`}>Asignar responsable</Link>}>Asigna quién es responsable del curso y quién colabora.</EmptyState>}
+      </Section>
       <Section title="Actividad reciente">
-        {recent.length ? <ol className="activity-feed">{recent.map(item => <li key={item.id}><span className="feed-icon" aria-hidden="true"><Icon name={item.kind === "Lección" ? "content" : "library"} size={16}/></span><div><Link href={item.href}>{item.title}</Link><span>{item.kind}</span></div><Updated value={item.updatedAt} prefix=""/></li>)}</ol> : <p className="muted">Sin cambios recientes.</p>}
+        <ActivityFeed course={course.id} limit={6} empty="Las acciones del equipo en este curso aparecerán aquí."/>
       </Section>
       {writable && <Section title="Accesos rápidos" className="span-2 quick-wide">
         <ul className="quick-actions">

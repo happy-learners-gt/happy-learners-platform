@@ -1,6 +1,18 @@
 export interface HealthResponse { status: "ok" }
 export interface VersionResponse { sha: string }
-export interface Member { id: string; username: string; role: "admin" | "educator"; organizationId: string; active?: boolean }
+export interface Member { id: string; username: string; displayName?: string; role: "admin" | "educator"; organizationId: string; active?: boolean }
+/** Someone on a course's teaching team: the lead or a co-teacher. */
+export interface CourseMember { userId: string; username: string; name: string; role: "lead" | "co-teacher" }
+/** An audited operation: who did what, on which course, and when. */
+export interface ActivityEvent {
+  id: string; actorId: string; actorName: string; action: "created" | "updated" | "published" | "archived" | "restored" | "planned" | "recorded" | "uploaded" | "assigned";
+  targetType: "course" | "program" | "module" | "lesson" | "resource" | "competency" | "outcome" | "group" | "session" | "team"; targetId: string; courseId?: string | null; summary: string; occurredAt: string;
+}
+/** How far a course has come: content, curriculum coverage and attendance. */
+export interface CourseProgress {
+  courseId: string; title: string; team: CourseMember[]; lessons: number; published: number; changes: number;
+  outcomes: number; taught: number; assessed: number; sessions: number; attendanceRate: number | null; learners: number; lastActivity: string | null;
+}
 export interface Organization { id: string; name: string | null; timezone: string; configured: boolean }
 export interface Level { id: string; name: string; description: string; position: number; status: "draft" | "active" | "archived"; updatedAt: string }
 export interface Unit { id: string; levelId: string; name: string; objective: string; position: number; status: "active" | "archived"; updatedAt: string }
@@ -61,6 +73,8 @@ export interface Course extends AcademicProfile {
   /** ISCED-F 2013 field: a broad field (2 digits) or a narrow field (3 digits). */
   area?: string; settings: CourseSettings;
   status: "active" | "archived"; version: number; updatedAt: string;
+  /** Teaching team, lead first. */
+  team?: CourseMember[];
 }
 export interface LearningUnit {
   id: string; courseId: string; name: string; objective: string; position: number;
