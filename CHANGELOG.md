@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.6.0 — 2026-10-01
+
+Rediseño con Fluent Design de Microsoft (HL-44 / ST-041). Sin cambios de API ni de datos.
+
+- **Tokens oficiales de Fluent 2** (`@fluentui/tokens`) generados en `fluent/tokens.css` con la rampa de marca violeta. `theme.css` traduce cada token de la app a uno de Fluent: neutros, paletas, estados, rampa de sombras, radios, duraciones, curvas y tipografía.
+- **Luz:** las tarjetas y los paneles se iluminan bajo el puntero, y el foco usa el indicador de Fluent.
+- **Profundidad:** rampa de sombras 2/4/8/16/28/64 según la jerarquía.
+- **Movimiento:** entradas que desaceleran, salidas que aceleran y cambios de estado suaves, sin rebotes. Respeta el movimiento reducido.
+- **Material:** acrílico en la barra superior, los menús, el cajón móvil y el inicio de sesión; mica en la capa base. Se vuelve sólido sin soporte de desenfoque o con transparencia reducida.
+- **Escala:** Segoe UI Variable con la fuente del sistema como respaldo, rampa tipográfica de Fluent, controles de 36 px (44 px táctiles) y esquinas de 4, 8 y 12 px. Se retiran las fuentes Inter y Plus Jakarta Sans.
+- **Componentes Fluent:**
+  - Botones: principal, secundario, sutil y peligro.
+  - Campos con subrayado de marca al enfocar y pestañas segmentadas con indicador.
+  - Menús y toasts como flyouts.
+  - Diálogos con sombra 64.
+  - Navegación con indicador de selección e icono relleno.
+  - Insignias, barra de progreso, tarjetas y paneles.
+- **Iconos:** Fluent System Icons (`@fluentui/react-icons`).
+- **Guía de estilo** en la aplicación (`/guia-de-estilo`) y documentación en `docs/design/fluent.md`.
+- **Pruebas nuevas:** los tokens generados no se desvían del paquete, cada token semántico apunta a uno de Fluent y los componentes no tienen colores literales. La guía de estilo entra en la auditoría axe.
+- **Correcciones:** el menú de un módulo ya no se recorta dentro de su tarjeta y el diálogo queda centrado en móvil.
+
 ## 0.5.0 — 2026-10-01
 
 Modelo académico (HL-44 / ST-041). La configuración del curso pasa de etiquetas libres a dimensiones estándar con consecuencias reales.

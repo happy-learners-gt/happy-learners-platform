@@ -25,7 +25,7 @@ test("main routes have no WCAG 2.2 A/AA violations detectable by axe", async ({ 
     ["contenido", "/cursos/course-exploradores/contenido"], ["editor", "/cursos/course-exploradores/lecciones/greetings-and-introductions"],
     ["vista previa", "/cursos/course-exploradores/lecciones/greetings-and-introductions?vista=previa"], ["biblioteca del curso", "/cursos/course-exploradores/biblioteca"],
     ["grupos", "/cursos/course-exploradores/grupos"], ["asistencia", "/cursos/course-exploradores/asistencia"], ["configuración", "/cursos/course-exploradores/configuracion"],
-    ["biblioteca", "/biblioteca"], ["buscar", "/buscar?q=greet"], ["ayuda", "/ayuda"],
+    ["biblioteca", "/biblioteca"], ["buscar", "/buscar?q=greet"], ["ayuda", "/ayuda"], ["guía de estilo", "/guia-de-estilo"],
   ]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1 }).first()).toBeAttached();

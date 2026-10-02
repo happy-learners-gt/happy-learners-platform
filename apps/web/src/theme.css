@@ -1,80 +1,111 @@
-/* Happy Learners theme · v0.2.4
-   Every visual decision lives here as a token; components in style.css only read tokens.
+/* Happy Learners theme · Fluent 2 (v0.6.0)
+   Layer 1 — fluent/tokens.css: official Fluent 2 tokens (@fluentui/tokens), generated, never edited.
+   Layer 2 — this file: the app's semantic tokens, each one pointing at a Fluent token. Components in
+   style.css read only these semantic tokens, so a component never hard-codes a colour, radius, shadow or curve.
    Breakpoints (media queries cannot read custom properties): sm 640px · md 1024px · lg 1280px.
-   Contrast: text tokens ≥ 4.5:1 on surface, canvas and their own soft tint; *-vivid tokens are
-   decorative only and never carry text. */
-:root {
-  /* Neutrals — cool slate with a hint of violet */
-  --color-canvas: #f5f6fb;
-  --color-surface: #ffffff;
-  --color-surface-muted: #f0f1f8;
-  --color-surface-sunken: #e7e9f3;
-  --color-border: #e2e4ef;
-  --color-border-strong: #8a8fa8;
-  --color-ink: #141729;
-  --color-ink-soft: #343a55;
-  --color-muted: #5b6180;
-  --color-placeholder: #6b7190;
+   Contrast: text tokens ≥ 4.5:1 on surface, canvas and their own soft tint; *-vivid tokens are decorative only. */
+@import "./fluent/tokens.css";
 
-  /* Tone families: vivid (decoration), ink (text/icons), soft (tint), solid (fill with white text) */
-  --violet-vivid: #7c6cf2; --violet-ink: #4b36cc; --violet-soft: #eeebff; --violet-solid: #5b45e0;
-  --coral-vivid: #ff7a5c;  --coral-ink: #b2381c;  --coral-soft: #ffede7;  --coral-solid: #d2452a;
-  --amber-vivid: #ffb224;  --amber-ink: #8a5200;  --amber-soft: #fff3d6;
-  --teal-vivid: #1fc7b4;   --teal-ink: #0b6f66;   --teal-soft: #ddf7f3;   --teal-solid: #0e8277;
-  --sky-vivid: #4da3ff;    --sky-ink: #1a5cc0;    --sky-soft: #e3f0ff;    --sky-solid: #2268d6;
-  --pink-vivid: #f25cb0;   --pink-ink: #ae2574;   --pink-soft: #fde6f2;   --pink-solid: #c8327f;
-  --green-vivid: #34c77b;  --green-ink: #16703f;  --green-soft: #e2f6ea;  --green-solid: #1c8048;
+:root {
+  /* Neutrals (Fluent neutral ramp) — canvas is the layer under cards, surface the card itself. */
+  --color-canvas: var(--colorNeutralBackground2);
+  --color-surface: var(--colorNeutralBackground1);
+  --color-surface-muted: var(--colorNeutralBackground3);
+  --color-surface-sunken: var(--colorNeutralBackground4);
+  --color-surface-hover: var(--colorSubtleBackgroundHover);
+  --color-surface-pressed: var(--colorSubtleBackgroundPressed);
+  --color-border: var(--colorNeutralStroke2);
+  --color-border-control: var(--colorNeutralStroke1);
+  --color-border-strong: var(--colorNeutralStrokeAccessible);
+  --color-ink: var(--colorNeutralForeground1);
+  --color-ink-soft: var(--colorNeutralForeground2);
+  --color-muted: var(--colorNeutralForeground3);
+  --color-placeholder: var(--colorNeutralForeground4);
+
+  /* Tone families from Fluent palettes: vivid (decoration), ink (text/icons), soft (tint), solid (fill with
+     white text). Palettes without a light tint derive it from their own colour (10 % over white). */
+  --violet-vivid: var(--brand-100); --violet-ink: var(--brand-60); --violet-soft: var(--brand-160); --violet-solid: var(--brand-80);
+  --coral-vivid: var(--colorPaletteDarkOrangeBorderActive); --coral-ink: var(--colorPaletteDarkOrangeForeground1); --coral-soft: var(--colorPaletteDarkOrangeBackground1); --coral-solid: var(--colorPaletteDarkOrangeForeground1);
+  --amber-vivid: var(--colorPaletteMarigoldBorderActive); --amber-ink: var(--colorPaletteMarigoldForeground2); --amber-soft: var(--colorPaletteMarigoldBackground1); --amber-solid: var(--colorPaletteMarigoldForeground2);
+  --teal-vivid: var(--colorPaletteTealBorderActive); --teal-ink: var(--colorPaletteTealForeground2); --teal-soft: color-mix(in srgb, var(--colorPaletteTealBorderActive) 10%, white); --teal-solid: color-mix(in srgb, var(--colorPaletteTealBorderActive) 78%, black);
+  --sky-vivid: var(--colorPaletteBlueBorderActive); --sky-ink: var(--colorPaletteBlueForeground2); --sky-soft: color-mix(in srgb, var(--colorPaletteBlueBorderActive) 10%, white); --sky-solid: color-mix(in srgb, var(--colorPaletteBlueBorderActive) 78%, black);
+  --pink-vivid: var(--colorPaletteBerryBorderActive); --pink-ink: var(--colorPaletteBerryForeground1); --pink-soft: var(--colorPaletteBerryBackground1); --pink-solid: var(--colorPaletteBerryForeground1);
+  --green-vivid: var(--colorPaletteGreenBorderActive); --green-ink: var(--colorPaletteGreenForeground1); --green-soft: var(--colorPaletteGreenBackground1); --green-solid: var(--colorPaletteGreenForeground1);
 
   /* Roles */
-  --color-primary: var(--violet-solid);
-  --color-primary-hover: var(--violet-ink);
-  --color-primary-ink: var(--violet-ink);
-  --color-primary-soft: var(--violet-soft);
-  --color-primary-line: #cfc8ff;
-  --color-focus: #7c6cf2;
-  --color-success: var(--green-ink);  --color-success-soft: var(--green-soft);
-  --color-warning: var(--amber-ink);  --color-warning-soft: var(--amber-soft);
-  --color-info: var(--sky-ink);       --color-info-soft: var(--sky-soft);
-  --color-danger: #b42318;            --color-danger-soft: #fdeceb; --color-danger-solid: #c4321f;
-  --color-neutral: #4f5572;           --color-neutral-soft: #eceef6;
-  --gradient-brand: linear-gradient(120deg, #4b36cc 0%, #7a2fc4 55%, #ae2574 100%);
-  --gradient-brand-soft: linear-gradient(120deg, #eeebff 0%, #f6e9ff 55%, #fde6f2 100%);
-  --gradient-progress: linear-gradient(90deg, #5b45e0, #c8327f);
+  --color-primary: var(--colorBrandBackground);
+  --color-primary-hover: var(--colorBrandBackgroundHover);
+  --color-primary-pressed: var(--colorBrandBackgroundPressed);
+  --color-primary-ink: var(--colorBrandForegroundLink);
+  --color-primary-soft: var(--colorBrandBackground2);
+  --color-primary-line: var(--brand-140);
+  --color-on-primary: var(--colorNeutralForegroundOnBrand);
+  --color-focus: var(--colorStrokeFocus2);
+  --color-focus-inner: var(--colorStrokeFocus1);
+  --color-success: var(--colorStatusSuccessForeground1);  --color-success-soft: var(--colorStatusSuccessBackground1);
+  --color-warning: var(--colorPaletteMarigoldForeground2); --color-warning-soft: var(--colorPaletteMarigoldBackground1);
+  --color-info: var(--colorBrandForeground2);              --color-info-soft: var(--colorBrandBackground2);
+  --color-danger: var(--colorStatusDangerForeground1);    --color-danger-soft: var(--colorStatusDangerBackground1); --color-danger-solid: var(--colorStatusDangerBackground3);
+  --color-neutral: var(--colorNeutralForeground3);        --color-neutral-soft: var(--colorNeutralBackground4);
+  --color-overlay: var(--colorBackgroundOverlay);
+  /* Fluent prefers flat colour; the brand gradient is a quiet two-step ramp used only on hero surfaces. */
+  --gradient-brand: linear-gradient(135deg, var(--brand-60) 0%, var(--brand-80) 100%);
+  --gradient-brand-soft: linear-gradient(135deg, var(--brand-160) 0%, var(--colorNeutralBackground1) 100%);
+  --gradient-progress: var(--colorBrandBackground);
 
-  /* Typography */
-  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-  --font-display: "Plus Jakarta Sans Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --text-xs: .75rem; --text-sm: .875rem; --text-base: .9375rem; --text-md: 1.0625rem; --text-lg: 1.25rem; --text-xl: 1.5rem; --text-2xl: 1.875rem; --text-3xl: 2.25rem;
-  --leading: 1.55; --leading-tight: 1.2; --leading-reading: 1.7;
-  --weight-regular: 420; --weight-medium: 560; --weight-bold: 680; --weight-heavy: 780;
-  --tracking-tight: -.015em; --word-display: .08em; --tracking-caps: .07em;
+  /* Material — Acrylic: translucent, blurred and lightly tinted; for chrome that overlays content
+     (top bar, menus, drawers, flyouts). Mica: the quiet, tinted base layer of the app window. */
+  --acrylic-background: color-mix(in srgb, var(--colorNeutralBackground1) 76%, transparent);
+  --acrylic-background-strong: color-mix(in srgb, var(--colorNeutralBackground1) 90%, transparent);
+  --acrylic-filter: blur(30px) saturate(125%);
+  --acrylic-stroke: color-mix(in srgb, var(--colorNeutralStroke2) 70%, transparent);
+  --mica: radial-gradient(1200px 480px at 0% -10%, color-mix(in srgb, var(--brand-160) 70%, transparent), transparent 70%), var(--colorNeutralBackground2);
 
-  /* Space (4px grid), radii, elevation */
+  /* Typography — Segoe UI Variable (Windows 11), Segoe UI, then each platform's system face; Fluent type ramp. */
+  --font-sans: "Segoe UI Variable Text", var(--fontFamilyBase);
+  --font-display: "Segoe UI Variable Display", var(--fontFamilyBase);
+  --font-mono: var(--fontFamilyMonospace);
+  --text-xs: var(--fontSizeBase200);   /* caption 1 · 12/16 */
+  --text-sm: var(--fontSizeBase300);   /* body 1 · 14/20 */
+  --text-base: var(--fontSizeBase300); /* body 1 · 14/20 */
+  --text-md: var(--fontSizeBase400);   /* subtitle 2 · 16/22 */
+  --text-lg: var(--fontSizeBase500);   /* subtitle 1 · 20/28 */
+  --text-xl: var(--fontSizeBase600);   /* title 3 · 24/32 */
+  --text-2xl: var(--fontSizeHero700);  /* title 2 · 28/36 */
+  --text-3xl: var(--fontSizeHero800);  /* title 1 · 32/40 */
+  --leading: 1.43; --leading-tight: 1.25; --leading-reading: 1.6;
+  --weight-regular: var(--fontWeightRegular); --weight-medium: var(--fontWeightMedium); --weight-bold: var(--fontWeightSemibold); --weight-heavy: var(--fontWeightBold);
+  --tracking-tight: 0; --word-display: normal; --tracking-caps: .04em;
+
+  /* Space (Fluent 4px grid), corner radius, elevation (Fluent shadow ramp) */
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-7: 28px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
-  --radius-xs: 6px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 22px; --radius-pill: 999px;
-  --shadow-xs: 0 1px 2px rgba(20, 23, 41, .05);
-  --shadow-sm: 0 1px 2px rgba(20, 23, 41, .04), 0 2px 8px -2px rgba(46, 38, 120, .08);
-  --shadow-md: 0 2px 4px rgba(20, 23, 41, .04), 0 10px 24px -8px rgba(46, 38, 120, .16);
-  --shadow-lg: 0 4px 8px rgba(20, 23, 41, .06), 0 24px 48px -12px rgba(46, 38, 120, .28);
-  --ring: 0 0 0 3px rgba(124, 108, 242, .35);
+  --radius-xs: var(--borderRadiusSmall); --radius-sm: var(--borderRadiusMedium); --radius-md: var(--borderRadiusMedium); --radius-lg: var(--borderRadiusXLarge); --radius-xl: var(--borderRadius2XLarge); --radius-pill: var(--borderRadiusCircular);
+  --shadow-xs: var(--shadow2); --shadow-sm: var(--shadow4); --shadow-md: var(--shadow8); --shadow-lg: var(--shadow28);
+  --shadow-flyout: var(--shadow16); --shadow-dialog: var(--shadow64);
+  --ring: inset 0 -2px 0 var(--colorCompoundBrandStroke);
 
-  /* Motion */
-  --motion-fast: 120ms; --motion-base: 200ms; --motion-slow: 320ms; --ease: cubic-bezier(.2, .8, .2, 1); --ease-spring: cubic-bezier(.34, 1.4, .64, 1);
+  /* Motion — Fluent durations and curves: enter decelerates, exit accelerates, state changes ease. */
+  --motion-fast: var(--durationFaster); --motion-base: var(--durationNormal); --motion-slow: var(--durationSlow);
+  --ease: var(--curveEasyEase); --ease-spring: var(--curveDecelerateMax); --ease-enter: var(--curveDecelerateMid); --ease-exit: var(--curveAccelerateMid);
 
   /* Layout */
-  --topbar-h: 60px; --sidebar-w: 256px; --content-max: 1480px; --page-gutter: 24px; --reading-max: 44rem; --touch: 44px; --control-h: 42px;
+  --topbar-h: 56px; --sidebar-w: 264px; --content-max: 1480px; --page-gutter: 24px; --reading-max: 44rem; --touch: 44px; --control-h: 36px;
 
-  color: var(--color-ink); background: var(--color-canvas); font-family: var(--font-sans); font-size: 16px; line-height: var(--leading);
+  color: var(--color-ink); background: var(--color-canvas); font-family: var(--font-sans); font-size: var(--fontSizeBase300); line-height: var(--leading);
   font-weight: var(--weight-regular); font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
-  font-feature-settings: "cv11", "ss01";
 }
+/* Touch: Fluent's large control size, so every target reaches 44 px. */
+@media (pointer: coarse) { :root { --control-h: 44px; } }
 @media (prefers-reduced-motion: reduce) { :root { --motion-fast: 0ms; --motion-base: 0ms; --motion-slow: 0ms; } *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
+/* Without blur support, or when the system asks for less transparency, acrylic becomes solid. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { :root { --acrylic-background: var(--colorNeutralBackground1); --acrylic-background-strong: var(--colorNeutralBackground1); } }
+@media (prefers-reduced-transparency: reduce) { :root { --acrylic-background: var(--colorNeutralBackground1); --acrylic-background-strong: var(--colorNeutralBackground1); --acrylic-filter: none; } }
+@media (forced-colors: active) { :root { --acrylic-filter: none; } }
 
 /* Tone utilities: a component reads --tone-* and any .tone-x ancestor recolours it. */
 .tone-violet { --tone-vivid: var(--violet-vivid); --tone-ink: var(--violet-ink); --tone-soft: var(--violet-soft); --tone-solid: var(--violet-solid); }
 .tone-coral  { --tone-vivid: var(--coral-vivid);  --tone-ink: var(--coral-ink);  --tone-soft: var(--coral-soft);  --tone-solid: var(--coral-solid); }
-.tone-amber  { --tone-vivid: var(--amber-vivid);  --tone-ink: var(--amber-ink);  --tone-soft: var(--amber-soft);  --tone-solid: var(--amber-ink); }
+.tone-amber  { --tone-vivid: var(--amber-vivid);  --tone-ink: var(--amber-ink);  --tone-soft: var(--amber-soft);  --tone-solid: var(--amber-solid); }
 .tone-teal   { --tone-vivid: var(--teal-vivid);   --tone-ink: var(--teal-ink);   --tone-soft: var(--teal-soft);   --tone-solid: var(--teal-solid); }
 .tone-sky    { --tone-vivid: var(--sky-vivid);    --tone-ink: var(--sky-ink);    --tone-soft: var(--sky-soft);    --tone-solid: var(--sky-solid); }
 .tone-pink   { --tone-vivid: var(--pink-vivid);   --tone-ink: var(--pink-ink);   --tone-soft: var(--pink-soft);   --tone-solid: var(--pink-solid); }
