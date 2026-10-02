@@ -62,6 +62,11 @@ test("didactic sequence: moments, composite activities and private teacher notes
   await student.getByRole("button", { name: "Siguiente" }).click();
   await expect(student.locator(".player-chip")).toHaveText("Práctica · Actividad 2 de 2 · 5 min");
   await student.getByLabel("My name is Ana.").check();
-  await expect(student.getByRole("status").filter({ hasText: "¡Correcto!" })).toBeVisible();
+  const correct = student.getByRole("status").filter({ hasText: "¡Correcto!" });
+  await expect(correct).toBeVisible();
+  // The feedback reads on one line across the card (it once inherited the editor's 44 px «correct» control).
+  const box = (await correct.boundingBox())!;
+  expect(box.width).toBeGreaterThan(200);
+  expect(box.height).toBeLessThan(80);
   await student.context().close();
 });
