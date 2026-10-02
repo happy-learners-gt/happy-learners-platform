@@ -5,7 +5,7 @@ import type { SidebarModel } from "../../ui/Shell";
 import { EmptyState, ErrorState, Loading, PageHeader } from "../../ui/primitives";
 import { Link } from "../../navigation";
 import { hueFor } from "../../model";
-import { CourseProvider, useCourseLoader } from "./context";
+import { CourseProvider, courseConfiguration, useCourseLoader } from "./context";
 import { Overview } from "./Overview";
 import { Content } from "./Content";
 import { CourseLibrary } from "./CourseLibrary";
@@ -31,6 +31,9 @@ export function CourseRoute({ id, area, item }: { id: string; area: string; item
     }
   }, [area, item, url.search]);
   const course = state.status === "ready" ? state.data.course : null;
+  const configuration = state.status === "ready" ? courseConfiguration(state.data.course, state.data.program) : null;
+  // Groups and attendance appear only when the course's configuration enables them.
+  const attendance = !!configuration?.settings.attendance;
   const current = area === "lecciones" ? "contenido" : area;
   const sidebar: SidebarModel = {
     label: "Navegación del curso",
@@ -44,8 +47,10 @@ export function CourseRoute({ id, area, item }: { id: string; area: string; item
       { href: `${base}/contenido`, label: "Contenido", icon: "content" as const, hue: "sky" as const, active: current === "contenido" },
       { href: `${base}/biblioteca`, label: "Biblioteca del curso", icon: "library" as const, hue: "teal" as const, active: current === "biblioteca" },
       ...(educator ? [
-        { href: `${base}/grupos`, label: "Grupos", icon: "users" as const, hue: "pink" as const, active: current === "grupos" },
-        { href: `${base}/asistencia`, label: "Asistencia", icon: "calendar" as const, hue: "coral" as const, active: current === "asistencia" },
+        ...(attendance ? [
+          { href: `${base}/grupos`, label: "Grupos", icon: "users" as const, hue: "pink" as const, active: current === "grupos" },
+          { href: `${base}/asistencia`, label: "Asistencia", icon: "calendar" as const, hue: "coral" as const, active: current === "asistencia" },
+        ] : []),
         { href: `${base}/configuracion`, label: "Configuración", icon: "settings" as const, hue: "amber" as const, active: current === "configuracion" },
       ] : []),
     ],
@@ -55,9 +60,9 @@ export function CourseRoute({ id, area, item }: { id: string; area: string; item
   else if (state.status === "error") body = state.code === 404
     ? <EmptyState level={1} icon="courses" title="Este curso no está disponible" action={<Link href="/cursos" className="button primary">Ver todos los cursos</Link>}>Puede que el enlace haya cambiado o que el curso pertenezca a otra organización.</EmptyState>
     : <><PageHeader title="No se pudo abrir el curso"/><ErrorState error={state.error} retry={() => void load()}/></>;
-  else if (!areas.includes(area) || (educatorOnly.has(area) && !educator)) body = <EmptyState level={1} icon="info" title="Esta sección no existe" action={<Link href={base} className="button primary">Ir al resumen del curso</Link>}>Usa el menú del curso para elegir otra sección.</EmptyState>;
+  else if (!areas.includes(area) || (educatorOnly.has(area) && !educator) || (["grupos", "asistencia"].includes(area) && !attendance)) body = <EmptyState level={1} icon="info" title="Esta sección no existe" action={<Link href={base} className="button primary">Ir al resumen del curso</Link>}>Usa el menú del curso para elegir otra sección.</EmptyState>;
   else {
-    const data = { ...state.data, educator, writable: educator && state.data.course.status === "active", reload: load };
+    const data = { ...state.data, ...configuration!, educator, writable: educator && state.data.course.status === "active", reload: load };
     body = <CourseProvider data={data}>
       {area === "" && <Overview/>}
       {area === "plan" && <Plan/>}

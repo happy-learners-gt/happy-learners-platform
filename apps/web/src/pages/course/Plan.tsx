@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import type { CognitiveLevel, Competency, LearningOutcome, Lesson } from "@happy-learners/contracts";
-import { assesses, activityOutcomes, cognitiveLevels, coverage, defaultSequence, lessonOutcomes } from "@happy-learners/domain";
+import { assesses, activityOutcomes, cognitiveLevels, coverage, lessonOutcomes } from "@happy-learners/domain";
 import type { OutcomeCoverage } from "@happy-learners/domain";
 import { api, message } from "../../api";
 import { Link, useNavigation } from "../../navigation";
@@ -20,7 +20,7 @@ type Editing = { kind: "competency"; item?: Competency } | { kind: "outcome"; it
  * each outcome is planned (units), worked on (lessons) and checked (assessing activities), with what is missing.
  */
 export function Plan() {
-  const { course, units, lessons, curriculum, writable, reload } = useCourse();
+  const { course, units, lessons, curriculum, writable, reload, settings, noun } = useCourse();
   const { toast, confirm } = useFeedback();
   const { navigate } = useNavigation();
   const [editing, setEditing] = useState<Editing | null>(null), [creating, setCreating] = useState<OutcomeCoverage | null>(null), [showArchived, setShowArchived] = useState(false);
@@ -96,7 +96,7 @@ export function Plan() {
     ]}/>}
     {!curriculum.outcomes.length && !curriculum.competencies.length ? <EmptyState icon="spark" title="Define lo que aprenderán"
       action={writable && <div className="plan-empty-actions"><Button icon="plus" onClick={() => setEditing({ kind: "competency" })}>Nueva competencia</Button><PrimaryAction icon="plus" onClick={() => setEditing({ kind: "outcome" })}>Nuevo resultado</PrimaryAction></div>}>
-      Escribe los resultados de aprendizaje del curso: lo que cada estudiante podrá demostrar al terminar. Después planifícalos en las unidades y alinea cada lección; el mapa de cobertura te mostrará qué falta.
+      Escribe los resultados de aprendizaje del curso: lo que cada estudiante podrá demostrar al terminar. Después planifícalos en {noun.theMany} y alinea cada lección; el mapa de cobertura te mostrará qué falta.
     </EmptyState> : <>
       <Section title="Competencias y resultados de aprendizaje" action={archived > 0 && <label className="switch"><input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)}/><span>Mostrar archivados ({archived})</span></label>}>
         <div className="competency-list">{groups.map(({ competency, outcomes }) => <article key={competency?.id || "none"} className={`competency-card${competency?.status === "archived" ? " is-archived" : ""}`} aria-labelledby={`competency-${competency?.id || "none"}`}>
@@ -115,7 +115,7 @@ export function Plan() {
         </article>)}</div>
       </Section>
       {map.outcomes.length > 0 && <Section title="Mapa de cobertura">
-        <p className="muted">Cada fila es un resultado y cada columna una unidad. {writable ? "Marca en qué unidades se planifica; " : ""}las lecciones alineadas cuentan como trabajado y las preguntas o actividades de evaluación como evaluado.</p>
+        <p className="muted">Cada fila es un resultado y cada columna {noun.a}. {writable ? `Marca dónde se planifica; ` : ""}las lecciones alineadas cuentan como trabajado y las preguntas o actividades de evaluación como evaluado.</p>
         {activeUnits.length ? <div className="coverage-scroll" role="region" aria-label="Mapa de cobertura" tabIndex={0}>
           <table className="coverage-table">
             <thead><tr><th scope="col">Resultado</th>{activeUnits.map(({ unit }) => <th key={unit.id} scope="col">{unit.name}</th>)}<th scope="col">Estado</th></tr></thead>
@@ -124,7 +124,7 @@ export function Plan() {
               {activeUnits.map(({ unit }) => <td key={unit.id}><Cell item={item} unitId={unit.id} unitName={unit.name} lessons={lessons} writable={writable} onToggle={() => void togglePlan(unit.id, item.outcome.id)}/></td>)}
               <td><GapAction item={item} lessons={lessons} base={base} writable={writable} onCreate={() => setCreating(item)}/></td>
             </tr>)}</tbody>
-            {activeUnits.some(item => item.missing.length) && <tfoot><tr><th scope="row">Pendiente en la unidad</th>{activeUnits.map(item => <td key={item.unit.id}>{item.missing.length ? <span className="gap-text"><Icon name="alert" size={14}/>Falta trabajar {item.missing.map(id => codeOf.get(id)).join(", ")}</span> : <span className="muted small">Al día</span>}</td>)}<td/></tr></tfoot>}
+            {activeUnits.some(item => item.missing.length) && <tfoot><tr><th scope="row">{`Pendiente en ${noun.the}`}</th>{activeUnits.map(item => <td key={item.unit.id}>{item.missing.length ? <span className="gap-text"><Icon name="alert" size={14}/>Falta trabajar {item.missing.map(id => codeOf.get(id)).join(", ")}</span> : <span className="muted small">Al día</span>}</td>)}<td/></tr></tfoot>}
           </table>
         </div> : <EmptyState compact icon="content" title="Sin unidades" action={writable && <Link className="button secondary small" href={`${base}/contenido?crear=unidad`}>Crear unidad</Link>}>Crea unidades en el contenido para planificar dónde se trabaja cada resultado.</EmptyState>}
       </Section>}
@@ -134,12 +134,12 @@ export function Plan() {
       if (ok) setEditing(null);
     }}/>}
     {editing?.kind === "outcome" && <OutcomeDialog item={editing.item} competencyId={editing.competencyId} competencies={curriculum.competencies} onClose={() => setEditing(null)} onSave={async data => {
-      const ok = await run(() => api(`/courses/${course.id}/outcomes${editing.item ? `/${editing.item.id}` : ""}`, editing.item ? "PUT" : "POST", { ...data, status: editing.item?.status || "active", version: course.version }), editing.item ? "Resultado actualizado. Las lecciones publicadas muestran el texto anterior hasta que vuelvas a publicarlas." : "Resultado creado. Planifícalo en una unidad del mapa de cobertura.");
+      const ok = await run(() => api(`/courses/${course.id}/outcomes${editing.item ? `/${editing.item.id}` : ""}`, editing.item ? "PUT" : "POST", { ...data, status: editing.item?.status || "active", version: course.version }), editing.item ? "Resultado actualizado. Las lecciones publicadas muestran el texto anterior hasta que vuelvas a publicarlas." : `Resultado creado. Planifícalo en ${noun.a} del mapa de cobertura.`);
       if (ok) setEditing(null);
     }}/>}
     {creating && <CreateLessonDialog item={creating} onClose={() => setCreating(null)} onCreate={async (title, objective, unitId) => {
       try {
-        const { lesson } = await api<{ lesson: Lesson }>("/lessons", "POST", { title, objective, courseId: course.id, courseUnitId: unitId, duration: 20, instructions: "", sequence: defaultSequence[course.profile], outcomeIds: [creating.outcome.id] });
+        const { lesson } = await api<{ lesson: Lesson }>("/lessons", "POST", { title, objective, courseId: course.id, courseUnitId: unitId, duration: 20, instructions: "", sequence: settings.defaultSequence, outcomeIds: [creating.outcome.id] });
         await reload();
         toast({ message: `Lección creada y alineada a ${creating.code}. Agrega sus actividades.` });
         navigate(`${base}/lecciones/${lesson.id}`);
@@ -172,8 +172,9 @@ function Cell({ item, unitId, unitName, lessons, writable, onToggle }: { item: O
 }
 
 function GapAction({ item, lessons, base, writable, onCreate }: { item: OutcomeCoverage; lessons: Lesson[]; base: string; writable: boolean; onCreate: () => void }) {
+  const { noun } = useCourse();
   const gap = item.gaps.includes("no-lesson") ? "no-lesson" : item.gaps[0];
-  if (gap === "no-lesson") return <div className="gap-action"><span className="gap-text"><Icon name="alert" size={14}/>{item.units.length ? "Ninguna lección lo trabaja" : "Sin unidad ni lecciones"}</span>{writable && <button type="button" className="button secondary small" onClick={onCreate}><Icon name="plus" size={16}/>Crear lección</button>}</div>;
+  if (gap === "no-lesson") return <div className="gap-action"><span className="gap-text"><Icon name="alert" size={14}/>{item.units.length ? "Ninguna lección lo trabaja" : `Sin ${noun.one} ni lecciones`}</span>{writable && <button type="button" className="button secondary small" onClick={onCreate}><Icon name="plus" size={16}/>Crear lección</button>}</div>;
   if (gap === "no-assessment") {
     const lesson = lessons.find(item2 => item2.id === item.lessons[0]);
     return <div className="gap-action"><span className="gap-text"><Icon name="info" size={14}/>Se trabaja pero no se comprueba</span>{writable && lesson && <Link className="button secondary small" href={`${base}/lecciones/${lesson.id}`}>Agregar evaluación en «{lesson.title}»</Link>}</div>;
@@ -221,7 +222,7 @@ function OutcomeDialog({ item, competencyId, competencies, onClose, onSave }: { 
 }
 
 function CreateLessonDialog({ item, onClose, onCreate }: { item: OutcomeCoverage; onClose: () => void; onCreate: (title: string, objective: string, unitId: string) => Promise<void> }) {
-  const { units } = useCourse();
+  const { units, noun } = useCourse();
   const [busy, setBusy] = useState(false);
   const active = units.filter(unit => unit.status === "active").sort((a, b) => Number(!item.units.includes(a.id)) - Number(!item.units.includes(b.id)) || a.position - b.position);
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -235,7 +236,7 @@ function CreateLessonDialog({ item, onClose, onCreate }: { item: OutcomeCoverage
       <p className="muted">La lección se crea como borrador alineada a «{item.outcome.statement}».</p>
       <Field label="Título de la lección"><input name="title" required maxLength={160}/></Field>
       <Field label="Objetivo" hint="Qué podrán hacer al terminar esta lección."><textarea name="objective" rows={2} required maxLength={1000} defaultValue={item.outcome.statement}/></Field>
-      <Field label="Unidad" hint={item.units.length ? "Primero, las unidades donde está planificado." : undefined}><select name="unitId" required>{active.map(unit => <option key={unit.id} value={unit.id}>{unit.name}{item.units.includes(unit.id) ? " (planificado)" : ""}</option>)}</select></Field>
+      <Field label={noun.One} hint={item.units.length ? "Primero, donde está planificado." : undefined}><select name="unitId" required>{active.map(unit => <option key={unit.id} value={unit.id}>{unit.name}{item.units.includes(unit.id) ? " (planificado)" : ""}</option>)}</select></Field>
       <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">{busy ? "Creando…" : "Crear y editar"}</button></div>
     </fieldset></form>
   </Modal>;

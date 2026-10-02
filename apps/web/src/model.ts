@@ -133,7 +133,7 @@ export function draftProblem(draft: LessonDraft): { message: string; target: str
 
 export function courseBody(course: Course, patch: Partial<Course> = {}) {
   const next = { ...course, ...patch };
-  return { title: next.title, objective: next.objective, profile: next.profile, unitLabel: next.unitLabel, status: next.status, termIds: next.termIds, version: course.version };
+  return { title: next.title, objective: next.objective, status: next.status, programId: next.programId || null, educationType: next.educationType, level: next.level, format: next.format, modality: next.modality, pacing: next.pacing, area: next.area || null, settings: next.settings, version: course.version };
 }
 
 export type CourseStats = { units: number; lessons: number; published: number; drafts: number; changes: number };

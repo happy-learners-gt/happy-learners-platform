@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0 — 2026-10-01
+
+Modelo académico (HL-44 / ST-041). La configuración del curso pasa de etiquetas libres a dimensiones estándar con consecuencias reales.
+
+- **Dimensiones estándar:** tipo de educación y nivel según la CINE 2011 de la UNESCO (de primera infancia a doctorado; "Sin nivel" solo en no formal), área de conocimiento CINE-F 2013, formato (Asignatura, Curso libre, Taller, Laboratorio, Seminario), modalidad y ritmo. Sustituyen al "perfil" y a la clasificación "Disciplina" de los cursos.
+- **Programas:** conjuntos de cursos que comparten tipo, nivel, modalidad y ritmo, dan valores a sus ajustes y pueden fijarlos. Los administra la organización en **Configuración académica**.
+- **Comportamiento configurable con herencia:** nombre de las partes del curso, secuencia didáctica inicial, grupos y asistencia, y requisitos para publicar (resultados de aprendizaje y comprobación). Cada valor viene del tipo de curso, del programa o del propio curso, y la pantalla dice de dónde. El servidor aplica los requisitos al publicar y desactiva el registro de asistencia cuando corresponde.
+- **Nomenclatura:** "Módulo" es el nombre estándar de las partes de un curso; cada curso o programa puede usar Unidades, Semanas, Sesiones, Temas o Bloques, con concordancia de género en toda la interfaz.
+- **Plantillas de inicio** al crear un curso, filtros con conteos en **Cursos** (programa, nivel, formato, área, modalidad) y en **Biblioteca** (etiqueta, área).
+- **Clasificaciones** se convierte en **Configuración académica**: programas, etiquetas de la biblioteca y estándares de referencia. La dirección anterior redirige.
+- Migración `0013_academic_model.sql`: tabla `study_programs`, dimensiones y ajustes en `courses`, disparadores que impiden mezclar organizaciones y traducción de cada perfil anterior. Conserva el comportamiento de los cursos existentes; las columnas antiguas quedan como historial.
+
 ## 0.4.0 — 2026-10-01
 
 Marco curricular (HL-44 / ST-041). Segunda fase del rediseño curricular.
