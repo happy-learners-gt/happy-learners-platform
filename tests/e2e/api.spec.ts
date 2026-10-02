@@ -2,7 +2,7 @@ import { test, expect } from "./local-test";
 import type { APIRequestContext } from "@playwright/test";
 import { E2E_PREFIX, sessionToken } from "./helpers";
 
-test("HL-44: course authorization, classification integrity, versions and cross-course references", async ({ playwright, baseURL }, info) => {
+test("HL-44: course authorization, programs, configured requirements, versions and cross-course references", async ({ playwright, baseURL }, info) => {
   const contexts: APIRequestContext[] = [];
   async function client(username?: string) {
     const cookie: Record<string, string> = username ? { Cookie: `hl_session=${await sessionToken(username)}` } : {};
@@ -12,24 +12,41 @@ test("HL-44: course authorization, classification integrity, versions and cross-
   try {
     const anon = await client(), educator = await client("educador-demo"), admin = await client("admin-demo"), other = await client("externo-demo");
     expect((await anon.get("/api/courses")).status()).toBe(401);
-    const body = { title: `${E2E_PREFIX} Laboratorio ${info.project.name}`, objective: "Describir evidencias sin identificar personas.", profile: "laboratory", unitLabel: "Prácticas", status: "active", termIds: [] };
+    const body = { title: `${E2E_PREFIX} Laboratorio ${Date.now().toString(36)} ${info.project.name}`, objective: "Describir evidencias sin identificar personas.", status: "active", educationType: "non-formal", level: "unspecified", format: "laboratory", modality: "in-person", pacing: "scheduled", area: "053", settings: {}, programId: null };
     expect((await admin.post("/api/courses", { data: body })).status()).toBe(403);
+    // Resource tags stay administrable by administration only.
     expect((await educator.post("/api/vocabularies", { data: { name: "Área", status: "active" } })).status()).toBe(403);
-    const vocabulary = { name: `${E2E_PREFIX} Área ${info.project.name}`, status: "active" };
+    const run = Date.now().toString(36);
+    const vocabulary = { name: `${E2E_PREFIX} Destreza ${run} ${info.project.name}`, status: "active" };
     const vr = await admin.post("/api/vocabularies", { data: vocabulary }); expect(vr.status()).toBe(201);
     const vid = (await vr.json()).id;
     expect((await admin.post("/api/vocabularies", { data: vocabulary })).status()).toBe(409);
     const tr = await admin.post("/api/terms", { data: { vocabularyId: vid, name: "Observación", status: "active" } }); expect(tr.status()).toBe(201);
     const tid = (await tr.json()).id;
-    const created = await educator.post("/api/courses", { data: { ...body, termIds: [tid] } }); expect(created.status()).toBe(201);
+    // Programs: administration manages them; a course in a program takes its type, level, modality and pacing.
+    const programBody = { name: `${E2E_PREFIX} Secundaria ${run} ${info.project.name}`, description: "", educationType: "formal", level: "lower-secondary", format: "subject", modality: "in-person", pacing: "scheduled", settings: { moduleLabel: "units" }, locked: ["moduleLabel"], status: "active" };
+    expect((await educator.post("/api/programs", { data: programBody })).status()).toBe(403);
+    expect((await admin.post("/api/programs", { data: { ...programBody, level: "unspecified" } })).status()).toBe(400);
+    expect((await admin.post("/api/programs", { data: { ...programBody, settings: {}, locked: ["attendance"] } })).status()).toBe(400);
+    const pr = await admin.post("/api/programs", { data: programBody }); expect(pr.status()).toBe(201);
+    const pid = (await pr.json()).id;
+    const inProgram = await educator.post("/api/courses", { data: { ...body, title: `${body.title} programa`, programId: pid, settings: { moduleLabel: "weeks" } } }); expect(inProgram.status()).toBe(201);
+    const programCourse = (await (await educator.get(`/api/courses/${(await inProgram.json()).id}`)).json()).course;
+    expect([programCourse.educationType, programCourse.level, programCourse.modality, programCourse.programId, programCourse.settings]).toEqual(["formal", "lower-secondary", "in-person", pid, {}]);
+    const otherProgram = await other.post("/api/programs", { data: { ...programBody, name: "Ajeno" } });
+    expect(otherProgram.status()).toBe(403);
+    expect((await educator.post("/api/courses", { data: { ...body, programId: "program-of-another-organization" } })).status()).toBe(400);
+    expect((await educator.post("/api/courses", { data: { ...body, educationType: "formal" } })).status()).toBe(400);
+    const created = await educator.post("/api/courses", { data: body }); expect(created.status()).toBe(201);
     const cid = (await created.json()).id, path = `/api/courses/${cid}`;
     expect((await other.get(path)).status()).toBe(404);
     expect((await other.get(`/api/lessons?drafts=1&course=${cid}`)).status()).toBe(404);
-    const otherTax = await (await other.get("/api/taxonomy")).json();
-    expect((await educator.put(path, { data: { ...body, termIds: [otherTax.terms[0].id], version: 1 } })).status()).toBe(400);
-    expect((await educator.put(path, { data: { ...body, termIds: [tid], version: 1 } })).status()).toBe(200);
+    expect((await educator.put(path, { data: { ...body, area: "999", version: 1 } })).status()).toBe(400);
+    expect((await educator.put(path, { data: { ...body, settings: { attendance: false }, version: 1 } })).status()).toBe(200);
     expect((await educator.put(path, { data: { ...body, version: 1 } })).status()).toBe(409);
-    expect((await (await educator.get(path)).json()).course.termIds).toEqual([tid]);
+    expect((await (await educator.get(path)).json()).course.settings).toEqual({ attendance: false });
+    // Attendance turned off: no new groups.
+    expect((await educator.post(`${path}/groups`, { data: { name: "Grupo A" } })).status()).toBe(409);
     const unitData = { name: `${E2E_PREFIX} Observar y describir`, objective: "Distinguir observación de interpretación.", status: "active", version: 2 };
     const ur = await educator.post(`${path}/units`, { data: unitData }); expect(ur.status()).toBe(201);
     const uid = (await ur.json()).id;
@@ -56,7 +73,11 @@ test("HL-44: course authorization, classification integrity, versions and cross-
     expect(publicView.lesson.resources[0].content).toBe(material.content);
     expect((await educator.post("/api/lessons", { data: lesson })).status()).toBe(400);
     expect((await educator.put(`/api/lessons/${saved.id}`, { data: { ...lesson, draftVersion: saved.draftVersion } })).status()).toBe(200);
-    expect((await educator.put(path, { data: { ...body, termIds: [tid], status: "archived", version: 3 } })).status()).toBe(200);
+    // A course that requires outcomes refuses to publish a lesson without them.
+    expect((await educator.put(path, { data: { ...body, settings: { attendance: false, outcomesRequired: true }, version: 3 } })).status()).toBe(200);
+    const blocked = await educator.post(`/api/lessons/${saved.id}/publish`); expect(blocked.status()).toBe(400);
+    expect((await blocked.json()).error).toContain("resultado de aprendizaje");
+    expect((await educator.put(path, { data: { ...body, settings: { attendance: false, outcomesRequired: true }, status: "archived", version: 4 } })).status()).toBe(200);
     expect((await educator.post(`${path}/materials`, { data: material })).status()).toBe(409);
     expect((await educator.post(`/api/lessons/${saved.id}/publish`)).status()).toBe(409);
     expect((await anon.get(`/api/share/${saved.shareCode}`)).status()).toBe(200);

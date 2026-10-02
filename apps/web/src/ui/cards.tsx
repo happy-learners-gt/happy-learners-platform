@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import type { Course, Material } from "@happy-learners/contracts";
+import type { Course, Material, StudyProgram } from "@happy-learners/contracts";
+import { areaLabel, labelOf, moduleNoun, resolveSettings } from "@happy-learners/domain";
 import { Link } from "../navigation";
 import { Icon } from "./icons";
 import type { IconName } from "./icons";
@@ -9,19 +10,27 @@ import { Progress, StatusBadge, Updated } from "./primitives";
 import { hueFor, plural, resourceHue, resourceKindLabel, resourceStatusLabel } from "../model";
 import type { CourseStats } from "../model";
 
-export function CourseCard({ course, stats, menu }: { course: Course; stats?: CourseStats; menu?: MenuItem[] }) {
+export function CourseCard({ course, program, stats, menu }: { course: Course; program?: StudyProgram | null; stats?: CourseStats; menu?: MenuItem[] }) {
   const href = `/cursos/${course.id}`;
+  const noun = moduleNoun(resolveSettings(course, program).values.moduleLabel);
+  const level = program?.level || course.level;
   return <article className={`course-card tone-${hueFor(course.id)}`}>
     <div className="course-cover" aria-hidden="true"><span/><span/><span/></div>
     <div className="course-card-top">
       <span className="course-avatar" aria-hidden="true">{course.title.trim().charAt(0).toUpperCase()}</span>
       <div className="course-card-title">
         <h3><Link href={href} className="card-link">{course.title}</Link></h3>
-        <p className="course-card-meta">{stats ? `${plural(stats.units, "unidad", "unidades")} · ${plural(stats.lessons, "lección", "lecciones")}` : "Cargando contenido…"}</p>
+        <p className="course-card-meta">{stats ? `${plural(stats.units, noun.one, noun.many)} · ${plural(stats.lessons, "lección", "lecciones")}` : "Cargando contenido…"}</p>
       </div>
       {course.status === "archived" && <StatusBadge>Archivado</StatusBadge>}
       {menu && <Menu label={`Acciones del curso ${course.title}`} items={menu}/>}
     </div>
+    <ul className="course-facets" aria-label="Configuración académica">
+      {program && <li className="is-program">{program.name}</li>}
+      <li>{labelOf.format(course.format)}</li>
+      {level !== "unspecified" && <li>{labelOf.level(level)}</li>}
+      {course.area && <li>{areaLabel(course.area)}</li>}
+    </ul>
     {course.objective && <p className="course-card-objective">{course.objective}</p>}
     {stats && <Progress value={stats.published} max={stats.lessons} label="Lecciones publicadas"/>}
     <Updated value={course.updatedAt}/>

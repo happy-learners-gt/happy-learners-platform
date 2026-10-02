@@ -40,11 +40,27 @@ export interface Lesson {
 export type ResourceSkill = "lectura" | "escritura" | "escucha" | "conversación";
 export interface Resource { id: string; title: string; description: string; level: string; skill: ResourceSkill; topic: string; tags: string[]; content: string; status: "draft" | "published" | "archived"; kind?: "text" | "link"; updatedAt?: string; }
 
-export type CourseProfile = "free" | "preschool" | "school" | "university" | "workshop" | "laboratory";
-export type UnitLabel = "Temas" | "Experiencias" | "Unidades" | "Semanas" | "Módulos" | "Prácticas";
-export interface Course {
-  id: string; title: string; objective: string; profile: CourseProfile; unitLabel: UnitLabel;
-  status: "active" | "archived"; version: number; updatedAt: string; termIds: string[];
+/** Type of education (UNESCO ISCED 2011, «CINE»). */
+export type EducationType = "formal" | "non-formal";
+/** ISCED 2011 level; "unspecified" is only for non-formal education. */
+export type EducationLevel = "early-childhood" | "pre-primary" | "primary" | "lower-secondary" | "upper-secondary" | "post-secondary" | "short-tertiary" | "bachelor" | "master" | "doctoral" | "unspecified";
+export type CourseFormat = "subject" | "open-course" | "workshop" | "laboratory" | "seminar";
+export type Modality = "in-person" | "online" | "hybrid";
+export type Pacing = "scheduled" | "self-paced";
+export type ModuleLabel = "modules" | "units" | "weeks" | "sessions" | "topics" | "blocks";
+export interface AcademicProfile { educationType: EducationType; level: EducationLevel; modality: Modality; pacing: Pacing }
+/** Behaviour a course's configuration controls. Missing values are inherited or derived. */
+export interface CourseSettings { moduleLabel?: ModuleLabel; defaultSequence?: SequenceTemplate; attendance?: boolean; outcomesRequired?: boolean; assessmentRequired?: boolean }
+/** A set of courses that share a configuration; it can fix settings for all of them. */
+export interface StudyProgram extends AcademicProfile {
+  id: string; name: string; description: string; format: CourseFormat; area?: string;
+  settings: CourseSettings; locked: (keyof CourseSettings)[]; status: "active" | "archived"; version: number; updatedAt: string; courseCount?: number;
+}
+export interface Course extends AcademicProfile {
+  id: string; title: string; objective: string; programId?: string; format: CourseFormat;
+  /** ISCED-F 2013 field: a broad field (2 digits) or a narrow field (3 digits). */
+  area?: string; settings: CourseSettings;
+  status: "active" | "archived"; version: number; updatedAt: string;
 }
 export interface LearningUnit {
   id: string; courseId: string; name: string; objective: string; position: number;

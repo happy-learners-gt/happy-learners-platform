@@ -123,12 +123,12 @@ test("archiving asks for confirmation and can be undone", async ({ page }, info)
   await page.getByRole("dialog", { name: `¿Archivar «${title}»?` }).getByRole("button", { name: "Archivar lección" }).click();
   await expect(toast(page)).toContainText(`«${title}» se archivó`);
   await expect(page.getByRole("link", { name: title, exact: true })).toHaveCount(0);
-  await page.getByLabel(/Mostrar archivadas/).check();
+  await page.getByLabel(/Mostrar archivados/).check();
   await page.getByRole("button", { name: `Acciones de la lección ${title}`, exact: true }).click();
   await page.getByRole("menuitem", { name: "Restaurar lección" }).click();
   await expect(toast(page)).toContainText("se restauró");
-  await page.getByLabel(/Mostrar archivadas/).click();
-  await expect(page.getByLabel(/Mostrar archivadas/)).toHaveCount(0);
+  await page.getByLabel(/Mostrar archivados/).click();
+  await expect(page.getByLabel(/Mostrar archivados/)).toHaveCount(0);
   await expect(page.getByRole("link", { name: title, exact: true })).toBeVisible();
 });
 

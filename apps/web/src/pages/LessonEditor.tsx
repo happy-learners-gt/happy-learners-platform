@@ -33,7 +33,7 @@ const AUTOSAVE_MS = 1000;
 const scrollBehavior = (): ScrollBehavior => matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
 
 export function LessonEditor({ lessonId }: { lessonId: string }) {
-  const { course, units, lessons, materials, legacyResources, curriculum, writable, reload } = useCourse();
+  const { course, units, lessons, materials, legacyResources, curriculum, writable, reload, noun, settings } = useCourse();
   const { member } = useSession();
   const { url, navigate } = useNavigation();
   const { toast, confirm } = useFeedback();
@@ -239,8 +239,11 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
   async function publish() {
     if (problem) { toast({ tone: "error", message: problem.message }); setSelected(problem.target === "title" ? "details" : problem.target); return; }
     if (!draft!.activities.length) { toast({ tone: "error", message: "Agrega al menos una actividad antes de publicar." }); return; }
-    // Recommendations do not block: some lessons (a review, an outing) legitimately skip one.
-    const open = publishChecklist(draftLesson(), curriculum).filter(item => !item.ok);
+    // What the course's configuration requires blocks publishing; the rest are recommendations.
+    const items = publishChecklist(draftLesson(), curriculum), required = requiredChecks(settings);
+    const missing = items.find(item => !item.ok && required.has(item.id));
+    if (missing) { toast({ tone: "error", message: `Este curso exige: ${missing.label.toLowerCase()}. ${missing.hint}` }); goTo("details"); return; }
+    const open = items.filter(item => !item.ok);
     if (open.length && !await confirm({ title: "¿Publicar con recomendaciones pendientes?", body: <><p>Antes de publicar, revisa:</p><ul className="check-list">{open.map(item => <li key={item.id}><Icon name="info" size={16}/><span><strong>{item.label}.</strong> {item.hint}</span></li>)}</ul></>, confirm: "Publicar de todos modos", cancel: "Revisar" })) { goTo("details"); return; }
     setPublishing(true);
     try {
@@ -360,7 +363,7 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
               <select value={draft.sequence} onChange={event => changeTemplate(event.target.value as SequenceTemplate)}>{sequenceTemplates.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
             </Field>
             <div className="field-row">
-              <Field label="Unidad"><select value={draft.unitId} onChange={event => update({ unitId: event.target.value })}>{units.filter(item => item.status === "active" || item.id === draft.unitId).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
+              <Field label={noun.One}><select value={draft.unitId} onChange={event => update({ unitId: event.target.value })}>{units.filter(item => item.status === "active" || item.id === draft.unitId).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
               <Field label="Duración (minutos)" hint={draft.activities.length ? `Las actividades suman ${minutes} min.` : undefined}><input type="number" min={1} max={300} value={draft.duration} onChange={event => update({ duration: Math.max(1, Math.min(300, Number(event.target.value) || 1)) })}/></Field>
             </div>
             <fieldset className="outcome-picker">
@@ -370,12 +373,12 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
                 <ul>{choosable.map(outcome => <li key={outcome.id}><label className={draft.outcomeIds.includes(outcome.id) ? "is-selected" : undefined}>
                   <input type="checkbox" checked={draft.outcomeIds.includes(outcome.id)} onChange={() => toggleOutcome(outcome.id)}/>
                   <span className="outcome-code" aria-hidden="true">{codes.get(outcome.id) || "—"}</span>
-                  <span><span className="sr-only">{codes.get(outcome.id) || "Archivado"}: </span>{outcome.statement}{plannedHere.has(outcome.id) && <small className="planned-tag">Planificado en esta unidad</small>}{!codes.has(outcome.id) && <small className="planned-tag">Archivado</small>}</span>
+                  <span><span className="sr-only">{codes.get(outcome.id) || "Archivado"}: </span>{outcome.statement}{plannedHere.has(outcome.id) && <small className="planned-tag">{`Planificado en ${noun.this}`}</small>}{!codes.has(outcome.id) && <small className="planned-tag">Archivado</small>}</span>
                 </label></li>)}</ul>
               </> : <p className="muted small">El curso aún no tiene resultados de aprendizaje. <Link href={`${base}/plan`}>Defínelos en el plan curricular</Link> para alinear esta lección.</p>}
             </fieldset>
           </fieldset>
-          {writable && <Checklist items={checklist} planHref={`${base}/plan`}/>}
+          {writable && <Checklist items={checklist} required={requiredChecks(settings)} planHref={`${base}/plan`} settingsHref={`${base}/configuracion`}/>}
           <div className="publish-info">
             {lesson.revision && lesson.shareCode ? <>
               <p><strong>Publicación {lesson.revision}.</strong> {state === "changes" ? "Tienes cambios en borrador que los estudiantes aún no ven." : "Los estudiantes ven esta versión."}</p>
@@ -539,13 +542,16 @@ function BlockEditor({ block, number, position, count, removable, writable, reso
 }
 
 /** Recommendations before publishing; each open item says what to do. */
-function Checklist({ items, planHref }: { items: CheckItem[]; planHref: string }) {
+/** Checks the course's configuration turns into requirements. */
+const requiredChecks = (settings: { outcomesRequired: boolean; assessmentRequired: boolean }) => new Set<CheckItem["id"]>([...(settings.outcomesRequired ? ["outcomes" as const] : []), ...(settings.assessmentRequired ? ["assessment" as const] : [])]);
+
+function Checklist({ items, required, planHref, settingsHref }: { items: CheckItem[]; required: Set<CheckItem["id"]>; planHref: string; settingsHref: string }) {
   const done = items.filter(item => item.ok).length;
   return <section className="checklist" aria-labelledby="checklist-title">
     <h3 id="checklist-title">Antes de publicar <span className="muted">· {done} de {items.length}</span></h3>
     <ul>{items.map(item => <li key={item.id} className={item.ok ? "is-ok" : "is-open"}>
       <Icon name={item.ok ? "check" : "info"} size={16}/>
-      <span><strong>{item.label}</strong><span className="muted small"> · {item.hint}</span>{!item.ok && item.id === "outcomes" && item.hint.includes("plan curricular") && <> <Link href={planHref}>Abrir el plan</Link></>}</span>
+      <span><strong>{item.label}</strong>{required.has(item.id) && <Link className="required-tag" href={settingsHref} title="Lo exige la configuración del curso">Obligatorio</Link>}<span className="muted small"> · {item.hint}</span>{!item.ok && item.id === "outcomes" && item.hint.includes("plan curricular") && <> <Link href={planHref}>Abrir el plan</Link></>}</span>
       <span className="sr-only">{item.ok ? "Listo" : "Pendiente"}</span>
     </li>)}</ul>
   </section>;

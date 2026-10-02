@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { Course, LearningUnit, Lesson, Taxonomy } from "@happy-learners/contracts";
-import { courseProfiles } from "@happy-learners/domain";
+import type { AcademicProfile, Course, CourseFormat, CourseSettings, EducationLevel, EducationType, LearningUnit, Lesson, Modality, ModuleLabel, Pacing, SequenceTemplate, StudyProgram, Taxonomy } from "@happy-learners/contracts";
+import { areaLabel, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, moduleLabels, moduleNoun, pacings, resolveSettings, sequenceOf, sequenceTemplates, settingDefinitions, sourceLabel } from "@happy-learners/domain";
+import type { SettingKey } from "@happy-learners/domain";
 import { api, message } from "../api";
 import { Link, useNavigation, useUnsavedChanges } from "../navigation";
 import { isEducator, useSession } from "../session";
@@ -21,7 +22,7 @@ export function useCourseActions(reload: () => Promise<void>) {
     catch (error) { toast({ tone: "error", message: `${message(error)} Recarga la página e inténtalo de nuevo.` }); }
   }
   async function duplicate(course: Course) {
-    if (!await confirm({ title: `¿Duplicar «${course.title}»?`, body: <p>Se crea una copia con sus unidades, recursos y lecciones. Todas las lecciones de la copia quedan como borrador; los grupos y la asistencia no se copian.</p>, confirm: "Duplicar curso" })) return;
+    if (!await confirm({ title: `¿Duplicar «${course.title}»?`, body: <p>Se crea una copia con su configuración, módulos, plan curricular, recursos y lecciones. Todas las lecciones de la copia quedan como borrador; los grupos y la asistencia no se copian.</p>, confirm: "Duplicar curso" })) return;
     toast({ tone: "info", message: "Creando la copia…" });
     try { const id = await duplicateCourse(course); await reload(); toast({ message: `Copia creada: «${course.title} (copia)».`, action: { label: "Abrir", onSelect: () => navigate(`/cursos/${id}`) } }); }
     catch (error) { await reload(); toast({ tone: "error", message: `La copia quedó incompleta: ${message(error)} Revísala en la lista de cursos o archívala.` }); }
@@ -29,17 +30,26 @@ export function useCourseActions(reload: () => Promise<void>) {
   return { setStatus, duplicate };
 }
 
+/** Facets for the course list: each option shows how many courses it would leave. */
+const facets: { key: string; param: string; label: string; value: (course: Course, program?: StudyProgram) => string | undefined; name: (value: string, programs: StudyProgram[]) => string }[] = [
+  { key: "program", param: "programa", label: "Programa", value: course => course.programId || "none", name: (value, programs) => value === "none" ? "Sin programa" : programs.find(item => item.id === value)?.name || value },
+  { key: "level", param: "nivel", label: "Nivel educativo", value: (course, program) => program?.level || course.level, name: value => labelOf.level(value as EducationLevel) },
+  { key: "format", param: "formato", label: "Formato", value: course => course.format, name: value => labelOf.format(value as CourseFormat) },
+  { key: "area", param: "area", label: "Área", value: course => course.area?.slice(0, 2), name: value => areaLabel(value) },
+  { key: "modality", param: "modalidad", label: "Modalidad", value: (course, program) => program?.modality || course.modality, name: value => labelOf.modality(value as Modality) },
+];
+
 export function CourseList() {
   const { member } = useSession();
   const educator = isEducator(member);
   const { url, navigate } = useNavigation();
-  const [courses, setCourses] = useState<Course[] | null>(null), [stats, setStats] = useState<Record<string, CourseStats>>({}), [error, setError] = useState("");
+  const [courses, setCourses] = useState<Course[] | null>(null), [programs, setPrograms] = useState<StudyProgram[]>([]), [stats, setStats] = useState<Record<string, CourseStats>>({}), [error, setError] = useState("");
   const query = url.searchParams.get("q") || "", archived = url.searchParams.get("estado") === "archivados";
   async function load() {
     setError("");
     try {
-      const [{ courses }, { lessons }] = await Promise.all([api<{ courses: Course[] }>("/courses"), api<{ lessons: Lesson[] }>(educator ? "/lessons?drafts=1" : "/lessons")]);
-      setCourses(courses);
+      const [{ courses }, { lessons }, { programs }] = await Promise.all([api<{ courses: Course[] }>("/courses"), api<{ lessons: Lesson[] }>(educator ? "/lessons?drafts=1" : "/lessons"), api<{ programs: StudyProgram[] }>("/programs")]);
+      setCourses(courses); setPrograms(programs);
       const details = await Promise.all(courses.map(course => api<{ units: LearningUnit[] }>(`/courses/${course.id}`).then(detail => [course.id, courseStats(detail.units, lessons.filter(lesson => lesson.courseId === course.id))] as const)));
       setStats(Object.fromEntries(details));
     } catch (cause) { setError(message(cause)); }
@@ -47,8 +57,13 @@ export function CourseList() {
   useEffect(() => { void load(); }, []);
   const actions = useCourseActions(load);
   function filter(key: string, value: string) { const next = new URL(url); if (value) next.searchParams.set(key, value); else next.searchParams.delete(key); navigate(next.pathname + next.search, true); }
+  const programOf = (course: Course) => programs.find(item => item.id === course.programId);
   const active = courses?.filter(course => course.status === "active").length || 0;
-  const visible = newest((courses || []).filter(course => (archived ? course.status === "archived" : course.status === "active") && matches(query, course.title, course.objective)));
+  const pool = (courses || []).filter(course => (archived ? course.status === "archived" : course.status === "active") && matches(query, course.title, course.objective));
+  const selected = (facet: typeof facets[number]) => url.searchParams.get(facet.param) || "";
+  const passes = (course: Course, skip?: string) => facets.every(facet => facet.key === skip || !selected(facet) || facet.value(course, programOf(course)) === selected(facet));
+  const visible = newest(pool.filter(course => passes(course)));
+  const filtered = facets.some(selected);
   return <>
     <PageHeader title="Cursos" description={courses ? `${plural(active, "curso activo", "cursos activos")}` : undefined} primary={educator && (!courses || courses.length > 0) && <PrimaryAction href="/cursos/nuevo" icon="plus">Crear curso</PrimaryAction>}/>
     <div className="toolbar" role="group" aria-label="Filtrar cursos">
@@ -56,56 +71,138 @@ export function CourseList() {
       <fieldset className="segmented"><legend className="sr-only">Estado</legend>
         {[["", "Activos"], ["archivados", "Archivados"]].map(([value, label]) => <label key={label}><input type="radio" name="course-status" checked={(url.searchParams.get("estado") || "") === value} onChange={() => filter("estado", value)}/><span>{label}</span></label>)}
       </fieldset>
-      {courses && <p className="toolbar-count" aria-live="polite">{plural(visible.length, "resultado", "resultados")}</p>}
     </div>
+    {courses && courses.length > 1 && <div className="facet-bar" role="group" aria-label="Filtrar por configuración académica">
+      {facets.map(facet => {
+        // Counts follow the other active filters, so every option says what it would leave.
+        const counts = new Map<string, number>();
+        for (const course of pool.filter(item => passes(item, facet.key))) { const value = facet.value(course, programOf(course)); if (value) counts.set(value, (counts.get(value) || 0) + 1); }
+        if (counts.size < 2 && !selected(facet)) return null;
+        return <label key={facet.key} className="facet"><span>{facet.label}</span><select value={selected(facet)} onChange={event => filter(facet.param, event.target.value)}>
+          <option value="">Todos</option>{[...counts.entries()].sort((x, y) => facet.name(x[0], programs).localeCompare(facet.name(y[0], programs), "es")).map(([value, count]) => <option key={value} value={value}>{facet.name(value, programs)} ({count})</option>)}
+        </select></label>;
+      })}
+      {filtered && <Button variant="ghost" icon="close" onClick={() => { const next = new URL(url); facets.forEach(facet => next.searchParams.delete(facet.param)); navigate(next.pathname + next.search, true); }}>Quitar filtros</Button>}
+    </div>}
     {error ? <ErrorState error={error} retry={() => void load()}/> : !courses ? <Loading label="Cargando cursos…" cards={3}/> :
-      visible.length ? <div className="card-grid">{visible.map(course => <CourseCard key={course.id} course={course} stats={stats[course.id]} menu={educator ? [
+      visible.length ? <div className="card-grid">{visible.map(course => <CourseCard key={course.id} course={course} program={programOf(course)} stats={stats[course.id]} menu={educator ? [
         { label: "Abrir", icon: "arrowRight", onSelect: () => navigate(`/cursos/${course.id}`) },
         { label: "Editar configuración", icon: "settings", onSelect: () => navigate(`/cursos/${course.id}/configuracion`) },
         { label: "Duplicar", icon: "copy", onSelect: () => void actions.duplicate(course) },
         "separator",
         course.status === "active" ? { label: "Archivar", icon: "archive", danger: true, onSelect: () => void actions.setStatus(course, "archived") } : { label: "Restaurar", icon: "archive", onSelect: () => void actions.setStatus(course, "active") },
       ] : undefined}/>)}</div>
-      : query ? <EmptyState icon="search" title={`No hay cursos que coincidan con «${query}»`} action={<Button onClick={() => filter("q", "")}>Limpiar búsqueda</Button>}>Prueba con otra palabra del nombre o del objetivo.</EmptyState>
+      : query || filtered ? <EmptyState icon="search" title="Ningún curso coincide con la búsqueda y los filtros" action={<Button onClick={() => navigate(url.pathname, true)}>Limpiar búsqueda y filtros</Button>}>Prueba con otra palabra o quita algún filtro.</EmptyState>
       : archived ? <EmptyState icon="archive" title="No hay cursos archivados">Los cursos que archives aparecerán aquí y podrás restaurarlos.</EmptyState>
-      : <EmptyState icon="courses" title="Crea tu primer curso" action={educator && <PrimaryAction href="/cursos/nuevo" icon="plus">Crear curso</PrimaryAction>}>Un curso reúne unidades, lecciones y recursos. Puede ser una asignatura, un taller o un recorrido breve.</EmptyState>}
+      : <EmptyState icon="courses" title="Crea tu primer curso" action={educator && <PrimaryAction href="/cursos/nuevo" icon="plus">Crear curso</PrimaryAction>}>Un curso reúne módulos, lecciones y recursos. Puede ser una asignatura, un taller o un curso libre.</EmptyState>}
   </>;
 }
 
+/** Free tags for library resources (search and filters). Course configuration uses standard dimensions instead. */
 export function TermChoices({ taxonomy, selected, onChange }: { taxonomy: Taxonomy; selected: string[]; onChange: (ids: string[]) => void }) {
   const groups = taxonomy.vocabularies.map(vocabulary => ({ vocabulary, terms: taxonomy.terms.filter(term => term.vocabularyId === vocabulary.id && ((vocabulary.status === "active" && term.status === "active") || selected.includes(term.id))) })).filter(group => group.terms.length);
   if (!groups.length) return null;
-  return <fieldset className="choice-group"><legend>Clasificación <span className="optional">(opcional)</span></legend>
-    {groups.map(({ vocabulary, terms }) => <div key={vocabulary.id} className="choice-row"><span className="choice-label">{vocabulary.name}</span><div className="chips">{terms.map(term => <label key={term.id} className="chip"><input type="checkbox" checked={selected.includes(term.id)} onChange={event => onChange(event.target.checked ? [...selected, term.id] : selected.filter(id => id !== term.id))}/><span>{term.name}{term.status === "archived" ? " (archivado)" : ""}</span></label>)}</div></div>)}
+  return <fieldset className="choice-group"><legend>Etiquetas <span className="optional">(opcional)</span></legend>
+    {groups.map(({ vocabulary, terms }) => <div key={vocabulary.id} className="choice-row"><span className="choice-label">{vocabulary.name}</span><div className="chips">{terms.map(term => <label key={term.id} className="chip"><input type="checkbox" checked={selected.includes(term.id)} onChange={event => onChange(event.target.checked ? [...selected, term.id] : selected.filter(id => id !== term.id))}/><span>{term.name}{term.status === "archived" ? " (archivada)" : ""}</span></label>)}</div></div>)}
   </fieldset>;
 }
 
-/** Create and configure a course. unitLabel is kept as stored; the product always says "Unidad". */
+type Dimensions = AcademicProfile & { format: CourseFormat; area: string; programId: string };
+/**
+ * Create and configure a course: a starting template, an optional program, the standard dimensions and
+ * the resulting behaviour, where every setting shows its value and where it comes from.
+ */
 export function CourseForm({ course, onSaved, cancelHref }: { course?: Course; onSaved: (id: string) => Promise<void> | void; cancelHref: string }) {
-  const [taxonomy, setTaxonomy] = useState<Taxonomy>({ vocabularies: [], terms: [] }), [terms, setTerms] = useState(course?.termIds || []);
+  const [programs, setPrograms] = useState<StudyProgram[]>([]);
+  const [dims, setDims] = useState<Dimensions>(() => course
+    ? { educationType: course.educationType, level: course.level, modality: course.modality, pacing: course.pacing, format: course.format, area: course.area || "", programId: course.programId || "" }
+    : { ...coursePresets[0].values, area: "", programId: "" });
+  const [settings, setSettings] = useState<CourseSettings>(course?.settings || {});
   const [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const { guard } = useNavigation();
   useUnsavedChanges(dirty);
-  useEffect(() => { api<Taxonomy>("/taxonomy").then(setTaxonomy).catch(() => undefined); }, []);
+  useEffect(() => { api<{ programs: StudyProgram[] }>("/programs").then(result => setPrograms(result.programs)).catch(() => undefined); }, []);
+  const program = programs.find(item => item.id === dims.programId) || null;
+  const choosable = programs.filter(item => item.status === "active" || item.id === course?.programId);
+  const profile = program ? { educationType: program.educationType, level: program.level, modality: program.modality, pacing: program.pacing } : dims;
+  const resolved = resolveSettings({ ...profile, format: dims.format, settings }, program);
+  const change = (patch: Partial<Dimensions>) => { setDims(current => {
+    const next = { ...current, ...patch };
+    if (next.educationType === "formal" && next.level === "unspecified") next.level = "primary";
+    return next;
+  }); setDirty(true); };
+  function choose(programId: string) {
+    const chosen = programs.find(item => item.id === programId);
+    // A new course in a program starts with the program's format and field.
+    change(chosen && !course ? { programId, format: chosen.format, area: chosen.area || "" } : { programId });
+  }
+  const setSetting = (key: SettingKey, value: string) => { setSettings(current => { const next = { ...current } as Record<string, unknown>; if (value === "") delete next[key]; else next[key] = value === "true" ? true : value === "false" ? false : value; return next as CourseSettings; }); setDirty(true); };
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.currentTarget)) as Record<string, string>;
     setBusy(true); setError("");
     try {
-      const body = { title: data.title, objective: data.objective, profile: data.profile, unitLabel: course?.unitLabel || "Unidades", status: course?.status || "active", termIds: terms, version: course?.version };
+      const body = { title: data.title, objective: data.objective, status: course?.status || "active", programId: dims.programId || null, ...profile, format: dims.format, area: dims.area || null, settings, version: course?.version };
       const result = await api<{ id: string }>(course ? `/courses/${course.id}` : "/courses", course ? "PUT" : "POST", body);
       setDirty(false); guard(false);
       await onSaved(result.id);
     } catch (cause) { setError(message(cause)); }
     finally { setBusy(false); }
   }
-  return <form className="form-card" onSubmit={save} onChange={() => setDirty(true)}>
+  const valueText = (key: SettingKey, value: unknown) => key === "moduleLabel" ? moduleNoun(value as ModuleLabel).Many : key === "defaultSequence" ? sequenceOf(value as SequenceTemplate).label : value ? "Sí" : "No";
+  return <form className="form-card course-form" onSubmit={save} onChange={() => setDirty(true)}>
     {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
     <fieldset disabled={busy} className="stack">
       <Field label="Nombre del curso"><input name="title" required maxLength={160} defaultValue={course?.title} placeholder="Ej. Exploradores"/></Field>
       <Field label="Objetivo" optional hint="Qué podrá hacer el grupo al terminar. Aparece en el resumen del curso."><textarea name="objective" maxLength={1000} rows={3} defaultValue={course?.objective}/></Field>
-      <Field label="Tipo de curso" hint="Solo orienta el tono del curso; no cambia permisos ni requisitos."><select name="profile" defaultValue={course?.profile || "free"}>{courseProfiles.map(profile => <option key={profile.value} value={profile.value}>{profile.label}</option>)}</select></Field>
-      <TermChoices taxonomy={taxonomy} selected={terms} onChange={ids => { setTerms(ids); setDirty(true); }}/>
+      {!course && !program && <fieldset className="preset-picker"><legend>Punto de partida</legend>
+        <p className="muted small">Llena la configuración de una vez; después puedes ajustar cada valor.</p>
+        <div className="preset-grid">{coursePresets.map(preset => { const on = Object.entries(preset.values).every(([key, value]) => dims[key as keyof Dimensions] === value); return <label key={preset.id} className={`preset${on ? " is-selected" : ""}`}>
+          <input type="radio" name="preset" checked={on} onChange={() => change(preset.values)}/><strong>{preset.label}</strong><small>{preset.description}</small>
+        </label>; })}</div>
+      </fieldset>}
+      <section className="config-section" aria-labelledby="academic-title">
+        <h2 id="academic-title">Configuración académica</h2>
+        <Field label="Programa" optional hint={program ? "El tipo, el nivel, la modalidad y el ritmo vienen del programa." : "Un programa reúne cursos que comparten configuración. Sin programa, el curso es independiente."}>
+          <select value={dims.programId} onChange={event => choose(event.target.value)}><option value="">Sin programa (curso independiente)</option>{choosable.map(item => <option key={item.id} value={item.id}>{item.name}{item.status === "archived" ? " (archivado)" : ""}</option>)}</select>
+        </Field>
+        {program ? <dl className="inherited">
+          <div><dt>Tipo de educación</dt><dd>{labelOf.type(program.educationType)}</dd></div>
+          <div><dt>Nivel educativo</dt><dd>{labelOf.level(program.level)}</dd></div>
+          <div><dt>Modalidad</dt><dd>{labelOf.modality(program.modality)}</dd></div>
+          <div><dt>Ritmo</dt><dd>{labelOf.pacing(program.pacing)}</dd></div>
+        </dl> : <div className="field-grid">
+          <Field label="Tipo de educación" hint={educationTypes.find(item => item.value === dims.educationType)?.hint}><select value={dims.educationType} onChange={event => change({ educationType: event.target.value as EducationType })}>{educationTypes.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
+          <Field label="Nivel educativo" hint={educationLevels.find(item => item.value === dims.level)?.hint}><select value={dims.level} onChange={event => change({ level: event.target.value as EducationLevel })}>{educationLevels.map(item => <option key={item.value} value={item.value} disabled={item.value === "unspecified" && dims.educationType === "formal"}>{item.code === "—" ? item.label : `${item.label} (${item.code})`}</option>)}</select></Field>
+          <Field label="Modalidad"><select value={dims.modality} onChange={event => change({ modality: event.target.value as Modality })}>{modalities.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
+          <Field label="Ritmo" hint={pacings.find(item => item.value === dims.pacing)?.hint}><select value={dims.pacing} onChange={event => change({ pacing: event.target.value as Pacing })}>{pacings.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
+        </div>}
+        <div className="field-grid">
+          <Field label="Formato" hint={courseFormats.find(item => item.value === dims.format)?.hint}><select value={dims.format} onChange={event => change({ format: event.target.value as CourseFormat })}>{courseFormats.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
+          <Field label="Área de conocimiento" optional hint="Clasificación CINE-F 2013 de la UNESCO."><select value={dims.area} onChange={event => change({ area: event.target.value })}><option value="">Sin área</option>{knowledgeAreas.map(area => <optgroup key={area.code} label={area.label}>
+            <option value={area.code}>{area.label} (general)</option>{area.fields.length > 1 && area.fields.map(field => <option key={field.code} value={field.code}>{field.label}</option>)}
+          </optgroup>)}</select></Field>
+        </div>
+      </section>
+      <section className="config-section" aria-labelledby="behaviour-title">
+        <h2 id="behaviour-title">Comportamiento del curso</h2>
+        <p className="muted small">Cada ajuste toma su valor del tipo de curso o del programa. Cámbialo solo si este curso necesita algo distinto.</p>
+        <ul className="settings-list">{settingDefinitions.map(definition => {
+          const key = definition.key, source = resolved.source[key], locked = source === "program-locked";
+          const inherited = program?.settings[key] !== undefined ? program.settings[key] : derivedSettings({ ...profile, format: dims.format })[key];
+          const options: [string, string][] = key === "moduleLabel" ? moduleLabels.map(item => [item.value, moduleNoun(item.value).Many]) : key === "defaultSequence" ? sequenceTemplates.map(item => [item.value, item.label]) : [["true", "Sí"], ["false", "No"]];
+          return <li key={key} className="setting-item">
+            <div><strong id={`setting-${key}`}>{definition.label}</strong><p className="muted small">{definition.description}</p></div>
+            <div className="setting-control">
+              <select aria-labelledby={`setting-${key}`} disabled={locked} value={locked ? "" : settings[key] === undefined ? "" : String(settings[key])} onChange={event => setSetting(key, event.target.value)}>
+                <option value="">{locked ? `${valueText(key, resolved.values[key])} (fijado)` : `${program?.settings[key] !== undefined ? "Del programa" : "Automático"}: ${valueText(key, inherited)}`}</option>
+                {!locked && options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+              <span className={`source-tag source-${source}`}>{sourceLabel[source]}</span>
+            </div>
+          </li>;
+        })}</ul>
+      </section>
       <div className="form-actions"><button className="button primary">{busy ? "Guardando…" : course ? "Guardar cambios" : "Crear curso"}</button><Link href={cancelHref} className="button ghost">Cancelar</Link></div>
     </fieldset>
   </form>;
@@ -117,7 +214,7 @@ export function CreateCourse() {
   const { toast } = useFeedback();
   if (!isEducator(member)) return <><PageHeader title="Crear curso" crumbs={[{ label: "Cursos", href: "/cursos" }, { label: "Crear curso" }]}/><EmptyState icon="shield" title="Solo educadores pueden crear cursos">Administración configura la organización y los permisos.</EmptyState></>;
   return <>
-    <PageHeader title="Crear curso" crumbs={[{ label: "Cursos", href: "/cursos" }, { label: "Crear curso" }]} description="Empieza por el nombre y el propósito. Después agregarás unidades y lecciones."/>
-    <div className="reading"><CourseForm cancelHref="/cursos" onSaved={id => { toast({ message: "Curso creado. Agrega su primera unidad." }); navigate(`/cursos/${id}/contenido`); }}/></div>
+    <PageHeader title="Crear curso" crumbs={[{ label: "Cursos", href: "/cursos" }, { label: "Crear curso" }]} description="Empieza por el nombre, el propósito y el tipo de curso. Después agregarás módulos y lecciones."/>
+    <div className="reading"><CourseForm cancelHref="/cursos" onSaved={id => { toast({ message: "Curso creado. Agrega su primer módulo." }); navigate(`/cursos/${id}/contenido`); }}/></div>
   </>;
 }

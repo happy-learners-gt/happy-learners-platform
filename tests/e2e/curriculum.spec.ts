@@ -8,7 +8,7 @@ test("curricular plan: outcomes, coverage gaps, aligned lesson and what students
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Plan curricular");
   // The curated demo plan shows a gap out of the box.
   await expect(page.getByRole("heading", { name: "Comunicación oral en inglés" })).toBeVisible();
-  await expect(page.getByRole("row", { name: /Nombra en inglés los colores básicos/ })).toContainText("Sin unidad ni lecciones");
+  await expect(page.getByRole("row", { name: /Nombra en inglés los colores básicos/ })).toContainText("Sin módulo ni lecciones");
 
   await page.getByRole("button", { name: "Nueva competencia", exact: true }).first().click();
   let dialog = page.getByRole("dialog", { name: "Nueva competencia" });
@@ -36,7 +36,7 @@ test("curricular plan: outcomes, coverage gaps, aligned lesson and what students
   await row.getByRole("button", { name: "Crear lección" }).click();
   dialog = page.getByRole("dialog", { name: /^Nueva lección para RA\d+$/ });
   await dialog.getByLabel("Título de la lección").fill(e2eName(info, "Mi presentación"));
-  await expect(dialog.getByLabel("Unidad")).toHaveValue("course-exploradores--unit-org-demo");
+  await expect(dialog.getByLabel("Módulo")).toHaveValue("course-exploradores--unit-org-demo");
   await dialog.getByRole("button", { name: "Crear y editar" }).click();
   await expect(page).toHaveURL(/\/lecciones\/lesson-/);
   await expect(page.getByRole("checkbox", { name: new RegExp(statement) })).toBeChecked();
