@@ -31,11 +31,12 @@ export function useCourseActions(reload: () => Promise<void>) {
 }
 
 /** Facets for the course list: each option shows how many courses it would leave. */
-const facets: { key: string; param: string; label: string; value: (course: Course, program?: StudyProgram) => string | undefined; name: (value: string, programs: StudyProgram[]) => string }[] = [
+const facets: { key: string; param: string; label: string; value: (course: Course, program?: StudyProgram) => string | undefined; name: (value: string, programs: StudyProgram[], courses?: Course[]) => string }[] = [
   { key: "program", param: "programa", label: "Programa", value: course => course.programId || "none", name: (value, programs) => value === "none" ? "Sin programa" : programs.find(item => item.id === value)?.name || value },
   { key: "level", param: "nivel", label: "Nivel educativo", value: (course, program) => program?.level || course.level, name: value => labelOf.level(value as EducationLevel) },
   { key: "format", param: "formato", label: "Formato", value: course => course.format, name: value => labelOf.format(value as CourseFormat) },
   { key: "area", param: "area", label: "Área", value: course => course.area?.slice(0, 2), name: value => areaLabel(value) },
+  { key: "lead", param: "responsable", label: "Responsable", value: course => course.team?.find(member => member.role === "lead")?.userId || "none", name: (value, _programs, courses) => value === "none" ? "Sin responsable" : courses?.flatMap(course => course.team || []).find(member => member.userId === value)?.name || value },
   { key: "modality", param: "modalidad", label: "Modalidad", value: (course, program) => program?.modality || course.modality, name: value => labelOf.modality(value as Modality) },
 ];
 
@@ -79,7 +80,7 @@ export function CourseList() {
         for (const course of pool.filter(item => passes(item, facet.key))) { const value = facet.value(course, programOf(course)); if (value) counts.set(value, (counts.get(value) || 0) + 1); }
         if (counts.size < 2 && !selected(facet)) return null;
         return <label key={facet.key} className="facet"><span>{facet.label}</span><select value={selected(facet)} onChange={event => filter(facet.param, event.target.value)}>
-          <option value="">Todos</option>{[...counts.entries()].sort((x, y) => facet.name(x[0], programs).localeCompare(facet.name(y[0], programs), "es")).map(([value, count]) => <option key={value} value={value}>{facet.name(value, programs)} ({count})</option>)}
+          <option value="">Todos</option>{[...counts.entries()].sort((x, y) => facet.name(x[0], programs, courses).localeCompare(facet.name(y[0], programs, courses), "es")).map(([value, count]) => <option key={value} value={value}>{facet.name(value, programs, courses)} ({count})</option>)}
         </select></label>;
       })}
       {filtered && <Button variant="ghost" icon="close" onClick={() => { const next = new URL(url); facets.forEach(facet => next.searchParams.delete(facet.param)); navigate(next.pathname + next.search, true); }}>Quitar filtros</Button>}

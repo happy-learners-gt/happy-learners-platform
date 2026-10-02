@@ -33,7 +33,7 @@ test("sign-in errors, organization settings, roles, help, logout and 404", async
   await openNavigation(page);
   await expect(page.getByRole("navigation", { name: "Navegación del curso" }).getByRole("link", { name: "Asistencia" })).toHaveCount(0);
   expect(await page.evaluate(async () => (await fetch("/api/courses/course-exploradores/groups")).status)).toBe(403);
-  await page.getByRole("button", { name: /Perfil de admin-demo/ }).click();
+  await page.getByRole("button", { name: /^Perfil de / }).click();
   await page.getByRole("menuitem", { name: "Cerrar sesión" }).click();
   await expect(page.getByRole("heading", { name: "Iniciar sesión" })).toBeVisible();
   await signInWithForm(page, "educador-demo", "/inicio");
@@ -44,7 +44,7 @@ test("sign-in errors, organization settings, roles, help, logout and 404", async
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Ayuda");
   await page.goto("/ruta-que-no-existe");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("No encontramos esta página");
-  await page.getByRole("button", { name: /Perfil de educador-demo/ }).click();
+  await page.getByRole("button", { name: /^Perfil de / }).click();
   await page.getByRole("menuitem", { name: "Cerrar sesión" }).click();
   await expect(page.getByRole("heading", { name: "Iniciar sesión" })).toBeVisible();
   expect(await page.evaluate(async () => (await fetch("/api/organization")).status)).toBe(401);

@@ -2,6 +2,7 @@ import type { Activity, Lesson, Member, Resource } from "@happy-learners/contrac
 import { assesses, lessonOutcomes, outcomeCodes, resourceIdsOf, sequenceTemplates, studentActivities, validActivities, validOutcomeIds } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { configurationOf, curriculumFor, materialsFor } from "./courses";
+import { recordEvent } from "./team";
 import { filesFor } from "./files";
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
 type LessonRow = { id: string; content: string; published_content: string | null; unit_id: string | null; course_unit_id: string | null; course_id: string | null; position: number; status: "draft" | "published"; archived: number; revision: number; draft_version: number; published_version: number; updated_at: string; completions: number };
@@ -74,7 +75,9 @@ export async function content(url: URL, method: string, input: unknown, current:
     // Teacher notes stay in the draft; students only receive what is meant for them.
     const published = { ...lesson, outcomes: learning, activities: studentActivities(lesson.activities), resources: resourceIds.map(rid => library.find(r => r.id === rid)!), publishedAt: new Date().toISOString(), revision: row.revision + 1 };
     const written = await db.prepare("UPDATE lessons SET published_content=?,published_version=draft_version,revision=revision+1,status='published' WHERE id=? AND draft_version=? RETURNING id").bind(JSON.stringify(published), row.id, row.draft_version).first();
-    return written ? reply({ lesson: published }) : reply({ error: "El borrador cambió. Recarga y vuelve a publicar." }, 409);
+    if (!written) return reply({ error: "El borrador cambió. Recarga y vuelve a publicar." }, 409);
+    await recordEvent(db, current, { action: "published", targetType: "lesson", targetId: row.id, courseId: row.course_id, summary: `Publicó «${lesson.title}» (publicación ${row.revision + 1})` });
+    return reply({ lesson: published });
   }
   if (method === "DELETE") return reply({ error: "Archiva la lección para conservar su historial." }, 409);
   if (!input || typeof input !== "object") return reply({ error: "Completa la lección." }, 400);
@@ -154,6 +157,9 @@ export async function content(url: URL, method: string, input: unknown, current:
   } else {
     await db.prepare("INSERT INTO lessons(id,program_id,status,content,unit_id,course_unit_id,position,updated_at) VALUES (?,?,'draft',?,?,?,?,?)").bind(lid, programId!, JSON.stringify(lesson), generic ? unit.legacyUnitId || null : unit.id, courseUnitId, rows.filter(r => r.course_unit_id === courseUnitId).length, now).run();
   }
+  // Autosave is not an event; creating, archiving and restoring a lesson are.
+  const archivedNow = v.status === "archived" ? 1 : 0;
+  if (!row || row.archived !== archivedNow) await recordEvent(db, current, { action: !row ? "created" : archivedNow ? "archived" : "restored", targetType: "lesson", targetId: lid, courseId: lesson.courseId || null, summary: `${!row ? "Creó" : archivedNow ? "Archivó" : "Restauró"} la lección «${lesson.title}»` });
   const updated = await db.prepare(lessonQuery + " AND l.id=?").bind(current.organizationId, lid).first<LessonRow>();
   return reply({ lesson: lessonView(updated!, true) }, row ? 200 : 201);
 }

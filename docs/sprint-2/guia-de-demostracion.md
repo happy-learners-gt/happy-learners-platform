@@ -1,5 +1,7 @@
 # Demostración de cinco minutos
 
+La organización de demostración completa (seis personas, programas, seis cursos con plan curricular, grupos e historial) se describe en [demo/organizacion-demo.md](../demo/organizacion-demo.md), con flujos para evaluar avance y responsabilidades.
+
 Usa una ventana normal para el educador y una privada para el estudiante. No uses información personal. La demostración empieza en [producción](https://happy-learners-demo.lfmendoza-alvarez.workers.dev).
 
 | Tiempo | Acción | Resultado que debe verse |

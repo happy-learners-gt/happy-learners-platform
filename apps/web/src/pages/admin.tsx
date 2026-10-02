@@ -3,14 +3,15 @@ import type { FormEvent, ReactNode } from "react";
 import type { AcademicProfile, CourseFormat, CourseSettings, EducationLevel, EducationType, Member, Modality, ModuleLabel, Organization, Pacing, SequenceTemplate, StudyProgram, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
 import { areaLabel, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, moduleLabels, moduleNoun, pacings, sequenceOf, sequenceTemplates, settingDefinitions } from "@happy-learners/domain";
 import type { SettingKey } from "@happy-learners/domain";
-import { plural } from "../model";
+import { plural, timeAgo } from "../model";
+import { ActivityFeed, Avatar, CourseProgressList, useProgress } from "../ui/progress";
 import { api, message } from "../api";
 import { useNavigation, useUnsavedChanges } from "../navigation";
 import { useSession } from "../session";
 import { Modal, useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import { Menu } from "../ui/Menu";
-import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, StatusBadge } from "../ui/primitives";
+import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section, StatusBadge } from "../ui/primitives";
 
 function AdminOnly({ title, children }: { title: string; children: ReactNode }) {
   const { member } = useSession();
@@ -49,38 +50,55 @@ function OrganizationForm() {
 export function Members() {
   return <AdminOnly title="Educadores"><MemberList/></AdminOnly>;
 }
+type MemberStats = Member & { leads: number; coTeaches: number; lessonsCreated: number; publications: number; attendance: number; events: number; lastActivity: string | null };
+/** People of the organization, what each one does and how their courses are progressing. */
 function MemberList() {
   const { toast } = useFeedback();
-  const [members, setMembers] = useState<Member[] | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState("");
-  const load = async () => { setError(""); try { setMembers((await api<{ members: Member[] }>("/members")).members); } catch (cause) { setError(message(cause)); } };
+  const [members, setMembers] = useState<MemberStats[] | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(""), [person, setPerson] = useState("");
+  const progress = useProgress();
+  const load = async () => { setError(""); try { setMembers((await api<{ members: MemberStats[] }>("/members")).members); } catch (cause) { setError(message(cause)); } };
   useEffect(() => { void load(); }, []);
   async function update(member: Member, patch: Partial<Member>) {
     setBusy(member.id);
-    try { await api(`/members/${member.id}`, "PUT", { role: patch.role || member.role, active: patch.active ?? member.active }); await load(); toast({ message: `Permisos de ${member.username} guardados. Sus sesiones abiertas se cerraron.` }); }
+    try { await api(`/members/${member.id}`, "PUT", { role: patch.role || member.role, active: patch.active ?? member.active }); await load(); toast({ message: `Permisos de ${member.displayName || member.username} guardados. Sus sesiones abiertas se cerraron.` }); }
     catch (cause) { toast({ tone: "error", message: message(cause) }); }
     finally { setBusy(""); }
   }
-  const header = <PageHeader title="Educadores" description="Quién puede entrar y qué puede hacer. Los estudiantes no necesitan cuenta."/>;
+  const header = <PageHeader title="Educadores" description="Quién puede entrar, qué hace cada persona y cómo avanzan los cursos. Los estudiantes no necesitan cuenta."/>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
   if (!members) return <>{header}<Loading label="Cargando equipo…"/></>;
+  const titles = Object.fromEntries((progress.courses || []).map(item => [item.courseId, item.title]));
+  const selected = members.find(member => member.id === person);
   return <>
     {header}
-    <div className="table-card"><table>
-      <caption className="sr-only">Cuentas del equipo</caption>
-      <thead><tr><th scope="col">Usuario</th><th scope="col">Rol</th><th scope="col">Acceso</th><th scope="col"><span className="sr-only">Acciones</span></th></tr></thead>
+    <div className="table-card" role="region" aria-label="Personas de la organización" tabIndex={0}><table className="members-table">
+      <caption className="sr-only">Personas de la organización y su actividad</caption>
+      <thead><tr><th scope="col">Persona</th><th scope="col">Rol</th><th scope="col">Cursos</th><th scope="col">Lecciones</th><th scope="col">Clases registradas</th><th scope="col">Última actividad</th><th scope="col">Acceso</th><th scope="col"><span className="sr-only">Acciones</span></th></tr></thead>
       <tbody>{members.map(member => {
-        const owner = member.id === "user-0";
+        const owner = member.id === "user-0", name = member.displayName || member.username;
         return <tr key={member.id}>
-          <th scope="row">{member.username}</th>
+          <th scope="row"><span className="person-cell"><Avatar name={name} size={30}/><span><button type="button" className="link-button" onClick={() => setPerson(person === member.id ? "" : member.id)} aria-pressed={person === member.id}>{name}</button><span className="muted small">@{member.username}</span></span></span></th>
           <td>{member.role === "admin" ? "Administración" : "Educador"}</td>
+          <td>{member.leads || member.coTeaches ? <>{member.leads ? `responsable de ${member.leads}` : ""}{member.leads && member.coTeaches ? " · " : ""}{member.coTeaches ? `colabora en ${member.coTeaches}` : ""}</> : <span className="muted">—</span>}</td>
+          <td>{member.lessonsCreated ? `${member.lessonsCreated} creadas · ${member.publications} publicaciones` : <span className="muted">—</span>}</td>
+          <td>{member.attendance || <span className="muted">—</span>}</td>
+          <td>{member.lastActivity ? <time dateTime={member.lastActivity}>{timeAgo(member.lastActivity)}</time> : <span className="muted">Sin actividad</span>}</td>
           <td><StatusBadge tone={member.active ? "success" : "neutral"}>{member.active ? "Activo" : "Sin acceso"}</StatusBadge></td>
-          <td className="cell-actions">{owner ? <span className="muted small">Cuenta principal</span> : <Menu label={`Acciones de ${member.username}`} items={[
+          <td className="cell-actions">{owner ? <span className="muted small">Cuenta principal</span> : <Menu label={`Acciones de ${name}`} items={[
             { label: member.role === "admin" ? "Cambiar a educador" : "Cambiar a administración", icon: "users", disabled: busy === member.id, onSelect: () => void update(member, { role: member.role === "admin" ? "educator" : "admin" }) },
             { label: member.active ? "Quitar acceso" : "Dar acceso", icon: "shield", danger: member.active, disabled: busy === member.id, onSelect: () => void update(member, { active: !member.active }) },
           ]}/>}</td>
         </tr>;
       })}</tbody>
     </table></div>
+    <div className="admin-grid">
+      <Section title="Avance por curso">
+        {progress.error ? <ErrorState error={progress.error} retry={() => void progress.reload()}/> : !progress.courses ? <Loading label="Calculando avance…" lines={4}/> : <CourseProgressList courses={progress.courses}/>}
+      </Section>
+      <Section title={selected ? `Actividad de ${selected.displayName || selected.username}` : "Actividad reciente de la organización"} action={selected && <button type="button" className="link-button" onClick={() => setPerson("")}>Ver toda</button>}>
+        <ActivityFeed key={person} actor={person || undefined} limit={15} courseTitles={titles}/>
+      </Section>
+    </div>
   </>;
 }
 
