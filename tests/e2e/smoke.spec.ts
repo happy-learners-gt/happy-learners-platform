@@ -64,7 +64,7 @@ test("production smoke: read content without changing the demo", async ({ page, 
     expect(await student.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await student.screenshot({ path: `${folder}/redesign-student.png`, fullPage: true });
     await student.close();
-    await page.getByRole("button", { name: /Perfil de educador-demo/ }).click();
+    await page.getByRole("button", { name: /^Perfil de / }).click();
     await page.getByRole("menuitem", { name: "Cerrar sesión" }).click();
     await expect(page.getByRole("heading", { name: "Iniciar sesión", exact: true })).toBeVisible();
     expect(await page.evaluate(async () => (await fetch("/api/session")).status)).toBe(401);

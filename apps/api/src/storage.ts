@@ -12,8 +12,24 @@ import legacyE2eMigration from "../../../database/migrations/0010_remove_legacy_
 import mediaFilesMigration from "../../../database/migrations/0011_pdf_video_files.sql";
 import curricularMigration from "../../../database/migrations/0012_curricular_framework.sql";
 import academicMigration from "../../../database/migrations/0013_academic_model.sql";
+import teamsMigration from "../../../database/migrations/0014_course_teams_activity.sql";
+import demoMigration from "../../../database/migrations/0015_demo_organization.sql";
 
 type Statement = { sql: string; values: (string | number | null)[] };
+/**
+ * Durable Object SQLite rejects a single SQL string beyond its length limit. Large migrations (the demo seed)
+ * keep one statement per line and run in chunks of whole lines, inside the caller's transaction.
+ */
+const CHUNK = 60_000;
+function runScript(sql: SqlStorage, script: string) {
+  if (script.length <= CHUNK) { sql.exec(script); return; }
+  let chunk = "";
+  for (const line of script.split("\n")) {
+    if (chunk.length + line.length + 1 > CHUNK && chunk) { sql.exec(chunk); chunk = ""; }
+    chunk += line + "\n";
+  }
+  if (chunk.trim()) sql.exec(chunk);
+}
 // One SQLite object per organization; only the Worker holds this binding.
 export class OrganizationStore extends DurableObject<Env> {
   async authorizeCollaborator(organizationId: string, courseId: string, lessonId: string, userId: string, tokenHash: string): Promise<boolean> {
@@ -54,6 +70,8 @@ export class OrganizationStore extends DurableObject<Env> {
       if (!applied.length || applied[0].version < 11) { this.ctx.storage.sql.exec(mediaFilesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (11,?)", scope); }
       if (!applied.length || applied[0].version < 12) { this.ctx.storage.sql.exec(curricularMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (12,?)", scope); }
       if (!applied.length || applied[0].version < 13) { this.ctx.storage.sql.exec(academicMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (13,?)", scope); }
+      if (!applied.length || applied[0].version < 14) { this.ctx.storage.sql.exec(teamsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (14,?)", scope); }
+      if (!applied.length || applied[0].version < 15) { runScript(this.ctx.storage.sql, demoMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (15,?)", scope); }
       // Compare-and-write plus dependent writes belong to one SQLite transaction.
       if (guard && !this.ctx.storage.sql.exec(guard.sql, ...guard.values).toArray().length) return [];
       return statements.map(statement => this.ctx.storage.sql.exec(statement.sql, ...statement.values).toArray());

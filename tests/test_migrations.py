@@ -37,7 +37,7 @@ class UpgradeTests(unittest.TestCase):
         db.execute("INSERT INTO materials(id,course_id,organization_id,title,description,kind,content,status,updated_at) VALUES (?,?,?,?,?,?,?,?,?)", ("material-light", "course-exploradores", "org-demo", "Luz", "Observar sombras", "text", "Compara dos sombras.", "draft", "2026-09-29T00:00:00Z"))
         db.execute("INSERT INTO material_terms VALUES (?,?,?)", ("material-light", "discipline-org-demo-science", "org-demo"))
         db.execute("UPDATE taxonomy_terms SET status='archived' WHERE id='discipline-org-demo-science'")
-        self.assertEqual(db.execute("SELECT count(*) FROM material_terms").fetchone()[0], 1)
+        self.assertEqual(db.execute("SELECT count(*) FROM material_terms WHERE material_id=?", ("material-light",)).fetchone()[0], 1)
         with self.assertRaises(sqlite3.IntegrityError):
             db.execute("DELETE FROM taxonomy_terms WHERE id='discipline-org-demo-science'")
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
@@ -192,3 +192,38 @@ class UpgradeTests(unittest.TestCase):
             with self.assertRaises(sqlite3.IntegrityError):
                 db.execute("UPDATE courses SET program_id='program-other' WHERE id='course-workshop'")
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def scoped(self, scope):
+        """Applies migrations the way each organization's Durable Object does: 0001, then keep only its scope."""
+        db = sqlite3.connect(":memory:")
+        db.setlimit(sqlite3.SQLITE_LIMIT_LIKE_PATTERN_LENGTH, 50)
+        db.execute("PRAGMA foreign_keys=ON")
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        db.executescript(migrations[0].read_text())
+        db.execute("DELETE FROM lessons WHERE program_id IN (SELECT id FROM programs WHERE organization_id<>?)", (scope,))
+        db.execute("DELETE FROM programs WHERE organization_id<>?", (scope,))
+        db.execute("DELETE FROM memberships WHERE organization_id<>?", (scope,))
+        db.execute("DELETE FROM users WHERE id NOT IN (SELECT user_id FROM memberships)")
+        db.execute("DELETE FROM organizations WHERE id<>?", (scope,))
+        for path in migrations[1:]:
+            db.executescript(path.read_text())
+        return db
+
+    def test_demo_seed_is_complete_in_the_demo_store_and_absent_elsewhere(self):
+        """0014 adds teams and the activity log; 0015 seeds the demo organization only."""
+        demo = self.scoped("org-demo")
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+        self.assertGreaterEqual(demo.execute("SELECT count(*) FROM courses WHERE status='active'").fetchone()[0], 6)
+        self.assertEqual(demo.execute("SELECT count(*) FROM memberships WHERE role='instructor' AND user_id LIKE 'seed-user-%'").fetchone()[0], 5)
+        self.assertEqual(demo.execute("SELECT count(*) FROM courses c WHERE c.status='active' AND NOT EXISTS(SELECT 1 FROM course_members m WHERE m.course_id=c.id AND m.role='lead')").fetchone()[0], 0)
+        self.assertGreater(demo.execute("SELECT count(*) FROM attendance_marks").fetchone()[0], 500)
+        self.assertGreater(demo.execute("SELECT count(DISTINCT actor_id) FROM activity_events").fetchone()[0], 5)
+        # Existing content is untouched: the original demo lessons keep their bytes.
+        self.assertEqual(demo.execute("SELECT count(*) FROM lessons WHERE id IN ('colores-en-equipo','greetings-and-introductions')").fetchone()[0], 2)
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("INSERT INTO course_members VALUES('seed-course-arte','org-demo','seed-user-ana','lead','t')")
+        other = self.scoped("org-other")
+        self.assertEqual(other.execute("PRAGMA foreign_key_check").fetchall(), [])
+        for table in ("study_programs", "course_members", "activity_events", "course_groups"):
+            self.assertEqual(other.execute(f"SELECT count(*) FROM {table}").fetchone()[0], 0, table)
+        self.assertEqual(other.execute("SELECT count(*) FROM users WHERE id LIKE 'seed-%'").fetchone()[0], 0)

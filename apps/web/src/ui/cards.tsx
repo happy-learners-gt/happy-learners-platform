@@ -5,6 +5,7 @@ import { Link } from "../navigation";
 import { Icon } from "./icons";
 import type { IconName } from "./icons";
 import { Menu } from "./Menu";
+import { TeamLine } from "./progress";
 import type { MenuItem } from "./Menu";
 import { Progress, StatusBadge, Updated } from "./primitives";
 import { hueFor, plural, resourceHue, resourceKindLabel, resourceStatusLabel } from "../model";
@@ -32,6 +33,7 @@ export function CourseCard({ course, program, stats, menu }: { course: Course; p
       {course.area && <li>{areaLabel(course.area)}</li>}
     </ul>
     {course.objective && <p className="course-card-objective">{course.objective}</p>}
+    {course.team && <TeamLine team={course.team}/>}
     {stats && <Progress value={stats.published} max={stats.lessons} label="Lecciones publicadas"/>}
     <Updated value={course.updatedAt}/>
   </article>;

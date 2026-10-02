@@ -1,5 +1,6 @@
 import type { Material, Member } from "@happy-learners/contracts";
 import type { Database } from "./storage";
+import { recordEvent } from "./team";
 
 const MAX_BYTES = 15 * 1024 * 1024;
 const MAX_EXPANDED_BYTES = 100 * 1024 * 1024;
@@ -166,6 +167,7 @@ export async function courseFiles(path: string, method: string, request: Request
     await bucket.put(row.object_key, bytes, { httpMetadata: { contentType: "application/octet-stream" }, customMetadata: { sha256, courseId, organizationId: current.organizationId } });
     const saved = await db.prepare(`UPDATE course_files SET status='ready',updated_at=? WHERE id=? AND organization_id=? AND sha256=? RETURNING ${fileColumns},object_key`).bind(new Date().toISOString(), row.id, current.organizationId, sha256).first<FileRow>();
     if (!saved) return reply({ error: "El archivo se almacenó, pero no se pudo confirmar. Reintenta con la misma clave de carga." }, 503);
+    if (!existing) await recordEvent(db, current, { action: "uploaded", targetType: "resource", targetId: saved.id, courseId, summary: `Subió el archivo «${saved.original_name}»` });
     return reply({ file: fileView(saved) }, existing ? 200 : 201);
   }
   const fileId = parts[5];
@@ -214,6 +216,7 @@ async function streamedUpload(request: Request, file: { courseId: string; name: 
   }
   const saved = await db.prepare(`UPDATE course_files SET status='ready',updated_at=? WHERE id=? AND organization_id=? AND sha256=? RETURNING ${fileColumns},object_key`).bind(new Date().toISOString(), id, current.organizationId, sha256).first<FileRow>();
   if (!saved) return reply({ error: "El archivo se almacenó, pero no se pudo confirmar. Reintenta con la misma clave de carga." }, 503);
+  if (!existing) await recordEvent(db, current, { action: "uploaded", targetType: "resource", targetId: saved.id, courseId, summary: `Subió el archivo «${saved.original_name}»` });
   return reply({ file: fileView(saved) }, existing ? 200 : 201);
 }
 

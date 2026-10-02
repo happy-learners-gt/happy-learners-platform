@@ -11,7 +11,7 @@ Happy Learners ayuda a los equipos docentes a organizar cursos, convertir materi
 - Prototipos de interacción: [prototipo de cursos](redesign/prototipo-cursos.html).
 - Guía de usuario y demo: [guía de usuario](sprint-2/guia-de-usuario.md) · [guía de demostración](sprint-2/guia-de-demostracion.md).
 - Navegación y nombres: [arquitectura de información v0.2.3](redesign/arquitectura-informacion-v0.2.3.md).
-- Cambios actuales: [release notes v0.6.0](redesign/release-notes-v0.6.0.md) (Fluent Design; guía en [design/fluent.md](design/fluent.md)). Anteriores: [v0.5.0](redesign/release-notes-v0.5.0.md), [v0.4.0](redesign/release-notes-v0.4.0.md), [v0.3.0](redesign/release-notes-v0.3.0.md), [v0.2.6](redesign/release-notes-v0.2.6.md), [v0.2.4](redesign/release-notes-v0.2.4.md), [v0.2.3](redesign/release-notes-v0.2.3.md), [v0.2.2](sprint-2/release-notes-v0.2.2.md) y [v0.2.1](sprint-2/release-notes-v0.2.1.md).
+- Cambios actuales: [release notes v0.7.0](redesign/release-notes-v0.7.0.md) (organización de demostración; guía en [demo/organizacion-demo.md](demo/organizacion-demo.md)). Anteriores: [v0.6.0](redesign/release-notes-v0.6.0.md) (Fluent, [design/fluent.md](design/fluent.md)), [v0.5.0](redesign/release-notes-v0.5.0.md), [v0.4.0](redesign/release-notes-v0.4.0.md), [v0.3.0](redesign/release-notes-v0.3.0.md), [v0.2.6](redesign/release-notes-v0.2.6.md), [v0.2.4](redesign/release-notes-v0.2.4.md), [v0.2.3](redesign/release-notes-v0.2.3.md), [v0.2.2](sprint-2/release-notes-v0.2.2.md) y [v0.2.1](sprint-2/release-notes-v0.2.1.md).
 
 ## Datos y demostraciones
 
