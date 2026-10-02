@@ -671,7 +671,8 @@ dialog.modal.viewer .modal-body > .usage, dialog.modal.viewer .modal-body > p { 
 .options ol { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .options li { display: flex; align-items: center; gap: var(--space-2); padding: 4px 4px 4px 0; }
 .options li input:not([type=radio]) { flex: 1; }
-.correct { display: grid; place-items: center; width: var(--touch); height: var(--touch); flex: none; cursor: pointer; }
+/* The radio that marks the right option in the editor; scoped so the student's «correct» feedback is unaffected. */
+.options label.correct { display: grid; place-items: center; width: var(--touch); height: var(--touch); flex: none; cursor: pointer; }
 .options .button { justify-self: start; }
 
 /* Student player */
