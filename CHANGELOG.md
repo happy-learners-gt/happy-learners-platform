@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1 — 2026-10-02
+
+- Corrección: al responder bien una pregunta, el mensaje «¡Correcto!» se mostraba en vertical. Heredaba la regla `.correct` del editor (el control de 44 px que marca la opción correcta). La regla queda limitada a ese control y una prueba E2E comprueba que el mensaje ocupa el ancho de la tarjeta.
+
 ## 0.7.0 — 2026-10-02
 
 Organización de demostración completa, equipos docentes e historial de actividad (HL-44 / ST-041).
