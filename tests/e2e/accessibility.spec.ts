@@ -15,6 +15,8 @@ async function audit(page: Page, label: string) {
 }
 
 test("main routes have no WCAG 2.2 A/AA violations detectable by axe", async ({ page }) => {
+  // Many routes are audited one after another; give the whole tour room on slow runners.
+  test.setTimeout(120_000);
   await page.goto("/inicio");
   await audit(page, "login");
   await signIn(page, "educador-demo", "/inicio");
@@ -43,6 +45,11 @@ test("main routes have no WCAG 2.2 A/AA violations detectable by axe", async ({ 
   await page.getByRole("button", { name: "Siguiente" }).click();
   await page.getByRole("button", { name: "Siguiente" }).click();
   await audit(page, "estudiante pregunta");
+  await signIn(page, "admin-demo", "/configuracion-academica");
+  for (const summary of ["Niveles educativos · CINE 2011", "Áreas de conocimiento · CINE-F 2013"]) await page.getByText(summary).click();
+  await audit(page, "configuración académica");
+  await page.getByRole("button", { name: "Crear programa", exact: true }).click();
+  await audit(page, "diálogo de programa");
 });
 
 test("keyboard: skip link, visible focus, menus and dialogs work without a pointer", async ({ page }) => {

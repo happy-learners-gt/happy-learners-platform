@@ -15,7 +15,7 @@ import { CourseRoute } from "./pages/course/CourseRoute";
 import { Library } from "./pages/Library";
 import { Search } from "./pages/Search";
 import { Help, NotFound } from "./pages/Help";
-import { Members, OrganizationSettings, Taxonomies } from "./pages/admin";
+import { Members, OrganizationSettings, AcademicSettings } from "./pages/admin";
 const StudentLesson = lazy(() => import("./pages/StudentLesson").then(module => ({ default: module.StudentLesson })));
 
 export function App() { return <NavigationProvider><FeedbackProvider><Application/></FeedbackProvider></NavigationProvider>; }
@@ -115,7 +115,8 @@ function page(first: string, second?: string) {
     case "ayuda": return <Help/>;
     case "organizacion": return <OrganizationSettings/>;
     case "educadores": return <Members/>;
-    case "clasificaciones": return <Taxonomies/>;
+    case "configuracion-academica": return <AcademicSettings/>;
+    case "clasificaciones": return <Redirect to="/configuracion-academica"/>;
     case "contenido": return null;
     default: return <NotFound/>;
   }
@@ -136,8 +137,15 @@ function GlobalShell({ children }: { children: ReactNode }) {
     ...(admin ? { secondary: { label: "Administración", items: [
       { href: "/organizacion", label: "Organización", icon: "settings" as const, hue: "coral" as const, active: path === "/organizacion" },
       { href: "/educadores", label: "Educadores", icon: "users" as const, hue: "pink" as const, active: path === "/educadores" },
-      { href: "/clasificaciones", label: "Clasificaciones", icon: "list" as const, hue: "green" as const, active: path === "/clasificaciones" },
+      { href: "/configuracion-academica", label: "Configuración académica", icon: "grid" as const, hue: "green" as const, active: path === "/configuracion-academica" },
     ] } } : {}),
   };
   return <AppShell sidebar={sidebar}>{children}</AppShell>;
+}
+
+/** Former locations keep working: replace the address without adding a history entry. */
+function Redirect({ to }: { to: string }) {
+  const { navigate } = useNavigation();
+  useEffect(() => { navigate(to, true); }, [to]);
+  return null;
 }

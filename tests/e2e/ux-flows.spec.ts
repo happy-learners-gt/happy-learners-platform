@@ -34,16 +34,16 @@ test("1 · login → course → content, with one navigation system and working 
   expect(errors).toEqual([]);
 });
 
-test("2 · create a unit and a lesson inside it", async ({ page }, info) => {
-  const unit = e2eName(info, "Unidad"), lesson = e2eName(info, "Lección");
+test("2 · create a module and a lesson inside it", async ({ page }, info) => {
+  const unit = e2eName(info, "Módulo"), lesson = e2eName(info, "Lección");
   await signIn(page, "educador-demo", "/cursos/course-exploradores/contenido");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Contenido");
-  await page.getByRole("button", { name: "Crear unidad", exact: true }).click();
-  const form = page.getByRole("form", { name: "Nueva unidad" });
-  await form.getByLabel("Nombre de la unidad").fill(unit);
+  await page.getByRole("button", { name: "Crear módulo", exact: true }).click();
+  const form = page.getByRole("form", { name: "Nuevo módulo" });
+  await form.getByLabel("Nombre del módulo").fill(unit);
   await form.getByLabel("Objetivo").fill("Practicar saludos en parejas.");
-  await form.getByRole("button", { name: "Crear unidad" }).click();
-  await expect(toast(page)).toContainText(`Unidad «${unit}» creada`);
+  await form.getByRole("button", { name: "Crear módulo" }).click();
+  await expect(toast(page)).toContainText(`Módulo «${unit}» creado`);
   await expect(page.getByRole("heading", { level: 2, name: unit, exact: true })).toBeVisible();
   await createLesson(page, unit, lesson, "Saludar a un compañero por su nombre de personaje.");
   await expect(page.locator(".badge").filter({ hasText: "Borrador" }).first()).toBeVisible();
@@ -51,9 +51,9 @@ test("2 · create a unit and a lesson inside it", async ({ page }, info) => {
   const row = page.locator(".outline-lesson").filter({ hasText: lesson });
   await expect(row).toContainText("Borrador");
   // Reordering is keyboard accessible through the contextual menu and persists.
-  await page.getByRole("button", { name: `Acciones de la unidad ${unit}`, exact: true }).click();
+  await page.getByRole("button", { name: `Acciones del módulo ${unit}`, exact: true }).click();
   await page.getByRole("menuitem", { name: "Mover arriba" }).click();
-  await expect(toast(page)).toContainText(`«${unit}» ahora es la unidad`);
+  await expect(toast(page)).toContainText(`«${unit}» ahora es el módulo`);
   await page.reload();
   await expect(page.locator(".outline-unit").filter({ hasText: unit })).toBeVisible();
   // Inline rename of a short name.

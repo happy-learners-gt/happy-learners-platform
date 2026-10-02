@@ -157,3 +157,38 @@ class UpgradeTests(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             db.execute("INSERT INTO unit_outcomes VALUES(?,?,?)", ("course-exploradores--unit-org-demo", "outcome-missing", "course-exploradores"))
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_academic_model_translates_profiles_and_keeps_behaviour(self):
+        """0013 maps each former profile to ISCED dimensions, keeps today's behaviour and scopes programs."""
+        db = sqlite3.connect(":memory:")
+        db.setlimit(sqlite3.SQLITE_LIMIT_LIKE_PATTERN_LENGTH, 50)
+        db.execute("PRAGMA foreign_keys=ON")
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        academic = [path for path in migrations if path.name.startswith("0013_")][0]
+        for path in migrations[:migrations.index(academic)]:
+            db.executescript(path.read_text())
+        for profile, label in [("university", "Semanas"), ("workshop", "Prácticas"), ("preschool", "Experiencias")]:
+            db.execute("INSERT INTO programs(id,organization_id,title) VALUES(?,?,?)", (f"p-{profile}", "org-demo", profile))
+            db.execute("INSERT INTO courses(id,organization_id,legacy_program_id,title,profile,unit_label,updated_at) VALUES(?,?,?,?,?,?,?)", (f"course-{profile}", "org-demo", f"p-{profile}", profile, profile, label, "t"))
+        db.execute("INSERT INTO course_terms VALUES(?,?,?)", ("course-workshop", "discipline-org-demo-arts", "org-demo"))
+        lessons = db.execute("SELECT id,content,published_content FROM lessons ORDER BY id").fetchall()
+        db.executescript(academic.read_text())
+        rows = {row[0]: row[1:] for row in db.execute("SELECT id,education_type,level,format,modality,pacing,area,settings FROM courses")}
+        self.assertEqual(rows["course-exploradores"], ("non-formal", "unspecified", "open-course", "online", "self-paced", "023", '{"attendance":true}'))
+        self.assertEqual(rows["course-university"], ("formal", "bachelor", "subject", "hybrid", "scheduled", None, '{"outcomesRequired":false,"assessmentRequired":false,"moduleLabel":"weeks"}'))
+        self.assertEqual(rows["course-workshop"], ("non-formal", "unspecified", "workshop", "in-person", "scheduled", "021", "{}"))
+        self.assertEqual(rows["course-preschool"][:2], ("formal", "pre-primary"))
+        self.assertEqual(lessons, db.execute("SELECT id,content,published_content FROM lessons ORDER BY id").fetchall())
+        db.execute("INSERT INTO study_programs(id,organization_id,name,name_key,education_type,level,format,modality,pacing,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)", ("program-a", "org-demo", "Primaria", "primaria", "formal", "primary", "subject", "in-person", "scheduled", "t"))
+        db.execute("UPDATE courses SET program_id='program-a' WHERE id='course-preschool'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO study_programs(id,organization_id,name,name_key,education_type,level,format,modality,pacing,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)", ("program-b", "org-demo", "Sin nivel", "sin nivel", "formal", "unspecified", "subject", "online", "scheduled", "t"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE courses SET settings='not json' WHERE id='course-workshop'")
+        orgs = [row[0] for row in db.execute("SELECT id FROM organizations")]
+        if len(orgs) > 1:
+            other = [org for org in orgs if org != "org-demo"][0]
+            db.execute("INSERT INTO study_programs(id,organization_id,name,name_key,education_type,level,format,modality,pacing,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)", ("program-other", other, "Ajeno", "ajeno", "non-formal", "unspecified", "open-course", "online", "self-paced", "t"))
+            with self.assertRaises(sqlite3.IntegrityError):
+                db.execute("UPDATE courses SET program_id='program-other' WHERE id='course-workshop'")
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
