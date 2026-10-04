@@ -1,5 +1,5 @@
 import type { Activity, Lesson, Member, Resource } from "@happy-learners/contracts";
-import { assesses, lessonOutcomes, outcomeCodes, resourceIdsOf, sequenceTemplates, studentActivities, validActivities, validOutcomeIds } from "@happy-learners/domain";
+import { assesses, moduleNavigation, lessonOutcomes, outcomeCodes, resourceIdsOf, sequenceTemplates, studentActivities, validActivities, validOutcomeIds } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { configurationOf, curriculumFor, materialsFor } from "./courses";
 import { recordEvent } from "./team";
@@ -164,11 +164,20 @@ export async function content(url: URL, method: string, input: unknown, current:
   return reply({ lesson: lessonView(updated!, true) }, row ? 200 : 201);
 }
 
+/** The lesson's place among the published lessons of its module, in curriculum order. */
+async function navigationOf(db: Database, lessonId: string, unitId: string | null) {
+  if (!unitId) return null;
+  const unit = await db.prepare("SELECT u.name FROM learning_units u JOIN courses c ON c.id=u.course_id WHERE u.id=? AND u.status='active' AND c.status='active'").bind(unitId).first<{ name: string }>();
+  if (!unit) return null;
+  const siblings = await db.prepare("SELECT id,json_extract(published_content,'$.title') AS title,json_extract(published_content,'$.shareCode') AS shareCode,archived,(published_content IS NOT NULL) AS published FROM lessons WHERE course_unit_id=? ORDER BY position,id").bind(unitId).all<{ id: string; title: string | null; shareCode: string | null; archived: number; published: number }>();
+  return moduleNavigation(unit.name, siblings.results.map(item => ({ id: item.id, title: item.title || "Lección", shareCode: item.shareCode || undefined, published: !!item.published, archived: !!item.archived })), lessonId);
+}
+
 export async function shared(path: string, method: string, request: Request, db: Database): Promise<Response> {
   const code = path.split("/")[3];
-  const row = await db.prepare("SELECT id,published_content FROM lessons WHERE archived=0 AND published_content IS NOT NULL AND json_extract(published_content,'$.shareCode')=?").bind(code).first<{ id: string; published_content: string }>();
+  const row = await db.prepare("SELECT id,published_content,course_unit_id FROM lessons WHERE archived=0 AND published_content IS NOT NULL AND json_extract(published_content,'$.shareCode')=?").bind(code).first<{ id: string; published_content: string; course_unit_id: string | null }>();
   if (!row) return reply({ error: "Lección no disponible." }, 404);
-  if (method === "GET") return reply({ lesson: JSON.parse(row.published_content) });
+  if (method === "GET") return reply({ lesson: JSON.parse(row.published_content), navigation: await navigationOf(db, row.id, row.course_unit_id) });
   const name = `hl_completed_${row.id.replaceAll("-", "_")}`;
   if (!(request.headers.get("Cookie") || "").split(";").some(c => c.trim() === `${name}=1`)) await db.prepare("INSERT INTO lesson_completions VALUES (?,?,?)").bind(crypto.randomUUID(), row.id, Date.now()).run();
   return Response.json({ ok: true }, { headers: { "Set-Cookie": `${name}=1; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000${new URL(request.url).protocol === "https:" ? "; Secure" : ""}` } });

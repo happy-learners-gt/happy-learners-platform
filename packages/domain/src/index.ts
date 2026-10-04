@@ -1,4 +1,6 @@
 export const timezones = ["America/Guatemala", "America/Mexico_City", "America/Bogota"] as const;
+export { moduleNavigation } from "./navigation";
+export type { ModuleLesson } from "./navigation";
 export { assignmentAvailability, assignmentPeriod, assignmentPeriodError, isCalendarDay } from "./assignments";
 export type { AssignedLessonFacts } from "./assignments";
 export { materialInput, record, cleanText, validTermIds, completeOrder } from "./courses";

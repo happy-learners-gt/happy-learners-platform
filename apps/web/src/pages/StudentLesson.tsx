@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import type { ActivityBlock, Lesson, Material, Resource } from "@happy-learners/contracts";
+import type { ActivityBlock, Lesson, LessonNavigation, Material, Resource } from "@happy-learners/contracts";
 import { blocksOf, groupings, phaseOf, purposes, sequenceOf } from "@happy-learners/domain";
 import { api, message } from "../api";
 import { FileViewer } from "../FileViewer";
@@ -8,12 +8,12 @@ import { Icon } from "../ui/icons";
 const RichText = lazy(() => import("../RichText").then(module => ({ default: module.RichText })));
 
 export function StudentLesson({ code }: { code: string }) {
-  const [lesson, setLesson] = useState<Lesson | null>(null), [error, setError] = useState("");
+  const [lesson, setLesson] = useState<Lesson | null>(null), [navigation, setNavigation] = useState<LessonNavigation | null>(null), [error, setError] = useState("");
   const shareCode = code.toUpperCase();
-  useEffect(() => { api<{ lesson: Lesson }>(`/share/${encodeURIComponent(shareCode)}`).then(result => setLesson(result.lesson)).catch(cause => setError(message(cause))); }, [shareCode]);
+  useEffect(() => { api<{ lesson: Lesson; navigation?: LessonNavigation | null }>(`/share/${encodeURIComponent(shareCode)}`).then(result => { setLesson(result.lesson); setNavigation(result.navigation || null); }).catch(cause => setError(message(cause))); }, [shareCode]);
   if (error) return <div className="player"><PlayerBar/><main id="main" className="player-main"><div className="player-card player-center"><Icon name="alert" size={28}/><h1>No encontramos esta lección</h1><p>{error === "Lección no disponible." ? "Revisa el código con tu educador. Puede que la lección ya no esté publicada." : error}</p><a className="button primary" href="/">Volver al inicio</a></div></main></div>;
   if (!lesson) return <div className="player"><PlayerBar/><main id="main" className="player-main"><p role="status" className="player-center">Abriendo lección…</p></main></div>;
-  return <LessonPlayer lesson={lesson} fileUrl={id => `/api/share/${encodeURIComponent(shareCode)}/files/${id}`} complete={() => api(`/share/${encodeURIComponent(shareCode)}/complete`, "POST").then(() => undefined)}/>;
+  return <LessonPlayer key={shareCode} lesson={lesson} navigation={navigation} fileUrl={id => `/api/share/${encodeURIComponent(shareCode)}/files/${id}`} complete={() => api(`/share/${encodeURIComponent(shareCode)}/complete`, "POST").then(() => undefined)}/>;
 }
 
 function PlayerBar({ title, step, total }: { title?: string; step?: number; total?: number }) {
@@ -29,7 +29,7 @@ function PlayerBar({ title, step, total }: { title?: string; step?: number; tota
  * One activity at a time: intro (step 0), activities (1…n) and completion (n+1).
  * In preview mode nothing is recorded and resources come from the course library.
  */
-export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, onExit }: { lesson: Lesson; fileUrl: (fileId: string) => string; complete?: () => Promise<void>; preview?: boolean; resources?: (Material | Resource)[]; onExit?: () => void }) {
+export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, onExit, navigation }: { lesson: Lesson; fileUrl: (fileId: string) => string; complete?: () => Promise<void>; preview?: boolean; resources?: (Material | Resource)[]; onExit?: () => void; navigation?: LessonNavigation | null }) {
   const [step, setStep] = useState(0), [answers, setAnswers] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [done, setDone] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null), first = useRef(true);
@@ -66,6 +66,7 @@ export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, on
           <ol>{moments.map(({ phase, count }) => <li key={phase.id} className={`tone-${phaseHue(template.phases.indexOf(phase))}`}><strong>{phase.label}</strong><span>{plural(count, "actividad", "actividades")}</span></li>)}</ol>
         </section>}
         <p className="player-meta"><Icon name="clock" size={16}/>{lesson.duration} minutos · {plural(total, "actividad", "actividades")}</p>
+        {navigation && <ModuleNavigation navigation={navigation}/>}
       </article>}
       {activity && <article className={`player-card tone-${structured ? phaseHue(phaseIndex) : blockHue[blocks[0]?.kind || "text"]}`} aria-labelledby="activity-title">
         <span className="player-chip">{structured ? `${template.phases[phaseIndex].label} · ` : ""}Actividad {step} de {total} · {activity.minutes} min</span>
@@ -77,7 +78,9 @@ export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, on
         <span className="done-icon" aria-hidden="true"><Icon name="check" size={32}/></span>
         <h1 ref={heading} tabIndex={-1}>¡Terminaste la lección!</h1>
         <p role="status">{done && !preview ? "¡Gracias por participar! Contamos la lección como terminada, sin guardar tu nombre ni tus respuestas." : "En la versión publicada, aquí se cuenta la lección como terminada."}</p>
+        {navigation?.next && <a className="button primary" href={`/aprender/${encodeURIComponent(navigation.next.shareCode)}`}>Siguiente lección: {navigation.next.title}<Icon name="arrowRight" size={18}/></a>}
         <button type="button" className="button secondary" onClick={() => { setAnswers({}); setStep(0); }}>Repasar desde el inicio</button>
+        {navigation && !navigation.next && <p className="muted">Es la última lección publicada de {navigation.moduleName}.</p>}
       </article>}
       {error && <p className="form-alert player-error" role="alert"><Icon name="alert" size={18}/>{error}</p>}
       {step <= total && <p className="player-privacy"><Icon name="shield" size={14}/>Sin cuenta ni datos personales. Tus respuestas se quedan en este dispositivo.</p>}
@@ -89,6 +92,18 @@ export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, on
         : <button type="button" className="button primary" disabled={busy} onClick={() => void finish()}>{busy ? "Guardando…" : "Terminar lección"}<Icon name="check" size={18}/></button>}
     </nav>}
   </div>;
+}
+
+/** Position in the module and links to the published lessons around this one (ST-032). */
+function ModuleNavigation({ navigation }: { navigation: LessonNavigation }) {
+  const link = (target: { title: string; shareCode: string }) => `/aprender/${encodeURIComponent(target.shareCode)}`;
+  return <nav className="module-nav" aria-label={`Lecciones de ${navigation.moduleName}`}>
+    <p className="module-position"><Icon name="list" size={16}/>Lección {navigation.position} de {navigation.total} en {navigation.moduleName}</p>
+    <div className="module-links">
+      {navigation.previous ? <a className="button ghost small" href={link(navigation.previous)} aria-label={`Lección anterior: ${navigation.previous.title}`}><Icon name="arrowLeft" size={16}/>{navigation.previous.title}</a> : <span/>}
+      {navigation.next && <a className="button secondary small" href={link(navigation.next)} aria-label={`Siguiente lección: ${navigation.next.title}`}>{navigation.next.title}<Icon name="arrowRight" size={16}/></a>}
+    </div>
+  </nav>;
 }
 
 function PlayerBlock({ block, library, fileUrl, answer, onAnswer }: { block: ActivityBlock; library: (Material | Resource)[]; fileUrl: (fileId: string) => string; answer?: number; onAnswer: (choice: number) => void }) {
