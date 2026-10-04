@@ -9,7 +9,7 @@ import { useSession, isEducator } from "../../session";
 export type CourseData = {
   course: Course; units: LearningUnit[]; curriculum: Curriculum; lessons: Lesson[]; materials: Material[]; legacyResources: Resource[];
   program: StudyProgram | null;
-  writable: boolean; educator: boolean; reload: () => Promise<void>;
+  writable: boolean; educator: boolean; admin: boolean; reload: () => Promise<void>;
   /** What the course actually does, and where each value comes from. */
   settings: Required<CourseSettings>; sources: Record<keyof CourseSettings, SettingSource>;
   /** How the course's modules are called, in every grammatical form. */
@@ -22,12 +22,12 @@ export function useCourse() {
   return value;
 }
 
-type State = { status: "loading" } | { status: "error"; error: string; code: number } | { status: "ready"; data: Omit<CourseData, "reload" | "writable" | "educator" | "settings" | "sources" | "noun"> };
+type State = { status: "loading" } | { status: "error"; error: string; code: number } | { status: "ready"; data: Omit<CourseData, "reload" | "writable" | "educator" | "admin" | "settings" | "sources" | "noun"> };
 
 /** Loads a course once for all of its pages; pages call reload() after a change. */
 export function useCourseLoader(id: string) {
   const { member } = useSession();
-  const educator = isEducator(member);
+  const educator = isEducator(member), admin = member.role === "admin";
   const [state, setState] = useState<State>({ status: "loading" });
   const load = useCallback(async () => {
     try {
@@ -44,7 +44,7 @@ export function useCourseLoader(id: string) {
     }
   }, [id, educator]);
   useEffect(() => { setState({ status: "loading" }); void load(); }, [load]);
-  return { state, load, educator };
+  return { state, load, educator, admin };
 }
 
 export function courseConfiguration(course: Course, program: StudyProgram | null) {

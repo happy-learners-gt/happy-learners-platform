@@ -8,7 +8,7 @@ test("seeded educators see their courses' progress, teams and who did what", asy
   await expect(mine.getByRole("link", { name: "Matemáticas 3.º primaria" })).toBeVisible();
   await expect(mine.getByRole("link", { name: "Ciencias Naturales 4.º primaria" })).toBeVisible();
   await expect(mine.getByRole("progressbar", { name: "Lecciones publicadas" }).first()).toBeVisible();
-  await expect(page.locator(".activity-feed.people")).toContainText("Lucía Herrera");
+  await expect(page.locator(".activity-feed.people")).toContainText(/Lucía Herrera|Marta Ruiz/);
 
   // Course overview: the team and the course's own history.
   await page.goto("/cursos/seed-course-matematicas");
@@ -16,21 +16,18 @@ test("seeded educators see their courses' progress, teams and who did what", asy
   await expect(team).toContainText("Lucía Herrera");
   await expect(team).toContainText("Responsable");
   await expect(team).toContainText("Carlos Mejía");
-  await expect(page.locator(".activity-feed.people").first()).toContainText(/Lucía Herrera|Carlos Mejía/);
+  // Team changes by administration are part of the course's history too.
+  await expect(page.locator(".activity-feed.people").first()).toContainText(/Lucía Herrera|Carlos Mejía|Marta Ruiz/);
 
   // The program fixes the module name; settings show where each value comes from.
   await page.goto("/cursos/seed-course-matematicas/configuracion");
   await expect(page.locator(".setting-item").filter({ hasText: "Nombre de las partes del curso" })).toContainText("Fijado por el programa");
-  // The team can change: add a co-teacher, then restore the original team.
-  const editor = page.getByRole("region", { name: "Equipo docente" });
-  await editor.getByLabel("Agregar persona al equipo").selectOption({ label: "Ana López (@ana.lopez)" });
-  await editor.getByRole("button", { name: "Agregar", exact: true }).click();
-  await editor.getByRole("button", { name: "Guardar equipo" }).click();
-  await expect(toast(page)).toContainText("Equipo docente actualizado");
-  await expect(editor.locator(".team-list")).toContainText("Ana López");
-  await editor.getByRole("button", { name: "Quitar a Ana López del equipo" }).click();
-  await editor.getByRole("button", { name: "Guardar equipo" }).click();
-  await expect(editor.locator(".team-list")).not.toContainText("Ana López");
+  // Educators see the team but cannot change it (HL-115 / ST-072).
+  const view = page.getByRole("region", { name: "Equipo docente" });
+  await expect(view.locator(".team-list")).toContainText("Carlos Mejía");
+  await expect(view).toContainText("Administración gestiona el equipo.");
+  await expect(view.getByRole("button", { name: "Guardar equipo" })).toHaveCount(0);
+  await expect(view.getByLabel("Agregar persona al equipo")).toHaveCount(0);
 
   // Courses can be filtered by who leads them.
   await page.goto("/cursos");
@@ -55,4 +52,18 @@ test("administration reviews each educator's contributions and every course's pr
   await page.getByRole("navigation", { name: "Administración" }).getByRole("link", { name: "Configuración académica" }).click();
   await expect(page.locator(".program-list")).toContainText("Primaria bilingüe");
   await expect(page.locator(".program-list")).toContainText("2 cursos");
+
+  // Administration manages a course team (HL-115 / ST-072): add a co-teacher, then restore the original team.
+  await page.goto("/cursos/seed-course-matematicas");
+  await page.getByRole("link", { name: "Gestionar equipo" }).click();
+  const editor = page.getByRole("region", { name: "Equipo docente" });
+  await editor.getByLabel("Agregar persona al equipo").selectOption({ label: "Ana López (@ana.lopez)" });
+  await editor.getByRole("button", { name: "Agregar", exact: true }).click();
+  await editor.getByRole("button", { name: "Guardar equipo" }).click();
+  await expect(toast(page)).toContainText("Equipo docente actualizado");
+  await expect(editor.locator(".team-list")).toContainText("Ana López");
+  await editor.getByRole("button", { name: "Quitar a Ana López del equipo" }).click();
+  await editor.getByRole("button", { name: "Guardar equipo" }).click();
+  await expect(toast(page)).toContainText("Equipo docente actualizado");
+  await expect(editor.locator(".team-list")).not.toContainText("Ana López");
 });
