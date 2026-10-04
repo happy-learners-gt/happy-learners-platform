@@ -9,6 +9,7 @@ import { Icon } from "../../ui/icons";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, StatusBadge } from "../../ui/primitives";
 import type { Tone } from "../../ui/primitives";
 import { useCourse } from "./context";
+import { MissingLink, OpenPublication } from "../../ui/assignments";
 import type { GroupView } from "./Groups";
 
 type Option = { id: string; title: string; unit?: string };
@@ -76,12 +77,16 @@ export function Assignments() {
               {item.availability === "unavailable" && <StatusBadge tone="danger">Requiere sustitución</StatusBadge>}
             </div>
             {item.availability === "updated" && <p className="assignment-note"><Icon name="info" size={16}/>La lección se volvió a publicar. El grupo ya recibe la publicación {item.publishedRevision}.</p>}
+            {item.availability !== "unavailable" && !item.effective && <MissingLink assignment={item}/>}
             {item.availability === "unavailable" && <p className="assignment-note danger"><Icon name="alert" size={16}/>La lección asignada ya no tiene una publicación vigente: fue archivada o retirada. Sustitúyela por otra lección publicada.</p>}
-            {writable && <div className="assignment-actions">
+            <div className="assignment-actions">
+              <OpenPublication assignment={item}/>
+              {writable && <>
               {item.availability === "updated" && <button type="button" className="button secondary small" disabled={!!busy} onClick={() => void change(item, { action: "adopt" }, `Confirmaste la publicación ${item.publishedRevision} para ${group.name}.`)}><Icon name="check" size={16}/>Confirmar publicación vigente</button>}
               {item.availability === "unavailable" && published.length > 0 && <Substitute item={item} options={published} disabled={!!busy} onSubmit={lessonId => change(item, { action: "substitute", lessonId }, `Asignación de ${group.name} actualizada.`)}/>}
               <button type="button" className="button ghost small" disabled={!!busy} onClick={() => void change(item, { action: "withdraw" }, `«${item.lessonTitle}» se retiró de ${group.name}.`)}>Retirar</button>
-            </div>}
+              </>}
+            </div>
           </li>;
         })}</ul> : <p className="muted">Este grupo aún no tiene lecciones asignadas.</p>}
       </section>;

@@ -432,6 +432,11 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: dialog-in
 .assignment-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .assignment-actions .substitute { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; max-width: 100%; }
 .assignment-actions .substitute select { max-width: min(320px, 100%); }
+.current-assignments { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.current-assignments li { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.current-assignments li > div { display: grid; gap: var(--space-1); min-width: 0; }
+.current-assignments li.needs-action { border-color: var(--color-danger); }
+.current-assignments .button { justify-self: start; max-width: 100%; white-space: normal; }
 @media (max-width: 640px) { .assignment-row { grid-template-columns: minmax(0, 1fr); } .assignment-state { justify-content: flex-start; } }
 .group-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: var(--space-4); }
 .group-card { display: grid; gap: var(--space-4); align-content: start; padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-xs); scroll-margin-top: calc(var(--topbar-h) + 16px); border-top: 4px solid var(--pink-vivid); }

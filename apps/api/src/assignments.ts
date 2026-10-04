@@ -1,5 +1,5 @@
 import type { LessonAssignment, Member } from "@happy-learners/contracts";
-import { assignmentAvailability, assignmentPeriod, assignmentPeriodError } from "@happy-learners/domain";
+import { assignmentAvailability, assignmentPeriod, assignmentPeriodError, effectivePublication } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { event } from "./team";
 
@@ -7,7 +7,7 @@ const reply = (data: unknown, status = 200) => Response.json(data, { status });
 type Row = {
   id: string; course_id: string; group_id: string; group_name: string; lesson_id: string; title: string | null; unit_name: string | null;
   starts_on: string; ends_on: string | null; status: "active" | "withdrawn"; assigned_revision: number;
-  archived: number; published: number; revision: number;
+  archived: number; published: number; revision: number; share_code: string | null; course_title?: string;
 };
 type LessonFacts = { id: string; title: string; revision: number; archived: number; published: number };
 
@@ -19,10 +19,11 @@ export async function organizationToday(db: Database, organizationId: string) {
 
 const assignmentQuery = `SELECT a.id,a.course_id,a.group_id,g.name AS group_name,a.lesson_id,
   json_extract(COALESCE(l.published_content,l.content),'$.title') AS title,u.name AS unit_name,a.starts_on,a.ends_on,a.status,
-  a.assigned_revision,l.archived,(l.published_content IS NOT NULL) AS published,l.revision
-  FROM lesson_assignments a JOIN course_groups g ON g.id=a.group_id JOIN lessons l ON l.id=a.lesson_id
+  a.assigned_revision,l.archived,(l.published_content IS NOT NULL) AS published,l.revision,
+  json_extract(l.published_content,'$.shareCode') AS share_code,c.title AS course_title
+  FROM lesson_assignments a JOIN course_groups g ON g.id=a.group_id JOIN lessons l ON l.id=a.lesson_id JOIN courses c ON c.id=a.course_id
   LEFT JOIN learning_units u ON u.id=l.course_unit_id
-  WHERE a.course_id=? AND a.organization_id=?`;
+  WHERE a.organization_id=?`;
 
 export function assignmentView(row: Row, today: string): LessonAssignment {
   const availability = assignmentAvailability({ archived: !!row.archived, published: !!row.published, revision: row.revision }, row.assigned_revision);
@@ -32,13 +33,25 @@ export function assignmentView(row: Row, today: string): LessonAssignment {
     startsOn: row.starts_on, endsOn: row.ends_on, status: row.status, assignedRevision: row.assigned_revision,
     publishedRevision: availability === "unavailable" ? null : row.revision, availability,
     period: assignmentPeriod(row.starts_on, row.ends_on, today), requiresSubstitution: availability === "unavailable",
+    // Resolved from the published snapshot only; draft content is never read here.
+    effective: effectivePublication({ archived: !!row.archived, published: !!row.published, revision: row.revision, shareCode: row.share_code }),
+    ...(row.course_title ? { courseTitle: row.course_title } : {}),
   };
 }
 
 export async function assignmentsFor(db: Database, organizationId: string, courseId: string) {
   const today = await organizationToday(db, organizationId);
-  const rows = await db.prepare(assignmentQuery + " AND a.status='active' ORDER BY g.name,a.starts_on,title,a.id").bind(courseId, organizationId).all<Row>();
+  const rows = await db.prepare(assignmentQuery + " AND a.course_id=? AND a.status='active' ORDER BY g.name,a.starts_on,title,a.id").bind(organizationId, courseId).all<Row>();
   return { today, assignments: rows.results.map(row => assignmentView(row, today)) };
+}
+
+/** GET /api/assignments — current assignments of the courses whose teaching team includes the educator (ST-029). */
+export async function currentAssignments(current: Member, db: Database) {
+  if (current.role !== "educator") return reply({ error: "Solo educadores consultan sus asignaciones." }, 403);
+  const today = await organizationToday(db, current.organizationId);
+  const rows = await db.prepare(assignmentQuery + " AND a.status='active' AND c.status='active' AND g.status='active' AND a.starts_on<=? AND (a.ends_on IS NULL OR a.ends_on>=?) AND EXISTS(SELECT 1 FROM course_members m WHERE m.course_id=a.course_id AND m.user_id=?) ORDER BY c.title,g.name,title,a.id")
+    .bind(current.organizationId, today, today, current.id).all<Row>();
+  return reply({ today, assignments: rows.results.map(row => assignmentView(row, today)) });
 }
 
 async function publishedLesson(db: Database, courseId: string, lessonId: unknown) {
@@ -74,7 +87,7 @@ export async function assignments(parts: string[], method: string, input: unknow
     return reply({ id }, 201);
   }
   if (parts.length !== 6 || method !== "PUT") return reply({ error: "Ruta no disponible." }, 404);
-  const row = await db.prepare(assignmentQuery + " AND a.id=? AND a.status='active'").bind(courseId, current.organizationId, parts[5]).first<Row>();
+  const row = await db.prepare(assignmentQuery + " AND a.course_id=? AND a.id=? AND a.status='active'").bind(current.organizationId, courseId, parts[5]).first<Row>();
   if (!row) return reply({ error: "La asignación no está disponible en este curso." }, 404);
   const value = input as Record<string, unknown> | null;
   const title = row.title || "la lección";

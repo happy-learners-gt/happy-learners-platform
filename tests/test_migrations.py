@@ -65,6 +65,19 @@ class UpgradeTests(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             db.execute("INSERT INTO lesson_assignments(id,organization_id,course_id,group_id,lesson_id,starts_on,ends_on,assigned_revision,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)", ("a-dates", "org-demo", group[1], group[0], lesson, "2026-10-10", "2026-10-01", 1, "user-0", "t", "t"))
 
+    def test_demo_class_receives_a_published_lesson_once(self):
+        db = self.migrated()
+        rows = db.execute("SELECT a.group_id,a.assigned_revision,l.revision,l.archived FROM lesson_assignments a JOIN lessons l ON l.id=a.lesson_id WHERE a.id='seed-assignment-demo-class'").fetchall()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][0], "group-demo-class")
+        self.assertEqual(rows[0][1], rows[0][2])
+        self.assertEqual(rows[0][3], 0)
+        # The demo lesson can be opened by students through its share code.
+        self.assertIsNotNone(db.execute("SELECT json_extract(l.published_content,'$.shareCode') FROM lesson_assignments a JOIN lessons l ON l.id=a.lesson_id WHERE a.id='seed-assignment-demo-class'").fetchone()[0])
+        # Re-applying the cumulative migration never duplicates the active assignment.
+        db.executescript(pathlib.Path("database/migrations/0017_demo_class_assignment.sql").read_text())
+        self.assertEqual(db.execute("SELECT count(*) FROM lesson_assignments WHERE group_id='group-demo-class' AND status='active'").fetchone()[0], 1)
+
     def test_office_files_are_private_course_scoped_and_bounded(self):
         db = self.migrated()
         values = ("file-docx", "org-demo", "course-exploradores", "123e4567-e89b-12d3-a456-426614174000", "org-demo/course-exploradores/file-docx", "Guia.docx", "docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", 128, "a" * 64, "ready", "user-educator", "2026-09-29T00:00:00Z", "2026-09-29T00:00:00Z")
