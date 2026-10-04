@@ -110,13 +110,20 @@ export async function courses(path: string, method: string, input: unknown, curr
     const { legacyProgramId: _, ...view } = course!;
     return reply({ course: { ...view, team: teams.get(view.id) || [] }, units: await unitsFor(db, id), curriculum: await curriculumFor(db, id) });
   }
+  // The team decides who reaches the course's groups and attendance, so only administration changes it.
+  if (area === "team") {
+    if (current.role !== "admin") return reply({ error: "Solo administración puede cambiar el equipo de un curso." }, 403);
+    const v = record(input);
+    if (!v) return reply({ error: "Completa los datos." }, 400);
+    if (course?.status === "archived") return reply({ error: "Restaura el curso antes de modificarlo. Sus enlaces publicados se conservan." }, 409);
+    return updateTeam(id, Number.isInteger(v.version) ? Number(v.version) : -1, v, current, db);
+  }
   if (current.role !== "educator") return reply({ error: "Solo educadores pueden preparar cursos y materiales." }, 403);
   const v = record(input);
   if (!v) return reply({ error: "Completa los datos." }, 400);
   const now = new Date().toISOString();
   const guard = () => db.prepare("UPDATE courses SET version=version+1,updated_at=? WHERE id=? AND organization_id=? AND version=? AND status='active' RETURNING id").bind(now, id, current.organizationId, Number.isInteger(v.version) ? Number(v.version) : -1);
   if (area && course?.status === "archived") return reply({ error: "Restaura el curso antes de modificarlo. Sus enlaces publicados se conservan." }, 409);
-  if (area === "team") return updateTeam(id, Number.isInteger(v.version) ? Number(v.version) : -1, v, current, db);
   if (!area) {
     const data = courseInput(v);
     if (!data) return reply({ error: "Revisa el nombre, el objetivo y la configuración académica del curso: la educación formal necesita un nivel." }, 400);

@@ -21,7 +21,7 @@ const educatorOnly = new Set(["grupos", "asignaciones", "asistencia", "configura
 
 export function CourseRoute({ id, area, item }: { id: string; area: string; item?: string }) {
   const { url, navigate } = useNavigation();
-  const { state, load, educator } = useCourseLoader(id);
+  const { state, load, educator, admin } = useCourseLoader(id);
   const base = `/cursos/${id}`;
   // v0.2.2 locations: Materiales, Editar lecciones (?editar=) and Preparar lección (?nueva=).
   useEffect(() => {
@@ -53,8 +53,8 @@ export function CourseRoute({ id, area, item }: { id: string; area: string; item
           { href: `${base}/asignaciones`, label: "Asignaciones", icon: "list" as const, hue: "violet" as const, active: current === "asignaciones" },
           { href: `${base}/asistencia`, label: "Asistencia", icon: "calendar" as const, hue: "coral" as const, active: current === "asistencia" },
         ] : []),
-        { href: `${base}/configuracion`, label: "Configuración", icon: "settings" as const, hue: "amber" as const, active: current === "configuracion" },
       ] : []),
+      ...(educator || admin ? [{ href: `${base}/configuracion`, label: "Configuración", icon: "settings" as const, hue: "amber" as const, active: current === "configuracion" }] : []),
     ],
   };
   let body;
@@ -62,9 +62,9 @@ export function CourseRoute({ id, area, item }: { id: string; area: string; item
   else if (state.status === "error") body = state.code === 404
     ? <EmptyState level={1} icon="courses" title="Este curso no está disponible" action={<Link href="/cursos" className="button primary">Ver todos los cursos</Link>}>Puede que el enlace haya cambiado o que el curso pertenezca a otra organización.</EmptyState>
     : <><PageHeader title="No se pudo abrir el curso"/><ErrorState error={state.error} retry={() => void load()}/></>;
-  else if (!areas.includes(area) || (educatorOnly.has(area) && !educator) || (["grupos", "asignaciones", "asistencia"].includes(area) && !attendance)) body = <EmptyState level={1} icon="info" title="Esta sección no existe" action={<Link href={base} className="button primary">Ir al resumen del curso</Link>}>Usa el menú del curso para elegir otra sección.</EmptyState>;
+  else if (!areas.includes(area) || (educatorOnly.has(area) && !educator && !(area === "configuracion" && admin)) || (["grupos", "asignaciones", "asistencia"].includes(area) && !attendance)) body = <EmptyState level={1} icon="info" title="Esta sección no existe" action={<Link href={base} className="button primary">Ir al resumen del curso</Link>}>Usa el menú del curso para elegir otra sección.</EmptyState>;
   else {
-    const data = { ...state.data, ...configuration!, educator, writable: educator && state.data.course.status === "active", reload: load };
+    const data = { ...state.data, ...configuration!, educator, admin, writable: educator && state.data.course.status === "active", reload: load };
     body = <CourseProvider data={data}>
       {area === "" && <Overview/>}
       {area === "plan" && <Plan/>}
