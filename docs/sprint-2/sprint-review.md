@@ -1,5 +1,7 @@
 # Sprint 2 · Una clase lista para compartir
 
+> Registro histórico de los incrementos v0.2.1 a v0.2.3. Desde el rebaseline DEC-017 forman parte de SPR-002; la planificación vigente está en `happy-learners-gt/happy-learners-ops`.
+
 ## Objetivo
 
 Permitir que Cesia y su equipo preparen una clase de inglés, organicen sus materiales y la compartan para usarla desde un teléfono sin pedir datos personales al estudiante.
