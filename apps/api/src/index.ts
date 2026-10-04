@@ -80,7 +80,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/courses\/[a-z0-9-]+\/files\/[a-z0-9-]+\/content$/.test(path)) methods[path] = ["GET"];
   if (/^\/api\/courses\/[a-z0-9-]+\/files\/[a-z0-9-]+\/archive$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/lessons\/[a-z0-9-]+\/collaborate$/.test(path)) methods[path] = ["GET"];
-  if (/^\/api\/courses\/[a-z0-9-]+\/groups$/.test(path) || /^\/api\/courses\/[a-z0-9-]+\/sessions$/.test(path)) methods[path] = ["GET", "POST"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions|assignments)$/.test(path)) methods[path] = ["GET", "POST"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/assignments\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/learners$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/attendance$/.test(path)) methods[path] = ["GET", "PUT"];
   if (path === "/api/taxonomy") methods[path] = ["GET"];
@@ -151,7 +152,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     return room.fetch(new Request(request, { headers: internalHeaders }));
   }
   if (/^\/api\/(taxonomy|vocabularies|terms)(\/|$)/.test(path)) return taxonomy(path, method, input, current, db);
-  if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions)(\/|$)/.test(path)) return classroom(path, method, input, current, db);
+  if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions|assignments)(\/|$)/.test(path)) return classroom(path, method, input, current, db);
   if (/^\/api\/courses(\/|$)/.test(path)) return courses(path, method, input, current, db);
   if (/^\/api\/programs(\/|$)/.test(path)) return programs(path, method, input, current, db);
   if (path === "/api/activity") return activity(url, current, db);

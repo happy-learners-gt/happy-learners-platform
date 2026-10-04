@@ -10,13 +10,14 @@ import { Overview } from "./Overview";
 import { Content } from "./Content";
 import { CourseLibrary } from "./CourseLibrary";
 import { Groups } from "./Groups";
+import { Assignments } from "./Assignments";
 import { Attendance } from "./Attendance";
 import { Settings } from "./Settings";
 import { Plan } from "./Plan";
 const LessonEditor = lazy(() => import("../LessonEditor").then(module => ({ default: module.LessonEditor })));
 
-const areas = ["", "plan", "contenido", "biblioteca", "grupos", "asistencia", "configuracion", "lecciones"];
-const educatorOnly = new Set(["grupos", "asistencia", "configuracion"]);
+const areas = ["", "plan", "contenido", "biblioteca", "grupos", "asignaciones", "asistencia", "configuracion", "lecciones"];
+const educatorOnly = new Set(["grupos", "asignaciones", "asistencia", "configuracion"]);
 
 export function CourseRoute({ id, area, item }: { id: string; area: string; item?: string }) {
   const { url, navigate } = useNavigation();
@@ -49,6 +50,7 @@ export function CourseRoute({ id, area, item }: { id: string; area: string; item
       ...(educator ? [
         ...(attendance ? [
           { href: `${base}/grupos`, label: "Grupos", icon: "users" as const, hue: "pink" as const, active: current === "grupos" },
+          { href: `${base}/asignaciones`, label: "Asignaciones", icon: "list" as const, hue: "violet" as const, active: current === "asignaciones" },
           { href: `${base}/asistencia`, label: "Asistencia", icon: "calendar" as const, hue: "coral" as const, active: current === "asistencia" },
         ] : []),
         { href: `${base}/configuracion`, label: "Configuración", icon: "settings" as const, hue: "amber" as const, active: current === "configuracion" },
@@ -60,7 +62,7 @@ export function CourseRoute({ id, area, item }: { id: string; area: string; item
   else if (state.status === "error") body = state.code === 404
     ? <EmptyState level={1} icon="courses" title="Este curso no está disponible" action={<Link href="/cursos" className="button primary">Ver todos los cursos</Link>}>Puede que el enlace haya cambiado o que el curso pertenezca a otra organización.</EmptyState>
     : <><PageHeader title="No se pudo abrir el curso"/><ErrorState error={state.error} retry={() => void load()}/></>;
-  else if (!areas.includes(area) || (educatorOnly.has(area) && !educator) || (["grupos", "asistencia"].includes(area) && !attendance)) body = <EmptyState level={1} icon="info" title="Esta sección no existe" action={<Link href={base} className="button primary">Ir al resumen del curso</Link>}>Usa el menú del curso para elegir otra sección.</EmptyState>;
+  else if (!areas.includes(area) || (educatorOnly.has(area) && !educator) || (["grupos", "asignaciones", "asistencia"].includes(area) && !attendance)) body = <EmptyState level={1} icon="info" title="Esta sección no existe" action={<Link href={base} className="button primary">Ir al resumen del curso</Link>}>Usa el menú del curso para elegir otra sección.</EmptyState>;
   else {
     const data = { ...state.data, ...configuration!, educator, writable: educator && state.data.course.status === "active", reload: load };
     body = <CourseProvider data={data}>
@@ -69,6 +71,7 @@ export function CourseRoute({ id, area, item }: { id: string; area: string; item
       {area === "contenido" && <Content/>}
       {area === "biblioteca" && <CourseLibrary/>}
       {area === "grupos" && <Groups/>}
+      {area === "asignaciones" && <Assignments/>}
       {area === "asistencia" && <Attendance sessionId={item}/>}
       {area === "configuracion" && <Settings/>}
       {area === "lecciones" && item && <Suspense fallback={<Loading label="Abriendo editor…" lines={8}/>}><LessonEditor key={item} lessonId={item}/></Suspense>}
