@@ -432,6 +432,11 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: dialog-in
 .assignment-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .assignment-actions .substitute { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; max-width: 100%; }
 .assignment-actions .substitute select { max-width: min(320px, 100%); }
+.current-assignments { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.current-assignments li { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.current-assignments li > div { display: grid; gap: var(--space-1); min-width: 0; }
+.current-assignments li.needs-action { border-color: var(--color-danger); }
+.current-assignments .button { justify-self: start; max-width: 100%; white-space: normal; }
 @media (max-width: 640px) { .assignment-row { grid-template-columns: minmax(0, 1fr); } .assignment-state { justify-content: flex-start; } }
 .group-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: var(--space-4); }
 .group-card { display: grid; gap: var(--space-4); align-content: start; padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-xs); scroll-margin-top: calc(var(--topbar-h) + 16px); border-top: 4px solid var(--pink-vivid); }
@@ -711,6 +716,8 @@ dialog.modal.viewer .modal-body > .usage, dialog.modal.viewer .modal-body > p { 
 .player-intro .eyebrow { color: var(--violet-ink); }
 .player-chip { justify-self: start; padding: 4px 12px; border-radius: var(--radius-pill); background: var(--tone-soft); color: var(--tone-ink); font-size: var(--text-xs); font-weight: var(--weight-bold); letter-spacing: .02em; }
 .player-center { justify-items: center; text-align: center; }
+/* Buttons that carry a lesson title (next lesson) wrap instead of widening the page on small screens. */
+.player-card .button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: center; }
 .player-objective { display: grid; gap: var(--space-2); padding: var(--space-4) var(--space-5); border-radius: var(--radius-lg); background: var(--gradient-brand-soft); }
 .player-objective h2 { font-family: var(--font-sans); font-size: var(--text-xs); color: var(--violet-ink); text-transform: uppercase; letter-spacing: var(--tracking-caps); }
 .player-objective p { font-size: var(--text-md); color: var(--color-ink); }
