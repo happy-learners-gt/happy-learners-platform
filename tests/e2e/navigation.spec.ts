@@ -10,7 +10,7 @@ test("ST-032 the published lesson shows its position in the module and moves to 
     const unit = await educator.post(`/api/courses/${courseId}/units`, { data: { name: moduleName, objective: "Practicar.", status: "active", version: 1 } }); expect(unit.status()).toBe(201);
     const courseUnitId = (await unit.json()).id;
     const lessons: { id: string; shareCode: string; title: string }[] = [];
-    for (const [title, publish] of [["Primera", true], ["Sin publicar", false], ["Tercera", true]] as const) {
+    for (const [title, publish] of [["Primera", true], ["Sin publicar", false], ["Tercera lección con un título largo para comprobar que el botón se ajusta en pantallas pequeñas", true]] as const) {
       const saved = (await (await educator.post("/api/lessons", { data: { title: `${E2E_PREFIX} ${title}`, objective: "Practicar.", courseId, courseUnitId, instructions: "Sigue las indicaciones.", duration: 15 } })).json()).lesson;
       if (publish) expect((await educator.post(`/api/lessons/${saved.id}/publish`)).status()).toBe(200);
       lessons.push({ id: saved.id, shareCode: saved.shareCode, title: saved.title });
@@ -41,5 +41,7 @@ test("ST-032 the published lesson shows its position in the module and moves to 
     await page.getByRole("button", { name: "Empezar" }).click();
     await page.getByRole("button", { name: "Terminar lección" }).click();
     await expect(page.getByRole("link", { name: `Siguiente lección: ${third.title}` })).toBeVisible();
+    // A long next-lesson title wraps instead of widening the page.
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   } finally { await educator.dispose(); }
 });

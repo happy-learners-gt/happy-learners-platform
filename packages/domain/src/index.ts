@@ -1,8 +1,8 @@
 export const timezones = ["America/Guatemala", "America/Mexico_City", "America/Bogota"] as const;
 export { moduleNavigation } from "./navigation";
 export type { ModuleLesson } from "./navigation";
-export { assignmentAvailability, assignmentPeriod, assignmentPeriodError, isCalendarDay } from "./assignments";
-export type { AssignedLessonFacts } from "./assignments";
+export { assignmentAvailability, assignmentPeriod, assignmentPeriodError, effectivePublication, isCalendarDay } from "./assignments";
+export type { AssignedLessonFacts, EffectivePublication } from "./assignments";
 export { materialInput, record, cleanText, validTermIds, completeOrder } from "./courses";
 export { educationTypes, educationLevels, knowledgeAreas, areaLabel, courseFormats, modalities, pacings, moduleLabels, moduleNoun, settingDefinitions, derivedSettings, sourceLabel, effectiveProfile, resolveSettings, settingsInput, profileInput, courseInput, programInput, coursePresets, labelOf } from "./academic";
 export type { ModuleNoun, SettingKey, SettingSource } from "./academic";

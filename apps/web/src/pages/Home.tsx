@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { ClassSession, Course, LearningUnit, Lesson } from "@happy-learners/contracts";
+import type { ClassSession, Course, LearningUnit, Lesson, LessonAssignment } from "@happy-learners/contracts";
 import { api, message } from "../api";
 import { Link } from "../navigation";
 import { isEducator, useSession } from "../session";
@@ -11,6 +11,7 @@ import type { IconName } from "../ui/icons";
 import { LessonBadge } from "../ui/LessonOutline";
 import { EmptyState, ErrorState, Loading, PrimaryAction, Section, StatTiles, Updated } from "../ui/primitives";
 import { ActivityFeed, CourseProgressList, useProgress } from "../ui/progress";
+import { CurrentAssignments } from "../ui/assignments";
 
 type Upcoming = ClassSession & { courseId: string; courseTitle: string };
 type Data = { courses: Course[]; lessons: Lesson[]; stats: Record<string, CourseStats>; units: Record<string, LearningUnit[]>; upcoming: Upcoming[] };
@@ -94,6 +95,9 @@ export function Home() {
         </Section>
       </div>
       <div className="dashboard-side">
+        {educator && <Section title="Tus asignaciones vigentes" className="order-2">
+          <CurrentAssignments/>
+        </Section>}
         {educator && <Section title="Próximas clases" className="order-2">
           {data.upcoming.length ? <ul className="session-list">{data.upcoming.map(session => <li key={session.id}>
             <span className="date-chip" aria-hidden="true"><strong>{session.sessionDate.slice(8)}</strong>{sessionDay(session.sessionDate, "short").replace(/^\d+\s*/, "")}</span>

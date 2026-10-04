@@ -34,3 +34,10 @@ export function assignmentPeriodError(startsOn: unknown, endsOn: unknown): strin
   }
   return null;
 }
+
+/** The publication an assignment delivers today: the lesson's current, non-archived publication, never a draft. */
+export interface EffectivePublication { revision: number; shareCode: string }
+export function effectivePublication(lesson: AssignedLessonFacts & { shareCode?: string | null }): EffectivePublication | null {
+  if (lesson.archived || !lesson.published || lesson.revision < 1 || !lesson.shareCode) return null;
+  return { revision: lesson.revision, shareCode: lesson.shareCode };
+}

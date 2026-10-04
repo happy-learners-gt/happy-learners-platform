@@ -104,6 +104,9 @@ export interface LessonAssignment {
   /** Publication number when assigned, and the lesson's current publication (null when it has none or is archived). */
   assignedRevision: number; publishedRevision: number | null;
   availability: AssignmentAvailability; period: AssignmentPeriod; requiresSubstitution: boolean;
+  /** What the group receives today: the current publication (share code and number), or null without a valid version (ST-029). */
+  effective: { revision: number; shareCode: string } | null;
+  courseTitle?: string;
 }
 export interface ClassSession { id: string; groupId: string; courseId: string; lessonId?: string; sessionDate: string; groupName?: string; attendance?: { learnerId: string; status: "present" | "late" | "absent" | "excused" }[] }
 
