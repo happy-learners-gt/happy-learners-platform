@@ -205,7 +205,8 @@ test("7 · no E2E contamination is visible: only curated data or cleanable E2E-p
       const detail = await (await api.get(`/api/courses/${course.id}`)).json();
       names.push(...detail.units.map((unit: { name: string }) => unit.name));
       names.push(...(await (await api.get(`/api/courses/${course.id}/materials`)).json()).materials.map((item: { title: string }) => item.title));
-      if (course.status === "active") names.push(...(await (await api.get(`/api/courses/${course.id}/groups`)).json()).groups.map((group: { name: string }) => group.name));
+      // Groups are visible only to the course's teaching team (HL-140 / ST-096).
+      if (course.status === "active" && course.team.some((person: { userId: string }) => person.userId === "user-educator")) names.push(...(await (await api.get(`/api/courses/${course.id}/groups`)).json()).groups.map((group: { name: string }) => group.name));
     }
     names.push(...(await (await api.get("/api/lessons?drafts=1")).json()).lessons.map((lesson: { title: string }) => lesson.title));
     names.push(...(await (await api.get("/api/resources")).json()).resources.map((item: { title: string }) => item.title));

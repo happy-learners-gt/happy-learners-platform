@@ -13,6 +13,13 @@ export function event(db: Database, current: Member, entry: EventInput) {
 }
 export const recordEvent = (db: Database, current: Member, entry: EventInput) => event(db, current, entry).run();
 
+/** Whether the educator belongs to the teaching team of an active course of their organization. */
+export async function onCourseTeam(db: Database, current: Member, courseId: string) {
+  if (current.role !== "educator") return false;
+  return !!await db.prepare("SELECT 1 AS member FROM course_members cm JOIN courses c ON c.id=cm.course_id AND c.organization_id=cm.organization_id WHERE cm.course_id=? AND cm.organization_id=? AND cm.user_id=? AND c.status='active'")
+    .bind(courseId, current.organizationId, current.id).first();
+}
+
 export async function teamsFor(db: Database, organization: string): Promise<Map<string, CourseMember[]>> {
   const rows = (await db.prepare("SELECT cm.course_id AS courseId,cm.user_id AS userId,cm.role,COALESCE(u.display_name,u.username) AS name,u.username FROM course_members cm JOIN users u ON u.id=cm.user_id WHERE cm.organization_id=? ORDER BY CASE cm.role WHEN 'lead' THEN 0 ELSE 1 END,name").bind(organization).all<CourseMember & { courseId: string }>()).results;
   const map = new Map<string, CourseMember[]>();
