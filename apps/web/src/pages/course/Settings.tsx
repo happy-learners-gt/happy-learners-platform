@@ -4,22 +4,27 @@ import { api, message } from "../../api";
 import { useFeedback } from "../../ui/feedback";
 import { Icon } from "../../ui/icons";
 import { Avatar, roleLabel } from "../../ui/progress";
-import { Button, PageHeader, Section } from "../../ui/primitives";
+import { Button, PageHeader, Section, StatusBadge } from "../../ui/primitives";
 import { CourseForm, useCourseActions } from "../Courses";
 import { useCourse } from "./context";
 
 export function Settings() {
-  const { course, reload } = useCourse();
+  const { course, reload, admin } = useCourse();
   const { toast } = useFeedback();
   const actions = useCourseActions(reload);
   const base = `/cursos/${course.id}`;
   const archived = course.status === "archived";
+  const crumbs = [{ label: "Cursos", href: "/cursos" }, { label: course.title, href: base }, { label: "Configuración" }];
+  if (admin) return <>
+    <PageHeader crumbs={crumbs} title="Configuración" description="Administración decide quién forma el equipo docente del curso."/>
+    <div className="reading stack-lg">{archived ? <p className="notice">Restaura el curso para cambiar su equipo.</p> : <TeamEditor/>}</div>
+  </>;
   return <>
-    <PageHeader crumbs={[{ label: "Cursos", href: "/cursos" }, { label: course.title, href: base }, { label: "Configuración" }]} title="Configuración" description="Nombre, objetivo, configuración académica y comportamiento del curso."/>
+    <PageHeader crumbs={crumbs} title="Configuración" description="Nombre, objetivo, configuración académica y comportamiento del curso."/>
     <div className="reading stack-lg">
       {archived ? <p className="notice">Restaura el curso para editar sus datos.</p>
         : <CourseForm key={course.version} course={course} cancelHref={base} onSaved={async () => { await reload(); toast({ message: "Cambios del curso guardados." }); }}/>}
-      {!archived && <TeamEditor/>}
+      {!archived && <TeamView/>}
       <Section title="Copiar o archivar" className="danger-zone">
         <div className="setting-row"><div><h3>Duplicar curso</h3><p className="muted">Crea una copia con su configuración, módulos, plan curricular, recursos y lecciones como borrador. No copia grupos ni asistencia.</p></div><Button icon="copy" onClick={() => void actions.duplicate(course)}>Duplicar</Button></div>
         <div className="setting-row"><div><h3>{archived ? "Restaurar curso" : "Archivar curso"}</h3><p className="muted">{archived ? "El curso vuelve a la lista de cursos activos y admite cambios." : "El curso deja de admitir cambios. Las lecciones publicadas siguen disponibles para estudiantes."}</p></div>
@@ -30,8 +35,24 @@ export function Settings() {
   </>;
 }
 
+const teamNote = "La persona responsable responde por el curso y su avance; quienes colaboran preparan lecciones y registran clases.";
+
+/** What educators see: the team, without controls. Administration changes it. */
+function TeamView() {
+  const { course } = useCourse();
+  const team = course.team || [];
+  return <section id="equipo" className="panel" aria-labelledby="team-title">
+    <div className="panel-header"><h2 id="team-title">Equipo docente</h2></div>
+    <p className="muted">{teamNote} Administración gestiona el equipo.</p>
+    {team.length ? <ul className="team-list">{team.map(member => <li key={member.userId}>
+      <Avatar name={member.name} size={32}/><div><strong>{member.name}</strong><span className="muted small">@{member.username}</span></div>
+      <StatusBadge tone={member.role === "lead" ? "info" : "neutral"}>{roleLabel[member.role]}</StatusBadge>
+    </li>)}</ul> : <p className="muted small">Sin equipo asignado.</p>}
+  </section>;
+}
+
 type Person = { id: string; username: string; name: string; role: string };
-/** The teaching team: one lead (who answers for the course) and co-teachers. Every educator can still edit. */
+/** The teaching team: one lead (who answers for the course) and co-teachers. Only administration edits it. */
 function TeamEditor() {
   const { course, reload } = useCourse();
   const { toast } = useFeedback();
@@ -55,7 +76,7 @@ function TeamEditor() {
   }
   return <section id="equipo" className="panel" aria-labelledby="team-title">
     <div className="panel-header"><h2 id="team-title">Equipo docente</h2></div>
-    <p className="muted">La persona responsable responde por el curso y su avance; quienes colaboran preparan lecciones y registran clases. Todos los educadores pueden editar el curso.</p>
+    <p className="muted">{teamNote}</p>
     {team.length ? <ul className="team-list">{team.map(member => <li key={member.userId}>
       <Avatar name={member.name} size={32}/><div><strong>{member.name}</strong><span className="muted small">@{member.username}</span></div>
       <label className="sr-only" htmlFor={`role-${member.userId}`}>Rol de {member.name}</label>
