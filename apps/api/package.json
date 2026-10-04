@@ -6,6 +6,7 @@
     "@happy-learners/contracts": "*",
     "@happy-learners/domain": "*",
     "@tiptap/core": "^3.31.3",
+    "@tiptap/extension-table": "3.31.3",
     "@tiptap/starter-kit": "^3.31.3",
     "lib0": "^0.2.119",
     "y-prosemirror": "^1.3.7",

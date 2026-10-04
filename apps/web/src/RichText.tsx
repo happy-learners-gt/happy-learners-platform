@@ -3,6 +3,7 @@ import type { KeyboardEvent, ReactNode } from "react";
 import { useEditor, useEditorState, EditorContent } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import { TableKit } from "@tiptap/extension-table";
 import { CharacterCount, Placeholder } from "@tiptap/extensions";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCaret from "@tiptap/extension-collaboration-caret";
@@ -21,6 +22,8 @@ export function RichText({ value, fallbackText = "", onChange, onRemoteChange, o
     extensions: [
       // Only the nodes and marks the Worker accepts (apps/api domain validation): no code blocks or rules.
       StarterKit.configure({ heading: { levels: [2, 3] }, codeBlock: false, horizontalRule: false, link: { openOnClick: !editable, autolink: true }, undoRedo: collaboration ? false : undefined }),
+      // Tables with a header row; Tab and Shift+Tab move between cells.
+      TableKit.configure({ table: { resizable: false, HTMLAttributes: { class: "richtext-table" } } }),
       Placeholder.configure({ placeholder }),
       CharacterCount,
       ...(collaboration ? [Collaboration.configure({ document: collaboration.document, field: collaboration.field }), CollaborationCaret.configure({ provider: collaboration.provider, user: { name: username || "Educador", color: "#5B45E0" } })] : []),
@@ -56,6 +59,7 @@ export function Toolbar({ editor }: { editor: Editor | null }) {
       h2: e.isActive("heading", { level: 2 }), h3: e.isActive("heading", { level: 3 }), paragraph: e.isActive("paragraph"),
       bullet: e.isActive("bulletList"), ordered: e.isActive("orderedList"), quote: e.isActive("blockquote"), link: e.isActive("link"),
       undo: e.can().undo(), redo: e.can().redo(), href: String(e.getAttributes("link").href || ""),
+      table: e.isActive("table"),
     }),
   });
   const [linking, setLinking] = useState(false), [href, setHref] = useState(""), [current, setCurrent] = useState(0);
@@ -76,6 +80,12 @@ export function Toolbar({ editor }: { editor: Editor | null }) {
      { label: "Lista numerada", icon: "listOrdered", active: state.ordered, run: () => chain().toggleOrderedList().run() },
      { label: "Cita", icon: "quote", active: state.quote, run: () => chain().toggleBlockquote().run() }],
     [{ label: "Enlace", icon: "link", active: state.link || linking, run: () => { setHref(state.href || "https://"); setLinking(!linking); } }],
+    [{ label: "Insertar tabla", icon: "table", disabled: state.table, run: () => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+     { label: "Agregar fila", icon: "tableRowAdd", disabled: !state.table, run: () => chain().addRowAfter().run() },
+     { label: "Quitar fila", icon: "tableRowDelete", disabled: !state.table, run: () => chain().deleteRow().run() },
+     { label: "Agregar columna", icon: "tableColumnAdd", disabled: !state.table, run: () => chain().addColumnAfter().run() },
+     { label: "Quitar columna", icon: "tableColumnDelete", disabled: !state.table, run: () => chain().deleteColumn().run() },
+     { label: "Eliminar tabla", icon: "tableDelete", disabled: !state.table, run: () => chain().deleteTable().run() }],
   ];
   const flat = groups.flat();
   function keys(event: KeyboardEvent) {
