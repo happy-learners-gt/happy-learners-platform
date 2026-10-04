@@ -1,5 +1,7 @@
 # Happy Learners · Entrega de Sprint 2
 
+> Registro histórico de los incrementos v0.2.1 a v0.2.3. Desde el rebaseline DEC-017 forman parte de SPR-002; la planificación vigente está en `happy-learners-gt/happy-learners-ops`.
+
 Happy Learners ayuda al equipo de San Gaspar a preparar materiales de inglés y compartir lecciones que los niños pueden abrir desde un teléfono, sin crear una cuenta.
 
 [Abrir la plataforma](https://happy-learners-demo.lfmendoza-alvarez.workers.dev) · [Abrir la lección de muestra](https://happy-learners-demo.lfmendoza-alvarez.workers.dev/aprender/GREETINGS)
@@ -10,7 +12,7 @@ Happy Learners ayuda al equipo de San Gaspar a preparar materiales de inglés y 
 | --- | --- |
 | Cesia y educadores | [Guía de usuario](guia-de-usuario.md) |
 | Quien presenta el producto | [Demostración de cinco minutos](guia-de-demostracion.md) |
-| Sandra y equipo de seguimiento | [Sprint Review](sprint-review.md) y [roadmap](roadmap.md) |
+| Sandra y equipo de seguimiento | [Sprint Review](sprint-review.md) (histórico) |
 | Mantenimiento técnico | [Arquitectura](arquitectura.md) y [matriz de aceptación](matriz-jira-codigo-pruebas.md) |
 | Consulta de cambios | [Notas de v0.2.3](../redesign/release-notes-v0.2.3.md) · [v0.2.2](release-notes-v0.2.2.md) |
 
