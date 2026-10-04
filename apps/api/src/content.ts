@@ -79,6 +79,23 @@ export async function content(url: URL, method: string, input: unknown, current:
     await recordEvent(db, current, { action: "published", targetType: "lesson", targetId: row.id, courseId: row.course_id, summary: `Publicó «${lesson.title}» (publicación ${row.revision + 1})` });
     return reply({ lesson: published });
   }
+  if (path.endsWith("/duplicate") && row) {
+    // A new draft in the same module, right after the original: new identity and share code, no publication,
+    // the same activities and references to reusable resources (ST-016).
+    if (!row.course_unit_id || !await db.prepare("SELECT u.id FROM learning_units u JOIN courses c ON c.id=u.course_id WHERE u.id=? AND u.status='active' AND c.status='active'").bind(row.course_unit_id).first()) return reply({ error: "Restaura el curso y su unidad antes de duplicar la lección." }, 409);
+    const source = JSON.parse(row.content) as Lesson;
+    const lid = `lesson-${crypto.randomUUID()}`, now = new Date().toISOString();
+    const suffix = " (copia)", title = source.title.slice(0, 160 - suffix.length) + suffix;
+    const copy: Lesson = { ...source, id: lid, title, publishedAt: "", shareCode: (current.organizationId === "org-other" ? "O-" : "D-") + crypto.randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase() };
+    const program = await db.prepare("SELECT program_id AS id FROM lessons WHERE id=?").bind(row.id).first<{ id: string }>();
+    await db.batch([
+      ...rows.filter(r => r.course_unit_id === row.course_unit_id && r.position > row.position).map(r => db.prepare("UPDATE lessons SET position=position+1 WHERE id=?").bind(r.id)),
+      db.prepare("INSERT INTO lessons(id,program_id,status,content,unit_id,course_unit_id,position,updated_at) VALUES (?,?,'draft',?,?,?,?,?)").bind(lid, program!.id, JSON.stringify(copy), row.unit_id, row.course_unit_id, row.position + 1, now),
+    ]);
+    await recordEvent(db, current, { action: "created", targetType: "lesson", targetId: lid, courseId: row.course_id, summary: `Duplicó la lección «${source.title}»` });
+    const created = await db.prepare(lessonQuery + " AND l.id=?").bind(current.organizationId, lid).first<LessonRow>();
+    return reply({ lesson: lessonView(created!, true) }, 201);
+  }
   if (method === "DELETE") return reply({ error: "Archiva la lección para conservar su historial." }, 409);
   if (!input || typeof input !== "object") return reply({ error: "Completa la lección." }, 400);
   const v = input as Record<string, unknown>;

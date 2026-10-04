@@ -53,7 +53,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     for (const [name, value] of Object.entries(headers)) result.headers.set(name, value);
     return result;
   }
-  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|organization|members|levels|units|resources|lessons|courses|programs|vocabularies|terms)(\/[a-z0-9-]+){0,4}$/.test(path) && !path.endsWith("/publish") && !path.includes("/files"))
+  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|organization|members|levels|units|resources|lessons|courses|programs|vocabularies|terms)(\/[a-z0-9-]+){0,4}$/.test(path) && !path.endsWith("/publish") && !path.endsWith("/duplicate") && !path.includes("/files"))
     ? await body(request) : undefined;
   let scope = sessionToken(request)?.startsWith("o_") ? "org-other" : "org-demo";
   if (path.startsWith("/api/share/")) scope = path.split("/")[3].startsWith("O-") ? "org-other" : "org-demo";
@@ -89,7 +89,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/programs\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET", "PUT"];
   if (/^\/api\/(vocabularies|terms)$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/(vocabularies|terms)\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
-  const allowed = methods[path] || (path === "/api/curriculum" ? ["GET"] : /^\/api\/(levels|units)$/.test(path) ? ["POST"] : /^\/api\/(levels|units)\/[a-z0-9-]+$/.test(path) ? ["PUT"] : path === "/api/members" ? ["GET"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/(lessons|resources)\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/publish$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+\/files\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
+  const allowed = methods[path] || (path === "/api/curriculum" ? ["GET"] : /^\/api\/(levels|units)$/.test(path) ? ["POST"] : /^\/api\/(levels|units)\/[a-z0-9-]+$/.test(path) ? ["PUT"] : path === "/api/members" ? ["GET"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/(lessons|resources)\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/(publish|duplicate)$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+\/files\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
   if (!allowed) return json({ error: "Not found" }, 404);
   if (!allowed.includes(method)) return json({ error: "Method not allowed" }, 405, { Allow: allowed.join(", ") });
   if (!["GET", "HEAD"].includes(method)) {
