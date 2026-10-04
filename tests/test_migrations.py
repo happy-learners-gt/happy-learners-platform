@@ -51,6 +51,20 @@ class UpgradeTests(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             db.execute("INSERT INTO course_groups(id,course_id,organization_id,name,created_at) VALUES(?,?,?,?,?)", ("foreign-group", "course-exploradores", "org-other", "Grupo inválido", "2026-09-29T00:00:00Z"))
 
+    def test_lesson_assignments_are_group_scoped_and_keep_their_publication(self):
+        db = self.migrated()
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+        # Demo assignments point to a published lesson of the group's own course.
+        rows = db.execute("SELECT a.assigned_revision,l.revision,u.course_id,a.course_id FROM lesson_assignments a JOIN lessons l ON l.id=a.lesson_id JOIN learning_units u ON u.id=l.course_unit_id").fetchall()
+        self.assertGreater(len(rows), 0)
+        self.assertTrue(all(assigned == revision and unit_course == course for assigned, revision, unit_course, course in rows))
+        group = db.execute("SELECT id,course_id FROM course_groups WHERE id='group-demo-class'").fetchone()
+        lesson = db.execute("SELECT id FROM lessons LIMIT 1").fetchone()[0]
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO lesson_assignments(id,organization_id,course_id,group_id,lesson_id,starts_on,assigned_revision,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)", ("a-cross", "org-other", group[1], group[0], lesson, "2026-10-01", 1, "user-0", "t", "t"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO lesson_assignments(id,organization_id,course_id,group_id,lesson_id,starts_on,ends_on,assigned_revision,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)", ("a-dates", "org-demo", group[1], group[0], lesson, "2026-10-10", "2026-10-01", 1, "user-0", "t", "t"))
+
     def test_office_files_are_private_course_scoped_and_bounded(self):
         db = self.migrated()
         values = ("file-docx", "org-demo", "course-exploradores", "123e4567-e89b-12d3-a456-426614174000", "org-demo/course-exploradores/file-docx", "Guia.docx", "docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", 128, "a" * 64, "ready", "user-educator", "2026-09-29T00:00:00Z", "2026-09-29T00:00:00Z")

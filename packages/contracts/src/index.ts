@@ -90,6 +90,17 @@ export interface Material {
 }
 export interface ClassGroup { id: string; courseId: string; name: string; status: "active" | "archived"; learnerCount: number }
 export interface GroupLearner { id: string; groupId: string; displayName: string; status: "active" | "archived" }
+/** Whether the publication an assignment points to is still the one students receive. */
+export type AssignmentAvailability = "current" | "updated" | "unavailable";
+export type AssignmentPeriod = "upcoming" | "active" | "ended";
+/** A published lesson assigned to a course group for a period (ST-027). */
+export interface LessonAssignment {
+  id: string; courseId: string; groupId: string; groupName: string; lessonId: string; lessonTitle: string; unitName?: string;
+  startsOn: string; endsOn?: string | null; status: "active" | "withdrawn";
+  /** Publication number when assigned, and the lesson's current publication (null when it has none or is archived). */
+  assignedRevision: number; publishedRevision: number | null;
+  availability: AssignmentAvailability; period: AssignmentPeriod; requiresSubstitution: boolean;
+}
 export interface ClassSession { id: string; groupId: string; courseId: string; lessonId?: string; sessionDate: string; groupName?: string; attendance?: { learnerId: string; status: "present" | "late" | "absent" | "excused" }[] }
 
 /** What a course develops over time; groups learning outcomes. */
