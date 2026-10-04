@@ -67,15 +67,20 @@ export function validActivities(input: unknown): boolean {
     return true;
   });
 }
-const richNodes = new Set(["doc", "paragraph", "heading", "text", "hardBreak", "bulletList", "orderedList", "listItem", "blockquote"]);
+// Tables (ST-069): a table holds rows; a row holds header or data cells; a cell holds paragraphs or lists.
+const tableParents: Record<string, string[]> = { tableRow: ["table"], tableHeader: ["tableRow"], tableCell: ["tableRow"] };
+const richNodes = new Set(["doc", "paragraph", "heading", "text", "hardBreak", "bulletList", "orderedList", "listItem", "blockquote", "table", "tableRow", "tableHeader", "tableCell"]);
 const richMarks = new Set(["bold", "italic", "underline", "strike", "code", "link"]);
 export function validRichText(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;
   let textLength = 0, count = 0;
-  function visit(item: unknown, depth: number): boolean {
-    if (!item || typeof item !== "object" || depth > 8 || ++count > 500) return false;
+  function visit(item: unknown, depth: number, parent = "doc"): boolean {
+    if (!item || typeof item !== "object" || depth > 10 || ++count > 1200) return false;
     const n = item as Record<string, unknown>;
     if (typeof n.type !== "string" || !richNodes.has(n.type)) return false;
+    if (tableParents[n.type] && !tableParents[n.type].includes(parent)) return false;
+    if (n.type === "table" && parent !== "doc") return false;
+    if (["table", "tableRow"].includes(n.type) && (!Array.isArray(n.content) || !n.content.length || n.content.length > 30)) return false;
     if (n.type === "text") { if (typeof n.text !== "string" || n.content !== undefined) return false; textLength += n.text.length; if (textLength > 12000) return false; }
     if (n.type === "heading" && (!n.attrs || ![2, 3].includes(Number((n.attrs as Record<string, unknown>).level)))) return false;
     if (n.marks !== undefined && (!Array.isArray(n.marks) || n.marks.length > 6 || !n.marks.every(mark => {
@@ -85,7 +90,9 @@ export function validRichText(value: unknown): boolean {
       const href = String((m.attrs as Record<string, unknown> | undefined)?.href || "");
       return /^https?:\/\/[^\s/?#@]+(?::\d+)?(?:[/?#]|$)/i.test(href);
     }))) return false;
-    return n.content === undefined || (Array.isArray(n.content) && n.content.every(child => visit(child, depth + 1)));
+    if (n.type === "table" && !(n.content as Record<string, unknown>[]).every(row => row?.type === "tableRow")) return false;
+    if (n.type === "tableRow" && !(n.content as Record<string, unknown>[]).every(cell => ["tableHeader", "tableCell"].includes(String(cell?.type)))) return false;
+    return n.content === undefined || (Array.isArray(n.content) && n.content.every(child => visit(child, depth + 1, n.type as string)));
   }
   const root = value as Record<string, unknown>;
   return root.type === "doc" && Array.isArray(root.content) && root.content.every(child => visit(child, 1)) && textLength > 0;

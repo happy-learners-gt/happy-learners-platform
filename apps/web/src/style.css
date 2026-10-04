@@ -516,6 +516,12 @@ tbody tr:hover { background: var(--color-surface-muted); }
 .richtext-content { max-width: 760px; min-height: 240px; margin: 0 auto; padding: var(--space-7) var(--space-8); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-sm); outline: none; color: var(--color-ink); font-size: 1.0625rem; line-height: var(--leading-reading); }
 .richtext-content > * + * { margin-top: .75em; }
 .richtext-content h2 { margin-top: 1.2em; font-size: 1.45rem; }
+.richtext-content .tableWrapper { overflow-x: auto; max-width: 100%; }
+.richtext-content table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: .95em; }
+.richtext-content th, .richtext-content td { min-width: 6em; padding: .4em .6em; border: 1px solid var(--color-border-strong, var(--color-border)); vertical-align: top; text-align: left; }
+.richtext-content th { background: var(--color-surface-subtle, var(--violet-soft)); font-weight: 600; }
+.richtext-content th > p, .richtext-content td > p { margin: 0; }
+.richtext-content .selectedCell { background: var(--sky-soft); }
 .richtext-content h3 { margin-top: 1em; font-size: 1.15rem; }
 .richtext-content h2:first-child, .richtext-content h3:first-child { margin-top: 0; }
 .richtext-content ul, .richtext-content ol { padding-left: 1.5em; }
