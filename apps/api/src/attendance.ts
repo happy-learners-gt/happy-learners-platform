@@ -1,7 +1,7 @@
 import type { ClassGroup, ClassSession, GroupLearner, Member } from "@happy-learners/contracts";
 import type { Database } from "./storage";
 import { configurationOf } from "./courses";
-import { event, recordEvent } from "./team";
+import { event, onCourseTeam, recordEvent } from "./team";
 import { assignments } from "./assignments";
 
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
@@ -13,7 +13,8 @@ export async function classroom(path: string, method: string, input: unknown, cu
   const courseId = parts[3];
   const course = await db.prepare("SELECT id FROM courses WHERE id=? AND organization_id=? AND status='active'").bind(courseId, current.organizationId).first();
   if (!course) return unavailable();
-  if (current.role !== "educator") return reply({ error: "Solo educadores pueden consultar y administrar grupos y asistencia." }, 403);
+  // Groups list minors by name: only the course's own teaching team reads or changes them, assignments and attendance.
+  if (!(await onCourseTeam(db, current, courseId))) return reply({ error: "Solo el equipo docente del curso puede consultar y administrar sus grupos y asistencia." }, 403);
   // Records stay readable when attendance is turned off; new groups, learners, classes and marks are not accepted.
   if (method !== "GET" && !(await configurationOf(db, current.organizationId, courseId))!.settings.attendance) return reply({ error: "La asistencia está desactivada en la configuración de este curso." }, 409);
   if (parts[4] === "assignments") return assignments(parts, method, input, current, db, courseId);

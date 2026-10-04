@@ -9,7 +9,10 @@ import { useSession, isEducator } from "../../session";
 export type CourseData = {
   course: Course; units: LearningUnit[]; curriculum: Curriculum; lessons: Lesson[]; materials: Material[]; legacyResources: Resource[];
   program: StudyProgram | null;
-  writable: boolean; educator: boolean; admin: boolean; reload: () => Promise<void>;
+  writable: boolean; educator: boolean; admin: boolean;
+  /** The member is an educator of the course's teaching team: the only people who reach its groups and attendance. */
+  classroom: boolean;
+  reload: () => Promise<void>;
   /** What the course actually does, and where each value comes from. */
   settings: Required<CourseSettings>; sources: Record<keyof CourseSettings, SettingSource>;
   /** How the course's modules are called, in every grammatical form. */
@@ -22,7 +25,7 @@ export function useCourse() {
   return value;
 }
 
-type State = { status: "loading" } | { status: "error"; error: string; code: number } | { status: "ready"; data: Omit<CourseData, "reload" | "writable" | "educator" | "admin" | "settings" | "sources" | "noun"> };
+type State = { status: "loading" } | { status: "error"; error: string; code: number } | { status: "ready"; data: Omit<CourseData, "reload" | "writable" | "educator" | "admin" | "classroom" | "settings" | "sources" | "noun"> };
 
 /** Loads a course once for all of its pages; pages call reload() after a change. */
 export function useCourseLoader(id: string) {

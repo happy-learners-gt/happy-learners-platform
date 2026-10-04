@@ -35,7 +35,7 @@ export function Settings() {
   </>;
 }
 
-const teamNote = "La persona responsable responde por el curso y su avance; quienes colaboran preparan lecciones y registran clases.";
+const teamNote = "La persona responsable responde por el curso y su avance; quienes colaboran preparan lecciones y registran clases. Solo el equipo del curso consulta y registra sus grupos y asistencia.";
 
 /** What educators see: the team, without controls. Administration changes it. */
 function TeamView() {
