@@ -13,7 +13,11 @@ describe("delivery gate", () => {
     expect(e2e.env?.BASE_URL).toBeUndefined();
   });
   it("verifies PRs and main pushes, and requires a successful verification before deploying", () => {
-    expect(workflow.on.push).toEqual({ branches: ["main"] });
+    expect(workflow.on.push).toEqual({ branches: ["main"], "paths-ignore": ["**/*.md", "docs/**"] });
+    // The hourly check compares production with the last successful deployment, not with the head of main.
+    const flows = workflow.jobs["critical-flows"];
+    expect(flows.permissions).toEqual({ contents: "read", deployments: "read" });
+    expect(flows.steps.find((step: { run?: string }) => step.run === "node scripts/critical-flows.mjs").env.EXPECTED_SHA).toBe("${{ steps.expected.outputs.sha }}");
     expect(workflow.on).toHaveProperty("pull_request");
     expect(workflow.on.schedule).toEqual([{ cron: "17 * * * *" }]);
     expect(workflow.jobs.verify.steps.some((step: { run?: string }) => step.run === "./scripts/verify")).toBe(true);

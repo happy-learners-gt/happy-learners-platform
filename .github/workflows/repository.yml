@@ -5,8 +5,10 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '17 * * * *'
+  # Documentation does not reach the Worker: a docs-only commit keeps the deployed product SHA.
   push:
     branches: [main]
+    paths-ignore: ['**/*.md', 'docs/**']
 
 permissions:
   contents: read
@@ -158,6 +160,9 @@ jobs:
         run: python3 scripts/deployment-event.py finish
 
   critical-flows:
+    permissions:
+      contents: read
+      deployments: read
     needs: deploy
     if: always() && (github.event_name == 'schedule' || needs.deploy.result == 'success')
     runs-on: ubuntu-latest
@@ -170,10 +175,29 @@ jobs:
         with:
           node-version: '24.19.0'
           cache: npm
+      # The scheduled check expects the SHA of the last successful deployment, not the head of main.
+      - name: Resolve deployed SHA
+        id: expected
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          sha="$GITHUB_SHA"
+          if [ "$EVENT" = schedule ]; then
+            sha=""
+            for id in $(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=demo&per_page=30" --jq '.[].id'); do
+              if [ "$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses?per_page=1" --jq '.[0].state')" = success ]; then
+                sha="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id" --jq .sha)"
+                break
+              fi
+            done
+          fi
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "No successful demo deployment found" >&2; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
       - run: node scripts/critical-flows.mjs
         env:
           BASE_URL: https://happy-learners-demo.lfmendoza-alvarez.workers.dev
-          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_SHA: ${{ steps.expected.outputs.sha }}
       - if: github.event_name != 'schedule'
         run: npm ci
       - if: github.event_name != 'schedule'
