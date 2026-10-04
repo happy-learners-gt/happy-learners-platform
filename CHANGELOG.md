@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.8.0
+
+El educador asigna y prepara contenido de principio a fin; el estudiante recibe la publicación vigente.
+
+- ST-027 / HL-48: Asignar contenido publicado
+- ST-032 / HL-41: Identificar la siguiente lección
+- ST-016 / HL-45: Duplicar una lección
+- ST-069 / HL-112: Insertar tablas en una lección
+- ST-029 / HL-50: Resolver la publicación efectiva
+
+Manifest: MNF-0ae9e87bc9028667bd8e
+
 ## 0.7.1 — 2026-10-02
 
 - Corrección: al responder bien una pregunta, el mensaje «¡Correcto!» se mostraba en vertical. Heredaba la regla `.correct` del editor (el control de 44 px que marca la opción correcta). La regla queda limitada a ese control y una prueba E2E comprueba que el mensaje ocupa el ancho de la tarjeta.
