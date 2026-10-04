@@ -81,6 +81,13 @@ export function Content() {
       if (archiving && !await confirm({ title: `¿Archivar «${lesson.title}»?`, body: <p>La lección deja de estar disponible para estudiantes y sale del contenido. Su historial se conserva y puedes restaurarla.</p>, confirm: "Archivar lección", danger: true })) return;
       void run(() => api(`/lessons/${lesson.id}`, "PUT", metadataBody(course.id, lesson, { archived: archiving })), archiving ? `«${lesson.title}» se archivó.` : `«${lesson.title}» se restauró como borrador.`);
     },
+    duplicateLesson: async lesson => {
+      try {
+        const { lesson: copy } = await api<{ lesson: Lesson }>(`/lessons/${lesson.id}/duplicate`, "POST");
+        await reload();
+        toast({ message: `Copia creada como borrador: «${copy.title}». El original no cambia.`, action: { label: "Abrir", onSelect: () => navigate(`${base}/lecciones/${copy.id}`) } });
+      } catch (error) { toast({ tone: "error", message: message(error) }); }
+    },
     previewLesson: lesson => { if (lesson.revision && lesson.shareCode && lesson.status !== "archived") window.open(`/aprender/${lesson.shareCode}`, "_blank", "noopener"); else navigate(`${base}/lecciones/${lesson.id}?vista=previa`); },
     openLesson: lesson => navigate(`${base}/lecciones/${lesson.id}`),
   };
