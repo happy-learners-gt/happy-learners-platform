@@ -25,6 +25,8 @@ export function Assignments() {
   const { toast } = useFeedback();
   const [groups, setGroups] = useState<GroupView[] | null>(null), [items, setItems] = useState<LessonAssignment[]>([]), [error, setError] = useState("");
   const [creating, setCreating] = useState<string | null>(null), [busy, setBusy] = useState("");
+  // The organization's calendar day, not the browser's: periods are evaluated in the organization's time zone.
+  const [orgToday, setOrgToday] = useState(today());
   const base = `/courses/${course.id}`, page = `/cursos/${course.id}`;
   // Only what students can open is offered: published lessons that are not archived.
   const published: Option[] = lessons.filter(lesson => lesson.status === "published" && lesson.revision)
@@ -32,8 +34,8 @@ export function Assignments() {
   async function load() {
     setError("");
     try {
-      const [g, a] = await Promise.all([api<{ groups: GroupView[] }>(`${base}/groups`), api<{ assignments: LessonAssignment[] }>(`${base}/assignments`)]);
-      setGroups(g.groups.filter(group => group.status === "active")); setItems(a.assignments);
+      const [g, a] = await Promise.all([api<{ groups: GroupView[] }>(`${base}/groups`), api<{ assignments: LessonAssignment[]; today: string }>(`${base}/assignments`)]);
+      setGroups(g.groups.filter(group => group.status === "active")); setItems(a.assignments); setOrgToday(a.today);
     } catch (cause) { setError(message(cause)); }
   }
   useEffect(() => { if (course.status === "active") void load(); }, [course.id]);
@@ -84,7 +86,7 @@ export function Assignments() {
         })}</ul> : <p className="muted">Este grupo aún no tiene lecciones asignadas.</p>}
       </section>;
     })}</div>
-    {creating !== null && <NewAssignment groups={groups} initialGroup={creating} lessons={published} onClose={() => setCreating(null)} onCreate={async () => { await load(); setCreating(null); }}/>}
+    {creating !== null && <NewAssignment groups={groups} initialGroup={creating} lessons={published} today={orgToday} onClose={() => setCreating(null)} onCreate={async () => { await load(); setCreating(null); }}/>}
   </>;
 }
 
@@ -97,7 +99,7 @@ function Substitute({ item, options, disabled, onSubmit }: { item: LessonAssignm
   </form>;
 }
 
-function NewAssignment({ groups, initialGroup, lessons, onClose, onCreate }: { groups: GroupView[]; initialGroup: string; lessons: Option[]; onClose: () => void; onCreate: () => Promise<void> }) {
+function NewAssignment({ groups, initialGroup, lessons, today, onClose, onCreate }: { groups: GroupView[]; initialGroup: string; lessons: Option[]; today: string; onClose: () => void; onCreate: () => Promise<void> }) {
   const { course } = useCourse();
   const { toast } = useFeedback();
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -117,7 +119,7 @@ function NewAssignment({ groups, initialGroup, lessons, onClose, onCreate }: { g
         <Field label="Grupo"><select name="groupId" required defaultValue={groups.some(group => group.id === initialGroup) ? initialGroup : groups[0]?.id}>{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select></Field>
         <Field label="Lección" hint="Solo lecciones publicadas."><select name="lessonId" required defaultValue={lessons[0]?.id}>{lessons.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.unit ? `${lesson.title} · ${lesson.unit}` : lesson.title}</option>)}</select></Field>
         <div className="field-row">
-          <Field label="Desde"><input name="startsOn" type="date" required defaultValue={today()}/></Field>
+          <Field label="Desde"><input name="startsOn" type="date" required defaultValue={today}/></Field>
           <Field label="Hasta" optional hint="Déjalo vacío si no tiene fecha de término."><input name="endsOn" type="date"/></Field>
         </div>
         <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">{busy ? "Asignando…" : "Asignar"}</button></div>
