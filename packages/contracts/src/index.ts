@@ -90,6 +90,10 @@ export interface Material {
 }
 export interface ClassGroup { id: string; courseId: string; name: string; status: "active" | "archived"; learnerCount: number }
 export interface GroupLearner { id: string; groupId: string; displayName: string; status: "active" | "archived" }
+/** A published lesson next to the current one in its module, reachable by its share code. */
+export interface LessonLink { title: string; shareCode: string }
+/** Where a published lesson sits in its module, counting only published lessons (ST-032). */
+export interface LessonNavigation { moduleName: string; position: number; total: number; previous: LessonLink | null; next: LessonLink | null }
 /** Whether the publication an assignment points to is still the one students receive. */
 export type AssignmentAvailability = "current" | "updated" | "unavailable";
 export type AssignmentPeriod = "upcoming" | "active" | "ended";
