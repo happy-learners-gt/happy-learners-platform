@@ -43,6 +43,7 @@ export type OutlineActions = {
   renameLesson: (lesson: Lesson, title: string) => Promise<boolean>;
   moveLesson: (lesson: Lesson, delta: number) => void;
   archiveLesson: (lesson: Lesson) => void;
+  duplicateLesson: (lesson: Lesson) => void;
   previewLesson: (lesson: Lesson) => void;
   openLesson: (lesson: Lesson) => void;
 };
@@ -95,7 +96,7 @@ export function LessonOutline({ courseId, units, lessons, writable, showArchived
               { label: writable ? "Editar" : "Abrir", icon: "edit", onSelect: () => actions.openLesson(lesson) },
               { label: "Vista previa", icon: "eye", onSelect: () => actions.previewLesson(lesson) },
               ...(writable ? [
-                ...(!lessonArchived ? [{ label: "Renombrar", icon: "text" as const, onSelect: () => setRenaming(lesson.id) }] : []),
+                ...(!lessonArchived ? [{ label: "Renombrar", icon: "text" as const, onSelect: () => setRenaming(lesson.id) }, { label: "Duplicar", icon: "copy" as const, onSelect: () => actions.duplicateLesson(lesson) }] : []),
                 { label: "Mover arriba", icon: "up" as const, onSelect: () => actions.moveLesson(lesson, -1), disabled: order === 0 },
                 { label: "Mover abajo", icon: "down" as const, onSelect: () => actions.moveLesson(lesson, 1), disabled: order === all.length - 1 },
                 "separator" as const,

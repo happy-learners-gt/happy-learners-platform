@@ -17,6 +17,7 @@ export function Help() {
         <li>Usa <strong>Vista previa</strong> para verla como estudiante y <strong>Publicar</strong> cuando esté lista. Comparte el enlace o el código.</li>
       </ol>
       <p>Después de publicar, puedes seguir editando: los estudiantes ven la versión publicada hasta que eliges <strong>Publicar cambios</strong>.</p>
+      <p>Para adaptar una lección sin tocar la original, usa <strong>Duplicar</strong> en el menú de la lección: la copia queda como borrador justo después, con las mismas actividades y recursos, y se publica por separado.</p>
       <h2>Grupos y asistencia</h2>
       <p>Están disponibles en los cursos presenciales o híbridos, o cuando la configuración del curso los activa. En <strong>Grupos</strong>, crea un grupo y agrega a sus participantes con un nombre de lista o un código. Desde el grupo o desde <strong>Asistencia</strong>, registra la clase del día y marca a cada participante.</p>
       <h2>Asignaciones</h2>
