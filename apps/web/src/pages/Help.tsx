@@ -13,7 +13,7 @@ export function Help() {
       <ol>
         <li>En <Link href="/cursos">Cursos</Link>, abre un curso o crea uno nuevo.</li>
         <li>En <strong>Contenido</strong>, crea un módulo y después una lección dentro de él.</li>
-        <li>En el editor, escribe el objetivo y agrega actividades. Los cambios se guardan solos; el indicador muestra “Guardado”.</li>
+        <li>En el editor, escribe el objetivo y agrega actividades. Los cambios se guardan solos; el indicador muestra “Guardado”. Para organizar vocabulario, usa <strong>Insertar tabla</strong>: la primera fila es de encabezados, Tab avanza entre celdas y la barra agrega o quita filas y columnas.</li>
         <li>Usa <strong>Vista previa</strong> para verla como estudiante y <strong>Publicar</strong> cuando esté lista. Comparte el enlace o el código.</li>
       </ol>
       <p>Después de publicar, puedes seguir editando: los estudiantes ven la versión publicada hasta que eliges <strong>Publicar cambios</strong>.</p>

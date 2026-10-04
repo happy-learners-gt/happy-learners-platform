@@ -1,11 +1,13 @@
 import { getSchema } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
+import { TableKit } from "@tiptap/extension-table";
 import type { Activity, RichTextDocument } from "@happy-learners/contracts";
 import { blocksOf } from "@happy-learners/domain";
 import * as Y from "yjs";
 import { prosemirrorJSONToYXmlFragment, yXmlFragmentToProsemirrorJSON } from "y-prosemirror";
 
-const schema = getSchema([StarterKit.configure({ heading: { levels: [2, 3] } })]);
+// Same nodes as the editor (apps/web/src/RichText.tsx), so collaborative drafts keep tables.
+const schema = getSchema([StarterKit.configure({ heading: { levels: [2, 3] } }), TableKit.configure({ table: { resizable: false } })]);
 const empty: RichTextDocument = { type: "doc", content: [{ type: "paragraph" }] };
 
 function initialDocument(activity: Activity): RichTextDocument {
