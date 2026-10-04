@@ -13,15 +13,15 @@ import { useCourse } from "./context";
 import type { GroupView } from "./Groups";
 
 export function Overview() {
-  const { course, units, lessons, materials, curriculum, educator, admin, writable, reload, noun, settings, program } = useCourse();
+  const { course, units, lessons, materials, curriculum, educator, admin, classroom, writable, reload, noun, settings, program } = useCourse();
   const teamEditable = admin && course.status === "active";
   const [groups, setGroups] = useState<GroupView[] | null>(null), [sessions, setSessions] = useState<ClassSession[]>([]);
   const actions = useCourseActions(reload);
   useEffect(() => {
-    if (!educator || course.status !== "active" || !settings.attendance) return;
+    if (!classroom || course.status !== "active" || !settings.attendance) return;
     api<{ groups: GroupView[] }>(`/courses/${course.id}/groups`).then(result => setGroups(result.groups)).catch(() => setGroups([]));
     api<{ sessions: ClassSession[] }>(`/courses/${course.id}/sessions`).then(result => setSessions(result.sessions)).catch(() => undefined);
-  }, [course.id, educator, course.status]);
+  }, [course.id, classroom, course.status]);
   const base = `/cursos/${course.id}`;
   const stats = courseStats(units, lessons);
   const pending = newest(lessons.filter(lesson => ["draft", "changes"].includes(lessonState(lesson))));
@@ -69,7 +69,7 @@ export function Overview() {
           return <li key={unit.id}><span className="outline-number" aria-hidden="true">{index + 1}</span><Link href={`${base}/contenido#unidad-${unit.id}`}>{unit.name}</Link><span className="muted">{plural(count, "lección", "lecciones")}</span></li>;
         })}</ol> : <EmptyState compact icon="content" title="Sin unidades todavía" action={writable && <Link className="button secondary small" href={`${base}/contenido?crear=unidad`}>Crear unidad</Link>}>Organiza el curso en unidades y agrega lecciones a cada una.</EmptyState>}
       </Section>
-      {educator && settings.attendance && <Section title="Grupos" action={<Link href={`${base}/grupos`} className="section-link">Ver grupos</Link>}>
+      {classroom && settings.attendance && <Section title="Grupos" action={<Link href={`${base}/grupos`} className="section-link">Ver grupos</Link>}>
         {groups === null ? <p className="muted">{course.status === "active" ? "Cargando grupos…" : "Restaura el curso para consultar sus grupos."}</p> : groups.length ? <>
           <ul className="link-list">{groups.slice(0, 4).map(group => <li key={group.id}><Link href={`${base}/grupos#grupo-${group.id}`}>{group.name}</Link><span className="muted">{plural(group.learnerCount, "participante", "participantes")}</span></li>)}</ul>
           {next ? <p className="muted small">Próxima clase: {sessionDay(next.sessionDate)} · {next.groupName}</p> : <p className="muted small">No hay clases próximas. <Link href={`${base}/asistencia`}>Registrar una clase</Link></p>}
@@ -86,7 +86,7 @@ export function Overview() {
         <ul className="quick-actions">
           <li><Link href={`${base}/contenido`}><Icon name="plus" size={18}/>Nueva lección</Link></li>
           <li><Link href={`${base}/biblioteca`}><Icon name="upload" size={18}/>Agregar recurso</Link></li>
-          {settings.attendance && <li><Link href={`${base}/asistencia`}><Icon name="calendar" size={18}/>Registrar asistencia</Link></li>}
+          {classroom && settings.attendance && <li><Link href={`${base}/asistencia`}><Icon name="calendar" size={18}/>Registrar asistencia</Link></li>}
           <li><Link href={`${base}/configuracion`}><Icon name="settings" size={18}/>Configuración</Link></li>
         </ul>
       </Section>}

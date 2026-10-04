@@ -30,7 +30,7 @@ export function Home() {
       const details = await Promise.all(active.slice(0, 6).map(course => api<{ units: LearningUnit[] }>(`/courses/${course.id}`).then(detail => [course.id, detail.units] as const)));
       const units = Object.fromEntries(details);
       const stats = Object.fromEntries(details.map(([id, list]) => [id, courseStats(list, lessons.filter(lesson => lesson.courseId === id))]));
-      const sessions = educator ? await Promise.all(active.slice(0, 6).map(course => api<{ sessions: ClassSession[] }>(`/courses/${course.id}/sessions`).then(result => result.sessions.map(session => ({ ...session, courseId: course.id, courseTitle: course.title }))).catch(() => []))) : [];
+      const sessions = educator ? await Promise.all(active.filter(course => course.team?.some(person => person.userId === member.id)).slice(0, 6).map(course => api<{ sessions: ClassSession[] }>(`/courses/${course.id}/sessions`).then(result => result.sessions.map(session => ({ ...session, courseId: course.id, courseTitle: course.title }))).catch(() => []))) : [];
       const upcoming = sessions.flat().filter(session => session.sessionDate >= today()).sort((a, b) => a.sessionDate.localeCompare(b.sessionDate)).slice(0, 4);
       setData({ courses, lessons, stats, units, upcoming });
     } catch (cause) { setError(message(cause)); }
@@ -56,6 +56,8 @@ export function Home() {
   const counts = { draft: live.filter(lesson => lessonState(lesson) === "draft").length, changes: live.filter(lesson => lessonState(lesson) === "changes").length, published: live.filter(lesson => lessonState(lesson) === "published").length };
   const recentCourses = newest(data.courses.filter(course => course.status === "active")).slice(0, 3);
   const firstCourse = recentCourses[0];
+  // Attendance belongs to the course's teaching team only.
+  const teamCourse = newest(data.courses.filter(course => course.status === "active" && course.team?.some(person => person.userId === member.id)))[0];
   const activity = newest([
     ...live.map(lesson => ({ id: lesson.id, title: lesson.title, detail: `Lección · ${courseTitle(lesson.courseId)}`, href: educator ? `/cursos/${lesson.courseId}/lecciones/${lesson.id}` : `/cursos/${lesson.courseId}/contenido`, updatedAt: lesson.updatedAt, icon: "content" as IconName })),
     ...data.courses.map(course => ({ id: course.id, title: course.title, detail: "Curso", href: `/cursos/${course.id}`, updatedAt: course.updatedAt, icon: "courses" as IconName })),
@@ -102,7 +104,7 @@ export function Home() {
           {data.upcoming.length ? <ul className="session-list">{data.upcoming.map(session => <li key={session.id}>
             <span className="date-chip" aria-hidden="true"><strong>{session.sessionDate.slice(8)}</strong>{sessionDay(session.sessionDate, "short").replace(/^\d+\s*/, "")}</span>
             <div><Link href={`/cursos/${session.courseId}/asistencia/${session.id}`}>{session.groupName || "Grupo"}</Link><span>{session.courseTitle} · {sessionDay(session.sessionDate)}</span></div>
-          </li>)}</ul> : <EmptyState compact icon="calendar" title="Sin clases próximas" action={firstCourse ? <Link className="button secondary small" href={`/cursos/${firstCourse.id}/asistencia`}>Registrar una clase</Link> : undefined}>Registra una clase para pasar lista ese día.</EmptyState>}
+          </li>)}</ul> : <EmptyState compact icon="calendar" title="Sin clases próximas" action={teamCourse ? <Link className="button secondary small" href={`/cursos/${teamCourse.id}/asistencia`}>Registrar una clase</Link> : undefined}>Registra una clase para pasar lista ese día.</EmptyState>}
         </Section>}
         <Section title="Estado de las lecciones" className="order-3">
           <StatTiles className="stack-tiles" items={[
@@ -116,7 +118,7 @@ export function Home() {
           <ul className="quick-actions">
             {firstCourse && <li><Link href={`/cursos/${firstCourse.id}/contenido`}><Icon name="content" size={18}/>Nueva lección en {firstCourse.title}</Link></li>}
             {firstCourse && <li><Link href={`/cursos/${firstCourse.id}/biblioteca`}><Icon name="upload" size={18}/>Agregar un recurso</Link></li>}
-            {firstCourse && <li><Link href={`/cursos/${firstCourse.id}/asistencia`}><Icon name="calendar" size={18}/>Registrar asistencia</Link></li>}
+            {teamCourse && <li><Link href={`/cursos/${teamCourse.id}/asistencia`}><Icon name="calendar" size={18}/>Registrar asistencia</Link></li>}
             <li><Link href="/biblioteca"><Icon name="library" size={18}/>Abrir la biblioteca</Link></li>
           </ul>
         </Section>}
