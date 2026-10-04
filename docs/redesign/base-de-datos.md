@@ -353,6 +353,6 @@ Este último diagrama es conceptual. No existen aún tablas de programas académ
 
 - [Migraciones](../../tests/test_migrations.py): compara el contenido publicado antes/después, verifica relaciones y rechaza clasificaciones cruzadas.
 - [Reglas de dominio](../../tests/courses.test.ts): perfiles, clasificación opcional, límites, URL y orden completo.
-- [Recorrido y API](../../tests/e2e/courses.spec.ts): curso no lingüístico, persistencia, archivo, permisos, referencias y conflictos de versión; se ejecuta en escritorio y móvil sobre almacenamiento local nuevo.
+- [Recorrido y API](../../tests/e2e/api.spec.ts): autorización del curso, programas, requisitos configurados, versiones y referencias entre cursos; se ejecuta en escritorio y móvil sobre almacenamiento local nuevo.
 
 Los bloques Mermaid se renderizan en GitHub. Sus nombres coinciden con las tablas SQL. El esquema objetivo no se mezcla con el físico desplegable.
