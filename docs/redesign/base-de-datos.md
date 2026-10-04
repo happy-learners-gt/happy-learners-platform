@@ -193,6 +193,27 @@ erDiagram
 
 La API autoriza consulta y escritura de asistencia al rol educador y verifica que grupo, participante, sesión, curso y organización coincidan. La clave primaria compuesta evita duplicar marcas para una persona dentro de una sesión. La migración incluye una lista sintética y no crea sesiones ni resultados históricos.
 
+### Asignaciones de lecciones
+
+```mermaid
+erDiagram
+  course_groups ||--o{ lesson_assignments : recibe
+  lessons ||--o{ lesson_assignments : asignada
+  lesson_assignments {
+    TEXT id PK
+    TEXT organization_id FK
+    TEXT course_id FK
+    TEXT group_id FK
+    TEXT lesson_id FK
+    TEXT starts_on "día de inicio"
+    TEXT ends_on "nullable; igual o posterior al inicio"
+    INTEGER assigned_revision "publicación al asignar"
+    TEXT status "active, withdrawn"
+  }
+```
+
+`0016_lesson_assignments.sql` asigna una lección publicada a un grupo del mismo curso durante un periodo. La API rechaza borradores, lecciones sin publicar y archivadas. La asignación conserva la publicación con la que se hizo: si la lección se vuelve a publicar se identifica como actualizada, y si se archiva o pierde su publicación requiere sustitución. Retirar una asignación conserva el registro con estado `withdrawn`.
+
 Un curso puede existir sin unidades ni programa académico. Una lección nueva necesita una unidad activa del curso. No hay anidamiento ilimitado. Los perfiles cambian el vocabulario inicial; no crean reglas de evaluación ni requisitos inferidos.
 
 La API verifica que la unidad y la lección pertenezcan al mismo curso. La columna heredada `program_id` sigue siendo obligatoria: al crear un curso se crea su contenedor de compatibilidad en la misma transacción. El JSON y las columnas de relación se actualizan juntos al guardar una lección.

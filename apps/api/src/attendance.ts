@@ -2,6 +2,7 @@ import type { ClassGroup, ClassSession, GroupLearner, Member } from "@happy-lear
 import type { Database } from "./storage";
 import { configurationOf } from "./courses";
 import { event, recordEvent } from "./team";
+import { assignments } from "./assignments";
 
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
 const unavailable = () => reply({ error: "El grupo o la clase no está disponible en este curso." }, 404);
@@ -15,6 +16,7 @@ export async function classroom(path: string, method: string, input: unknown, cu
   if (current.role !== "educator") return reply({ error: "Solo educadores pueden consultar y administrar grupos y asistencia." }, 403);
   // Records stay readable when attendance is turned off; new groups, learners, classes and marks are not accepted.
   if (method !== "GET" && !(await configurationOf(db, current.organizationId, courseId))!.settings.attendance) return reply({ error: "La asistencia está desactivada en la configuración de este curso." }, 409);
+  if (parts[4] === "assignments") return assignments(parts, method, input, current, db, courseId);
   const now = new Date().toISOString();
   if (parts[4] === "groups" && parts.length === 5) {
     if (method === "GET") {
