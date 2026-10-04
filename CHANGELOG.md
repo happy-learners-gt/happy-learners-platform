@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.1 — 2026-10-04
+
+Parche de seguridad de REL-004 (DEC-018): dos defectos HIGH de autorización, corregidos en el servidor con denegación por defecto.
+
+- ST-072 / HL-115: solo administración cambia el equipo docente de un curso. La persona responsable y los educadores lo ven en modo lectura; cada cambio queda en la actividad del curso.
+- ST-096 / HL-140: solo el equipo docente del curso consulta y administra sus grupos, participantes, clases, asignaciones y asistencia. Un educador ajeno al equipo y administración reciben 403, y la interfaz no les ofrece esas secciones.
+- Entrega: un commit solo de documentación ya no redespliega el Worker, y la verificación horaria compara producción con el último despliegue exitoso (HL-15 / ST-049).
+
 ## 0.8.0
 
 El educador asigna y prepara contenido de principio a fin; el estudiante recibe la publicación vigente.
