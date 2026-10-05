@@ -67,6 +67,7 @@ test("HL-61 ST-035 ST-097 ST-098: an educator plans and teaches a class; the gro
   await page.goto(`/cursos/${course}/clases?vista=historial&grupo=${groupId}`);
   await expect(page.locator(".class-list li")).toHaveCount(1);
   await expect(page.locator(".class-list li").first()).toContainText("Impartida");
+  await expect(page.locator(".class-list li").first()).toContainText(/1 de 2 presentes .*· publicación \d+ · impartió /);
   await expect(page.locator(".class-stats")).toContainText("%");
 
   // The group enters with the code — no account — and sees the next class and its resources.
