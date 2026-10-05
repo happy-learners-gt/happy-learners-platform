@@ -37,7 +37,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => Promise<void> }) {
         </form>
         <details className="demo-help"><summary>Probar con cuentas de demostración</summary>
           <p><code>lucia.herrera</code> imparte Matemáticas 3.º; <code>educador-demo</code> prepara Exploradores. <code>marta.ruiz</code> coordina la organización.</p>
-          <p>Como estudiante, entra con el código de grupo <code>DG-MATE-3A</code>.</p>
+          <p>Como estudiante, entra con el código de sección <code>DG-MATE-3A</code>.</p>
           <p>Contraseña: <code>Aprender-2026!</code></p>
           <p>Las cuentas son compartidas: no escribas información personal real.</p>
         </details>
@@ -52,9 +52,9 @@ export function Login({ onSignedIn }: { onSignedIn: () => Promise<void> }) {
         try { await api("/student/login", "POST", { code: value }); navigate("/estudiante"); }
         catch (cause) { setCodeError(message(cause)); setBusy(false); }
       }}>
-        <div><h2 id="student-title">¿Eres estudiante?</h2><p>Escribe el código de tu grupo o de una lección. No necesitas cuenta.</p></div>
+        <div><h2 id="student-title">¿Eres estudiante?</h2><p>Escribe el código de tu sección o de una lección. No necesitas cuenta.</p></div>
         {codeError && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{codeError}</p>}
-        <div className="code-row"><label htmlFor="lesson-code" className="sr-only">Código de grupo o de lección</label><input id="lesson-code" required maxLength={40} value={code} onChange={event => setCode(event.target.value)} placeholder="Ej. DG-MATE-3A" autoCapitalize="characters"/><button className="button secondary" disabled={busy}>{busy ? "Abriendo…" : "Abrir"}</button></div>
+        <div className="code-row"><label htmlFor="lesson-code" className="sr-only">Código de sección o de lección</label><input id="lesson-code" required maxLength={40} value={code} onChange={event => setCode(event.target.value)} placeholder="Ej. DG-MATE-3A" autoCapitalize="characters"/><button className="button secondary" disabled={busy}>{busy ? "Abriendo…" : "Abrir"}</button></div>
       </form>
       <p className="login-privacy"><Icon name="shield" size={16}/>Sin expedientes ni datos personales de estudiantes.</p>
     </main>

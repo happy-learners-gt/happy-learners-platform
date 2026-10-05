@@ -12,7 +12,6 @@ import { courses, programs, taxonomy } from "./courses";
 import { activity, people, progress } from "./team";
 import { classroom } from "./attendance";
 import { myClasses, student, studentScope, studentToken } from "./classes";
-import { currentAssignments } from "./assignments";
 import { courseFiles, sharedFile } from "./files";
 import { LessonCollaborationRoom } from "./collaboration";
 import { encodeLessonDraft } from "./rich-text";
@@ -55,7 +54,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     for (const [name, value] of Object.entries(headers)) result.headers.set(name, value);
     return result;
   }
-  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|organization|members|levels|units|resources|lessons|courses|programs|vocabularies|terms|student)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files"))
+  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|organization|members|levels|units|resources|lessons|courses|programs|vocabularies|terms|student)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !/\/groups\/[a-z0-9-]+\/lessons$/.test(path) && !path.includes("/files"))
     ? await body(request) : undefined;
   let scope = sessionToken(request)?.startsWith("o_") ? "org-other" : "org-demo";
   if (path.startsWith("/api/share/")) scope = path.split("/")[3].startsWith("O-") ? "org-other" : "org-demo";
@@ -78,13 +77,15 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/courses\/[a-z0-9-]+\/(competencies|outcomes)$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/units\/[a-z0-9-]+\/outcomes$/.test(path)) methods[path] = ["PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/team$/.test(path)) methods[path] = ["PUT"];
-  if (path === "/api/activity" || path === "/api/progress" || path === "/api/people" || path === "/api/assignments") methods[path] = ["GET"];
+  if (path === "/api/activity" || path === "/api/progress" || path === "/api/people") methods[path] = ["GET"];
   if (/^\/api\/courses\/[a-z0-9-]+\/files$/.test(path)) methods[path] = ["GET", "POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/files\/[a-z0-9-]+\/content$/.test(path)) methods[path] = ["GET"];
   if (/^\/api\/courses\/[a-z0-9-]+\/files\/[a-z0-9-]+\/archive$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/lessons\/[a-z0-9-]+\/collaborate$/.test(path)) methods[path] = ["GET"];
-  if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions|assignments)$/.test(path)) methods[path] = ["GET", "POST"];
-  if (/^\/api\/courses\/[a-z0-9-]+\/assignments\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions)$/.test(path)) methods[path] = ["GET", "POST"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/schedule$/.test(path)) methods[path] = ["PUT", "DELETE"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/lessons$/.test(path)) methods[path] = ["POST"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/lesson$/.test(path)) methods[path] = ["PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/learners$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/learners\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
@@ -163,12 +164,11 @@ async function route(request: Request, env: Env): Promise<Response> {
     return room.fetch(new Request(request, { headers: internalHeaders }));
   }
   if (/^\/api\/(taxonomy|vocabularies|terms)(\/|$)/.test(path)) return taxonomy(path, method, input, current, db);
-  if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions|assignments)(\/|$)/.test(path)) return classroom(path, method, input, current, db);
+  if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions)(\/|$)/.test(path)) return classroom(path, method, input, current, db);
   if (/^\/api\/courses(\/|$)/.test(path)) return courses(path, method, input, current, db);
   if (/^\/api\/programs(\/|$)/.test(path)) return programs(path, method, input, current, db);
   if (path === "/api/activity") return activity(url, current, db);
   if (path === "/api/classes") return myClasses(current, db);
-  if (path === "/api/assignments") return currentAssignments(current, db);
   if (path === "/api/progress") return progress(current, db);
   if (path === "/api/people") return people(current, db);
   if (path.startsWith("/api/members")) return roles(path, method, input, current, db);

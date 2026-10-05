@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.4 — 2026-10-05
+
+Parche de REL-004 (DEC-021): el aula sigue el orden de trabajo del equipo docente. Las secciones agrupan a los estudiantes asignados, el horario genera las clases y cada clase trabaja una lección con sus recursos.
+
+- ST-026 / ST-070: **Asignaciones** reemplaza a Grupos. Cada sección del curso tiene sus estudiantes asignados, su código de acceso y su horario; `/cursos/:id/grupos` redirige.
+- ST-099: **Horario** nuevo. Por sección se eligen días, hora, duración y periodo; al guardar se generan todas sus clases. Un cambio rehace solo las clases generadas que siguen pendientes, conserva las impartidas, en curso, canceladas y agregadas a mano, y mantiene el orden de sus lecciones.
+- ST-097 / HL-141 y ST-027: **Clases** es el cronograma. La lección de cada clase se elige en su fila o con «Asignar lecciones en orden», que usa las lecciones publicadas en el orden de Contenido. Solo se asignan lecciones publicadas. Los recursos de la clase son los de su lección y ya no se eligen al planificar. «Agregar clase» programa una clase extra. La página Cronograma se retira y su ruta redirige a Clases.
+- ST-029: una clase cuya lección se archivó muestra «Requiere sustitución».
+- ST-098: el espacio de la sección muestra «Lecciones de tus clases» y entrega solo los archivos publicados en la lección de una de sus clases.
+- ST-100: el mapa de cobertura del Plan curricular marca como **Impartido** lo que trabajan las lecciones de las clases finalizadas, con filtro por sección para el equipo del curso.
+- Datos: `0019_section_schedule.sql` agrega el horario de cada sección y el origen de cada clase, recupera el horario de las secciones de la demostración y da a sus clases pendientes las lecciones publicadas en orden. `lesson_assignments` y `class_session_resources` dejan de leerse y se conservan para poder restaurar v0.8.3.
+- API: `PUT|DELETE /api/courses/:id/groups/:gid/schedule`, `POST /api/courses/:id/groups/:gid/lessons` y `PUT /api/courses/:id/sessions/:sid/lesson`. Se retiran `/api/assignments` y `/api/courses/:id/assignments`. La autorización por equipo del curso (ST-096) cubre las rutas nuevas.
+
 ## 0.8.3 — 2026-10-04
 
 Parche de REL-004 (DEC-020): nombres del aula alineados con el uso del equipo docente.

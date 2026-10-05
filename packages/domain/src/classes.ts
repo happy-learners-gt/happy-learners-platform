@@ -1,5 +1,5 @@
 import type { ClassStatus } from "@happy-learners/contracts";
-import { isCalendarDay } from "./assignments";
+import { isCalendarDay } from "./schedule";
 
 export const classStatusLabels: Record<ClassStatus, string> = { planned: "Planificada", in_progress: "En curso", completed: "Impartida", cancelled: "Cancelada" };
 export type ClassAction = "start" | "complete" | "cancel" | "restore";
@@ -20,7 +20,7 @@ export function nextClassStatus(current: ClassStatus, action: ClassAction): Clas
 /** Attendance is taken once a class is open and stays correctable after it ends; a cancelled class has none. */
 export const acceptsAttendance = (status: ClassStatus) => status !== "cancelled";
 
-export type ClassPlan = { sessionDate: string; startsAt: string | null; durationMinutes: number | null; lessonId: string | null; resourceIds: string[]; notes: string };
+export type ClassPlan = { sessionDate: string; startsAt: string | null; durationMinutes: number | null; lessonId: string | null; notes: string };
 const idPattern = /^[a-z0-9-]{1,100}$/;
 
 /** Validates what an educator plans for a class. Returns the clean plan or a message that says what to fix. */
@@ -33,11 +33,9 @@ export function classPlanInput(input: unknown): ClassPlan | { error: string } {
   if (duration !== null && (!Number.isInteger(duration) || duration < 5 || duration > 480)) return { error: "La duración debe estar entre 5 y 480 minutos." };
   const lessonId = typeof value.lessonId === "string" && value.lessonId ? value.lessonId : null;
   if (lessonId !== null && !idPattern.test(lessonId)) return { error: "La lección seleccionada no es válida." };
-  const resourceIds = value.resourceIds === undefined ? [] : value.resourceIds;
-  if (!Array.isArray(resourceIds) || resourceIds.length > 20 || resourceIds.some(id => typeof id !== "string" || !idPattern.test(id)) || new Set(resourceIds).size !== resourceIds.length) return { error: "Elige hasta 20 recursos distintos de la biblioteca." };
   const notes = typeof value.notes === "string" ? value.notes.trim() : "";
   if (notes.length > 2000 || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(notes)) return { error: "Las notas admiten hasta 2000 caracteres." };
-  return { sessionDate: value.sessionDate, startsAt, durationMinutes: duration, lessonId, resourceIds: resourceIds as string[], notes };
+  return { sessionDate: value.sessionDate, startsAt, durationMinutes: duration, lessonId, notes };
 }
 
 /** Group codes: a prefix for the organization's storage, then characters that cannot be confused when read aloud. */

@@ -11,7 +11,7 @@ it("shows an accessible Spanish login with explicit synthetic account guidance",
   expect(screen.getByLabelText("Usuario")).toBeTruthy();
   expect(screen.getByLabelText("Contraseña").getAttribute("type")).toBe("password");
   expect(screen.getByText("Probar con cuentas de demostración")).toBeTruthy();
-  expect(screen.getByLabelText("Código de grupo o de lección")).toBeTruthy();
+  expect(screen.getByLabelText("Código de sección o de lección")).toBeTruthy();
 });
 it("preserves the login form and explains network failure", async () => {
   const request = vi.fn().mockResolvedValueOnce(Response.json({}, { status: 401 })).mockRejectedValue(new TypeError("Network"));
