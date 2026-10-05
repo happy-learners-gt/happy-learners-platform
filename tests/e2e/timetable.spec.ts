@@ -7,9 +7,11 @@ const day = (offset: number) => { const date = new Date(); date.setDate(date.get
 
 test("ST-099 ST-097 ST-101 ST-029 ST-100: the section schedule generates its classes, planned with optional lessons in order, and completed classes feed coverage", async ({ page, playwright, baseURL }, info) => {
   const educator = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("educador-demo")}` } });
+  // DEC-023: administration creates the course with educador-demo as its lead, who prepares the content.
+  const admin = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("admin-demo")}` } });
   try {
     const body = { title: `${E2E_PREFIX} Horario ${info.project.name}`, objective: "Seguir un horario.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", area: "011", settings: { attendance: true }, programId: null };
-    const courseId = (await (await educator.post("/api/courses", { data: body })).json()).id, path = `/api/courses/${courseId}`;
+    const courseId = (await (await admin.post("/api/courses", { data: { ...body, leadId: "user-educator" } })).json()).id, path = `/api/courses/${courseId}`;
     const version = async () => (await (await educator.get(path)).json()).course.version as number;
     const outcomeId = (await (await educator.post(`${path}/outcomes`, { data: { statement: "Saluda y se presenta.", level: "apply", evidence: "", competencyId: null, status: "active", version: await version() } })).json()).id;
     const courseUnitId = (await (await educator.post(`${path}/units`, { data: { name: `${E2E_PREFIX} Módulo`, objective: "Practicar.", status: "active", version: await version() } })).json()).id;
@@ -19,13 +21,13 @@ test("ST-099 ST-097 ST-101 ST-029 ST-100: the section schedule generates its cla
       expect((await educator.post(`/api/lessons/${lesson.id}/publish`)).status()).toBe(200);
       lessons.push(lesson);
     }
-    const groupId = (await (await educator.post(`${path}/groups`, { data: { name: `${E2E_PREFIX} Sección A` } })).json()).id;
-    const learnerId = (await (await educator.post(`${path}/groups/${groupId}/learners`, { data: { displayName: `${E2E_PREFIX} Ana` } })).json()).id;
+    const groupId = (await (await admin.post(`${path}/groups`, { data: { name: `${E2E_PREFIX} Sección A` } })).json()).id;
+    const learnerId = (await (await admin.post(`${path}/groups/${groupId}/learners`, { data: { displayName: `${E2E_PREFIX} Ana` } })).json()).id;
     const sessions = async () => ((await (await educator.get(`${path}/sessions`)).json()).sessions as Session[]).filter(item => item.groupId === groupId).sort((a, b) => a.sessionDate.localeCompare(b.sessionDate));
 
     // Saving the schedule generates every class of the period, from today on.
-    expect((await educator.put(`${path}/groups/${groupId}/schedule`, { data: { weekdays: [1], startsAt: "25:00", durationMinutes: 45, from: day(0), until: day(6) } })).status()).toBe(400);
-    const saved = await educator.put(`${path}/groups/${groupId}/schedule`, { data: { weekdays: [0, 1, 2, 3, 4, 5, 6], startsAt: "08:00", durationMinutes: 45, from: day(0), until: day(6) } });
+    expect((await admin.put(`${path}/groups/${groupId}/schedule`, { data: { weekdays: [1], startsAt: "25:00", durationMinutes: 45, from: day(0), until: day(6) } })).status()).toBe(400);
+    const saved = await admin.put(`${path}/groups/${groupId}/schedule`, { data: { weekdays: [0, 1, 2, 3, 4, 5, 6], startsAt: "08:00", durationMinutes: 45, from: day(0), until: day(6) } });
     expect(saved.status(), await saved.text()).toBe(200);
     expect((await saved.json()).classes).toBe(7);
     let list = await sessions();
@@ -64,7 +66,7 @@ test("ST-099 ST-097 ST-101 ST-029 ST-100: the section schedule generates its cla
     expect((await educator.put(`${path}/sessions/${started.id}`, { data: { sessionDate: day(2), startsAt: "08:00", durationMinutes: 45, lessonIds: ids(started), notes: "", version: started.version } })).status()).toBe(409);
     expect((await educator.put(`${path}/sessions/${started.id}`, { data: { sessionDate: started.sessionDate, startsAt: "08:00", durationMinutes: 45, lessonIds: [lessons[0].id, lessons[1].id], notes: "", version: started.version } })).status()).toBe(200);
     expect((await sessions())[0].lessons.every(lesson => lesson.revision === 1)).toBe(true);
-    const changed = await educator.put(`${path}/groups/${groupId}/schedule`, { data: { weekdays: [0, 1, 2, 3, 4, 5, 6], startsAt: "09:30", durationMinutes: 50, from: day(0), until: day(3) } });
+    const changed = await admin.put(`${path}/groups/${groupId}/schedule`, { data: { weekdays: [0, 1, 2, 3, 4, 5, 6], startsAt: "09:30", durationMinutes: 50, from: day(0), until: day(3) } });
     expect(changed.status(), await changed.text()).toBe(200);
     list = await sessions();
     expect(list.map(item => [item.sessionDate, item.startsAt, item.origin, item.status])).toEqual([
@@ -74,7 +76,7 @@ test("ST-099 ST-097 ST-101 ST-029 ST-100: the section schedule generates its cla
     expect(list.map(ids)).toEqual([[lessons[0].id, lessons[1].id], [], [lessons[1].id], [lessons[2].id]]);
 
     // The student code shows the section's lessons once each; the class resources come from the lesson.
-    const { accessCode } = await (await educator.post(`${path}/groups/${groupId}/code`)).json();
+    const { accessCode } = await (await admin.post(`${path}/groups/${groupId}/code`)).json();
     const student = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL! } });
     try {
       expect((await student.post("/api/student/login", { data: { code: accessCode } })).status()).toBe(200);
@@ -107,7 +109,10 @@ test("ST-099 ST-097 ST-101 ST-029 ST-100: the section schedule generates its cla
     await courseNav(page).getByRole("link", { name: "Horario", exact: true }).click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Horario");
     await expect(page.locator(".timetable")).toContainText("09:30");
-    await expect(page.getByRole("form", { name: `Horario de ${E2E_PREFIX} Sección A` }).getByLabel("Hora")).toHaveValue("09:30");
+    // The lead consults the schedule; administration changes it.
+    await expect(page.getByRole("form", { name: `Horario de ${E2E_PREFIX} Sección A` })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  } finally { await educator.dispose(); }
+    await signIn(page, "admin-demo", `/cursos/${courseId}/horario`);
+    await expect(page.getByRole("form", { name: `Horario de ${E2E_PREFIX} Sección A` }).getByLabel("Hora")).toHaveValue("09:30");
+  } finally { await educator.dispose(); await admin.dispose(); }
 });

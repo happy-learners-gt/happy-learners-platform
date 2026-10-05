@@ -1,8 +1,36 @@
 export interface HealthResponse { status: "ok" }
 export interface VersionResponse { sha: string }
 export interface Member { id: string; username: string; displayName?: string; role: "admin" | "educator"; organizationId: string; active?: boolean }
+export type CourseRole = "lead" | "co-teacher";
 /** Someone on a course's teaching team: the lead or a co-teacher. */
-export interface CourseMember { userId: string; username: string; name: string; role: "lead" | "co-teacher" }
+export interface CourseMember { userId: string; username: string; name: string; role: CourseRole }
+/**
+ * What the signed-in person can do in a course (DEC-023). Administration configures the course, its sections and
+ * schedules; the lead decides and publishes the content; co-teachers prepare lessons for review and teach the
+ * sections assigned to them.
+ */
+export interface CourseAccess {
+  role: CourseRole | null;
+  /** Course settings, team, sections, students, section educators and schedules. */
+  configure: boolean;
+  /** Lesson drafts and course resources. */
+  edit: boolean;
+  /** Publishing and archiving lessons, modules, the curriculum plan and reviews. */
+  publish: boolean;
+  /** Sections whose classes the person plans and teaches. */
+  teach: "all" | "assigned" | null;
+  /** Sections the person sees. */
+  sections: "all" | "assigned";
+  /** Sections assigned to the person as educator. */
+  assigned: string[];
+}
+/** A request to publish a lesson, sent by a co-teacher and decided by the lead. */
+export interface LessonReview {
+  id: string; status: "pending" | "returned" | "approved"; note: string; requestedById: string; requestedByName: string; requestedAt: string;
+  decidedByName?: string | null; decidedAt?: string | null; decisionNote: string;
+}
+/** A review on the home page: what the lead has to decide or what came back to its author. */
+export interface ReviewItem extends LessonReview { lessonId: string; lessonTitle: string; courseId: string; courseTitle: string }
 /** An audited operation: who did what, on which course, and when. */
 export interface ActivityEvent {
   id: string; actorId: string; actorName: string; action: "created" | "updated" | "published" | "archived" | "restored" | "planned" | "recorded" | "uploaded" | "assigned";
@@ -48,6 +76,8 @@ export interface Lesson {
   outcomeIds?: string[];
   /** Published lessons carry the wording students see, frozen at publication. */
   outcomes?: { id: string; code: string; statement: string }[];
+  /** The latest open review: pending, or returned to its author. */
+  review?: LessonReview | null;
 }
 export type ResourceSkill = "lectura" | "escritura" | "escucha" | "conversación";
 export interface Resource { id: string; title: string; description: string; level: string; skill: ResourceSkill; topic: string; tags: string[]; content: string; status: "draft" | "published" | "archived"; kind?: "text" | "link"; updatedAt?: string; }
@@ -75,6 +105,8 @@ export interface Course extends AcademicProfile {
   status: "active" | "archived"; version: number; updatedAt: string;
   /** Teaching team, lead first. */
   team?: CourseMember[];
+  /** Present on the course detail. */
+  access?: CourseAccess;
 }
 export interface LearningUnit {
   id: string; courseId: string; name: string; objective: string; position: number;
@@ -91,7 +123,9 @@ export interface Material {
 /** A weekly class time of a section and the period it applies to; days use 0 for Sunday (ST-099). */
 export interface SectionSchedule { weekdays: number[]; startsAt: string; durationMinutes: number; from: string; until: string }
 /** A section of a course: the students assigned to it, its access code and its schedule (ST-026, ST-099). */
-export interface ClassGroup { id: string; courseId: string; name: string; status: "active" | "archived"; learnerCount: number; accessCode?: string | null; schedule?: SectionSchedule | null }
+export interface ClassGroup { id: string; courseId: string; name: string; status: "active" | "archived"; learnerCount: number; accessCode?: string | null; schedule?: SectionSchedule | null; educators: SectionEducator[] }
+/** An educator who teaches a section's classes (DEC-023). */
+export interface SectionEducator { userId: string; name: string; username: string }
 export interface GroupLearner { id: string; groupId: string; displayName: string; status: "active" | "archived" }
 /** A published lesson next to the current one in its module, reachable by its share code. */
 export interface LessonLink { title: string; shareCode: string }

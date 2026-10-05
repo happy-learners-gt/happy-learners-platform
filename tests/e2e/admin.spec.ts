@@ -28,11 +28,14 @@ test("sign-in errors, organization settings, roles, help, logout and 404", async
   await expect(toast(page)).toContainText("Organización guardada");
   await page.reload();
   await expect(page.getByLabel("Nombre de la organización")).toHaveValue("Jardín de Colores");
-  // Administration does not see the course's private attendance.
+  // DEC-023: administration reads the course's sections and classes; only those who teach a section record its classes.
   await page.goto("/cursos/course-exploradores");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Exploradores");
   await openNavigation(page);
-  await expect(page.getByRole("navigation", { name: "Navegación del curso" }).getByRole("link", { name: "Clases", exact: true })).toHaveCount(0);
-  expect(await page.evaluate(async () => (await fetch("/api/courses/course-exploradores/groups")).status)).toBe(403);
+  await expect(page.getByRole("navigation", { name: "Navegación del curso" }).getByRole("link", { name: "Clases", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  expect(await page.evaluate(async () => (await fetch("/api/courses/course-exploradores/groups")).status)).toBe(200);
+  expect(await page.evaluate(async () => (await fetch("/api/courses/course-exploradores/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ groupId: "none", sessionDate: "2026-10-05" }) })).status)).toBe(403);
   await page.getByRole("button", { name: /^Perfil de / }).click();
   await page.getByRole("menuitem", { name: "Cerrar sesión" }).click();
   await expect(page.getByRole("heading", { name: "Iniciar sesión" })).toBeVisible();
@@ -92,13 +95,19 @@ test("administration configures programs and library tags; courses inherit what 
   await expect(group).toContainText("Comprensión lectora");
   await page.getByText("Niveles educativos · CINE 2011").click();
   await expect(page.getByRole("rowheader", { name: "Secundaria alta" })).toBeVisible();
+  // Administration creates the courses.
   await page.goto("/cursos");
-  await expect(page.getByRole("link", { name: "Crear curso", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Crear curso", exact: true })).toBeVisible();
 });
 
-test("creating a course keeps unsaved input when leaving is cancelled, then lands in its content", async ({ page }, info) => {
+test("DEC-023: administration creates a course with its lead, keeps unsaved input when leaving is cancelled, and the lead prepares its content", async ({ page }, info) => {
   const title = e2eName(info, `Curso ${Date.now().toString(36)}`);
+  // Educators do not create courses.
   await signIn(page, "educador-demo", "/cursos");
+  await expect(page.getByRole("link", { name: "Crear curso", exact: true })).toHaveCount(0);
+  await page.goto("/cursos/nuevo");
+  await expect(page.getByRole("heading", { name: "Administración crea los cursos" })).toBeVisible();
+  await signIn(page, "admin-demo", "/cursos");
   await page.getByRole("link", { name: "Crear curso", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Crear curso");
   await page.getByLabel("Nombre del curso").fill(title);
@@ -116,11 +125,13 @@ test("creating a course keeps unsaved input when leaving is cancelled, then land
   const names = page.locator(".setting-item").filter({ hasText: "Nombre de las partes del curso" });
   await names.getByRole("combobox").selectOption({ label: "Sesiones" });
   await expect(names).toContainText("Definido en el curso");
+  await page.getByLabel("Responsable del curso").selectOption("user-educator");
   await page.getByRole("button", { name: "Crear curso", exact: true }).click();
-  await expect(page).toHaveURL(/\/cursos\/course-[^/]+\/contenido$/);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Contenido");
-  await expect(page.getByRole("form", { name: "Nueva sesión" })).toBeVisible();
-  // In-person workshops get groups and attendance.
+  await expect(page).toHaveURL(/\/cursos\/course-[^/]+$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
+  const courseId = new URL(page.url()).pathname.split("/")[2];
+  // In-person workshops get sections and attendance: administration starts by creating them.
+  await expect(page.getByRole("link", { name: "Crear secciones", exact: true })).toBeVisible();
   await openNavigation(page);
   await expect(page.getByRole("navigation", { name: "Navegación del curso" }).getByRole("link", { name: "Clases", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
@@ -136,4 +147,9 @@ test("creating a course keeps unsaved input when leaving is cancelled, then land
   await expect(toast(page)).toContainText("se archivó");
   await page.getByLabel("Archivados").check();
   await expect(page.locator("article.course-card").filter({ hasText: `${title} (copia)` })).toBeVisible();
+  // The lead finds the course among their own and starts its content.
+  await signIn(page, "educador-demo", "/cursos");
+  await expect(page.locator("article.course-card").filter({ hasText: title }).first()).toBeVisible();
+  await page.goto(`/cursos/${courseId}/contenido`);
+  await expect(page.getByRole("form", { name: "Nueva sesión" })).toBeVisible();
 });

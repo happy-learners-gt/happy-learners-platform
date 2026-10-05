@@ -9,24 +9,26 @@ import { CourseForm, useCourseActions } from "../Courses";
 import { useCourse } from "./context";
 
 export function Settings() {
-  const { course, reload, admin } = useCourse();
+  const { course, reload, access } = useCourse();
   const { toast } = useFeedback();
   const actions = useCourseActions(reload);
   const base = `/cursos/${course.id}`;
   const archived = course.status === "archived";
   const crumbs = [{ label: "Cursos", href: "/cursos" }, { label: course.title, href: base }, { label: "Configuración" }];
-  if (admin) return <>
-    <PageHeader crumbs={crumbs} title="Configuración" description="Administración decide quién forma el equipo docente del curso."/>
-    <div className="reading stack-lg">{archived ? <p className="notice">Restaura el curso para cambiar su equipo.</p> : <TeamEditor/>}</div>
+  if (!access.configure) return <>
+    <PageHeader crumbs={crumbs} title="Configuración" description="Nombre, objetivo, configuración académica, comportamiento y equipo docente del curso. Administración los gestiona."/>
+    <div className="reading stack-lg">
+      <CourseForm key={course.version} course={course} cancelHref={base} readOnly onSaved={() => undefined}/>
+      <TeamView/>
+    </div>
   </>;
   return <>
-    <PageHeader crumbs={crumbs} title="Configuración" description="Nombre, objetivo, configuración académica y comportamiento del curso."/>
+    <PageHeader crumbs={crumbs} title="Configuración" description="Nombre, objetivo, configuración académica, comportamiento y equipo docente del curso."/>
     <div className="reading stack-lg">
-      {archived ? <p className="notice">Restaura el curso para editar sus datos.</p>
-        : <CourseForm key={course.version} course={course} cancelHref={base} onSaved={async () => { await reload(); toast({ message: "Cambios del curso guardados." }); }}/>}
-      {!archived && <TeamView/>}
+      {archived ? <p className="notice">Restaura el curso para cambiar su configuración y su equipo.</p>
+        : <><CourseForm key={course.version} course={course} cancelHref={base} onSaved={async () => { await reload(); toast({ message: "Cambios del curso guardados." }); }}/><TeamEditor/></>}
       <Section title="Copiar o archivar" className="danger-zone">
-        <div className="setting-row"><div><h3>Duplicar curso</h3><p className="muted">Crea una copia con su configuración, módulos, plan curricular, recursos y lecciones como borrador. No copia grupos ni asistencia.</p></div><Button icon="copy" onClick={() => void actions.duplicate(course)}>Duplicar</Button></div>
+        {!archived && <div className="setting-row"><div><h3>Duplicar curso</h3><p className="muted">Crea una copia con su configuración, equipo docente, módulos, plan curricular, recursos y lecciones como borrador. No copia secciones, horarios, clases ni asistencia.</p></div><Button icon="copy" onClick={() => void actions.duplicate(course)}>Duplicar</Button></div>}
         <div className="setting-row"><div><h3>{archived ? "Restaurar curso" : "Archivar curso"}</h3><p className="muted">{archived ? "El curso vuelve a la lista de cursos activos y admite cambios." : "El curso deja de admitir cambios. Las lecciones publicadas siguen disponibles para estudiantes."}</p></div>
           {archived ? <Button icon="archive" onClick={() => void actions.setStatus(course, "active")}>Restaurar</Button> : <Button icon="archive" variant="danger" onClick={() => void actions.setStatus(course, "archived")}>Archivar</Button>}
         </div>
@@ -35,7 +37,7 @@ export function Settings() {
   </>;
 }
 
-const teamNote = "La persona responsable responde por el curso y su avance; quienes colaboran preparan lecciones y registran clases. Solo el equipo del curso consulta y registra sus secciones, clases y asistencia.";
+const teamNote = "La persona responsable publica el contenido y el plan curricular, y puede impartir cualquier sección. Quienes colaboran preparan lecciones, las envían a revisión e imparten las secciones que tienen asignadas.";
 
 /** What educators see: the team, without controls. Administration changes it. */
 function TeamView() {
@@ -88,7 +90,8 @@ function TeamEditor() {
       <select id="team-add" value={adding} onChange={event => setAdding(event.target.value)}><option value="">Agregar persona…</option>{available.map(person => <option key={person.id} value={person.id}>{person.name} (@{person.username})</option>)}</select>
       <Button icon="plus" onClick={add} disabled={!adding}>Agregar</Button>
       <Button variant="ghost" onClick={() => setTeam(course.team || [])} disabled={!dirty || busy}>Descartar</Button>
-      <button type="button" className="button primary" onClick={() => void save()} disabled={!dirty || busy}>{busy ? "Guardando…" : "Guardar equipo"}</button>
+      <button type="button" className="button primary" onClick={() => void save()} disabled={!dirty || busy || !team.some(member => member.role === "lead")}>{busy ? "Guardando…" : "Guardar equipo"}</button>
+      {!team.some(member => member.role === "lead") && <p className="muted small" role="status">Elige a la persona responsable del curso para guardar el equipo.</p>}
     </div>
   </section>;
 }

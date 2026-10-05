@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import type { Course, Lesson, Material } from "@happy-learners/contracts";
 import { api, message } from "../api";
 import { Link, useNavigation } from "../navigation";
-import { isEducator, useSession } from "../session";
 import { matches, plural, resourceKindLabel } from "../model";
 import { LessonBadge } from "../ui/LessonOutline";
 import { EmptyState, ErrorState, Loading, PageHeader, Section } from "../ui/primitives";
@@ -10,14 +9,13 @@ import { EmptyState, ErrorState, Loading, PageHeader, Section } from "../ui/prim
 type Index = { courses: Course[]; lessons: Lesson[]; resources: (Material & { courseTitle: string })[] };
 
 export function Search() {
-  const { member } = useSession();
   const { url } = useNavigation();
   const query = url.searchParams.get("q") || "";
   const [index, setIndex] = useState<Index | null>(null), [error, setError] = useState("");
   async function load() {
     setError("");
     try {
-      const [{ courses }, { lessons }] = await Promise.all([api<{ courses: Course[] }>("/courses"), api<{ lessons: Lesson[] }>(isEducator(member) ? "/lessons?drafts=1" : "/lessons")]);
+      const [{ courses }, { lessons }] = await Promise.all([api<{ courses: Course[] }>("/courses"), api<{ lessons: Lesson[] }>("/lessons?drafts=1")]);
       const resources = await Promise.all(courses.map(course => api<{ materials: Material[] }>(`/courses/${course.id}/materials`).then(result => result.materials.map(item => ({ ...item, courseTitle: course.title })))));
       setIndex({ courses, lessons, resources: resources.flat() });
     } catch (cause) { setError(message(cause)); }
@@ -38,7 +36,7 @@ export function Search() {
     {!total && <EmptyState icon="search" title="Sin resultados">Revisa la ortografía o prueba con una palabra más corta.</EmptyState>}
     <div className="stack-lg">
       {courses.length > 0 && <Section title={`Cursos (${courses.length})`}><ul className="result-list">{courses.map(course => <li key={course.id}><Link href={`/cursos/${course.id}`}>{course.title}</Link><span className="muted">{course.objective}</span></li>)}</ul></Section>}
-      {lessons.length > 0 && <Section title={`Lecciones (${lessons.length})`}><ul className="result-list">{lessons.map(lesson => <li key={lesson.id}><Link href={isEducator(member) ? `/cursos/${lesson.courseId}/lecciones/${lesson.id}` : `/cursos/${lesson.courseId}/contenido`}>{lesson.title}</Link><span className="muted">{title(lesson.courseId)}</span><LessonBadge lesson={lesson}/></li>)}</ul></Section>}
+      {lessons.length > 0 && <Section title={`Lecciones (${lessons.length})`}><ul className="result-list">{lessons.map(lesson => <li key={lesson.id}><Link href={`/cursos/${lesson.courseId}/lecciones/${lesson.id}`}>{lesson.title}</Link><span className="muted">{title(lesson.courseId)}</span><LessonBadge lesson={lesson}/></li>)}</ul></Section>}
       {resources.length > 0 && <Section title={`Recursos (${resources.length})`}><ul className="result-list">{resources.map(item => <li key={item.id}><Link href={`/cursos/${item.courseId}/biblioteca?q=${encodeURIComponent(item.title)}`}>{item.title}</Link><span className="muted">{resourceKindLabel[item.kind]} · {item.courseTitle}</span></li>)}</ul></Section>}
     </div>
   </>;

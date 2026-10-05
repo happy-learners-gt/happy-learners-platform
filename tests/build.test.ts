@@ -140,9 +140,13 @@ it("HL-10 persists organization settings, validates input and restricts administ
   expect(before.organization.id).toBe(read.organization.id);
 });
 it("HL-11 published lessons are read-only and isolated from other organizations", async () => {
-  const Cookie = await login("instructor-demo");
+  const Cookie = await login("educador-demo");
   const data = await (await fetch(`${origin}/api/lessons`, { headers: { Cookie } })).json();
   expect(data.lessons.map((l: { id: string }) => l.id)).toContain("colores-en-equipo");
+  // DEC-023: an educator of the same organization outside the course's team does not reach its lessons.
+  const unassigned = await login("instructor-demo");
+  expect((await (await fetch(`${origin}/api/lessons`, { headers: { Cookie: unassigned } })).json()).lessons.map((l: { id: string }) => l.id)).not.toContain("colores-en-equipo");
+  expect((await fetch(`${origin}/api/lessons/colores-en-equipo`, { headers: { Cookie: unassigned } })).status).toBe(404);
   const response = await fetch(`${origin}/api/lessons/colores-en-equipo`, { headers: { Cookie } });
   const { lesson } = await response.json();
   expect(lesson.title).toBe("Un mundo de colores");
