@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { ClassSession } from "@happy-learners/contracts";
+import type { SectionSummary } from "@happy-learners/contracts";
 import { areaLabel, coverage, labelOf, scheduleSummary } from "@happy-learners/domain";
 import { api } from "../../api";
 import { Link } from "../../navigation";
@@ -10,17 +10,17 @@ import { EmptyState, PageHeader, PrimaryAction, Progress, Section, StatTiles, St
 import { useCourseActions } from "../Courses";
 import { ActivityFeed, Avatar, roleLabel } from "../../ui/progress";
 import { useCourse } from "./context";
-import type { SectionView } from "./Sections";
+import { sectionPath } from "../sections/context";
 
 export function Overview() {
   const { course, units, lessons, materials, curriculum, access, writable, publisher, configurable, reload, noun, settings, program } = useCourse();
   const teamEditable = configurable;
-  const [groups, setGroups] = useState<SectionView[] | null>(null), [sessions, setSessions] = useState<ClassSession[]>([]), [today, setToday] = useState("");
+  // Sections are instances of the course: administration sees all of them, each educator only their own (DEC-024).
+  const [groups, setGroups] = useState<SectionSummary[] | null>(null);
   const actions = useCourseActions(reload);
   useEffect(() => {
-    if (course.status !== "active" || !settings.attendance) return;
-    api<{ groups: SectionView[] }>(`/courses/${course.id}/groups`).then(result => setGroups(result.groups)).catch(() => setGroups([]));
-    api<{ sessions: ClassSession[]; today: string }>(`/courses/${course.id}/sessions`).then(result => { setSessions(result.sessions); setToday(result.today); }).catch(() => undefined);
+    if (!settings.attendance) return;
+    api<{ sections: SectionSummary[] }>("/sections").then(result => setGroups(result.sections.filter(item => item.courseId === course.id && item.status === "active"))).catch(() => setGroups([]));
   }, [course.id, course.status]);
   const base = `/cursos/${course.id}`;
   const stats = courseStats(units, lessons);
@@ -31,9 +31,9 @@ export function Overview() {
     ...materials.filter(item => item.status !== "archived").map(item => ({ id: item.id, title: item.title, kind: "Recurso", href: `${base}/biblioteca`, updatedAt: item.updatedAt })),
   ]).slice(0, 5);
   const plan = coverage(curriculum, units, lessons);
-  const next = sessions.filter(session => session.status === "in_progress" || (session.status === "planned" && session.sessionDate >= today)).sort((a, b) => a.sessionDate.localeCompare(b.sessionDate) || (a.startsAt || "").localeCompare(b.startsAt || ""))[0];
+  const mine = access.sections !== "all";
   // Each role starts where its work is: administration in the sections, the team in the content.
-  const primary = configurable && settings.attendance ? <PrimaryAction href={`${base}/asignaciones`} icon="users">{groups?.length ? "Ver asignaciones" : "Crear secciones"}</PrimaryAction>
+  const primary = configurable && settings.attendance ? <PrimaryAction href={`${base}/secciones`} icon="users">{groups?.length ? "Ver secciones" : "Crear secciones"}</PrimaryAction>
     : !writable ? undefined
     : activeUnits.length || !publisher ? <PrimaryAction href={`${base}/contenido`} icon="content">Ir al contenido</PrimaryAction>
     : <PrimaryAction href={`${base}/contenido?crear=unidad`} icon="plus">Crear la primera unidad</PrimaryAction>;
@@ -71,11 +71,11 @@ export function Overview() {
           return <li key={unit.id}><span className="outline-number" aria-hidden="true">{index + 1}</span><Link href={`${base}/contenido#unidad-${unit.id}`}>{unit.name}</Link><span className="muted">{plural(count, "lección", "lecciones")}</span></li>;
         })}</ol> : <EmptyState compact icon="content" title="Sin unidades todavía" action={publisher && <Link className="button secondary small" href={`${base}/contenido?crear=unidad`}>Crear unidad</Link>}>Organiza el curso en unidades y agrega lecciones a cada una.</EmptyState>}
       </Section>
-      {settings.attendance && <Section title="Asignaciones" action={<Link href={`${base}/asignaciones`} className="section-link">Ver secciones</Link>}>
-        {groups === null ? <p className="muted">{course.status === "active" ? "Cargando secciones…" : "Restaura el curso para consultar sus secciones."}</p> : groups.length ? <>
-          <ul className="link-list">{groups.slice(0, 4).map(group => <li key={group.id}><Link href={`${base}/asignaciones#seccion-${group.id}`}>{group.name}</Link><span className="muted">{plural(group.learnerCount, "estudiante", "estudiantes")}{group.schedule ? ` · ${scheduleSummary(group.schedule)}` : " · sin horario"}</span></li>)}</ul>
-          {next ? <p className="muted small">Próxima clase: <Link href={`${base}/clases/${next.id}`}>{sessionDay(next.sessionDate)}{next.startsAt ? `, ${next.startsAt}` : ""}</Link> · {next.groupName}</p> : <p className="muted small">No hay clases próximas.{configurable && <> <Link href={`${base}/horario`}>Configurar el horario</Link></>}</p>}
-        </> : <EmptyState compact icon="users" title={access.sections === "all" ? "Sin secciones" : "Sin secciones asignadas"} action={configurable && <Link className="button secondary small" href={`${base}/asignaciones`}>Crear sección</Link>}>{configurable ? "Crea una sección, inscribe a sus estudiantes, asigna sus educadores y configura su horario." : access.sections === "all" ? "Administración crea las secciones del curso y configura su horario." : "Administración te asigna las secciones que impartes."}</EmptyState>}
+      {settings.attendance && <Section title={mine ? "Mis secciones" : "Secciones"} action={<Link href={`${base}/secciones`} className="section-link">{mine ? "Ver mis secciones" : "Ver secciones"}</Link>}>
+        {groups === null ? <p className="muted">Cargando secciones…</p> : groups.length ? <ul className="link-list">{groups.slice(0, 5).map(group => <li key={group.id}>
+          <Link href={sectionPath(group.id)}>{group.name}</Link>
+          <span className="muted">{plural(group.indicators.learners, "estudiante", "estudiantes")}{group.schedule ? ` · ${scheduleSummary(group.schedule)}` : " · sin horario"}{group.next ? ` · próxima clase ${sessionDay(group.next.sessionDate, "short")}` : ""}</span>
+        </li>)}</ul> : <EmptyState compact icon="users" title={mine ? "Sin secciones asignadas" : "Sin secciones"} action={configurable && <Link className="button secondary small" href={`${base}/secciones`}>Crear sección</Link>}>{configurable ? "Crea una sección, inscribe a sus estudiantes, asigna sus educadores y configura su horario." : "Administración te asigna las secciones que impartes. Cada una tiene su propio cronograma y avance."}</EmptyState>}
       </Section>}
       <Section title="Equipo docente" action={teamEditable && <Link href={`${base}/configuracion#equipo`} className="section-link">Gestionar equipo</Link>}>
         {course.team?.length ? <ul className="team-list">{course.team.map(person => <li key={person.userId}><Avatar name={person.name} size={32}/><div><strong>{person.name}</strong><span className="muted small">@{person.username}</span></div><StatusBadge tone={person.role === "lead" ? "info" : "neutral"}>{roleLabel[person.role]}</StatusBadge></li>)}</ul>
@@ -88,9 +88,8 @@ export function Overview() {
         <ul className="quick-actions">
           {writable && <li><Link href={`${base}/contenido`}><Icon name="plus" size={18}/>Nueva lección</Link></li>}
           {writable && <li><Link href={`${base}/biblioteca`}><Icon name="upload" size={18}/>Agregar recurso</Link></li>}
-          {writable && access.teach && settings.attendance && <li><Link href={`${base}/clases`}><Icon name="calendar" size={18}/>Planificar clases</Link></li>}
-          {configurable && settings.attendance && <li><Link href={`${base}/asignaciones`}><Icon name="users" size={18}/>Secciones y estudiantes</Link></li>}
-          {configurable && settings.attendance && <li><Link href={`${base}/horario`}><Icon name="clock" size={18}/>Horario</Link></li>}
+          {settings.attendance && groups?.[0] && access.assigned.includes(groups[0].id) && <li><Link href={`${sectionPath(groups[0].id)}/clases`}><Icon name="calendar" size={18}/>Planificar clases de {groups[0].name}</Link></li>}
+          {configurable && settings.attendance && <li><Link href={`${base}/secciones`}><Icon name="users" size={18}/>Secciones</Link></li>}
           {configurable && <li><Link href={`${base}/configuracion`}><Icon name="settings" size={18}/>Configuración</Link></li>}
         </ul>
       </Section>}

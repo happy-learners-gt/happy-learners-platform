@@ -14,6 +14,7 @@ import { accessTo } from "./access";
 import { activity, people, progress } from "./team";
 import { classroom } from "./attendance";
 import { myClasses, student, studentScope, studentToken } from "./classes";
+import { sections } from "./sections";
 import { courseFiles, sharedFile } from "./files";
 import { LessonCollaborationRoom } from "./collaboration";
 import { encodeLessonDraft } from "./rich-text";
@@ -91,7 +92,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/educators$/.test(path)) methods[path] = ["PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/learners$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/learners\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
-  if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET", "PUT"];
+  if (path === "/api/sections" || /^\/api\/sections\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/code$/.test(path)) methods[path] = ["POST", "DELETE"];
   if (/^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET", "PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/(start|complete|cancel|restore)$/.test(path)) methods[path] = ["POST"];
@@ -173,6 +175,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/programs(\/|$)/.test(path)) return programs(path, method, input, current, db);
   if (path === "/api/activity") return activity(url, current, db);
   if (path === "/api/classes") return myClasses(current, db);
+  if (path.startsWith("/api/sections")) return sections(path, current, db);
   if (path === "/api/progress") return progress(current, db);
   if (path === "/api/people") return people(current, db);
   if (path === "/api/reviews") return reviews(current, db);
