@@ -12,6 +12,8 @@ import { Login, SessionExpiredDialog } from "./pages/Login";
 import { Home } from "./pages/Home";
 import { CourseList, CreateCourse } from "./pages/Courses";
 import { CourseRoute } from "./pages/course/CourseRoute";
+import { SectionRoute } from "./pages/sections/SectionRoute";
+import { SectionList } from "./pages/sections/SectionList";
 import { Library } from "./pages/Library";
 import { Search } from "./pages/Search";
 import { Help, NotFound } from "./pages/Help";
@@ -106,6 +108,7 @@ function Routes() {
   const { url } = useNavigation();
   const [, first = "inicio", second, third, fourth] = url.pathname.replace(/\/+$/, "").split("/");
   if (first === "cursos" && second && second !== "nuevo") return <CourseRoute key={second} id={second} area={third || ""} item={fourth}/>;
+  if (first === "secciones" && second) return <SectionRoute key={second} id={second} area={third || ""} item={fourth}/>;
   return <GlobalShell>{page(first || "inicio", second)}</GlobalShell>;
 }
 
@@ -113,6 +116,7 @@ function page(first: string, second?: string) {
   switch (first) {
     case "inicio": return <Home/>;
     case "cursos": return second === "nuevo" ? <CreateCourse/> : <CourseList/>;
+    case "secciones": return <SectionList/>;
     case "biblioteca": return <Library/>;
     case "buscar": return <Search/>;
     case "ayuda": return <Help/>;
@@ -134,6 +138,7 @@ function GlobalShell({ children }: { children: ReactNode }) {
     label: "Navegación principal",
     items: [
       { href: "/inicio", label: "Inicio", icon: "home", hue: "violet", active: path === "/" || path === "/inicio" },
+      { href: "/secciones", label: admin ? "Secciones" : "Mis secciones", icon: "calendar", hue: "coral", active: path.startsWith("/secciones") },
       { href: "/cursos", label: "Cursos", icon: "courses", hue: "sky", active: path.startsWith("/cursos") },
       { href: "/biblioteca", label: "Biblioteca", icon: "library", hue: "teal", active: path === "/biblioteca" },
       { href: "/ayuda", label: "Ayuda", icon: "help", hue: "amber", active: path === "/ayuda" },
