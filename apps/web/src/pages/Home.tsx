@@ -3,7 +3,7 @@ import type { ClassSession, Course, LearningUnit, Lesson } from "@happy-learners
 import { api, message } from "../api";
 import { Link } from "../navigation";
 import { isEducator, useSession } from "../session";
-import { courseStats, lessonState, newest, plural, sessionDay, timeAgo } from "../model";
+import { courseStats, lessonNames, lessonState, newest, plural, sessionDay, timeAgo } from "../model";
 import type { CourseStats } from "../model";
 import { CourseCard } from "../ui/cards";
 import { Icon } from "../ui/icons";
@@ -98,7 +98,7 @@ export function Home() {
         {educator && <Section title="Próximas clases" className="order-2">
           {data.upcoming.length ? <ul className="session-list">{data.upcoming.map(session => <li key={session.id}>
             <span className="date-chip" aria-hidden="true"><strong>{session.sessionDate.slice(8)}</strong>{sessionDay(session.sessionDate, "short").replace(/^\d+\s*/, "")}</span>
-            <div><Link href={`/cursos/${session.courseId}/clases/${session.id}`}>{session.groupName || "Sección"}{session.startsAt ? ` · ${session.startsAt}` : ""}</Link><span>{session.courseTitle} · {session.lessonTitle || sessionDay(session.sessionDate)}</span></div>
+            <div><Link href={`/cursos/${session.courseId}/clases/${session.id}`}>{session.groupName || "Sección"}{session.startsAt ? ` · ${session.startsAt}` : ""}</Link><span>{session.courseTitle} · {lessonNames(session) || sessionDay(session.sessionDate)}</span></div>
             {(session.status === "in_progress" || session.sessionDate <= data.today) && classBadge(session, data.today)}
           </li>)}</ul> : <EmptyState compact icon="calendar" title="Sin clases próximas" action={teamCourse ? <Link className="button secondary small" href={`/cursos/${teamCourse.id}/horario`}>Configurar horario</Link> : undefined}>El horario de cada sección genera sus clases.</EmptyState>}
         </Section>}

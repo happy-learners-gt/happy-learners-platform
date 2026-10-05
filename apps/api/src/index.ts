@@ -54,7 +54,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     for (const [name, value] of Object.entries(headers)) result.headers.set(name, value);
     return result;
   }
-  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|organization|members|levels|units|resources|lessons|courses|programs|vocabularies|terms|student)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !/\/groups\/[a-z0-9-]+\/lessons$/.test(path) && !path.includes("/files"))
+  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|organization|members|levels|units|resources|lessons|courses|programs|vocabularies|terms|student)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files"))
     ? await body(request) : undefined;
   let scope = sessionToken(request)?.startsWith("o_") ? "org-other" : "org-demo";
   if (path.startsWith("/api/share/")) scope = path.split("/")[3].startsWith("O-") ? "org-other" : "org-demo";
@@ -85,7 +85,6 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions)$/.test(path)) methods[path] = ["GET", "POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/schedule$/.test(path)) methods[path] = ["PUT", "DELETE"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/lessons$/.test(path)) methods[path] = ["POST"];
-  if (/^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/lesson$/.test(path)) methods[path] = ["PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/learners$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/learners\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];

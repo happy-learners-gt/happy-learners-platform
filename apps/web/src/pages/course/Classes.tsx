@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { ClassResource, ClassSession, ClassStatus } from "@happy-learners/contracts";
-import { classStatusLabels } from "@happy-learners/domain";
+import type { ClassLesson, ClassLessonPlan, ClassResource, ClassSession, ClassStatus } from "@happy-learners/contracts";
+import { classSequence, classStatusLabels, maxClassLessons } from "@happy-learners/domain";
 import { api, message } from "../../api";
 import { Link, useNavigation, useUnsavedChanges } from "../../navigation";
 import { plural, sessionDay } from "../../model";
@@ -17,9 +17,11 @@ import type { SectionView } from "./Sections";
 
 type Mark = "unmarked" | "present" | "late" | "absent" | "excused";
 type Row = { learnerId: string; displayName: string; status: Mark };
-type Detail = { session: ClassSession & { notes: string }; lesson: { id: string; title: string; revision: number; archived: boolean; shareCode: string | null } | null; resources: ClassResource[]; learners: Row[]; groupActive: boolean };
+type DetailLesson = ClassLesson & { currentRevision: number | null; archived: boolean; shareCode: string | null; activities: ClassLessonPlan["activities"]; resources: ClassResource[] };
+type Detail = { session: ClassSession & { notes: string }; lessons: DetailLesson[]; resources: ClassResource[]; learners: Row[]; groupActive: boolean };
 const markLabels: [Exclude<Mark, "unmarked">, string][] = [["present", "Presente"], ["late", "Tarde"], ["absent", "Ausente"], ["excused", "Justificada"]];
 const statusTone: Record<ClassStatus, Tone> = { planned: "info", in_progress: "warning", completed: "success", cancelled: "neutral" };
+const kindIcon = { text: "text", link: "link", file: "file" } as const;
 
 export const classTime = (session: Pick<ClassSession, "startsAt" | "durationMinutes">) => [session.startsAt, session.durationMinutes ? `${session.durationMinutes} min` : ""].filter(Boolean).join(" · ");
 /** A planned class whose day has passed was not recorded: it shows as pending, not as planned. */
@@ -28,122 +30,135 @@ export function classBadge(session: Pick<ClassSession, "status" | "sessionDate">
   return <StatusBadge tone={statusTone[session.status]}>{session.status === "planned" && session.sessionDate === today ? "Hoy" : classStatusLabels[session.status]}</StatusBadge>;
 }
 const rate = (session: ClassSession) => session.marked ? Math.round(100 * Number(session.attended) / Number(session.marked)) : null;
+const byDate = (a: ClassSession, b: ClassSession) => a.sessionDate.localeCompare(b.sessionDate) || (a.startsAt || "").localeCompare(b.startsAt || "");
+const unique = <T extends { id: string }>(items: T[]) => items.filter((item, index) => items.findIndex(other => other.id === item.id) === index);
+const attendanceText = (session: ClassSession) => session.marked ? `${session.attended} de ${session.marked} presentes${rate(session) !== null ? ` (${rate(session)} %)` : ""}` : "";
 
 export function Classes({ sessionId }: { sessionId?: string }) {
-  return sessionId ? <ClassDetail key={sessionId} id={sessionId}/> : <ClassList/>;
+  return sessionId ? <ClassDetail key={sessionId} id={sessionId}/> : <Schedule/>;
 }
 
-function ClassList() {
-  const { course, writable } = useCourse();
+/**
+ * The schedule of classes of a section: the classes its timetable generates, each planned with its lessons,
+ * activities, comments and resources, and tracked as it is taught with its attendance.
+ */
+function Schedule() {
+  const { course, writable, noun } = useCourse();
   const { url, navigate } = useNavigation();
-  const [groups, setGroups] = useState<SectionView[] | null>(null), [sessions, setSessions] = useState<ClassSession[]>([]), [today, setToday] = useState(""), [error, setError] = useState("");
-  const [planning, setPlanning] = useState(url.searchParams.get("nueva") === "1"), [filling, setFilling] = useState(false);
-  const [all, setAll] = useState(false);
-  const view = url.searchParams.get("vista") === "historial" ? "history" : "upcoming", groupFilter = url.searchParams.get("seccion") || "";
+  const [groups, setGroups] = useState<SectionView[] | null>(null), [sessions, setSessions] = useState<ClassSession[]>([]), [plans, setPlans] = useState<Record<string, ClassLessonPlan>>({}), [today, setToday] = useState(""), [error, setError] = useState("");
+  const [adding, setAdding] = useState(url.searchParams.get("nueva") === "1"), [filling, setFilling] = useState(false), [planning, setPlanning] = useState<ClassSession | null>(null);
+  const view = url.searchParams.get("vista") === "historial" ? "history" : url.searchParams.get("vista") === "proximas" ? "upcoming" : "all";
   const base = `/courses/${course.id}`, page = `/cursos/${course.id}/clases`;
   async function load() {
     setError("");
     try {
-      const [g, s] = await Promise.all([api<{ groups: SectionView[] }>(`${base}/groups`), api<{ sessions: ClassSession[]; today: string }>(`${base}/sessions`)]);
-      setGroups(g.groups); setSessions(s.sessions); setToday(s.today);
+      const [g, s] = await Promise.all([api<{ groups: SectionView[] }>(`${base}/groups`), api<{ sessions: ClassSession[]; lessonPlans: Record<string, ClassLessonPlan>; today: string }>(`${base}/sessions`)]);
+      setGroups(g.groups); setSessions(s.sessions); setPlans(s.lessonPlans); setToday(s.today);
     } catch (cause) { setError(message(cause)); }
   }
   useEffect(() => { if (course.status === "active") void load(); }, [course.id]);
-  useEffect(() => setAll(false), [view, groupFilter]);
   function filter(key: string, value: string) { const next = new URL(url); if (value) next.searchParams.set(key, value); else next.searchParams.delete(key); next.searchParams.delete("nueva"); navigate(next.pathname + next.search, true); }
   const activeGroups = (groups || []).filter(group => group.status === "active");
+  const withClasses = (groups || []).filter(group => sessions.some(session => session.groupId === group.id));
+  const group = (groups || []).find(item => item.id === url.searchParams.get("seccion")) || withClasses.find(item => item.status === "active") || withClasses[0] || activeGroups[0];
   const header = <PageHeader crumbs={[{ label: "Cursos", href: "/cursos" }, { label: course.title, href: `/cursos/${course.id}` }, { label: "Clases" }]} title="Clases"
-    description="El cronograma de clases de cada sección se genera con su horario. Elige la lección de cada clase, pasa lista y finalízala; el plan curricular se actualiza solo."
-    actions={writable && activeGroups.length > 0 && <Button icon="plus" onClick={() => setPlanning(true)}>Agregar clase</Button>}
+    description="El cronograma de cada sección se genera con su horario. Planifica en él las lecciones y comentarios de cada clase; el día de la clase ábrela para pasar lista y finalizarla."
+    actions={writable && activeGroups.length > 0 && <Button icon="plus" onClick={() => setAdding(true)}>Agregar clase</Button>}
     primary={writable && activeGroups.length > 0 && sessions.length > 0 && <PrimaryAction icon="list" onClick={() => setFilling(true)}>Asignar lecciones en orden</PrimaryAction>}/>;
+  const addDialog = adding && <AddDialog groups={activeGroups} initialGroup={group?.id || ""} onClose={() => { setAdding(false); if (url.searchParams.has("nueva")) filter("nueva", ""); }}
+    onSaved={async groupId => { setAdding(false); filter("seccion", groupId); await load(); }}/>;
   if (course.status !== "active") return <>{header}<EmptyState icon="archive" title="Curso archivado">Restaura el curso desde Configuración para consultar sus clases.</EmptyState></>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
-  if (!groups) return <>{header}<Loading label="Cargando clases…" lines={6}/></>;
+  if (!groups) return <>{header}<Loading label="Cargando el cronograma…" lines={6}/></>;
   if (!activeGroups.length && !sessions.length) return <>{header}<EmptyState icon="users" title="Primero crea una sección" action={<Link className="button primary" href={`/cursos/${course.id}/asignaciones`}>Ir a Asignaciones</Link>}>Cada clase pertenece a una sección del curso. Crea una y asígnale sus estudiantes.</EmptyState></>;
-  if (!sessions.length) return <>{header}<EmptyState icon="calendar" title="Configura el horario del curso" action={<Link className="button primary" href={`/cursos/${course.id}/horario`}>Ir a Horario</Link>}>Al guardar el horario de una sección se generan todas sus clases del periodo. También puedes agregar una clase suelta.</EmptyState>
-    {planning && <PlanDialog groups={activeGroups} initialGroup={groupFilter} onClose={() => setPlanning(false)} onSaved={async id => { setPlanning(false); navigate(`${page}/${id}`); }}/>}</>;
-  const ofGroup = sessions.filter(session => !groupFilter || session.groupId === groupFilter);
-  const upcoming = ofGroup.filter(session => session.status === "in_progress" || (session.status === "planned" && session.sessionDate >= today))
-    .sort((a, b) => a.sessionDate.localeCompare(b.sessionDate) || (a.startsAt || "").localeCompare(b.startsAt || ""));
-  const history = ofGroup.filter(session => !upcoming.includes(session));
-  const taught = history.filter(session => session.status === "completed");
+  if (!sessions.length) return <>{header}<EmptyState icon="calendar" title="Configura el horario del curso" action={<Link className="button primary" href={`/cursos/${course.id}/horario`}>Ir a Horario</Link>}>Al guardar el horario de una sección se genera su cronograma de clases del periodo. También puedes agregar una clase suelta.</EmptyState>{addDialog}</>;
+  const ofGroup = sessions.filter(session => session.groupId === group?.id).sort(byDate);
+  const sequence = classSequence(ofGroup, group?.schedule?.from);
+  const isUpcoming = (session: ClassSession) => session.status === "in_progress" || (session.status === "planned" && session.sessionDate >= today);
+  const upcoming = ofGroup.filter(isUpcoming), history = ofGroup.filter(session => !isUpcoming(session)).reverse();
+  const held = ofGroup.filter(session => session.status !== "cancelled"), taught = held.filter(session => session.status === "completed");
   const marked = taught.reduce((sum, session) => sum + Number(session.marked || 0), 0), attended = taught.reduce((sum, session) => sum + Number(session.attended || 0), 0);
-  const pendingCount = history.filter(session => session.status === "planned").length;
-  const full = view === "upcoming" ? upcoming : history, list = all ? full : full.slice(0, 10);
+  const rows = view === "upcoming" ? upcoming : view === "history" ? history : ofGroup;
+  const editable = writable && group?.status === "active";
   return <>
     {header}
-    <StatTiles className="class-stats" items={[
-      { label: "Próximas", value: upcoming.length, icon: "calendar", hue: "sky" },
-      { label: "Impartidas", value: taught.length, icon: "check", hue: "green" },
-      { label: "Asistencia promedio", value: marked ? `${Math.round(100 * attended / marked)} %` : "—", icon: "users", hue: "violet" },
-      { label: "Sin registrar", value: pendingCount, icon: "alert", hue: "coral" },
-    ]}/>
-    <div className="toolbar" role="group" aria-label="Filtrar clases">
+    <div className="toolbar" role="group" aria-label="Elegir cronograma">
+      <label className="select-inline"><span>Sección</span><select value={group?.id || ""} onChange={event => filter("seccion", event.target.value)}>{groups.map(item => <option key={item.id} value={item.id}>{item.name}{item.status === "archived" ? " (cerrada)" : ""}</option>)}</select></label>
       <fieldset className="segmented"><legend className="sr-only">Mostrar</legend>
-        <label><input type="radio" name="class-view" checked={view === "upcoming"} onChange={() => filter("vista", "")}/><span>Próximas ({upcoming.length})</span></label>
+        <label><input type="radio" name="class-view" checked={view === "all"} onChange={() => filter("vista", "")}/><span>Todo el periodo ({ofGroup.length})</span></label>
+        <label><input type="radio" name="class-view" checked={view === "upcoming"} onChange={() => filter("vista", "proximas")}/><span>Próximas ({upcoming.length})</span></label>
         <label><input type="radio" name="class-view" checked={view === "history"} onChange={() => filter("vista", "historial")}/><span>Historial ({history.length})</span></label>
       </fieldset>
-      <label className="select-inline"><span>Sección</span><select value={groupFilter} onChange={event => filter("seccion", event.target.value)}><option value="">Todas</option>{groups.map(group => <option key={group.id} value={group.id}>{group.name}{group.status === "archived" ? " (cerrada)" : ""}</option>)}</select></label>
+      {group?.schedule && <span className="muted small">Horario: {group.schedule.from ? `del ${sessionDay(group.schedule.from, "short")} al ${sessionDay(group.schedule.until || group.schedule.from, "short")}` : ""} <Link href={`/cursos/${course.id}/horario#horario-${group.id}`}>Ver horario</Link></span>}
     </div>
-    {list.length ? <ol className="class-list" aria-label={view === "upcoming" ? "Próximas clases" : "Historial de clases"}>{list.map(session => <li key={session.id}>
-      <span className="date-chip" aria-hidden="true"><strong>{session.sessionDate.slice(8)}</strong>{sessionDay(session.sessionDate, "short").replace(/^\d+\s*/, "")}</span>
-      <div className="class-row-main">
-        <Link href={`${page}/${session.id}`} className="class-row-title">{sessionDay(session.sessionDate)}{session.startsAt ? `, ${session.startsAt}` : ""}<span className="sr-only"> · {session.groupName}</span></Link>
-        {writable && session.status === "planned" && session.sessionDate >= today && activeGroups.some(group => group.id === session.groupId)
-          ? <span className="muted class-row-lesson">{session.groupName}{session.durationMinutes ? ` · ${session.durationMinutes} min` : ""} · <LessonSelect session={session} onSaved={load}/></span>
-          : <span className="muted">{session.groupName} · {session.lessonTitle || "Sin lección"}{session.durationMinutes ? ` · ${session.durationMinutes} min` : ""}</span>}
-        {session.lessonAvailable === 0 && <LessonWarning session={session}/>}
-        {session.status === "completed" && <span className="muted small">{session.attended} de {session.marked} presentes{rate(session) !== null ? ` (${rate(session)} %)` : ""}{session.lessonRevision ? ` · publicación ${session.lessonRevision}` : ""}{session.taughtByName ? ` · impartió ${session.taughtByName}` : ""}</span>}
-      </div>
-      {classBadge(session, today)}
-    </li>)}</ol>
-      : groupFilter && !ofGroup.length ? <EmptyState icon="calendar" title="Esta sección aún no tiene clases" action={writable && <Link className="button primary" href={`/cursos/${course.id}/horario#horario-${groupFilter}`}>Configurar horario</Link>}>
-        Configura su horario para generar sus clases del periodo, o agrega una clase suelta.
+    <StatTiles className="class-stats" items={[
+      { label: "Clases planificadas", value: `${held.filter(session => session.lessons.length).length} de ${held.length}`, icon: "list", hue: "sky" },
+      { label: "Impartidas", value: taught.length, icon: "check", hue: "green" },
+      { label: "Asistencia promedio", value: marked ? `${Math.round(100 * attended / marked)} %` : "—", icon: "users", hue: "violet" },
+      { label: "Sin registrar", value: held.filter(session => session.status === "planned" && session.sessionDate < today).length, icon: "alert", hue: "coral" },
+    ]}/>
+    {rows.length ? <div className="table-card" role="region" aria-label={`Cronograma de ${group?.name}`} tabIndex={0}>
+      <table className="schedule-table">
+        <caption className="sr-only">Cronograma de clases de {group?.name}: planificación y seguimiento</caption>
+        <thead><tr><th scope="col">Fecha</th><th scope="col">{noun.One}</th><th scope="col">Lecciones</th><th scope="col">Actividades</th><th scope="col">Comentarios</th><th scope="col">Recursos</th><th scope="col">Seguimiento</th></tr></thead>
+        <tbody>{rows.map(session => <ScheduleRow key={session.id} session={session} place={sequence.get(session.id)} extra={session.origin === "manual" && !!group?.schedule && session.sessionDate >= group.schedule.from && session.sessionDate <= group.schedule.until} plans={plans} today={today} page={page} editable={editable} onPlan={() => setPlanning(session)}/>)}</tbody>
+      </table>
+    </div>
+      : !ofGroup.length ? <EmptyState icon="calendar" title="Esta sección aún no tiene clases" action={writable && group && <Link className="button primary" href={`/cursos/${course.id}/horario#horario-${group.id}`}>Configurar horario</Link>}>
+        Configura su horario para generar su cronograma del periodo, o agrega una clase suelta.
       </EmptyState>
-      : <EmptyState icon="calendar" title={view === "upcoming" ? "No hay clases próximas" : "Aún no hay clases en el historial"} action={writable && view === "upcoming" && <Link className="button primary" href={`/cursos/${course.id}/horario`}>Revisar el horario</Link>}>
+      : <EmptyState icon="calendar" title={view === "upcoming" ? "No hay clases próximas" : "Aún no hay clases en el historial"} action={writable && view === "upcoming" && group && <Link className="button primary" href={`/cursos/${course.id}/horario#horario-${group.id}`}>Revisar el horario</Link>}>
         {view === "upcoming" ? "Amplía el periodo del horario de la sección o agrega una clase suelta." : "Las clases impartidas, canceladas o sin registrar aparecerán aquí."}
       </EmptyState>}
-    {full.length > list.length && <Button variant="ghost" icon="chevronDown" onClick={() => setAll(true)}>Mostrar {full.length - list.length} más</Button>}
-    {filling && <FillDialog groups={activeGroups} sessions={sessions} today={today} initialGroup={groupFilter} onClose={() => setFilling(false)} onDone={async () => { setFilling(false); await load(); }}/>}
-    {planning && <PlanDialog groups={activeGroups} initialGroup={groupFilter} onClose={() => { setPlanning(false); if (url.searchParams.has("nueva")) filter("nueva", ""); }}
-      onSaved={async id => { setPlanning(false); navigate(`${page}/${id}`); }}/>}
+    {filling && <FillDialog groups={activeGroups} sessions={sessions} today={today} initialGroup={group?.id || ""} onClose={() => setFilling(false)} onDone={async () => { setFilling(false); await load(); }}/>}
+    {planning && <PlanDialog session={planning} onClose={() => setPlanning(null)} onSaved={async () => { setPlanning(null); await load(); }}/>}
+    {addDialog}
   </>;
 }
 
-/** Changes the lesson of an upcoming class without opening it; the date, time and notes stay. */
-function LessonSelect({ session, onSaved }: { session: ClassSession; onSaved: () => Promise<void> }) {
-  const { course, lessons } = useCourse();
-  const { toast } = useFeedback();
-  const [busy, setBusy] = useState(false);
-  const available = lessons.filter(lesson => (lesson.status !== "archived" && !!lesson.revision) || lesson.id === session.lessonId);
-  async function change(lessonId: string) {
-    setBusy(true);
-    try { await api(`/courses/${course.id}/sessions/${session.id}/lesson`, "PUT", { lessonId: lessonId || null, version: session.version }); await onSaved(); toast({ message: lessonId ? "Lección asignada a la clase." : "La clase quedó sin lección." }); }
-    catch (cause) { toast({ tone: "error", message: message(cause) }); }
-    finally { setBusy(false); }
-  }
-  return <select className="inline-select" aria-label={`Lección de la clase del ${sessionDay(session.sessionDate)} en ${session.groupName}`} value={session.lessonId || ""} disabled={busy} onChange={event => void change(event.target.value)}>
-    <option value="">Sin lección</option>{available.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title}{lesson.status === "archived" ? " (archivada)" : lesson.revision ? "" : " (borrador)"}</option>)}
-  </select>;
+/** One class of the schedule: when, what is planned for it and how it went. */
+function ScheduleRow({ session, place, extra, plans, today, page, editable, onPlan }: { session: ClassSession; place?: { week: number; number: number | null }; extra: boolean; plans: Record<string, ClassLessonPlan>; today: string; page: string; editable: boolean; onPlan: () => void }) {
+  const { noun } = useCourse();
+  const modules = [...new Set(session.lessons.map(lesson => lesson.unitTitle).filter(Boolean))];
+  const activities = session.lessons.flatMap(lesson => plans[lesson.id]?.activities || []);
+  const resources = unique(session.lessons.flatMap(lesson => plans[lesson.id]?.resources || []));
+  const day = sessionDay(session.sessionDate);
+  const none = <span className="muted">—</span>;
+  return <tr className={session.sessionDate === today ? "is-today" : session.status === "cancelled" ? "is-cancelled" : undefined}>
+    <th scope="row" data-label="Fecha"><div className="cell-date">
+      <Link href={`${page}/${session.id}`} className="class-row-title">{sessionDay(session.sessionDate, "short")}{session.startsAt ? `, ${session.startsAt}` : ""}</Link>
+      <span className="muted small">{place?.number ? `Clase ${place.number} · ` : ""}Semana {place?.week ?? 1}{extra ? " · adicional" : ""}</span>
+    </div></th>
+    <td data-label={noun.One}>{modules.length ? modules.join(" · ") : none}</td>
+    <td data-label="Lecciones">{session.lessons.length ? <ol className="cell-list">{session.lessons.map(lesson => <li key={lesson.id}>{lesson.title}{!lesson.available && <> <LessonWarning id={lesson.id}/></>}</li>)}</ol> : <span className="muted">Sin lección</span>}</td>
+    <td data-label="Actividades">{activities.length ? <ul className="cell-list">{activities.slice(0, 4).map((activity, index) => <li key={index}>{activity.title}{activity.minutes ? <span className="muted nowrap"> · {activity.minutes} min</span> : null}</li>)}{activities.length > 4 && <li className="muted">y {activities.length - 4} más</li>}</ul> : none}</td>
+    <td data-label="Comentarios">{session.notes ? <p className="cell-notes">{session.notes}</p> : none}</td>
+    <td data-label="Recursos">{resources.length ? <ul className="cell-list">{resources.slice(0, 4).map(resource => <li key={resource.id}><Icon name={kindIcon[resource.kind]} size={14}/>{resource.title}</li>)}{resources.length > 4 && <li className="muted">y {resources.length - 4} más</li>}</ul> : none}</td>
+    <td data-label="Seguimiento"><div className="cell-status">
+      {classBadge(session, today)}{attendanceText(session) && <span className="muted small">{attendanceText(session)}</span>}
+      {editable && session.status !== "cancelled" && <Button className="small" icon="edit" onClick={onPlan}>{session.status === "completed" ? "Comentar" : "Planificar"}<span className="sr-only"> la clase del {day}</span></Button>}
+    </div></td>
+  </tr>;
 }
+
 /** A lesson students cannot open: still a draft, or archived and in need of a replacement (ST-029). */
-function LessonWarning({ session }: { session: ClassSession }) {
+function LessonWarning({ id }: { id: string }) {
   const { lessons } = useCourse();
-  const lesson = lessons.find(item => item.id === session.lessonId);
+  const lesson = lessons.find(item => item.id === id);
   return lesson && lesson.status !== "archived" && !lesson.revision ? <StatusBadge tone="neutral">Borrador: aún no la ven los estudiantes</StatusBadge> : <StatusBadge tone="warning">Requiere sustitución</StatusBadge>;
 }
 
-/** Gives the upcoming classes of a section without a lesson the next published lessons, in content order. */
+/** Gives the upcoming classes of a section without lessons the next published lessons, in content order. */
 function FillDialog({ groups, sessions, today, initialGroup, onClose, onDone }: { groups: SectionView[]; sessions: ClassSession[]; today: string; initialGroup: string; onClose: () => void; onDone: () => Promise<void> }) {
   const { course } = useCourse();
   const { toast } = useFeedback();
-  const [groupId, setGroupId] = useState(groups.some(group => group.id === initialGroup) ? initialGroup : groups[0]?.id || ""), [busy, setBusy] = useState(false), [error, setError] = useState("");
-  const empty = sessions.filter(session => session.groupId === groupId && session.status === "planned" && session.sessionDate >= today && !session.lessonId).length;
+  const [groupId, setGroupId] = useState(groups.some(group => group.id === initialGroup) ? initialGroup : groups[0]?.id || ""), [perClass, setPerClass] = useState("1"), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const empty = sessions.filter(session => session.groupId === groupId && session.status === "planned" && session.sessionDate >= today && !session.lessons.length).length;
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
     try {
-      const { assigned } = await api<{ assigned: number }>(`/courses/${course.id}/groups/${groupId}/lessons`, "POST");
-      toast({ message: assigned ? `Se asignaron ${plural(assigned, "lección", "lecciones")} en orden.` : "No quedan lecciones publicadas por asignar a esta sección." });
+      const { assigned, classes } = await api<{ assigned: number; classes: number }>(`/courses/${course.id}/groups/${groupId}/lessons`, "POST", { perClass: Number(perClass) });
+      toast({ message: assigned ? `Se planificaron ${plural(assigned, "lección", "lecciones")} en ${plural(classes, "clase", "clases")}, en orden.` : "No quedan lecciones publicadas por asignar a esta sección." });
       await onDone();
     } catch (cause) { setError(message(cause)); setBusy(false); }
   }
@@ -152,56 +167,118 @@ function FillDialog({ groups, sessions, today, initialGroup, onClose, onDone }: 
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
       <fieldset disabled={busy} className="stack">
         <Field label="Sección"><select value={groupId} onChange={event => setGroupId(event.target.value)} required>{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select></Field>
-        <p className="muted">{empty ? `${plural(empty, "clase próxima no tiene", "clases próximas no tienen")} lección.` : "Todas las clases próximas de esta sección tienen lección."} Se usan las lecciones publicadas en el orden de Contenido y se omiten las que la sección ya tiene en una clase. Las clases que ya tienen lección no cambian.</p>
+        <Field label="Lecciones por clase" hint="Usa más de una cuando el horario es extenso y se cubren varias lecciones en la misma clase."><select value={perClass} onChange={event => setPerClass(event.target.value)}><option value="1">1 lección</option><option value="2">2 lecciones</option><option value="3">3 lecciones</option></select></Field>
+        <p className="muted">{empty ? `${plural(empty, "clase próxima no tiene", "clases próximas no tienen")} lecciones.` : "Todas las clases próximas de esta sección tienen lecciones."} Se usan las lecciones publicadas en el orden de Contenido y se omiten las que la sección ya tiene en una clase. Las clases que ya tienen lecciones no cambian.</p>
         <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary" disabled={!empty}>{busy ? "Asignando…" : "Asignar lecciones"}</button></div>
       </fieldset>
     </form>
   </Modal>;
 }
 
-type PlanValues = { groupId?: string; sessionDate: string; startsAt: string; durationMinutes: string; lessonId: string; notes: string };
-/** Adds a class outside the schedule or edits the plan of an existing one. */
-function PlanDialog({ groups, initialGroup, detail, onClose, onSaved }: { groups?: SectionView[]; initialGroup?: string; detail?: Detail; onClose: () => void; onSaved: (id: string) => Promise<void> }) {
-  const { course, lessons } = useCourse();
+/** Picks the lessons of a class, in the order they are worked on: none, one, or several in a long class. */
+function LessonPicker({ value, onChange, current, locked }: { value: string[]; onChange: (ids: string[]) => void; current: ClassLesson[]; locked?: boolean }) {
+  const { lessons, units } = useCourse();
+  const title = (id: string) => lessons.find(item => item.id === id)?.title || current.find(item => item.id === id)?.title || "Lección";
+  const groups = units.filter(unit => unit.status === "active").sort((a, b) => a.position - b.position)
+    .map(unit => ({ unit, items: lessons.filter(lesson => lesson.courseUnitId === unit.id && lesson.status !== "archived" && !!lesson.revision && !value.includes(lesson.id)).sort((a, b) => (a.position || 0) - (b.position || 0)) }))
+    .filter(group => group.items.length);
+  const move = (index: number, delta: number) => { const next = [...value]; [next[index], next[index + delta]] = [next[index + delta], next[index]]; onChange(next); };
+  return <fieldset className="lesson-picker">
+    <legend>Lecciones <span className="optional">(opcional)</span></legend>
+    {value.length ? <ol className="lesson-picker-list">{value.map((id, index) => <li key={id}>
+      <span className="roster-number" aria-hidden="true">{index + 1}</span><span>{title(id)}</span>
+      {!locked && <span className="button-row">
+        <button type="button" className="icon-button" disabled={!index} onClick={() => move(index, -1)} aria-label={`Subir «${title(id)}»`}><Icon name="up" size={16}/></button>
+        <button type="button" className="icon-button" disabled={index === value.length - 1} onClick={() => move(index, 1)} aria-label={`Bajar «${title(id)}»`}><Icon name="down" size={16}/></button>
+        <button type="button" className="icon-button" onClick={() => onChange(value.filter(item => item !== id))} aria-label={`Quitar «${title(id)}»`}><Icon name="close" size={16}/></button>
+      </span>}
+    </li>)}</ol> : <p className="muted small">Sin lecciones: la clase queda en el cronograma y puedes planificarla después.</p>}
+    {locked ? <p className="muted small">Una clase impartida conserva las lecciones que trabajó.</p>
+      : value.length < maxClassLessons && <label className="select-inline"><span>Agregar lección</span><select value="" onChange={event => event.target.value && onChange([...value, event.target.value])}>
+        <option value="">Elige una lección publicada</option>
+        {groups.map(({ unit, items }) => <optgroup key={unit.id} label={unit.name}>{items.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title}</option>)}</optgroup>)}
+      </select></label>}
+  </fieldset>;
+}
+
+/** Plans a class of the schedule: its lessons and comments; a pending class can also move to another day or time. */
+function PlanDialog({ session, onClose, onSaved }: { session: ClassSession; onClose: () => void; onSaved: () => Promise<void> }) {
+  const { course } = useCourse();
   const { toast } = useFeedback();
-  const session = detail?.session;
-  const [values, setValues] = useState<PlanValues>(() => session
-    ? { sessionDate: session.sessionDate, startsAt: session.startsAt || "", durationMinutes: session.durationMinutes ? String(session.durationMinutes) : "", lessonId: session.lessonId || "", notes: session.notes }
-    : { groupId: groups?.some(group => group.id === initialGroup) ? initialGroup : groups?.[0]?.id, sessionDate: new Date().toLocaleDateString("en-CA"), startsAt: "", durationMinutes: "45", lessonId: "", notes: "" });
+  const [values, setValues] = useState({ sessionDate: session.sessionDate, startsAt: session.startsAt || "", durationMinutes: session.durationMinutes ? String(session.durationMinutes) : "", lessonIds: session.lessons.map(lesson => lesson.id), notes: session.notes || "" });
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
-  const set = (patch: Partial<PlanValues>) => setValues(current => ({ ...current, ...patch }));
-  const available = lessons.filter(lesson => (lesson.status !== "archived" && !!lesson.revision) || lesson.id === session?.lessonId);
+  const set = (patch: Partial<typeof values>) => setValues(current => ({ ...current, ...patch }));
+  const pending = session.status === "planned";
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
-    const body = { ...values, durationMinutes: values.durationMinutes ? Number(values.durationMinutes) : null, ...(session ? { version: session.version } : {}) };
     try {
-      if (session) { await api(`/courses/${course.id}/sessions/${session.id}`, "PUT", body); toast({ message: "Planificación guardada." }); await onSaved(session.id); }
-      else { const { id } = await api<{ id: string }>(`/courses/${course.id}/sessions`, "POST", body); toast({ message: "Clase agregada. Ábrela el día de la clase para pasar lista." }); await onSaved(id); }
+      await api(`/courses/${course.id}/sessions/${session.id}`, "PUT", { ...values, startsAt: values.startsAt || null, durationMinutes: values.durationMinutes ? Number(values.durationMinutes) : null, version: session.version });
+      toast({ message: "Planificación guardada." }); await onSaved();
     } catch (cause) { setError(message(cause)); setBusy(false); }
   }
-  return <Modal title={session ? "Editar planificación" : "Agregar clase"} onClose={onClose} wide>
+  return <Modal title={`Planificar la clase del ${sessionDay(session.sessionDate)}`} onClose={onClose} wide>
     <form className="stack" onSubmit={submit}>
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
       <fieldset disabled={busy} className="stack">
-        {!session && <p className="muted">Las clases del horario se generan solas. Agrega aquí una clase extra, como una recuperación o un repaso.</p>}
-        {!session && <Field label="Sección"><select value={values.groupId} onChange={event => set({ groupId: event.target.value })} required>{groups!.map(group => <option key={group.id} value={group.id}>{group.name} · {plural(group.learnerCount, "estudiante", "estudiantes")}</option>)}</select></Field>}
-        <div className="field-row">
-          <Field label="Fecha"><input type="date" value={values.sessionDate} onChange={event => set({ sessionDate: event.target.value })} required/></Field>
-          <Field label="Hora" optional><input type="time" value={values.startsAt} onChange={event => set({ startsAt: event.target.value })}/></Field>
-          <Field label="Duración (min)" optional><input type="number" min={5} max={480} step={5} value={values.durationMinutes} onChange={event => set({ durationMinutes: event.target.value })}/></Field>
-        </div>
-        <Field label="Lección" optional hint="Solo lecciones publicadas. Los estudiantes la ven con sus recursos.">
-          <select value={values.lessonId} onChange={event => set({ lessonId: event.target.value })}><option value="">Sin lección</option>{available.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title}{lesson.revision ? "" : " (borrador)"}</option>)}</select>
-        </Field>
-        <Field label="Notas para el equipo" optional hint="Solo las ve el equipo docente. No escribas datos personales de los estudiantes."><textarea rows={3} maxLength={2000} value={values.notes} onChange={event => set({ notes: event.target.value })}/></Field>
-        <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">{busy ? "Guardando…" : session ? "Guardar planificación" : "Agregar clase"}</button></div>
+        <p className="muted">{session.groupName}{classTime(session) ? ` · ${classTime(session)}` : ""} · {classStatusLabels[session.status]}</p>
+        {pending && <details className="disclosure">
+          <summary>Cambiar fecha u hora</summary>
+          <div className="field-row">
+            <Field label="Fecha"><input type="date" value={values.sessionDate} onChange={event => set({ sessionDate: event.target.value })} required/></Field>
+            <Field label="Hora" optional><input type="time" value={values.startsAt} onChange={event => set({ startsAt: event.target.value })}/></Field>
+            <Field label="Duración (min)" optional><input type="number" min={5} max={480} step={5} value={values.durationMinutes} onChange={event => set({ durationMinutes: event.target.value })}/></Field>
+          </div>
+        </details>}
+        <LessonPicker value={values.lessonIds} onChange={lessonIds => set({ lessonIds })} current={session.lessons} locked={session.status === "completed"}/>
+        <Field label="Comentarios" optional hint="Qué se trabajará o qué quedó pendiente. Solo los ve el equipo docente; no escribas datos personales de los estudiantes."><textarea rows={3} maxLength={2000} value={values.notes} onChange={event => set({ notes: event.target.value })}/></Field>
+        <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">{busy ? "Guardando…" : "Guardar planificación"}</button></div>
       </fieldset>
     </form>
   </Modal>;
 }
 
+/** Adds a class outside the timetable, such as a make-up or a review: it takes the section's time unless another is given. */
+function AddDialog({ groups, initialGroup, onClose, onSaved }: { groups: SectionView[]; initialGroup: string; onClose: () => void; onSaved: (groupId: string) => Promise<void> }) {
+  const { course } = useCourse();
+  const { toast } = useFeedback();
+  const [values, setValues] = useState({ groupId: groups.some(group => group.id === initialGroup) ? initialGroup : groups[0]?.id || "", sessionDate: new Date().toLocaleDateString("en-CA"), startsAt: "", durationMinutes: "", lessonIds: [] as string[], notes: "" });
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const set = (patch: Partial<typeof values>) => setValues(current => ({ ...current, ...patch }));
+  const schedule = groups.find(group => group.id === values.groupId)?.schedule;
+  async function submit(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError("");
+    try {
+      await api(`/courses/${course.id}/sessions`, "POST", { ...values, startsAt: values.startsAt || null, durationMinutes: values.durationMinutes ? Number(values.durationMinutes) : null });
+      toast({ message: "Clase agregada al cronograma." }); await onSaved(values.groupId);
+    } catch (cause) { setError(message(cause)); setBusy(false); }
+  }
+  return <Modal title="Agregar clase" onClose={onClose} wide>
+    <form className="stack" onSubmit={submit}>
+      {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
+      <fieldset disabled={busy} className="stack">
+        <p className="muted">Las clases del horario ya están en el cronograma. Agrega aquí una clase adicional, como una recuperación o un repaso.</p>
+        <div className="field-row">
+          <Field label="Sección"><select value={values.groupId} onChange={event => set({ groupId: event.target.value })} required>{groups.map(group => <option key={group.id} value={group.id}>{group.name} · {plural(group.learnerCount, "estudiante", "estudiantes")}</option>)}</select></Field>
+          <Field label="Fecha" hint={schedule ? `Toma la hora del horario: ${schedule.startsAt}, ${schedule.durationMinutes} min.` : "La sección no tiene horario: indica la hora si la conoces."}><input type="date" value={values.sessionDate} onChange={event => set({ sessionDate: event.target.value })} required/></Field>
+        </div>
+        <details className="disclosure" open={!schedule}>
+          <summary>{schedule ? "Otra hora o duración" : "Hora y duración"}</summary>
+          <div className="field-row">
+            <Field label="Hora" optional><input type="time" value={values.startsAt} onChange={event => set({ startsAt: event.target.value })}/></Field>
+            <Field label="Duración (min)" optional><input type="number" min={5} max={480} step={5} value={values.durationMinutes} onChange={event => set({ durationMinutes: event.target.value })}/></Field>
+          </div>
+        </details>
+        <LessonPicker value={values.lessonIds} onChange={lessonIds => set({ lessonIds })} current={[]}/>
+        <Field label="Comentarios" optional hint="Solo los ve el equipo docente. No escribas datos personales de los estudiantes."><textarea rows={3} maxLength={2000} value={values.notes} onChange={event => set({ notes: event.target.value })}/></Field>
+        <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">{busy ? "Agregando…" : "Agregar clase"}</button></div>
+      </fieldset>
+    </form>
+  </Modal>;
+}
+
+/** A class on the day it is taught: its lessons and resources at hand, the roll, and finishing it. */
 function ClassDetail({ id }: { id: string }) {
-  const { course, writable, lessons } = useCourse();
+  const { course, writable, lessons: courseLessons, noun } = useCourse();
   const { toast, confirm } = useFeedback();
   const [detail, setDetail] = useState<Detail | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false), [editing, setEditing] = useState(false);
   const [preview, setPreview] = useState<ClassResource | null>(null);
@@ -212,16 +289,16 @@ function ClassDetail({ id }: { id: string }) {
   }
   useEffect(() => { void load(); }, [id]);
   const crumbs = [{ label: "Cursos", href: "/cursos" }, { label: course.title, href: `/cursos/${course.id}` }, { label: "Clases", href: page }];
-  if (error) return <><PageHeader crumbs={crumbs} title="Clase"/>{/404/.test(error) || error.includes("no está disponible") ? <EmptyState icon="calendar" title="No encontramos esa clase" action={<Link className="button secondary" href={page}>Ver todas las clases</Link>}/> : <ErrorState error={error} retry={() => void load()}/>}</>;
+  if (error) return <><PageHeader crumbs={crumbs} title="Clase"/>{/404/.test(error) || error.includes("no está disponible") ? <EmptyState icon="calendar" title="No encontramos esa clase" action={<Link className="button secondary" href={page}>Ver el cronograma</Link>}/> : <ErrorState error={error} retry={() => void load()}/>}</>;
   if (!detail) return <><PageHeader crumbs={crumbs} title={<span className="skeleton-title">Clase</span>}/><Loading label="Abriendo clase…" lines={6}/></>;
-  const { session, lesson, resources } = detail;
+  const { session, lessons, resources } = detail;
   const editable = writable && detail.groupActive;
   async function act(action: "start" | "complete" | "cancel" | "restore") {
-    if (action === "cancel" && !await confirm({ title: "¿Cancelar esta clase?", body: <p>Deja de aparecer en las próximas clases de la sección y de sus estudiantes. Puedes reprogramarla después.</p>, confirm: "Cancelar clase", cancel: "Volver", danger: true })) return;
+    if (action === "cancel" && !await confirm({ title: "¿Cancelar esta clase?", body: <p>Queda en el cronograma como cancelada y deja de aparecer en las próximas clases de la sección y de sus estudiantes. Puedes reprogramarla después.</p>, confirm: "Cancelar clase", cancel: "Volver", danger: true })) return;
     setBusy(true);
     try {
       await api(`${path}/${action}`, "POST");
-      toast({ message: { start: "Clase en curso. Pasa lista cuando estés listo.", complete: "Clase finalizada. Su registro queda en el historial.", cancel: "Clase cancelada.", restore: "Clase reprogramada." }[action] });
+      toast({ message: { start: "Clase en curso. Pasa lista cuando estés listo.", complete: "Clase finalizada. Queda registrada en el cronograma.", cancel: "Clase cancelada.", restore: "Clase reprogramada." }[action] });
       await load();
     } catch (cause) { toast({ tone: "error", message: message(cause) }); }
     finally { setBusy(false); }
@@ -231,12 +308,12 @@ function ClassDetail({ id }: { id: string }) {
     : session.status === "in_progress" ? <PrimaryAction icon="check" busy={busy} onClick={() => void act("complete")}>Finalizar clase</PrimaryAction>
     : session.status === "cancelled" ? <PrimaryAction icon="calendar" busy={busy} onClick={() => void act("restore")}>Reprogramar</PrimaryAction> : undefined;
   const menu: MenuItem[] = editable && session.status === "planned" ? [{ label: "Cancelar clase", icon: "close", danger: true, onSelect: () => void act("cancel") }] : [];
-  const lessonState = lessons.find(item => item.id === session.lessonId);
+  const modules = [...new Set(lessons.map(lesson => lesson.unitTitle).filter(Boolean))];
   return <>
     <PageHeader crumbs={[...crumbs, { label: sessionDay(session.sessionDate) }]} title={`${sessionDay(session.sessionDate)}${session.startsAt ? `, ${session.startsAt}` : ""}`}
-      description={<>{session.groupName}{session.durationMinutes ? ` · ${session.durationMinutes} min` : ""}{session.taughtByName ? ` · impartió ${session.taughtByName}` : ""}</>}
+      description={<>{session.groupName}{session.durationMinutes ? ` · ${session.durationMinutes} min` : ""}{modules.length ? ` · ${noun.One}: ${modules.join(", ")}` : ""}{session.taughtByName ? ` · impartió ${session.taughtByName}` : ""}</>}
       meta={classBadge(session, new Date().toLocaleDateString("en-CA"))}
-      actions={<>{editable && session.status !== "cancelled" && <Button icon="edit" onClick={() => setEditing(true)}>Editar planificación</Button>}{menu.length > 0 && <Menu label="Más acciones de la clase" items={menu}/>}</>}
+      actions={<>{editable && session.status !== "cancelled" && <Button icon="edit" onClick={() => setEditing(true)}>{session.status === "completed" ? "Editar comentarios" : "Planificar"}</Button>}{menu.length > 0 && <Menu label="Más acciones de la clase" items={menu}/>}</>}
       primary={primary}/>
     {!detail.groupActive && <p className="notice"><Icon name="info" size={18}/>La sección está cerrada: la clase se consulta, pero no se modifica.</p>}
     <div className="class-layout">
@@ -245,27 +322,28 @@ function ClassDetail({ id }: { id: string }) {
           : <Sheet sessionId={session.id} status={session.status} initial={detail.learners} writable={editable} groupId={session.groupId} onSaved={load}/>}
       </div>
       <div className="class-side">
-        <Section title="Lección">
-          {lesson ? <div className="class-lesson">
+        <Section title={lessons.length > 1 ? `Lecciones de la clase (${lessons.length})` : "Lección"}>
+          {lessons.length ? <ol className="class-lessons">{lessons.map(lesson => <li key={lesson.id} className="class-lesson">
             <strong>{lesson.title}</strong>
-            <span className="muted small">{lesson.archived ? "Archivada: requiere sustitución" : lesson.revision ? `Publicación ${lesson.revision}` : "Borrador: los estudiantes aún no la ven"}{session.lessonRevision && session.lessonRevision !== lesson.revision ? ` · en clase se usó la publicación ${session.lessonRevision}` : ""}</span>
+            <span className="muted small">{lesson.archived ? "Archivada: requiere sustitución" : lesson.currentRevision ? `Publicación ${lesson.currentRevision}` : "Borrador: los estudiantes aún no la ven"}{lesson.revision && lesson.revision !== lesson.currentRevision ? ` · en clase se usó la publicación ${lesson.revision}` : ""}</span>
+            {lesson.activities.length > 0 && <ul className="cell-list">{lesson.activities.map((activity, index) => <li key={index}>{activity.title}{activity.minutes ? <span className="muted"> · {activity.minutes} min</span> : null}</li>)}</ul>}
             <div className="button-row">
-              {lessonState && <Link className="button secondary small" href={`/cursos/${course.id}/lecciones/${lesson.id}`}><Icon name="edit" size={16}/>Abrir lección</Link>}
+              {courseLessons.some(item => item.id === lesson.id) && <Link className="button secondary small" href={`/cursos/${course.id}/lecciones/${lesson.id}`}><Icon name="edit" size={16}/>Abrir lección</Link>}
               {lesson.shareCode && <a className="button ghost small" href={`/aprender/${lesson.shareCode}`} target="_blank" rel="noopener"><Icon name="present" size={16}/>Presentar</a>}
             </div>
-          </div> : <p className="muted">Sin lección. {editable && session.status !== "cancelled" && <button type="button" className="link-button" onClick={() => setEditing(true)}>Elegir una lección</button>}</p>}
+          </li>)}</ol> : <p className="muted">Sin lecciones. {editable && session.status !== "cancelled" && <button type="button" className="link-button" onClick={() => setEditing(true)}>Planificar la clase</button>}</p>}
         </Section>
-        <Section title={`Recursos de la lección (${resources.length})`}>
+        <Section title={`Recursos (${resources.length})`}>
           {resources.length ? <ul className="class-resources">{resources.map(item => <li key={item.id}>
-            <button type="button" className="link-button" onClick={() => setPreview(item)}><Icon name={item.kind === "link" ? "link" : item.kind === "file" ? "file" : "text"} size={16}/>{item.title}</button>
+            <button type="button" className="link-button" onClick={() => setPreview(item)}><Icon name={kindIcon[item.kind]} size={16}/>{item.title}</button>
             {!item.available && <StatusBadge tone="warning">No disponible para estudiantes</StatusBadge>}
-          </li>)}</ul> : <p className="muted">{lesson ? "La lección no usa recursos de la biblioteca." : "Los recursos llegan con la lección."}</p>}
-          {lesson && lessonState && writable && <p className="muted small">Se agregan o quitan en la lección, desde <Link href={`/cursos/${course.id}/lecciones/${lesson.id}`}>Contenido</Link>.</p>}
+          </li>)}</ul> : <p className="muted">{lessons.length ? "Las lecciones no usan recursos de la biblioteca." : "Los recursos llegan con las lecciones."}</p>}
+          {lessons.length > 0 && writable && <p className="muted small">Se agregan o quitan en cada lección, desde Contenido.</p>}
         </Section>
         <Notes detail={detail} editable={editable && session.status !== "cancelled"} onSaved={load}/>
       </div>
     </div>
-    {editing && <PlanDialog detail={detail} onClose={() => setEditing(false)} onSaved={async () => { setEditing(false); await load(); }}/>}
+    {editing && <PlanDialog session={session} onClose={() => setEditing(false)} onSaved={async () => { setEditing(false); await load(); }}/>}
     {preview && <ResourcePreview item={{ ...preview, courseId: preview.courseId || course.id, content: preview.content || "", status: preview.available ? "published" : "draft", version: 1, updatedAt: "", termIds: [], usedIn: 0, fileId: preview.kind === "file" ? preview.id : undefined }} lessons={[]} onClose={() => setPreview(null)}/>}
   </>;
 }
@@ -281,17 +359,17 @@ function Notes({ detail, editable, onSaved }: { detail: Detail; editable: boolea
   async function save() {
     setBusy(true);
     try {
-      await api(`/courses/${course.id}/sessions/${session.id}`, "PUT", { sessionDate: session.sessionDate, startsAt: session.startsAt, durationMinutes: session.durationMinutes, lessonId: session.lessonId, notes, version: session.version });
-      toast({ message: "Notas guardadas." }); await onSaved();
+      await api(`/courses/${course.id}/sessions/${session.id}`, "PUT", { sessionDate: session.sessionDate, startsAt: session.startsAt ?? null, durationMinutes: session.durationMinutes ?? null, lessonIds: session.lessons.map(lesson => lesson.id), notes, version: session.version });
+      toast({ message: "Comentarios guardados." }); await onSaved();
     } catch (cause) { toast({ tone: "error", message: message(cause) }); }
     finally { setBusy(false); }
   }
-  return <Section title="Notas de la clase">
+  return <Section title="Comentarios">
     {editable ? <div className="stack">
-      <label htmlFor="class-notes" className="sr-only">Notas de la clase</label>
+      <label htmlFor="class-notes" className="sr-only">Comentarios de la clase</label>
       <textarea id="class-notes" rows={4} maxLength={2000} value={notes} onChange={event => setNotes(event.target.value)} placeholder="Qué se trabajó, qué quedó pendiente para la próxima clase"/>
-      <div className="button-row"><button type="button" className="button secondary small" disabled={!dirty || busy} onClick={() => void save()}>{busy ? "Guardando…" : "Guardar notas"}</button><span className="muted small">Solo las ve el equipo docente.</span></div>
-    </div> : session.notes ? <p className="preserve-lines">{session.notes}</p> : <p className="muted">Sin notas.</p>}
+      <div className="button-row"><button type="button" className="button secondary small" disabled={!dirty || busy} onClick={() => void save()}>{busy ? "Guardando…" : "Guardar comentarios"}</button><span className="muted small">Solo los ve el equipo docente. Aparecen en el cronograma.</span></div>
+    </div> : session.notes ? <p className="preserve-lines">{session.notes}</p> : <p className="muted">Sin comentarios.</p>}
   </Section>;
 }
 
