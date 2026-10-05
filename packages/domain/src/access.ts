@@ -4,10 +4,10 @@ import type { CourseAccess, CourseRole } from "@happy-learners/contracts";
 export const maxSectionEducators = 6;
 
 /**
- * What a person can do in a course (DEC-023): administration answers who teaches, when and to whom; the lead
- * answers what is taught; co-teachers prepare lessons for review and teach the sections assigned to them.
- * Course roles add to the organization role, so an administrator on a team also has that team role.
- * Null when the person has no access to the course at all.
+ * What a person can do in a course (DEC-023, DEC-024). The course defines what is taught: the lead decides and
+ * publishes it and co-teachers prepare lessons for review. Each section is its own instance of the course, taught
+ * only by the educators administration assigns to it, the lead included. Administration configures everything and
+ * sees every section. Course roles add to the organization role. Null when the person has no access to the course.
  */
 export function courseAccess(admin: boolean, role: CourseRole | null, assigned: string[]): CourseAccess | null {
   if (!admin && !role) return null;
@@ -16,9 +16,9 @@ export function courseAccess(admin: boolean, role: CourseRole | null, assigned: 
     configure: admin,
     edit: role !== null,
     publish: role === "lead",
-    teach: role === "lead" ? "all" : role ? "assigned" : null,
-    sections: admin || role === "lead" ? "all" : "assigned",
+    sections: admin ? "all" : "assigned",
   };
 }
 export const seesSection = (access: CourseAccess, groupId: string) => access.sections === "all" || access.assigned.includes(groupId);
-export const teachesSection = (access: CourseAccess, groupId: string) => access.teach === "all" || (access.teach === "assigned" && access.assigned.includes(groupId));
+/** Only the section's own educators plan and teach its classes; seeing every section does not make administration teach them. */
+export const teachesSection = (access: CourseAccess, groupId: string) => access.role !== null && access.assigned.includes(groupId);

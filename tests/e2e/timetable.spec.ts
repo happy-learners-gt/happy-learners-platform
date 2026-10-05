@@ -1,5 +1,5 @@
 import { test, expect } from "./local-test";
-import { E2E_PREFIX, courseNav, openNavigation, sessionToken, signIn } from "./helpers";
+import { E2E_PREFIX, courseNav, openNavigation, sectionNav, sessionToken, signIn } from "./helpers";
 
 type Session = { id: string; groupId: string; lessons: { id: string; available: boolean; revision?: number | null }[]; sessionDate: string; startsAt: string | null; durationMinutes: number | null; status: string; origin: string; version: number; notes: string };
 const ids = (session: Session) => session.lessons.map(lesson => lesson.id);
@@ -23,6 +23,9 @@ test("ST-099 ST-097 ST-101 ST-029 ST-100: the section schedule generates its cla
     }
     const groupId = (await (await admin.post(`${path}/groups`, { data: { name: `${E2E_PREFIX} Sección A` } })).json()).id;
     const learnerId = (await (await admin.post(`${path}/groups/${groupId}/learners`, { data: { displayName: `${E2E_PREFIX} Ana` } })).json()).id;
+    // DEC-024: even the lead teaches a section only once administration assigns it.
+    expect((await educator.get(`/api/sections/${groupId}`)).status()).toBe(403);
+    expect((await admin.put(`${path}/groups/${groupId}/educators`, { data: { userIds: ["user-educator"] } })).status()).toBe(200);
     const sessions = async () => ((await (await educator.get(`${path}/sessions`)).json()).sessions as Session[]).filter(item => item.groupId === groupId).sort((a, b) => a.sessionDate.localeCompare(b.sessionDate));
 
     // Saving the schedule generates every class of the period, from today on.
@@ -99,20 +102,24 @@ test("ST-099 ST-097 ST-101 ST-029 ST-100: the section schedule generates its cla
     await expect(page.locator(".plan-stats")).toContainText("Impartidos en clase");
     await expect(page.locator(".coverage-table")).toContainText("Impartido");
     await openNavigation(page);
-    await courseNav(page).getByRole("link", { name: "Clases", exact: true }).click();
+    await courseNav(page).getByRole("link", { name: "Secciones", exact: true }).click();
+    await page.getByRole("link", { name: `${E2E_PREFIX} Sección A`, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/secciones/${groupId}$`));
+    await openNavigation(page);
+    await sectionNav(page).getByRole("link", { name: "Cronograma", exact: true }).click();
     const schedule = page.getByRole("table", { name: /Cronograma de clases de/ });
     await expect(schedule.locator("tbody tr").filter({ hasText: "Requiere sustitución" })).toHaveCount(1);
     await expect(schedule.locator("tbody tr").first()).toContainText("Se cubrieron las dos lecciones.");
     await expect(schedule.locator("tbody tr").first()).toContainText("1 de 1 presentes (100 %)");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await openNavigation(page);
-    await courseNav(page).getByRole("link", { name: "Horario", exact: true }).click();
+    await sectionNav(page).getByRole("link", { name: "Horario", exact: true }).click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Horario");
     await expect(page.locator(".timetable")).toContainText("09:30");
     // The lead consults the schedule; administration changes it.
     await expect(page.getByRole("form", { name: `Horario de ${E2E_PREFIX} Sección A` })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await signIn(page, "admin-demo", `/cursos/${courseId}/horario`);
+    await signIn(page, "admin-demo", `/secciones/${groupId}/horario`);
     await expect(page.getByRole("form", { name: `Horario de ${E2E_PREFIX} Sección A` }).getByLabel("Hora")).toHaveValue("09:30");
   } finally { await educator.dispose(); await admin.dispose(); }
 });

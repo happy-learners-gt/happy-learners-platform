@@ -19,8 +19,8 @@ const routes = [
   ["editor-leccion", `/cursos/${course}/lecciones/${lesson}`],
   ["editor-vista-previa", `/cursos/${course}/lecciones/${lesson}?vista=previa`],
   ["curso-biblioteca", `/cursos/${course}/biblioteca`],
-  ["curso-grupos", `/cursos/${course}/grupos`],
-  ["curso-clases", `/cursos/${course}/clases`],
+  ["curso-secciones", `/cursos/${course}/secciones`],
+  ["mis-secciones", "/secciones"],
   ["curso-configuracion", `/cursos/${course}/configuracion`],
   ["biblioteca", "/biblioteca"],
   ["buscar", "/buscar?q=greet"],
@@ -59,10 +59,15 @@ async function states(page, name, out) {
   await page.goto(`${origin}/cursos/${course}/plan`);
   await page.getByRole("heading", { name: "Mapa de cobertura" }).waitFor();
   await shot(page, `${out}/51-plan-curricular.png`);
-  await page.goto(`${origin}/cursos/${course}/clases`);
-  await page.getByRole("button", { name: "Planificar clase" }).first().click();
+  await page.goto(`${origin}/cursos/${course}/secciones`);
+  await page.locator(".section-card .progress-title").first().click();
+  await page.waitForURL(/\/secciones\/[^/]+$/);
+  await shot(page, `${out}/53-resumen-seccion.png`);
+  await page.goto(`${page.url()}/clases`);
+  await page.getByRole("button", { name: "Agregar clase" }).first().click();
   await shot(page, `${out}/47-dialogo-clase.png`);
-  await page.getByRole("dialog").getByRole("button", { name: "Planificar clase" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Agregar clase" }).click();
+  await page.getByRole("table", { name: /Cronograma de clases de/ }).getByRole("row").nth(1).getByRole("link").first().click();
   await page.waitForURL(/clases\/class-/);
   const groups = page.locator(".mark-group");
   await groups.nth(0).getByLabel("Presente").check();

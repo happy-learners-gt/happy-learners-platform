@@ -886,6 +886,8 @@ dialog.modal.viewer .modal-body > .usage, dialog.modal.viewer .modal-body > p { 
 .progress-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); flex-wrap: wrap; }
 .progress-title { font-weight: var(--weight-bold); color: var(--color-ink); text-decoration: none; }
 .progress-title:hover { color: var(--color-primary-ink); text-decoration: underline; }
+.section-course { display: block; }
+.section-list .progress-head > div { min-width: 0; }
 .progress-bars { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: var(--space-2) var(--space-4); }
 .mini-progress { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px var(--space-2); }
 .mini-progress .progress-track { grid-column: 1 / -1; grid-row: 2; }

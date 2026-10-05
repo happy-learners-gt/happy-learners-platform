@@ -2,7 +2,7 @@ import { test, expect } from "./local-test";
 import type { APIRequestContext, PlaywrightWorkerArgs } from "@playwright/test";
 import { publish, sessionToken, signIn } from "./helpers";
 
-const course = "/api/courses/seed-course-matematicas";
+const slug = "seed-course-matematicas", course = `/api/courses/${slug}`;
 const original = [{ userId: "seed-user-carlos", role: "co-teacher" }, { userId: "seed-user-lucia", role: "lead" }];
 
 const contexts: APIRequestContext[] = [];
@@ -102,6 +102,9 @@ test("HL-140 ST-096 ST-102 ST-103: administration configures the sections; only 
   expect((await (await outsider.get("/api/classes")).json()).classes.some((item: { courseId: string }) => item.courseId === "seed-course-matematicas")).toBe(false);
   expect((await (await lead.get("/api/classes")).json()).classes.some((item: { courseId: string }) => item.courseId === "seed-course-matematicas")).toBe(true);
 
+  // DEC-024: a section's educators come from the course's team; nobody joins the team by being assigned a section.
+  expect((await educators(admin, groups[0].id, [...groups[0].educators.map(item => item.userId), "user-educator"])).status()).toBe(400);
+  expect((await outsider.get(`${course}/groups`)).status()).toBe(403);
   // Joining the team gives the course; administration then assigns the sections it teaches. Leaving revokes both.
   try {
     await setTeam(admin, [...original, { userId: "user-educator", role: "co-teacher" }]);
@@ -119,32 +122,60 @@ test("HL-140 ST-096 ST-102 ST-103: administration configures the sections; only 
   expect((await (await lead.get(`${course}/groups`)).json()).groups).toEqual(groups);
 });
 
-test("ST-103: a co-teacher sees and teaches only the sections assigned; the lead teaches every section", async ({ playwright, baseURL, page }) => {
+test("ST-103 DEC-024: the co-teacher and the lead each see and teach only the sections assigned to them", async ({ playwright, baseURL, page }) => {
   const admin = await client(playwright, baseURL!, "marta.ruiz"), lead = await client(playwright, baseURL!, "lucia.herrera"), coTeacher = await client(playwright, baseURL!, "carlos.mejia");
   const groups = (await (await admin.get(`${course}/groups`)).json()).groups as (Group & { name: string; status: string })[];
-  const [kept, removed] = groups.filter(item => item.educators.some(person => person.userId === "seed-user-carlos"));
-  const sessions = (await (await lead.get(`${course}/sessions`)).json()).sessions as { id: string; groupId: string; status: string }[];
-  const theirs = sessions.find(item => item.groupId === removed.id && item.status === "planned")!;
+  const [kept, removed] = groups.filter(item => item.status === "active" && item.educators.some(person => person.userId === "seed-user-carlos"));
+  const sessions = (await (await admin.get(`${course}/sessions`)).json()).sessions as { id: string; groupId: string; status: string }[];
+  const theirs = sessions.find(item => item.groupId === removed.id && item.status === "planned")!, leads = sessions.find(item => item.groupId === kept.id && item.status === "planned")!;
+  const ids = async (api: APIRequestContext) => ((await (await api.get("/api/sections")).json()).sections as { id: string }[]).map(item => item.id);
   try {
     expect((await educators(admin, removed.id, ["seed-user-lucia"])).status()).toBe(200);
+    expect((await educators(admin, kept.id, ["seed-user-carlos"])).status()).toBe(200);
+    // Each section is its own instance: its classes, schedule and indicators reach only who teaches it.
+    expect(await ids(coTeacher)).toContain(kept.id);
+    expect(await ids(coTeacher)).not.toContain(removed.id);
+    expect(await ids(lead)).toContain(removed.id);
+    expect(await ids(lead)).not.toContain(kept.id);
+    expect(await ids(admin)).toEqual(expect.arrayContaining([kept.id, removed.id]));
+    expect((await coTeacher.get(`/api/sections/${removed.id}`)).status()).toBe(403);
+    expect((await lead.get(`/api/sections/${kept.id}`)).status()).toBe(403);
+    expect((await (await coTeacher.get(`/api/sections/${kept.id}`)).json()).section).toMatchObject({ id: kept.id, teaches: true, indicators: { learners: expect.any(Number) } });
     expect(((await (await coTeacher.get(`${course}/groups`)).json()).groups as Group[]).map(item => item.id)).not.toContain(removed.id);
     expect(((await (await coTeacher.get(`${course}/sessions`)).json()).sessions as typeof sessions).some(item => item.groupId === removed.id)).toBe(false);
     expect((await coTeacher.get(`${course}/sessions/${theirs.id}`)).status()).toBe(404);
     expect((await coTeacher.post(`${course}/sessions/${theirs.id}/start`)).status()).toBe(404);
     expect((await coTeacher.post(`${course}/sessions`, { data: { groupId: removed.id, sessionDate: "2026-10-05" } })).status()).toBe(400);
     expect(((await (await coTeacher.get("/api/classes")).json()).classes as { groupId: string }[]).some(item => item.groupId === removed.id)).toBe(false);
-    // The lead keeps teaching it, for example to cover a class.
+    // The lead publishes the course's content, but teaches only the sections assigned.
     expect((await lead.get(`${course}/sessions/${theirs.id}`)).status()).toBe(200);
-    // On screen the co-teacher finds only their section, and cannot configure it.
-    await signIn(page, "carlos.mejia", "/cursos/seed-course-matematicas/asignaciones");
-    await expect(page.locator(".group-card")).toHaveCount(groups.filter(item => item.status === "active").length - 1);
-    await expect(page.getByRole("heading", { name: kept.name, exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: removed.name, exact: true })).toHaveCount(0);
+    expect((await lead.get(`${course}/sessions/${leads.id}`)).status()).toBe(404);
+    expect(((await (await lead.get("/api/classes")).json()).classes as { groupId: string }[]).some(item => item.groupId === kept.id)).toBe(false);
+    // What happens in a section stays with who teaches it.
+    type Event = { targetType: string; targetId: string };
+    expect(((await (await admin.get(`/api/activity?section=${removed.id}`)).json()).events as Event[]).length).toBeGreaterThan(0);
+    expect((await (await coTeacher.get(`/api/activity?section=${removed.id}`)).json()).events).toEqual([]);
+    expect(((await (await coTeacher.get("/api/activity?limit=100")).json()).events as Event[]).some(item => item.targetId === removed.id)).toBe(false);
+
+    // On screen each one finds only their sections, and cannot configure them.
+    await signIn(page, "carlos.mejia", "/secciones");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Mis secciones");
+    await page.goto(`/cursos/${slug}/secciones`);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Mis secciones del curso");
+    await expect(page.getByRole("link", { name: kept.name, exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: removed.name, exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Nueva sección", exact: true })).toHaveCount(0);
-    await page.goto("/cursos/seed-course-matematicas/horario");
+    await page.goto(`/secciones/${removed.id}`);
+    await expect(page.getByRole("heading", { name: "Esta sección no está asignada a tu cuenta" })).toBeVisible();
+    await page.goto(`/secciones/${kept.id}/horario`);
     await expect(page.locator("form[aria-label^='Horario de']")).toHaveCount(0);
+    await expect(page.locator(".timetable")).toContainText(kept.name);
+    await signIn(page, "lucia.herrera", `/cursos/${slug}/secciones`);
+    await expect(page.getByRole("link", { name: removed.name, exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: kept.name, exact: true })).toHaveCount(0);
   } finally {
     expect((await educators(admin, removed.id, removed.educators.map(item => item.userId))).status()).toBe(200);
+    expect((await educators(admin, kept.id, kept.educators.map(item => item.userId))).status()).toBe(200);
   }
 });
 
@@ -154,23 +185,28 @@ test("HL-140 ST-102 ST-103: an educator sees only their own courses; administrat
   await expect(page.locator("article.course-card").filter({ hasText: "Exploradores" })).toBeVisible();
   await expect(page.locator("article.course-card").filter({ hasText: "Matemáticas 3.º primaria" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Crear curso", exact: true })).toHaveCount(0);
-  await page.goto("/cursos/seed-course-matematicas/clases");
+  await page.goto("/cursos/seed-course-matematicas/secciones");
   await expect(page.getByRole("heading", { name: "Este curso no está asignado a tu cuenta" })).toBeVisible();
+  await page.goto("/secciones/seed-group-mat-3a");
+  await expect(page.getByRole("heading", { name: "Esta sección no está asignada a tu cuenta" })).toBeVisible();
   // Administration reads the content and the classes, without writing them.
   await signIn(page, "marta.ruiz", "/cursos/seed-course-matematicas/contenido");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Contenido");
   await expect(page.getByRole("button", { name: /^Crear / })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Nueva lección en / })).toHaveCount(0);
-  await page.goto("/cursos/seed-course-matematicas/clases");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Clases");
+  await page.goto("/secciones/seed-group-mat-3a/clases");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Cronograma");
   await expect(page.getByRole("button", { name: "Agregar clase", exact: true })).toHaveCount(0);
-  await page.goto("/cursos/seed-course-matematicas/asignaciones");
+  await page.goto("/cursos/seed-course-matematicas/secciones");
   await expect(page.getByRole("button", { name: "Nueva sección", exact: true })).toBeVisible();
-  // The team works with the sections.
-  await signIn(page, "lucia.herrera", "/cursos/seed-course-matematicas/asignaciones");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Asignaciones");
-  await expect(page.locator(".group-card").first()).toBeVisible();
-  await page.goto("/cursos/seed-course-matematicas/horario");
+  await page.goto("/secciones");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Secciones");
+  // The team works in the sections it teaches.
+  await signIn(page, "lucia.herrera", "/secciones");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Mis secciones");
+  await expect(page.getByRole("link", { name: "3.º A", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Mi semana" })).toContainText("Matemáticas 3.º primaria");
+  await page.goto("/secciones/seed-group-mat-3a/horario");
   await expect(page.locator(".timetable")).toContainText("08:00");
   await expect(page.locator(".timetable")).toContainText("3.º A");
 });
