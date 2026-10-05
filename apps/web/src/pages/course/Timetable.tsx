@@ -17,7 +17,7 @@ type Values = { weekdays: number[]; startsAt: string; durationMinutes: string; f
 
 /** Horario: the weekly class times of each section. Saving one generates the section's classes for its period. */
 export function Timetable() {
-  const { course } = useCourse();
+  const { course, configurable } = useCourse();
   const [groups, setGroups] = useState<SectionView[] | null>(null), [sessions, setSessions] = useState<ClassSession[]>([]), [today, setToday] = useState(""), [error, setError] = useState("");
   const base = `/courses/${course.id}`, page = `/cursos/${course.id}`;
   async function load() {
@@ -29,12 +29,14 @@ export function Timetable() {
   }
   useEffect(() => { if (course.status === "active") void load(); }, [course.id]);
   const header = <PageHeader crumbs={[{ label: "Cursos", href: "/cursos" }, { label: course.title, href: page }, { label: "Horario" }]} title="Horario"
-    description="Los días, la hora y el periodo de clases de cada sección. Al guardar el horario se generan todas sus clases, que luego planificas con sus lecciones en Clases."/>;
-  if (course.status !== "active") return <>{header}<EmptyState icon="archive" title="Curso archivado">Restaura el curso desde Configuración para consultar su horario.</EmptyState></>;
+    description={configurable ? "Los días, la hora y el periodo de clases de cada sección. Al guardar el horario se generan todas sus clases, que el equipo docente planifica con sus lecciones en Clases." : "Los días, la hora y el periodo de clases de cada sección. Administración configura el horario; tú planificas cada clase en Clases."}/>;
+  if (course.status !== "active") return <>{header}<EmptyState icon="archive" title="Curso archivado">El horario vuelve a estar disponible cuando administración restaura el curso.</EmptyState></>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
   if (!groups) return <>{header}<Loading label="Cargando horario…" cards={2}/></>;
   const active = groups.filter(group => group.status === "active");
-  if (!active.length) return <>{header}<EmptyState icon="users" title="Primero crea una sección" action={<Link className="button primary" href={`${page}/asignaciones`}>Ir a Asignaciones</Link>}>Cada sección del curso tiene su propio horario.</EmptyState></>;
+  if (!active.length) return <>{header}{configurable
+    ? <EmptyState icon="users" title="Primero crea una sección" action={<Link className="button primary" href={`${page}/asignaciones`}>Ir a Asignaciones</Link>}>Cada sección del curso tiene su propio horario.</EmptyState>
+    : <EmptyState icon="users" title="No hay secciones asignadas">Administración crea las secciones y configura su horario.</EmptyState>}</>;
   const scheduled = active.filter(group => group.schedule);
   const days = weekdays.filter(([day]) => day >= 1 && day <= 5 || scheduled.some(group => group.schedule!.weekdays.includes(day)));
   return <>
@@ -54,7 +56,7 @@ export function Timetable() {
 }
 
 function ScheduleCard({ group, today, sessions, onSaved }: { group: SectionView; today: string; sessions: ClassSession[]; onSaved: () => Promise<void> }) {
-  const { course, writable } = useCourse();
+  const { course, configurable: writable } = useCourse();
   const { toast, confirm } = useFeedback();
   const initial = (schedule?: SectionSchedule | null): Values => schedule
     ? { weekdays: schedule.weekdays, startsAt: schedule.startsAt, durationMinutes: String(schedule.durationMinutes), from: schedule.from, until: schedule.until }
@@ -107,6 +109,6 @@ function ScheduleCard({ group, today, sessions, onSaved }: { group: SectionView;
         <div className="button-row"><button className="button primary" disabled={!values.weekdays.length}>{busy ? "Guardando…" : group.schedule ? "Actualizar horario" : "Guardar horario"}</button>
           {!values.weekdays.length && <span className="muted small">Elige al menos un día.</span>}</div>
       </fieldset>
-    </form> : !group.schedule && <p className="muted">El equipo docente aún no configura el horario de esta sección.</p>}
+    </form> : !group.schedule && <p className="muted">Administración aún no configura el horario de esta sección.</p>}
   </article>;
 }

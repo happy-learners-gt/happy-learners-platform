@@ -11,9 +11,12 @@ import { StatusBadge } from "./primitives";
 import type { Tone } from "./primitives";
 
 export const stateTone: Record<LessonState, Tone> = { draft: "warning", published: "success", changes: "info", archived: "neutral" };
-export function LessonBadge({ lesson }: { lesson: Pick<Lesson, "status" | "revision" | "hasDraft"> }) {
+export function LessonBadge({ lesson }: { lesson: Pick<Lesson, "status" | "revision" | "hasDraft" | "review"> }) {
   const state = lessonState(lesson);
-  return <StatusBadge tone={stateTone[state]}>{lessonStateLabel[state]}</StatusBadge>;
+  return <>
+    <StatusBadge tone={stateTone[state]}>{lessonStateLabel[state]}</StatusBadge>
+    {lesson.review && state !== "archived" && <StatusBadge tone={lesson.review.status === "pending" ? "info" : "warning"}>{lesson.review.status === "pending" ? "En revisión" : "Devuelta"}</StatusBadge>}
+  </>;
 }
 
 /** Short names edit in place: Enter saves, Escape cancels, leaving the field saves. */
@@ -48,8 +51,9 @@ export type OutlineActions = {
   openLesson: (lesson: Lesson) => void;
 };
 
-export function LessonOutline({ courseId, units, lessons, writable, showArchived, actions, expanded, setExpanded, focusUnit, noun }: {
-  courseId: string; noun: ModuleNoun; units: LearningUnit[]; lessons: Lesson[]; writable: boolean; showArchived: boolean; actions: OutlineActions;
+/** writable: the team creates, renames and duplicates lessons. organize: the lead also orders and archives modules and lessons. */
+export function LessonOutline({ courseId, units, lessons, writable, organize, showArchived, actions, expanded, setExpanded, focusUnit, noun }: {
+  courseId: string; noun: ModuleNoun; units: LearningUnit[]; lessons: Lesson[]; writable: boolean; organize: boolean; showArchived: boolean; actions: OutlineActions;
   expanded: Set<string>; setExpanded: (ids: Set<string>) => void; focusUnit?: string;
 }) {
   const [renaming, setRenaming] = useState<string | null>(null), [creating, setCreating] = useState<string | null>(null);
@@ -67,12 +71,12 @@ export function LessonOutline({ courseId, units, lessons, writable, showArchived
         <div className="outline-unit-title">
           <span className="outline-eyebrow"><span className="unit-dot" aria-hidden="true"/>{noun.One} {index + 1}</span>
           {renaming === unit.id ? <InlineName value={unit.name} label={`Nombre ${noun.ofThe} ${index + 1}`} onSave={name => actions.renameUnit(unit, name)} onDone={() => setRenaming(null)} className="unit"/>
-            : <h2 onDoubleClick={() => writable && !archived && setRenaming(unit.id)}>{unit.name}</h2>}
+            : <h2 onDoubleClick={() => organize && !archived && setRenaming(unit.id)}>{unit.name}</h2>}
           {unit.objective && open && <p>{unit.objective}</p>}
         </div>
         <span className="outline-count">{visible.length ? `${published} de ${plural(visible.length, "lección publicada", "lecciones publicadas")}` : "Sin lecciones"}</span>
         {archived && <StatusBadge>Archivada</StatusBadge>}
-        {writable && <Menu label={`Acciones ${noun.ofThe} ${unit.name}`} items={[
+        {organize && <Menu label={`Acciones ${noun.ofThe} ${unit.name}`} items={[
           ...(!archived ? [{ label: "Renombrar", icon: "edit" as const, onSelect: () => setRenaming(unit.id) }, { label: "Editar nombre y objetivo", icon: "text" as const, onSelect: () => actions.editUnit(unit) }, { label: "Nueva lección", icon: "plus" as const, onSelect: () => { setExpanded(new Set([...expanded, unit.id])); setCreating(unit.id); } }] : []),
           { label: "Mover arriba", icon: "up", onSelect: () => actions.moveUnit(unit, -1), disabled: position === 0 },
           { label: "Mover abajo", icon: "down", onSelect: () => actions.moveUnit(unit, 1), disabled: position === units.length - 1 },
@@ -95,8 +99,8 @@ export function LessonOutline({ courseId, units, lessons, writable, showArchived
             <Menu label={`Acciones de la lección ${lesson.title}`} items={[
               { label: writable ? "Editar" : "Abrir", icon: "edit", onSelect: () => actions.openLesson(lesson) },
               { label: "Vista previa", icon: "eye", onSelect: () => actions.previewLesson(lesson) },
-              ...(writable ? [
-                ...(!lessonArchived ? [{ label: "Renombrar", icon: "text" as const, onSelect: () => setRenaming(lesson.id) }, { label: "Duplicar", icon: "copy" as const, onSelect: () => actions.duplicateLesson(lesson) }] : []),
+              ...(writable && !lessonArchived ? [{ label: "Renombrar", icon: "text" as const, onSelect: () => setRenaming(lesson.id) }, { label: "Duplicar", icon: "copy" as const, onSelect: () => actions.duplicateLesson(lesson) }] : []),
+              ...(organize ? [
                 { label: "Mover arriba", icon: "up" as const, onSelect: () => actions.moveLesson(lesson, -1), disabled: order === 0 },
                 { label: "Mover abajo", icon: "down" as const, onSelect: () => actions.moveLesson(lesson, 1), disabled: order === all.length - 1 },
                 "separator" as const,

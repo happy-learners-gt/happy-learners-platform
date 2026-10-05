@@ -25,7 +25,7 @@ export function Library() {
   async function load() {
     setError("");
     try {
-      const [{ courses }, { lessons }, { resources }, taxonomy] = await Promise.all([api<{ courses: Course[] }>("/courses"), api<{ lessons: Lesson[] }>(isEducator(member) ? "/lessons?drafts=1" : "/lessons"), api<{ resources: Resource[] }>("/resources"), api<Taxonomy>("/taxonomy").catch(() => ({ vocabularies: [], terms: [] }))]);
+      const [{ courses }, { lessons }, { resources }, taxonomy] = await Promise.all([api<{ courses: Course[] }>("/courses"), api<{ lessons: Lesson[] }>("/lessons?drafts=1"), api<{ resources: Resource[] }>("/resources"), api<Taxonomy>("/taxonomy").catch(() => ({ vocabularies: [], terms: [] }))]);
       const perCourse = await Promise.all(courses.map(course => api<{ materials: Material[] }>(`/courses/${course.id}/materials`).then(result => result.materials.map(item => ({ ...item, courseTitle: course.title, usedIn: usage(item.id, lessons).length })))));
       setData({ courses, lessons, taxonomy, items: [...perCourse.flat(), ...resources.filter(resource => resource.status !== "archived").map(resource => ({ ...legacyItem(resource, usage(resource.id, lessons).length), courseTitle: "General" }))] });
     } catch (cause) { setError(message(cause)); }

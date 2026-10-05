@@ -43,7 +43,7 @@ export function Classes({ sessionId }: { sessionId?: string }) {
  * activities, comments and resources, and tracked as it is taught with its attendance.
  */
 function Schedule() {
-  const { course, writable, noun } = useCourse();
+  const { course, teaches, configurable, noun } = useCourse();
   const { url, navigate } = useNavigation();
   const [groups, setGroups] = useState<SectionView[] | null>(null), [sessions, setSessions] = useState<ClassSession[]>([]), [plans, setPlans] = useState<Record<string, ClassLessonPlan>>({}), [today, setToday] = useState(""), [error, setError] = useState("");
   const [adding, setAdding] = useState(url.searchParams.get("nueva") === "1"), [filling, setFilling] = useState(false), [planning, setPlanning] = useState<ClassSession | null>(null);
@@ -58,20 +58,25 @@ function Schedule() {
   }
   useEffect(() => { if (course.status === "active") void load(); }, [course.id]);
   function filter(key: string, value: string) { const next = new URL(url); if (value) next.searchParams.set(key, value); else next.searchParams.delete(key); next.searchParams.delete("nueva"); navigate(next.pathname + next.search, true); }
-  const activeGroups = (groups || []).filter(group => group.status === "active");
+  const activeGroups = (groups || []).filter(group => group.status === "active"), taughtGroups = activeGroups.filter(group => teaches(group.id));
+  const writable = taughtGroups.length > 0;
   const withClasses = (groups || []).filter(group => sessions.some(session => session.groupId === group.id));
   const group = (groups || []).find(item => item.id === url.searchParams.get("seccion")) || withClasses.find(item => item.status === "active") || withClasses[0] || activeGroups[0];
   const header = <PageHeader crumbs={[{ label: "Cursos", href: "/cursos" }, { label: course.title, href: `/cursos/${course.id}` }, { label: "Clases" }]} title="Clases"
-    description="El cronograma de cada sección se genera con su horario. Planifica en él las lecciones y comentarios de cada clase; el día de la clase ábrela para pasar lista y finalizarla."
-    actions={writable && activeGroups.length > 0 && <Button icon="plus" onClick={() => setAdding(true)}>Agregar clase</Button>}
-    primary={writable && activeGroups.length > 0 && sessions.length > 0 && <PrimaryAction icon="list" onClick={() => setFilling(true)}>Asignar lecciones en orden</PrimaryAction>}/>;
-  const addDialog = adding && <AddDialog groups={activeGroups} initialGroup={group?.id || ""} onClose={() => { setAdding(false); if (url.searchParams.has("nueva")) filter("nueva", ""); }}
+    description={writable ? "El cronograma de cada sección se genera con su horario. Planifica en él las lecciones y comentarios de cada clase; el día de la clase ábrela para pasar lista y finalizarla." : "El cronograma de cada sección, con lo planificado y lo impartido en cada clase. Lo planifica y registra quien imparte la sección."}
+    actions={writable && <Button icon="plus" onClick={() => setAdding(true)}>Agregar clase</Button>}
+    primary={writable && sessions.length > 0 && <PrimaryAction icon="list" onClick={() => setFilling(true)}>Asignar lecciones en orden</PrimaryAction>}/>;
+  const addDialog = adding && <AddDialog groups={taughtGroups} initialGroup={group?.id || ""} onClose={() => { setAdding(false); if (url.searchParams.has("nueva")) filter("nueva", ""); }}
     onSaved={async groupId => { setAdding(false); filter("seccion", groupId); await load(); }}/>;
-  if (course.status !== "active") return <>{header}<EmptyState icon="archive" title="Curso archivado">Restaura el curso desde Configuración para consultar sus clases.</EmptyState></>;
+  if (course.status !== "active") return <>{header}<EmptyState icon="archive" title="Curso archivado">Las clases vuelven a estar disponibles cuando administración restaura el curso.</EmptyState></>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
   if (!groups) return <>{header}<Loading label="Cargando el cronograma…" lines={6}/></>;
-  if (!activeGroups.length && !sessions.length) return <>{header}<EmptyState icon="users" title="Primero crea una sección" action={<Link className="button primary" href={`/cursos/${course.id}/asignaciones`}>Ir a Asignaciones</Link>}>Cada clase pertenece a una sección del curso. Crea una y asígnale sus estudiantes.</EmptyState></>;
-  if (!sessions.length) return <>{header}<EmptyState icon="calendar" title="Configura el horario del curso" action={<Link className="button primary" href={`/cursos/${course.id}/horario`}>Ir a Horario</Link>}>Al guardar el horario de una sección se genera su cronograma de clases del periodo. También puedes agregar una clase suelta.</EmptyState>{addDialog}</>;
+  if (!activeGroups.length && !sessions.length) return <>{header}{configurable
+    ? <EmptyState icon="users" title="Primero crea una sección" action={<Link className="button primary" href={`/cursos/${course.id}/asignaciones`}>Ir a Asignaciones</Link>}>Cada clase pertenece a una sección del curso. Crea una y asígnale sus educadores y estudiantes.</EmptyState>
+    : <EmptyState icon="users" title="No hay secciones asignadas">Administración crea las secciones del curso y te asigna las que impartes.</EmptyState>}</>;
+  if (!sessions.length) return <>{header}{configurable
+    ? <EmptyState icon="calendar" title="Configura el horario del curso" action={<Link className="button primary" href={`/cursos/${course.id}/horario`}>Ir a Horario</Link>}>Al guardar el horario de una sección se genera su cronograma de clases del periodo.</EmptyState>
+    : <EmptyState icon="calendar" title="Aún no hay clases" action={writable && <Button icon="plus" onClick={() => setAdding(true)}>Agregar clase</Button>}>Administración configura el horario de la sección y con él se genera su cronograma. También puedes agregar una clase suelta.</EmptyState>}{addDialog}</>;
   const ofGroup = sessions.filter(session => session.groupId === group?.id).sort(byDate);
   const sequence = classSequence(ofGroup, group?.schedule?.from);
   const isUpcoming = (session: ClassSession) => session.status === "in_progress" || (session.status === "planned" && session.sessionDate >= today);
@@ -79,7 +84,7 @@ function Schedule() {
   const held = ofGroup.filter(session => session.status !== "cancelled"), taught = held.filter(session => session.status === "completed");
   const marked = taught.reduce((sum, session) => sum + Number(session.marked || 0), 0), attended = taught.reduce((sum, session) => sum + Number(session.attended || 0), 0);
   const rows = view === "upcoming" ? upcoming : view === "history" ? history : ofGroup;
-  const editable = writable && group?.status === "active";
+  const editable = !!group && group.status === "active" && teaches(group.id);
   return <>
     {header}
     <div className="toolbar" role="group" aria-label="Elegir cronograma">
@@ -104,13 +109,13 @@ function Schedule() {
         <tbody>{rows.map(session => <ScheduleRow key={session.id} session={session} place={sequence.get(session.id)} extra={session.origin === "manual" && !!group?.schedule && session.sessionDate >= group.schedule.from && session.sessionDate <= group.schedule.until} plans={plans} today={today} page={page} editable={editable} onPlan={() => setPlanning(session)}/>)}</tbody>
       </table>
     </div>
-      : !ofGroup.length ? <EmptyState icon="calendar" title="Esta sección aún no tiene clases" action={writable && group && <Link className="button primary" href={`/cursos/${course.id}/horario#horario-${group.id}`}>Configurar horario</Link>}>
-        Configura su horario para generar su cronograma del periodo, o agrega una clase suelta.
+      : !ofGroup.length ? <EmptyState icon="calendar" title="Esta sección aún no tiene clases" action={configurable && group && <Link className="button primary" href={`/cursos/${course.id}/horario#horario-${group.id}`}>Configurar horario</Link>}>
+        {configurable ? "Configura su horario para generar su cronograma del periodo." : "Su cronograma se genera cuando administración configura el horario. También puedes agregar una clase suelta."}
       </EmptyState>
-      : <EmptyState icon="calendar" title={view === "upcoming" ? "No hay clases próximas" : "Aún no hay clases en el historial"} action={writable && view === "upcoming" && group && <Link className="button primary" href={`/cursos/${course.id}/horario#horario-${group.id}`}>Revisar el horario</Link>}>
+      : <EmptyState icon="calendar" title={view === "upcoming" ? "No hay clases próximas" : "Aún no hay clases en el historial"} action={configurable && view === "upcoming" && group && <Link className="button primary" href={`/cursos/${course.id}/horario#horario-${group.id}`}>Revisar el horario</Link>}>
         {view === "upcoming" ? "Amplía el periodo del horario de la sección o agrega una clase suelta." : "Las clases impartidas, canceladas o sin registrar aparecerán aquí."}
       </EmptyState>}
-    {filling && <FillDialog groups={activeGroups} sessions={sessions} today={today} initialGroup={group?.id || ""} onClose={() => setFilling(false)} onDone={async () => { setFilling(false); await load(); }}/>}
+    {filling && <FillDialog groups={taughtGroups} sessions={sessions} today={today} initialGroup={group?.id || ""} onClose={() => setFilling(false)} onDone={async () => { setFilling(false); await load(); }}/>}
     {planning && <PlanDialog session={planning} onClose={() => setPlanning(null)} onSaved={async () => { setPlanning(null); await load(); }}/>}
     {addDialog}
   </>;
@@ -278,7 +283,7 @@ function AddDialog({ groups, initialGroup, onClose, onSaved }: { groups: Section
 
 /** A class on the day it is taught: its lessons and resources at hand, the roll, and finishing it. */
 function ClassDetail({ id }: { id: string }) {
-  const { course, writable, lessons: courseLessons, noun } = useCourse();
+  const { course, teaches, lessons: courseLessons, noun } = useCourse();
   const { toast, confirm } = useFeedback();
   const [detail, setDetail] = useState<Detail | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false), [editing, setEditing] = useState(false);
   const [preview, setPreview] = useState<ClassResource | null>(null);
@@ -292,7 +297,7 @@ function ClassDetail({ id }: { id: string }) {
   if (error) return <><PageHeader crumbs={crumbs} title="Clase"/>{/404/.test(error) || error.includes("no está disponible") ? <EmptyState icon="calendar" title="No encontramos esa clase" action={<Link className="button secondary" href={page}>Ver el cronograma</Link>}/> : <ErrorState error={error} retry={() => void load()}/>}</>;
   if (!detail) return <><PageHeader crumbs={crumbs} title={<span className="skeleton-title">Clase</span>}/><Loading label="Abriendo clase…" lines={6}/></>;
   const { session, lessons, resources } = detail;
-  const editable = writable && detail.groupActive;
+  const editable = teaches(session.groupId) && detail.groupActive;
   async function act(action: "start" | "complete" | "cancel" | "restore") {
     if (action === "cancel" && !await confirm({ title: "¿Cancelar esta clase?", body: <p>Queda en el cronograma como cancelada y deja de aparecer en las próximas clases de la sección y de sus estudiantes. Puedes reprogramarla después.</p>, confirm: "Cancelar clase", cancel: "Volver", danger: true })) return;
     setBusy(true);
@@ -338,7 +343,7 @@ function ClassDetail({ id }: { id: string }) {
             <button type="button" className="link-button" onClick={() => setPreview(item)}><Icon name={kindIcon[item.kind]} size={16}/>{item.title}</button>
             {!item.available && <StatusBadge tone="warning">No disponible para estudiantes</StatusBadge>}
           </li>)}</ul> : <p className="muted">{lessons.length ? "Las lecciones no usan recursos de la biblioteca." : "Los recursos llegan con las lecciones."}</p>}
-          {lessons.length > 0 && writable && <p className="muted small">Se agregan o quitan en cada lección, desde Contenido.</p>}
+          {lessons.length > 0 && editable && <p className="muted small">Se agregan o quitan en cada lección, desde Contenido.</p>}
         </Section>
         <Notes detail={detail} editable={editable && session.status !== "cancelled"} onSaved={load}/>
       </div>
@@ -374,7 +379,7 @@ function Notes({ detail, editable, onSaved }: { detail: Detail; editable: boolea
 }
 
 function Sheet({ sessionId, status, initial, writable, groupId, onSaved }: { sessionId: string; status: ClassStatus; initial: Row[]; writable: boolean; groupId: string; onSaved: () => Promise<void> }) {
-  const { course } = useCourse();
+  const { course, configurable } = useCourse();
   const { toast } = useFeedback();
   const [rows, setRows] = useState<Row[]>(initial), [saved, setSaved] = useState<Row[]>(initial), [busy, setBusy] = useState(false);
   useEffect(() => { setRows(initial); setSaved(initial); }, [initial]);
@@ -400,7 +405,7 @@ function Sheet({ sessionId, status, initial, writable, groupId, onSaved }: { ses
       <div><h2 id="sheet-title">{title}</h2><p className="muted">{status === "completed" ? "Puedes corregir una marca y volver a guardar." : status === "planned" ? "Al guardar la lista, la clase queda en curso." : "Marca a cada estudiante y guarda antes de finalizar."}</p></div>
       <StatusBadge tone={dirty ? "warning" : complete ? "success" : "neutral"}>{dirty ? "Cambios sin guardar" : complete ? "Guardada" : "Sin registrar"}</StatusBadge>
     </header>
-    {!rows.length ? <EmptyState compact icon="users" title="Esta sección no tiene estudiantes" action={writable && <Link className="button secondary" href={`/cursos/${course.id}/asignaciones#seccion-${groupId}`}>Asignar estudiantes</Link>}/> : <>
+    {!rows.length ? <EmptyState compact icon="users" title="Esta sección no tiene estudiantes" action={configurable && <Link className="button secondary" href={`/cursos/${course.id}/asignaciones#seccion-${groupId}`}>Asignar estudiantes</Link>}>{configurable ? undefined : "Administración asigna los estudiantes de la sección."}</EmptyState> : <>
       <p className="attendance-counts" aria-live="polite">{counts.map(([label, count]) => <span key={label}><strong>{count}</strong> {label.toLowerCase()}</span>)}</p>
       {writable && pending > 0 && <button type="button" className="button ghost small" onClick={() => setRows(rows.map(row => row.status === "unmarked" ? { ...row, status: "present" } : row))}><Icon name="check" size={16}/>Marcar {plural(pending, "pendiente", "pendientes")} como presente</button>}
       <ol className="attendance-list">{rows.map((row, index) => <li key={row.learnerId}>

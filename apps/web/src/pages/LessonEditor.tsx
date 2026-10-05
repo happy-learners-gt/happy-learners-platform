@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
 import type { Activity, ActivityBlock, LearningOutcome, Lesson, Material, Resource, RichTextDocument, SequenceTemplate } from "@happy-learners/contracts";
 import { blockKinds, groupings, outcomeCodes, phaseOf, publishChecklist, purposes, resourceIdsOf, sequenceOf, sequenceTemplates, studentActivities, suggestedResources } from "@happy-learners/domain";
 import type { CheckItem } from "@happy-learners/domain";
@@ -13,7 +14,7 @@ import { Link, useNavigation, useUnsavedChanges } from "../navigation";
 import { useSession } from "../session";
 import { blockHue, blockKindLabel, changeSequence, draftOf, draftProblem, lessonBody, lessonState, lessonStateLabel, newBlock, orderByPhase, phaseHue, plural, timeAgo, usage } from "../model";
 import type { LessonDraft } from "../model";
-import { useFeedback } from "../ui/feedback";
+import { Modal, useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import type { IconName } from "../ui/icons";
 import { stateTone } from "../ui/LessonOutline";
@@ -33,13 +34,13 @@ const AUTOSAVE_MS = 1000;
 const scrollBehavior = (): ScrollBehavior => matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
 
 export function LessonEditor({ lessonId }: { lessonId: string }) {
-  const { course, units, lessons, materials, legacyResources, curriculum, writable, reload, noun, settings } = useCourse();
+  const { course, units, lessons, materials, legacyResources, curriculum, writable, publisher, reload, noun, settings } = useCourse();
   const { member } = useSession();
   const { url, navigate } = useNavigation();
   const { toast, confirm } = useFeedback();
   const [lesson, setLesson] = useState<Lesson | null>(null), [draft, setDraft] = useState<LessonDraft | null>(null), [loadError, setLoadError] = useState<ApiError | null>(null);
   const [save, setSave] = useState<Save>({ state: "saved" });
-  const [selected, setSelected] = useState("details"), [publishing, setPublishing] = useState(false), [activeEditor, setActiveEditor] = useState<Editor | null>(null);
+  const [selected, setSelected] = useState("details"), [publishing, setPublishing] = useState(false), [activeEditor, setActiveEditor] = useState<Editor | null>(null), [reviewing, setReviewing] = useState<"send" | "return" | null>(null);
   const [collaboration, setCollaboration] = useState<CollaborationProvider | null>(null), [collabStatus, setCollabStatus] = useState<CollaborationStatus>("closed"), [editors, setEditors] = useState<string[]>([]);
   const [, tick] = useState(0);
   const version = useRef<number | undefined>(undefined), changes = useRef(0), savedChanges = useRef(0), dirtyKeys = useRef(new Set<keyof LessonDraft>()), conflicts = useRef(0);
@@ -52,11 +53,11 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
   const open = useCallback(async () => {
     setLoadError(null);
     try {
-      const { lesson: loaded } = await api<{ lesson: Lesson }>(writable ? `/lessons/${lessonId}?draft=1` : `/lessons/${lessonId}`);
+      const { lesson: loaded } = await api<{ lesson: Lesson }>(`/lessons/${lessonId}?draft=1`);
       if (loaded.courseId !== course.id) throw new ApiError("Esta lección pertenece a otro curso.", 404);
       setLesson(loaded); setDraft(draftOf(loaded)); version.current = loaded.draftVersion; setSave({ state: "saved", at: loaded.updatedAt });
     } catch (error) { setLoadError(error instanceof ApiError ? error : new ApiError(message(error), 0)); }
-  }, [lessonId, course.id, writable]);
+  }, [lessonId, course.id]);
   useEffect(() => { void open(); }, [open]);
 
   // Live co-editing of rich text; structure and metadata are saved with version control.
@@ -236,24 +237,46 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     update({ sequence, activities: changeSequence(draft!.activities, draft!.sequence, sequence) });
     if (draft!.activities.length) toast({ tone: "info", message: `Las actividades se ordenaron en los momentos de «${sequenceOf(sequence).label}». Revisa que cada una esté donde corresponde.` });
   }
-  async function publish() {
-    if (problem) { toast({ tone: "error", message: problem.message }); setSelected(problem.target === "title" ? "details" : problem.target); return; }
-    if (!draft!.activities.length) { toast({ tone: "error", message: "Agrega al menos una actividad antes de publicar." }); return; }
+  /** The same checks guard publishing and sending to review: the lead receives lessons ready to publish. */
+  async function ready(verb: "publicar" | "enviar") {
+    if (problem) { toast({ tone: "error", message: problem.message }); setSelected(problem.target === "title" ? "details" : problem.target); return false; }
+    if (!draft!.activities.length) { toast({ tone: "error", message: `Agrega al menos una actividad antes de ${verb}.` }); return false; }
     // What the course's configuration requires blocks publishing; the rest are recommendations.
     const items = publishChecklist(draftLesson(), curriculum), required = requiredChecks(settings);
     const missing = items.find(item => !item.ok && required.has(item.id));
-    if (missing) { toast({ tone: "error", message: `Este curso exige: ${missing.label.toLowerCase()}. ${missing.hint}` }); goTo("details"); return; }
+    if (missing) { toast({ tone: "error", message: `Este curso exige: ${missing.label.toLowerCase()}. ${missing.hint}` }); goTo("details"); return false; }
     const open = items.filter(item => !item.ok);
-    if (open.length && !await confirm({ title: "¿Publicar con recomendaciones pendientes?", body: <><p>Antes de publicar, revisa:</p><ul className="check-list">{open.map(item => <li key={item.id}><Icon name="info" size={16}/><span><strong>{item.label}.</strong> {item.hint}</span></li>)}</ul></>, confirm: "Publicar de todos modos", cancel: "Revisar" })) { goTo("details"); return; }
+    if (open.length && !await confirm({ title: verb === "publicar" ? "¿Publicar con recomendaciones pendientes?" : "¿Enviar con recomendaciones pendientes?", body: <><p>Antes de {verb === "publicar" ? "publicar" : "enviar a revisión"}, revisa:</p><ul className="check-list">{open.map(item => <li key={item.id}><Icon name="info" size={16}/><span><strong>{item.label}.</strong> {item.hint}</span></li>)}</ul></>, confirm: verb === "publicar" ? "Publicar de todos modos" : "Continuar", cancel: "Revisar" })) { goTo("details"); return false; }
+    return true;
+  }
+  async function refresh() {
+    const { lesson: fresh } = await api<{ lesson: Lesson }>(`/lessons/${lessonId}?draft=1`);
+    setLesson(fresh); version.current = fresh.draftVersion;
+    return fresh;
+  }
+  async function publish() {
+    if (!await ready("publicar")) return;
     setPublishing(true);
     try {
       if (!await flush()) throw new Error("No pudimos guardar los últimos cambios.");
-      await api(`/lessons/${lessonId}/publish`, "POST");
-      const { lesson: fresh } = await api<{ lesson: Lesson }>(`/lessons/${lessonId}?draft=1`);
-      setLesson(fresh); version.current = fresh.draftVersion;
-      toast({ message: "Lección publicada. Los estudiantes ya ven esta versión.", action: fresh.shareCode ? { label: "Copiar enlace", onSelect: () => void copyLink(fresh.shareCode!) } : undefined });
+      const approving = lesson?.review?.status === "pending";
+      // Publishes exactly the version on screen: if someone saved a change since, the server asks to review it first.
+      await api(`/lessons/${lessonId}/publish?draftVersion=${version.current}`, "POST");
+      const fresh = await refresh();
+      void reload();
+      toast({ message: approving ? "Revisión aprobada y lección publicada. Los estudiantes ya ven esta versión." : "Lección publicada. Los estudiantes ya ven esta versión.", action: fresh.shareCode ? { label: "Copiar enlace", onSelect: () => void copyLink(fresh.shareCode!) } : undefined });
     } catch (error) { toast({ tone: "error", message: `${message(error)} Revisa las actividades y vuelve a intentar.` }); }
     finally { setPublishing(false); }
+  }
+  async function sendToReview() {
+    if (!await ready("enviar")) return;
+    if (!await flush()) { toast({ tone: "error", message: "No pudimos guardar los últimos cambios. Vuelve a intentar." }); return; }
+    setReviewing("send");
+  }
+  async function decide(kind: "send" | "return", note: string) {
+    await api(kind === "send" ? `/lessons/${lessonId}/review` : `/lessons/${lessonId}/review/return`, "POST", { note });
+    await refresh(); void reload(); setReviewing(null);
+    toast({ message: kind === "send" ? "Lección enviada a revisión. La persona responsable del curso la publicará." : "Lección devuelta con tus comentarios." });
   }
   async function copyLink(code: string) {
     const link = `${location.origin}/aprender/${code}`;
@@ -300,10 +323,15 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     <LessonPlayer lesson={previewLesson} preview resources={available} fileUrl={id => `/api/courses/${course.id}/files/${id}/content`} onExit={() => navigate(`${base}/lecciones/${lessonId}`, true)}/>
   </div>;
 
+  const review = lesson.review, pendingReview = review?.status === "pending";
+  // The lead publishes; the rest of the team sends the lesson to review. Archiving and restoring are the lead's.
   const primary = !writable ? undefined
-    : state === "archived" ? <PrimaryAction icon="archive" onClick={() => void archive(false)}>Restaurar lección</PrimaryAction>
+    : state === "archived" ? publisher ? <PrimaryAction icon="archive" onClick={() => void archive(false)}>Restaurar lección</PrimaryAction> : undefined
+    : publisher && pendingReview ? <PrimaryAction icon="check" busy={publishing} disabled={publishing} onClick={() => void publish()}>{publishing ? "Publicando…" : "Aprobar y publicar"}</PrimaryAction>
     : state === "published" && lesson.shareCode ? <PrimaryAction icon="copy" onClick={() => void copyLink(lesson.shareCode!)}>Copiar enlace</PrimaryAction>
-    : <PrimaryAction icon="check" busy={publishing} disabled={publishing} onClick={() => void publish()}>{publishing ? "Publicando…" : state === "changes" ? "Publicar cambios" : "Publicar"}</PrimaryAction>;
+    : publisher ? <PrimaryAction icon="check" busy={publishing} disabled={publishing} onClick={() => void publish()}>{publishing ? "Publicando…" : pendingReview ? "Aprobar y publicar" : state === "changes" ? "Publicar cambios" : "Publicar"}</PrimaryAction>
+    : pendingReview ? undefined
+    : <PrimaryAction icon="send" onClick={() => void sendToReview()}>{review?.status === "returned" ? "Volver a enviar a revisión" : "Enviar a revisión"}</PrimaryAction>;
   const goTo = (id: string, focus = true) => {
     setSelected(id);
     const card = document.getElementById(id === "details" ? "lesson-details" : `card-${id}`);
@@ -327,14 +355,18 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
           <Menu label="Más acciones de la lección" items={[
             ...(lesson.revision && lesson.shareCode && !draft.archived ? [{ label: "Abrir como estudiante", icon: "eye" as const, onSelect: () => window.open(`/aprender/${lesson.shareCode}`, "_blank", "noopener") }, { label: "Copiar enlace", icon: "copy" as const, onSelect: () => void copyLink(lesson.shareCode!) }] : []),
             { label: "Volver al contenido", icon: "back", onSelect: () => navigate(`${base}/contenido`) },
-            ...(writable && !draft.archived ? ["separator" as const, { label: "Archivar lección", icon: "archive" as const, danger: true, onSelect: () => void archive(true) }] : []),
+            ...(publisher && pendingReview ? [{ label: "Devolver con comentarios", icon: "undo" as const, onSelect: () => setReviewing("return") }] : []),
+            ...(writable && !publisher && pendingReview ? [{ label: "Actualizar el envío", icon: "send" as const, onSelect: () => void sendToReview() }] : []),
+            ...(publisher && !draft.archived ? ["separator" as const, { label: "Archivar lección", icon: "archive" as const, danger: true, onSelect: () => void archive(true) }] : []),
           ]}/>
           </div>
         </div>
       </div>
-      {writable && state === "changes" && <p className="draft-note"><Icon name="info" size={16}/>Tus cambios se guardan como borrador. Los estudiantes siguen viendo la versión publicada hasta que elijas <strong>Publicar cambios</strong>.</p>}
+      {writable && state === "changes" && !review && <p className="draft-note"><Icon name="info" size={16}/>Tus cambios se guardan como borrador. Los estudiantes siguen viendo la versión publicada hasta que {publisher ? <>elijas <strong>Publicar cambios</strong></> : "la persona responsable del curso los publique"}.</p>}
+      {review && !draft.archived && <ReviewBanner review={review} publisher={publisher} writable={writable} onReturn={() => setReviewing("return")}/>}
       {editors.length > 0 && <p className="presence"><Icon name="users" size={16}/>También editando: {[...new Set(editors)].map(name => name === member.username ? `${name} (otra sesión)` : name).join(", ")}</p>}
-      {!writable && <p className="notice"><Icon name="info" size={18}/>{course.status === "archived" ? "El curso está archivado: la lección se muestra en modo lectura." : "Estás viendo la versión publicada. Solo educadores pueden editarla."}</p>}
+      {!writable && <p className="notice"><Icon name="info" size={18}/>{course.status === "archived" ? "El curso está archivado: la lección se muestra en modo lectura." : "Estás viendo el borrador más reciente. Solo el equipo docente del curso edita sus lecciones."}</p>}
+      {reviewing && <ReviewDialog kind={reviewing} onClose={() => setReviewing(null)} onSubmit={note => decide(reviewing, note)}/>}
     </header>
     <div className="editor-layout">
       <nav className="activity-outline" aria-label="Estructura de la lección">
@@ -555,4 +587,38 @@ function Checklist({ items, required, planHref, settingsHref }: { items: CheckIt
       <span className="sr-only">{item.ok ? "Listo" : "Pendiente"}</span>
     </li>)}</ul>
   </section>;
+}
+
+/** Where the lesson's review stands: waiting for the lead, or returned with what to change. */
+function ReviewBanner({ review, publisher, writable, onReturn }: { review: NonNullable<Lesson["review"]>; publisher: boolean; writable: boolean; onReturn: () => void }) {
+  if (review.status === "returned") return <div className="review-banner is-returned" role="status">
+    <Icon name="undo" size={18}/><div><strong>{review.decidedByName || "La persona responsable"} devolvió la lección {timeAgo(review.decidedAt || review.requestedAt)}.</strong>
+      {review.decisionNote && <p>«{review.decisionNote}»</p>}
+      {writable && !publisher && <p className="muted small">Haz los ajustes y vuelve a enviarla a revisión.</p>}</div>
+  </div>;
+  return <div className="review-banner" role="status">
+    <Icon name="send" size={18}/><div><strong>{review.requestedByName} la envió a revisión {timeAgo(review.requestedAt)}.</strong>
+      {review.note && <p>«{review.note}»</p>}
+      <p className="muted small">{publisher ? "Revisa el borrador y elige Aprobar y publicar, o devuélvela con tus comentarios." : "La persona responsable del curso la publicará. Si sigues editando, tus cambios se incluyen en la revisión."}</p></div>
+    {publisher && <Button icon="undo" onClick={onReturn}>Devolver</Button>}
+  </div>;
+}
+
+function ReviewDialog({ kind, onClose, onSubmit }: { kind: "send" | "return"; onClose: () => void; onSubmit: (note: string) => Promise<void> }) {
+  const [note, setNote] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const send = kind === "send";
+  async function submit(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError("");
+    try { await onSubmit(note.trim()); } catch (cause) { setError(message(cause)); setBusy(false); }
+  }
+  return <Modal title={send ? "Enviar a revisión" : "Devolver con comentarios"} onClose={onClose}>
+    <form className="stack" onSubmit={submit}>
+      {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
+      <fieldset disabled={busy} className="stack">
+        <p className="muted">{send ? "La persona responsable del curso revisa el borrador y lo publica, o te lo devuelve con comentarios." : "La lección vuelve a quien la envió, con tus comentarios. La versión publicada no cambia."}</p>
+        <Field label={send ? "Nota para la persona responsable" : "Qué debe cambiar"} optional={send}><textarea rows={3} maxLength={600} value={note} required={!send} autoFocus onChange={event => setNote(event.target.value)} placeholder={send ? "Ej. Agregué la actividad de cierre y la rúbrica." : "Ej. Falta una pregunta que evalúe el resultado 2."}/></Field>
+        <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">{busy ? "Enviando…" : send ? "Enviar a revisión" : "Devolver"}</button></div>
+      </fieldset>
+    </form>
+  </Modal>;
 }
