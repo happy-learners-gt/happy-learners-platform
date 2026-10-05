@@ -61,7 +61,7 @@ export function CourseProgressList({ courses, userId, compact }: { courses: Cour
         <Bar label="Resultados evaluados" value={item.assessed} max={item.outcomes} text={item.outcomes ? `${item.assessed} de ${item.outcomes}` : "Sin plan"}/>
         <Bar label="Asistencia" value={item.attendanceRate || 0} max={100} text={item.attendanceRate === null ? "Sin clases" : `${item.attendanceRate} % · ${plural(item.sessions, "clase", "clases")}`}/>
       </div>
-      <p className="muted small">{plural(item.learners, "participante", "participantes")}{item.changes ? ` · ${plural(item.changes, "lección con cambios", "lecciones con cambios")} sin publicar` : ""}{item.lastActivity ? ` · actividad ${timeAgo(item.lastActivity)}` : ""}</p>
+      <p className="muted small">{plural(item.learners, "estudiante asignado", "estudiantes asignados")}{item.changes ? ` · ${plural(item.changes, "lección con cambios", "lecciones con cambios")} sin publicar` : ""}{item.lastActivity ? ` · actividad ${timeAgo(item.lastActivity)}` : ""}</p>
     </li>;
   })}</ul>;
 }

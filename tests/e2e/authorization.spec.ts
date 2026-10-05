@@ -60,15 +60,18 @@ test("HL-140 ST-096: only the course's teaching team reaches its groups, learner
   expect(roster.length).toBeGreaterThan(0);
 
   const requests = (api: APIRequestContext) => [
-    () => api.get(`${course}/groups`), () => api.get(`${course}/sessions`), () => api.get(`${course}/assignments`), () => api.get(attendance),
-    () => api.post(`${course}/groups`, { data: { name: "Grupo no autorizado" } }),
+    () => api.get(`${course}/groups`), () => api.get(`${course}/sessions`), () => api.get(attendance),
+    () => api.post(`${course}/groups`, { data: { name: "Sección no autorizada" } }),
     () => api.post(`${course}/groups/${groups[0].id}/learners`, { data: { displayName: "Estudiante no autorizado" } }),
     () => api.post(`${course}/sessions`, { data: { groupId: groups[0].id, sessionDate: "2026-10-05" } }),
     () => api.put(attendance, { data: { marks: roster.map(row => ({ learnerId: row.learnerId, status: "absent" })) } }),
     () => api.get(`${course}/sessions/${sessions[0].id}`),
     () => api.put(`${course}/sessions/${sessions[0].id}`, { data: { sessionDate: "2026-10-05", version: 1 } }),
+    () => api.put(`${course}/sessions/${sessions[0].id}/lesson`, { data: { lessonId: null, version: 1 } }),
+    () => api.put(`${course}/groups/${groups[0].id}/schedule`, { data: { weekdays: [1], startsAt: "08:00", durationMinutes: 45, from: "2026-10-05", until: "2026-10-30" } }),
+    () => api.delete(`${course}/groups/${groups[0].id}/schedule`), () => api.post(`${course}/groups/${groups[0].id}/lessons`),
     ...["start", "complete", "cancel", "restore"].map(action => () => api.post(`${course}/sessions/${sessions[0].id}/${action}`)),
-    () => api.put(`${course}/groups/${groups[0].id}`, { data: { name: "Grupo renombrado sin permiso" } }),
+    () => api.put(`${course}/groups/${groups[0].id}`, { data: { name: "Sección renombrada sin permiso" } }),
     () => api.post(`${course}/groups/${groups[0].id}/code`), () => api.delete(`${course}/groups/${groups[0].id}/code`),
     () => api.put(`${course}/groups/${groups[0].id}/learners/${groups[0].learners[0].id}`, { data: { status: "archived" } }),
   ];
@@ -104,16 +107,19 @@ test("HL-140 ST-096: only the course's teaching team reaches its groups, learner
   expect((await outsider.post(`${course}/groups/${groups[0].id}/code`)).status()).toBe(403);
 });
 
-test("HL-140 ST-096: educators outside the team see no groups or attendance in the course", async ({ page }) => {
+test("HL-140 ST-096: educators outside the team see no sections, schedule or attendance in the course", async ({ page }) => {
   await signIn(page, "educador-demo", "/cursos/seed-course-matematicas");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Matemáticas 3.º primaria");
   await openNavigation(page);
   const nav = page.getByRole("navigation", { name: "Navegación del curso" });
-  for (const name of ["Clases", "Grupos", "Cronograma"]) await expect(nav.getByRole("link", { name, exact: true })).toHaveCount(0);
+  for (const name of ["Clases", "Asignaciones", "Horario"]) await expect(nav.getByRole("link", { name, exact: true })).toHaveCount(0);
   await page.goto("/cursos/seed-course-matematicas/clases");
   await expect(page.getByRole("heading", { name: "Solo el equipo docente del curso" })).toBeVisible();
   // The team still works with them.
-  await signIn(page, "lucia.herrera", "/cursos/seed-course-matematicas/grupos");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Grupos");
+  await signIn(page, "lucia.herrera", "/cursos/seed-course-matematicas/asignaciones");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Asignaciones");
   await expect(page.locator(".group-card").first()).toBeVisible();
+  await page.goto("/cursos/seed-course-matematicas/horario");
+  await expect(page.locator(".timetable")).toContainText("08:00");
+  await expect(page.locator(".timetable")).toContainText("3.º A");
 });

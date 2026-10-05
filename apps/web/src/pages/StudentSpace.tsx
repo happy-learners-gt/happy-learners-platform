@@ -17,9 +17,9 @@ export function StudentSpace() {
   }
   useEffect(() => { void load(); }, []);
   async function leave() { await api("/student/logout", "POST").catch(() => undefined); navigate("/inicio"); }
-  if (missing) return <main id="main" className="student-page"><EmptyState level={1} icon="users" title="Escribe el código de tu grupo" action={<Link className="button primary" href="/inicio">Ir al inicio</Link>}>El acceso terminó o el código cambió. Pídele el código actual a tu educador.</EmptyState></main>;
-  if (error) return <main id="main" className="student-page"><h1>Mi grupo</h1><ErrorState error={error} retry={() => void load()}/></main>;
-  if (!space) return <main id="main" className="student-page"><p role="status" className="sr-only">Abriendo tu grupo…</p><Loading label="Abriendo tu grupo…" lines={6}/></main>;
+  if (missing) return <main id="main" className="student-page"><EmptyState level={1} icon="users" title="Escribe el código de tu sección" action={<Link className="button primary" href="/inicio">Ir al inicio</Link>}>El acceso terminó o el código cambió. Pídele el código actual a tu educador.</EmptyState></main>;
+  if (error) return <main id="main" className="student-page"><h1>Mi sección</h1><ErrorState error={error} retry={() => void load()}/></main>;
+  if (!space) return <main id="main" className="student-page"><p role="status" className="sr-only">Abriendo tu sección…</p><Loading label="Abriendo tu sección…" lines={6}/></main>;
   return <main id="main" className="student-page">
     <div className="student-top">
       <span className="welcome-date">{space.organization}</span>
@@ -28,10 +28,10 @@ export function StudentSpace() {
     <header><h1>{space.group.name}</h1><p className="page-description">{space.course.title}</p></header>
     <section className="student-next" aria-labelledby="next-title">
       <span className="eyebrow">Próxima clase</span>
-      {space.next ? <ClassCard item={space.next} today={space.today} headingId="next-title" big/> : <><h2 id="next-title">No hay clases programadas</h2><p className="muted">Cuando tu educador planifique la siguiente clase, aparecerá aquí con sus recursos.</p></>}
+      {space.next ? <ClassCard item={space.next} today={space.today} headingId="next-title" big/> : <><h2 id="next-title">No hay clases programadas</h2><p className="muted">Cuando tu educador programe la siguiente clase, aparecerá aquí con su lección y sus recursos.</p></>}
     </section>
     {space.lessons.length > 0 && <section aria-labelledby="lessons-title" className="stack">
-      <h2 id="lessons-title">Lecciones del cronograma</h2>
+      <h2 id="lessons-title">Lecciones de tus clases</h2>
       <ul className="student-resources">{space.lessons.map(lesson => <li key={lesson.shareCode}><Link href={`/aprender/${lesson.shareCode}`}><Icon name="play" size={16}/>{lesson.title}</Link></li>)}</ul>
     </section>}
     {space.upcoming.length > 0 && <section aria-labelledby="upcoming-title" className="stack">
@@ -42,7 +42,7 @@ export function StudentSpace() {
       <h2 id="recent-title">Clases anteriores</h2>
       <ol className="student-classes">{space.recent.map(item => <li key={item.id}><ClassCard item={item} today={space.today}/></li>)}</ol>
     </section>}
-    <p className="login-privacy"><Icon name="shield" size={16}/>Solo ves las clases de tu grupo. No guardamos tu nombre ni tus datos.</p>
+    <p className="login-privacy"><Icon name="shield" size={16}/>Solo ves las clases de tu sección. No guardamos tu nombre ni tus datos.</p>
   </main>;
 }
 

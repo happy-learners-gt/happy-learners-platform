@@ -57,7 +57,7 @@ it("validates competencies and outcomes and codes active outcomes in order", () 
   expect(outcomeInput({ statement: "Saluda", level: "memorize", status: "active" })).toBeNull();
   expect([...outcomeCodes(curriculum.outcomes)]).toEqual([["a", "RA1"], ["b", "RA2"], ["c", "RA3"]]);
 });
-it("maps coverage: planned, taught and assessed, with the gaps to close", () => {
+it("ST-100 maps coverage: planned, taught, assessed and delivered in completed classes, with the gaps to close", () => {
   const lessons = [
     lesson("l1", "u1", { outcomeIds: ["a"], activities: [{ id: "x", title: "Quiz", minutes: 5, instructions: "", outcomeIds: ["a"], blocks: [{ id: "q", kind: "question", instructions: "¿?", options: ["1", "2"], answer: 0 }] }] }),
     lesson("l2", "u2", { outcomeIds: ["b"], activities: [{ id: "y", title: "Leer", minutes: 5, instructions: "", purpose: "explain", blocks: [{ id: "t", kind: "text", instructions: "Hola" }] }] }),
@@ -70,7 +70,10 @@ it("maps coverage: planned, taught and assessed, with the gaps to close", () => 
     ["RA3", [], [], [], ["no-unit", "no-lesson"]],
   ]);
   expect(map.units.map(item => [item.unit.id, item.missing])).toEqual([["u1", ["b"]], ["u2", []]]);
-  expect(map.summary).toEqual({ total: 3, taught: 2, assessed: 1, gaps: 2 });
+  expect(map.summary).toEqual({ total: 3, taught: 2, assessed: 1, delivered: 0, gaps: 2 });
+  const delivered = coverage(curriculum, [unit("u1", 0), unit("u2", 1)], lessons, ["l2", "gone"]);
+  expect(delivered.outcomes.map(item => [item.code, item.deliveredIn])).toEqual([["RA1", []], ["RA2", ["l2"]], ["RA3", []]]);
+  expect(delivered.summary.delivered).toBe(1);
 });
 it("recommends before publishing and suggests resources from lessons with the same outcomes", () => {
   const draft = lesson("l1", "u1", { sequence: "start-develop-close", duration: 20, activities: [{ id: "x", title: "Inicio", minutes: 5, instructions: "", phase: "start", blocks: [{ id: "t", kind: "text", instructions: "Hola" }] }] });

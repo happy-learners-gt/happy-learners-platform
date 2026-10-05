@@ -4,37 +4,43 @@ import { E2E_PREFIX, courseNav, e2eName, openNavigation, origin, sessionToken, s
 const course = "course-exploradores";
 const day = (offset: number) => { const date = new Date(); date.setDate(date.getDate() + offset); return date.toLocaleDateString("en-CA"); };
 
-test("HL-61 ST-035 ST-097 ST-098: an educator plans and teaches a class; the group follows it with its code", async ({ page }, info) => {
+test("HL-61 ST-035 ST-097 ST-098: an educator assigns students, teaches a class with its lesson, and the section follows it with its code", async ({ page }, info) => {
   const group = e2eName(info, "Clase"), first = `${E2E_PREFIX} Ana`, second = `${E2E_PREFIX} Beto`;
-  await signIn(page, "educador-demo", `/cursos/${course}/grupos`);
-  await page.getByRole("button", { name: "Crear grupo", exact: true }).click();
-  const form = page.getByRole("form", { name: "Nuevo grupo" });
-  await form.getByLabel("Nombre del grupo").fill(group);
-  await form.getByRole("button", { name: "Crear grupo" }).click();
+  await signIn(page, "educador-demo", `/cursos/${course}/asignaciones`);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Asignaciones");
+  await page.getByRole("button", { name: "Nueva sección", exact: true }).click();
+  const form = page.getByRole("form", { name: "Nueva sección" });
+  await form.getByLabel("Nombre de la sección").fill(group);
+  await form.getByRole("button", { name: "Crear sección" }).click();
   const card = page.locator(".group-card").filter({ has: page.getByRole("heading", { name: group, exact: true }) });
   for (const learner of [first, second]) {
     await card.getByLabel(`Nombre o código de lista para ${group}`).fill(learner);
-    await card.getByRole("button", { name: "Agregar" }).click();
+    await card.getByRole("button", { name: "Asignar" }).click();
     await expect(card.getByText(learner, { exact: true })).toBeVisible();
   }
   await card.getByRole("button", { name: "Generar código" }).click();
-  const code = (await card.getByLabel(`Código del grupo ${group}`).textContent())!.trim();
+  const code = (await card.getByLabel(`Código de la sección ${group}`).textContent())!.trim();
   expect(code).toMatch(/^DG-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
 
-  // Plan today's class with a lesson and a library resource.
-  await card.getByRole("button", { name: "Planificar clase" }).click();
-  const groupId = new URL(page.url()).searchParams.get("grupo")!;
-  let dialog = page.getByRole("dialog", { name: "Planificar clase" });
+  await expect(card).toContainText("Sin horario.");
+
+  // Add today's class with a lesson: its resources are the lesson's, without choosing them again.
+  await card.getByRole("link", { name: "Ver clases" }).click();
+  await expect(page).toHaveURL(/\/clases\?seccion=group-/);
+  const groupId = new URL(page.url()).searchParams.get("seccion")!;
+  await page.getByRole("button", { name: "Agregar clase" }).click();
+  let dialog = page.getByRole("dialog", { name: "Agregar clase" });
+  await expect(dialog.getByLabel("Sección").locator("option:checked")).toContainText(group);
+  await expect(dialog.getByRole("checkbox")).toHaveCount(0);
   await dialog.getByLabel("Hora").fill("08:00");
   await dialog.getByLabel("Lección").selectOption({ label: "Greetings and Introductions" });
-  await dialog.getByRole("checkbox", { name: /Greetings song/ }).check();
-  await dialog.getByRole("button", { name: "Planificar clase" }).click();
+  await dialog.getByRole("button", { name: "Agregar clase" }).click();
   await expect(page).toHaveURL(/\/clases\/class-/);
   await expect(page.locator(".page-meta .badge")).toHaveText("Hoy");
   await expect(page.locator(".class-side")).toContainText("Greetings and Introductions");
-  await expect(page.getByRole("heading", { name: "Recursos (1)" })).toBeVisible();
-  await page.locator(".class-side").getByRole("button", { name: "Greetings song" }).click();
-  await expect(page.getByRole("dialog")).toContainText("Hello! How are you?");
+  await expect(page.getByRole("heading", { name: "Recursos de la lección (1)" })).toBeVisible();
+  await page.locator(".class-side").getByRole("button", { name: "Introduce yourself" }).click();
+  await expect(page.getByRole("dialog")).toContainText("My name is Sunny");
   await page.keyboard.press("Escape");
 
   // Open the class, take attendance and finish it.
@@ -51,30 +57,33 @@ test("HL-61 ST-035 ST-097 ST-098: an educator plans and teaches a class; the gro
   await expect(page.getByRole("radiogroup", { name: second }).getByLabel("Ausente")).toBeChecked();
   await expect(page.locator(".page-header")).toContainText("impartió");
 
-  // Plan the next class; the history and the indicators show the one just taught.
+  // Add the next class and choose its lesson from the list; the history and the indicators show the one just taught.
   await openNavigation(page);
   await courseNav(page).getByRole("link", { name: "Clases", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Clases");
-  await page.getByRole("button", { name: "Planificar clase" }).first().click();
-  dialog = page.getByRole("dialog", { name: "Planificar clase" });
-  await dialog.getByLabel("Grupo").selectOption(groupId);
+  await page.getByRole("button", { name: "Agregar clase" }).click();
+  dialog = page.getByRole("dialog", { name: "Agregar clase" });
+  await dialog.getByLabel("Sección").selectOption(groupId);
   await dialog.getByLabel("Fecha").fill(day(1));
   await dialog.getByLabel("Hora").fill("09:15");
-  await dialog.getByLabel("Lección").selectOption({ label: "Greetings and Introductions" });
-  await dialog.getByRole("checkbox", { name: /Introduce yourself/ }).check();
-  await dialog.getByRole("button", { name: "Planificar clase" }).click();
+  await dialog.getByRole("button", { name: "Agregar clase" }).click();
   await expect(page).toHaveURL(/\/clases\/class-/);
-  await page.goto(`/cursos/${course}/clases?vista=historial&grupo=${groupId}`);
+  await page.goto(`/cursos/${course}/clases?seccion=${groupId}`);
+  const lessonSelect = page.getByRole("combobox", { name: new RegExp(`^Lección de la clase del .* en ${group}$`) });
+  await lessonSelect.selectOption({ label: "Greetings and Introductions" });
+  await expect(toast(page)).toContainText("Lección asignada a la clase.");
+  await expect(lessonSelect.locator("option:checked")).toHaveText("Greetings and Introductions");
+  await page.goto(`/cursos/${course}/clases?vista=historial&seccion=${groupId}`);
   await expect(page.locator(".class-list li")).toHaveCount(1);
   await expect(page.locator(".class-list li").first()).toContainText("Impartida");
   await expect(page.locator(".class-list li").first()).toContainText(/1 de 2 presentes .*· publicación \d+ · impartió /);
   await expect(page.locator(".class-stats")).toContainText("%");
 
-  // The group enters with the code — no account — and sees the next class and its resources.
+  // The section enters with the code — no account — and sees the next class with its lesson's resources.
   await page.context().clearCookies();
   await page.goto("/inicio");
   const entry = page.getByRole("form", { name: "¿Eres estudiante?" });
-  await entry.getByLabel("Código de grupo o de lección").fill(code.toLowerCase());
+  await entry.getByLabel("Código de sección o de lección").fill(code.toLowerCase());
   await entry.getByRole("button", { name: "Abrir" }).click();
   await expect(page).toHaveURL(/\/estudiante$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(group);
@@ -89,15 +98,15 @@ test("HL-61 ST-035 ST-097 ST-098: an educator plans and teaches a class; the gro
   await expect(page).toHaveURL(/\/aprender\//);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Greetings");
 
-  // Disabling the code ends the group's access at once.
+  // Disabling the code ends the section's access at once.
   const educator = await sessionToken("educador-demo");
   const disabled = await fetch(`${origin}/api/courses/${course}/groups/${groupId}/code`, { method: "DELETE", headers: { Origin: origin, Cookie: `hl_session=${educator}` } });
   expect(disabled.status).toBe(200);
   await page.goto("/estudiante");
-  await expect(page.getByRole("heading", { name: "Escribe el código de tu grupo" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Escribe el código de tu sección" })).toBeVisible();
 });
 
-test("ST-098: the group code shows only that group's published content and its own files", async ({ page }) => {
+test("ST-098: the section code shows only that section's published content and its own files", async ({ page }) => {
   const login = (code: string) => fetch(`${origin}/api/student/login`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
   expect((await login("DG-ZZZZ-ZZZZ")).status).toBe(404);
   expect((await login("GREETINGS")).status).toBe(400);
@@ -109,7 +118,7 @@ test("ST-098: the group code shows only that group's published content and its o
   expect(space.group.name).toBeTruthy();
   expect(space.next).toBeTruthy();
   expect(JSON.stringify(space)).not.toMatch(/displayName|attendance|notes|taughtBy/);
-  // The group cookie is not an educator session.
+  // The section cookie is not an educator session.
   expect((await get("/api/courses")).status).toBe(401);
   expect((await get("/api/courses/seed-course-matematicas/groups")).status).toBe(401);
   expect((await get("/api/student/files/file-that-is-not-linked")).status).toBe(404);
@@ -128,7 +137,7 @@ test("HL-62 ST-036: the course shows upcoming classes with time and the history 
   await expect(upcoming.locator("li").first()).toContainText(/\d{2}:\d{2}/);
   await upcoming.getByRole("link").first().click();
   await expect(page).toHaveURL(/\/clases\/seed-/);
-  await expect(page.getByRole("heading", { name: "Lección" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Lección", exact: true })).toBeVisible();
   await page.goto("/cursos/seed-course-matematicas/clases?vista=historial");
   await expect(page.locator(".class-list li").filter({ hasText: "Impartida" }).first()).toContainText(/\d+ de \d+ presentes/);
   await expect(page.locator(".class-list li").filter({ hasText: "Sin registrar" }).first()).toBeVisible();
@@ -138,7 +147,7 @@ test("HL-62 ST-036: the course shows upcoming classes with time and the history 
   await expect(page).toHaveURL(/\/cursos\/seed-course-matematicas\/clases$/);
 });
 
-test("HL-61 ST-070: a group is renamed, loses a participant, closes without new classes and reopens", async ({}, info) => {
+test("HL-61 ST-070: a section is renamed, loses a student, closes without new classes and reopens", async ({}, info) => {
   const cookie = `hl_session=${await sessionToken("educador-demo")}`;
   const call = (method: string, path: string, data?: unknown) => fetch(`${origin}/api/courses/${course}${path}`, { method, headers: { Origin: origin, Cookie: cookie, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
   const studentLogin = (code: string) => fetch(`${origin}/api/student/login`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
@@ -155,11 +164,12 @@ test("HL-61 ST-070: a group is renamed, loses a participant, closes without new 
   const { accessCode } = await (await call("POST", `/groups/${id}/code`)).json() as { accessCode: string };
   expect((await studentLogin(accessCode)).status).toBe(200);
 
-  // A closed group keeps its history but takes no new classes, participants or student sessions.
+  // A closed section keeps its history but takes no new classes, students, schedule or student sessions.
   expect((await call("PUT", `/groups/${id}`, { status: "archived" })).status).toBe(200);
   expect((await group()).status).toBe("archived");
   expect((await call("POST", "/sessions", { groupId: id, sessionDate: day(1) })).status).toBe(400);
   expect((await call("POST", `/groups/${id}/learners`, { displayName: `${E2E_PREFIX} Tres` })).status).toBe(409);
+  expect((await call("PUT", `/groups/${id}/schedule`, { weekdays: [1], startsAt: "08:00", durationMinutes: 45, from: day(1), until: day(8) })).status).toBe(409);
   expect((await studentLogin(accessCode)).status).toBe(404);
 
   expect((await call("PUT", `/groups/${id}`, { status: "active" })).status).toBe(200);

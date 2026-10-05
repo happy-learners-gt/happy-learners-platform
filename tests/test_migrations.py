@@ -264,7 +264,6 @@ class UpgradeTests(unittest.TestCase):
         self.assertGreater(planned[0], 50)
         self.assertGreaterEqual(demo.execute("SELECT min(session_date) FROM class_sessions WHERE id LIKE 'seed-plan-%'").fetchone()[0], "2026-10-09")
         self.assertEqual(planned[0], planned[2])
-        self.assertEqual(planned[0], planned[3])
         self.assertEqual(demo.execute("SELECT count(*) FROM class_sessions s WHERE status='planned' AND NOT EXISTS(SELECT 1 FROM class_session_resources r WHERE r.session_id=s.id)").fetchone()[0], 0)
         self.assertEqual(demo.execute("SELECT count(*) FROM course_groups WHERE status='active' AND access_code IS NULL").fetchone()[0], 0)
         self.assertEqual(demo.execute("SELECT access_code FROM course_groups WHERE id='seed-group-mat-3a'").fetchone()[0], "DG-MATE-3A")
@@ -277,6 +276,29 @@ class UpgradeTests(unittest.TestCase):
         other = self.scoped("org-other")
         self.assertEqual(other.execute("SELECT count(*) FROM class_sessions").fetchone()[0], 0)
         self.assertEqual(other.execute("SELECT count(*) FROM class_session_resources").fetchone()[0], 0)
+
+    def test_section_schedule_comes_from_the_demo_classes_and_lessons_follow_content_order(self):
+        """0019: each demo section gets the weekly schedule of its classes; their lessons follow the course content."""
+        demo = self.scoped("org-demo")
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+        self.assertEqual(demo.execute("SELECT schedule_weekdays,schedule_starts_at,schedule_duration,schedule_from,schedule_until FROM course_groups WHERE id='seed-group-mat-3a'").fetchone(), ("1,3", "08:00", 45, "2026-10-12", "2026-11-25"))
+        self.assertEqual(demo.execute("SELECT schedule_weekdays FROM course_groups WHERE id='seed-group-art-k2'").fetchone()[0], "1,3,5")
+        self.assertEqual(demo.execute("SELECT count(*) FROM class_sessions WHERE id LIKE 'seed-plan-%' AND origin<>'schedule'").fetchone()[0], 0)
+        self.assertEqual(demo.execute("SELECT count(*) FROM class_sessions WHERE id NOT LIKE 'seed-plan-%' AND origin<>'manual'").fetchone()[0], 0)
+        ordered = [row[0] for row in demo.execute("SELECT l.id FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id WHERE u.course_id='seed-course-matematicas' AND u.status='active' AND l.archived=0 AND l.revision>0 ORDER BY u.position,l.position,l.id")]
+        given = [row[0] for row in demo.execute("SELECT lesson_id FROM class_sessions WHERE group_id='seed-group-mat-3a' AND origin='schedule' ORDER BY session_date")]
+        self.assertEqual(given[:len(ordered)], ordered)
+        self.assertTrue(all(lesson is None for lesson in given[len(ordered):]))
+        # Every generated class still points at a lesson of its own course, and v0.8.3 tables stay for a rollback.
+        self.assertEqual(demo.execute("SELECT count(*) FROM class_sessions s JOIN lessons l ON l.id=s.lesson_id JOIN learning_units u ON u.id=l.course_unit_id WHERE u.course_id<>s.course_id").fetchone()[0], 0)
+        for table in ("lesson_assignments", "class_session_resources"):
+            self.assertIsNotNone(demo.execute("SELECT name FROM sqlite_master WHERE name=?", (table,)).fetchone())
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("UPDATE class_sessions SET origin='imported' WHERE id=(SELECT id FROM class_sessions LIMIT 1)")
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("UPDATE course_groups SET schedule_duration=2 WHERE id='seed-group-mat-3a'")
+        other = self.scoped("org-other")
+        self.assertEqual(other.execute("SELECT count(*) FROM course_groups WHERE schedule_weekdays IS NOT NULL").fetchone()[0], 0)
 
     def test_class_planning_keeps_a_renamed_organization(self):
         db = sqlite3.connect(":memory:")

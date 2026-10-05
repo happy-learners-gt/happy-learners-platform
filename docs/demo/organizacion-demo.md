@@ -2,7 +2,7 @@
 
 El entorno de demostración incluye una organización completa y ficticia para recorrer todos los flujos.
 
-- **Datos:** personas, programas, cursos, plan curricular, módulos, lecciones, actividades, recursos, grupos, asistencia, finalizaciones e historial de quién hizo qué.
+- **Datos:** personas, programas, cursos, plan curricular, módulos, lecciones, actividades, recursos, secciones con horario, clases, asistencia, finalizaciones e historial de quién hizo qué.
 - **Origen:** la migración `0015_demo_organization.sql`, generada por `scripts/seed/build.mjs` desde `scripts/seed/content-*.mjs`.
 - **Garantías:** es determinista y solo escribe en la organización `org-demo`. Las pruebas comprueban que cada lección cumple las mismas reglas del editor y del servidor (`tests/seed.test.ts`, `tests/test_migrations.py`).
 
@@ -32,9 +32,9 @@ Todas las cuentas usan la contraseña **`Aprender-2026!`**. Son datos ficticios:
 | Exploradores | — | Curso libre · Idiomas | Contenido original; hueco curricular a propósito (un resultado sin módulo ni lecciones). |
 | Club de lectura 2025 | — | Seminario | **Archivado**: se consulta, no se edita; su lección publicada sigue disponible. |
 
-Cada curso activo tiene competencias, resultados, planificación por módulo, recursos etiquetados (enlaces reales a Khan Academy, PhET, NASA, British Council, Scratch, Code.org y Google Arts & Culture), lecciones con momentos, propósito, organización, bloques y notas para el docente, grupos con 12 a 20 participantes ficticios y clases de septiembre con asistencia. La migración `0018_class_planning.sql` agrega hora, duración y estado a cada clase, planifica las clases de cada grupo hasta el 27 de noviembre de 2026 con su lección y dos recursos de la biblioteca, y asigna a cada grupo activo un código para estudiantes:
+Cada curso activo tiene competencias, resultados, planificación por módulo, recursos etiquetados (enlaces reales a Khan Academy, PhET, NASA, British Council, Scratch, Code.org y Google Arts & Culture), lecciones con momentos, propósito, organización, bloques y notas para el docente, secciones con 12 a 20 estudiantes ficticios asignados y clases de septiembre con asistencia. La migración `0018_class_planning.sql` agrega hora, duración y estado a cada clase, programa las clases de cada sección hasta el 27 de noviembre de 2026 y asigna a cada sección activa un código para estudiantes. `0019_section_schedule.sql` guarda ese horario en cada sección y da a sus clases pendientes las lecciones publicadas del curso en el orden de Contenido; las clases posteriores a la última lección quedan sin lección:
 
-| Grupo | Curso | Horario | Código |
+| Sección | Curso | Horario | Código |
 |---|---|---|---|
 | 3.º A | Matemáticas 3.º primaria | lunes y miércoles, 08:00 | `DG-MATE-3A` |
 | 3.º B | Matemáticas 3.º primaria | martes y jueves, 10:00 | `DG-MATE-3B` |
@@ -54,10 +54,10 @@ Las clases de septiembre con asistencia quedan como **Impartidas**; las de octub
 4. **Publicación con requisitos:** en un curso de Primaria bilingüe, una lección sin resultados no se puede publicar; en Arte sí.
 5. **Plan curricular:** en Ciencias, el mapa muestra lo trabajado y lo evaluado. En Exploradores, el hueco se cierra con **Crear lección**.
 6. **Cambios sin publicar:** en Ciencias, «El ciclo del agua» tiene cambios en borrador. Los estudiantes ven la versión publicada hasta **Publicar cambios**.
-7. **Clases:** entra como `lucia.herrera`. En **Inicio → Próximas clases** abre la siguiente clase de 3.º A: muestra la lección, los recursos y la lista. Elige **Comenzar clase**, pasa lista, guarda y **Finalizar clase**. En **Matemáticas → Clases → Historial** aparece como impartida, con el porcentaje de asistencia. Con **Planificar clase** se elige grupo, fecha, hora, lección y recursos de cualquier curso.
+7. **Clases:** entra como `lucia.herrera`. En **Matemáticas → Asignaciones** están las secciones con sus estudiantes y en **Horario**, sus días y horas. En **Clases**, cada clase pendiente muestra su lección y se cambia desde la misma fila; **Asignar lecciones en orden** completa las que no tienen. En **Inicio → Próximas clases** abre la siguiente clase de 3.º A: muestra la lección, los recursos de la lección y la lista. Elige **Comenzar clase**, pasa lista, guarda y **Finalizar clase**. En **Clases → Historial** aparece como impartida, con el porcentaje de asistencia, y en **Plan curricular** sus resultados cuentan como impartidos.
 8. **Coordinación:** entra como `marta.ruiz`. En **Educadores** verás cada persona con sus cursos, lecciones creadas, publicaciones, clases registradas y última actividad; al elegir una persona se filtra su actividad. **Avance por curso** compara todos los cursos. En **Configuración académica** están los programas.
 9. **Filtros:** en **Cursos**, filtra por programa, nivel, formato, área, modalidad o responsable. En **Biblioteca**, filtra por etiqueta o área.
-10. **Estudiante:** en una ventana privada, escribe `DG-MATE-3A` en **¿Eres estudiante?**. El espacio del grupo muestra la próxima clase, su lección y sus recursos, sin cuenta ni datos personales. El código de una lección publicada (por ejemplo `GREETINGS`) abre solo esa lección. Las notas para el docente no aparecen.
+10. **Estudiante:** en una ventana privada, escribe `DG-MATE-3A` en **¿Eres estudiante?**. El espacio de la sección muestra la próxima clase, su lección y sus recursos, sin cuenta ni datos personales. El código de una lección publicada (por ejemplo `GREETINGS`) abre solo esa lección. Las notas para el docente no aparecen.
 
 ## Regenerar el seed
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ClassSession } from "@happy-learners/contracts";
-import { areaLabel, coverage, labelOf } from "@happy-learners/domain";
+import { areaLabel, coverage, labelOf, scheduleSummary } from "@happy-learners/domain";
 import { api } from "../../api";
 import { Link } from "../../navigation";
 import { courseStats, lessonState, newest, plural, sessionDay } from "../../model";
@@ -10,16 +10,16 @@ import { EmptyState, PageHeader, PrimaryAction, Progress, Section, StatTiles, St
 import { useCourseActions } from "../Courses";
 import { ActivityFeed, Avatar, roleLabel } from "../../ui/progress";
 import { useCourse } from "./context";
-import type { GroupView } from "./Groups";
+import type { SectionView } from "./Sections";
 
 export function Overview() {
   const { course, units, lessons, materials, curriculum, educator, admin, classroom, writable, reload, noun, settings, program } = useCourse();
   const teamEditable = admin && course.status === "active";
-  const [groups, setGroups] = useState<GroupView[] | null>(null), [sessions, setSessions] = useState<ClassSession[]>([]), [today, setToday] = useState("");
+  const [groups, setGroups] = useState<SectionView[] | null>(null), [sessions, setSessions] = useState<ClassSession[]>([]), [today, setToday] = useState("");
   const actions = useCourseActions(reload);
   useEffect(() => {
     if (!classroom || course.status !== "active" || !settings.attendance) return;
-    api<{ groups: GroupView[] }>(`/courses/${course.id}/groups`).then(result => setGroups(result.groups)).catch(() => setGroups([]));
+    api<{ groups: SectionView[] }>(`/courses/${course.id}/groups`).then(result => setGroups(result.groups)).catch(() => setGroups([]));
     api<{ sessions: ClassSession[]; today: string }>(`/courses/${course.id}/sessions`).then(result => { setSessions(result.sessions); setToday(result.today); }).catch(() => undefined);
   }, [course.id, classroom, course.status]);
   const base = `/cursos/${course.id}`;
@@ -69,11 +69,11 @@ export function Overview() {
           return <li key={unit.id}><span className="outline-number" aria-hidden="true">{index + 1}</span><Link href={`${base}/contenido#unidad-${unit.id}`}>{unit.name}</Link><span className="muted">{plural(count, "lección", "lecciones")}</span></li>;
         })}</ol> : <EmptyState compact icon="content" title="Sin unidades todavía" action={writable && <Link className="button secondary small" href={`${base}/contenido?crear=unidad`}>Crear unidad</Link>}>Organiza el curso en unidades y agrega lecciones a cada una.</EmptyState>}
       </Section>
-      {classroom && settings.attendance && <Section title="Grupos" action={<Link href={`${base}/grupos`} className="section-link">Ver grupos</Link>}>
-        {groups === null ? <p className="muted">{course.status === "active" ? "Cargando grupos…" : "Restaura el curso para consultar sus grupos."}</p> : groups.length ? <>
-          <ul className="link-list">{groups.slice(0, 4).map(group => <li key={group.id}><Link href={`${base}/grupos#grupo-${group.id}`}>{group.name}</Link><span className="muted">{plural(group.learnerCount, "participante", "participantes")}</span></li>)}</ul>
-          {next ? <p className="muted small">Próxima clase: <Link href={`${base}/clases/${next.id}`}>{sessionDay(next.sessionDate)}{next.startsAt ? `, ${next.startsAt}` : ""}</Link> · {next.groupName}</p> : <p className="muted small">No hay clases próximas. <Link href={`${base}/clases?nueva=1`}>Planificar una clase</Link></p>}
-        </> : <EmptyState compact icon="users" title="Sin grupos" action={writable && <Link className="button secondary small" href={`${base}/grupos`}>Crear grupo</Link>}>Crea un grupo para planificar sus clases y pasar lista.</EmptyState>}
+      {classroom && settings.attendance && <Section title="Asignaciones" action={<Link href={`${base}/asignaciones`} className="section-link">Ver secciones</Link>}>
+        {groups === null ? <p className="muted">{course.status === "active" ? "Cargando secciones…" : "Restaura el curso para consultar sus secciones."}</p> : groups.length ? <>
+          <ul className="link-list">{groups.slice(0, 4).map(group => <li key={group.id}><Link href={`${base}/asignaciones#seccion-${group.id}`}>{group.name}</Link><span className="muted">{plural(group.learnerCount, "estudiante", "estudiantes")}{group.schedule ? ` · ${scheduleSummary(group.schedule)}` : " · sin horario"}</span></li>)}</ul>
+          {next ? <p className="muted small">Próxima clase: <Link href={`${base}/clases/${next.id}`}>{sessionDay(next.sessionDate)}{next.startsAt ? `, ${next.startsAt}` : ""}</Link> · {next.groupName}</p> : <p className="muted small">No hay clases próximas. <Link href={`${base}/horario`}>Configurar el horario</Link></p>}
+        </> : <EmptyState compact icon="users" title="Sin secciones" action={writable && <Link className="button secondary small" href={`${base}/asignaciones`}>Crear sección</Link>}>Crea una sección, asígnale sus estudiantes y configura su horario.</EmptyState>}
       </Section>}
       <Section title="Equipo docente" action={teamEditable && <Link href={`${base}/configuracion#equipo`} className="section-link">Gestionar equipo</Link>}>
         {course.team?.length ? <ul className="team-list">{course.team.map(person => <li key={person.userId}><Avatar name={person.name} size={32}/><div><strong>{person.name}</strong><span className="muted small">@{person.username}</span></div><StatusBadge tone={person.role === "lead" ? "info" : "neutral"}>{roleLabel[person.role]}</StatusBadge></li>)}</ul>
