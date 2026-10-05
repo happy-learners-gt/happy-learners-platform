@@ -6,7 +6,7 @@ test("ST-016 duplicating a lesson creates an independent draft that keeps its re
   const admin = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("admin-demo")}` } });
   try {
     const body = { title: `${E2E_PREFIX} Copias ${info.project.name}`, objective: "Adaptar lecciones sin tocar el original.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", area: "011", settings: {}, programId: null };
-    const courseId = (await (await educator.post("/api/courses", { data: body })).json()).id, path = `/api/courses/${courseId}`;
+    const courseId = (await (await admin.post("/api/courses", { data: { ...body, leadId: "user-educator" } })).json()).id, path = `/api/courses/${courseId}`;
     const courseUnitId = (await (await educator.post(`${path}/units`, { data: { name: `${E2E_PREFIX} Módulo`, objective: "Practicar.", status: "active", version: 1 } })).json()).id;
     const material = (await (await educator.post(`${path}/materials`, { data: { title: `${E2E_PREFIX} Ficha`, description: "Ficha reutilizable.", content: "Lee y responde.", kind: "text", status: "published", termIds: [] } })).json()).material.id;
     const activity = { id: "activity-sheet", type: "resource", position: 0, title: "Lee la ficha", instructions: "Lee la ficha.", minutes: 5, resourceId: material };
