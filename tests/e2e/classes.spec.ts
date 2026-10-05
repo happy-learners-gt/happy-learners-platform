@@ -4,9 +4,9 @@ import { E2E_PREFIX, courseNav, e2eName, openNavigation, origin, sessionToken, s
 const course = "course-exploradores";
 const day = (offset: number) => { const date = new Date(); date.setDate(date.getDate() + offset); return date.toLocaleDateString("en-CA"); };
 
-test("HL-61 ST-035 ST-097 ST-098 ST-101: an educator assigns students, plans the schedule of classes, teaches a class and the section follows it with its code", async ({ page }, info) => {
+test("HL-61 ST-035 ST-097 ST-098 ST-101 ST-102: administration prepares a section, its educator plans and teaches a class and the section follows it with its code", async ({ page }, info) => {
   const group = e2eName(info, "Clase"), first = `${E2E_PREFIX} Ana`, second = `${E2E_PREFIX} Beto`;
-  await signIn(page, "educador-demo", `/cursos/${course}/asignaciones`);
+  await signIn(page, "admin-demo", `/cursos/${course}/asignaciones`);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Asignaciones");
   await page.getByRole("button", { name: "Nueva sección", exact: true }).click();
   const form = page.getByRole("form", { name: "Nueva sección" });
@@ -15,13 +15,23 @@ test("HL-61 ST-035 ST-097 ST-098 ST-101: an educator assigns students, plans the
   const card = page.locator(".group-card").filter({ has: page.getByRole("heading", { name: group, exact: true }) });
   for (const learner of [first, second]) {
     await card.getByLabel(`Nombre o código de lista para ${group}`).fill(learner);
-    await card.getByRole("button", { name: "Asignar" }).click();
+    await card.getByRole("form", { name: `Asignar estudiante a ${group}` }).getByRole("button", { name: "Asignar" }).click();
     await expect(card.getByText(learner, { exact: true })).toBeVisible();
   }
   await card.getByRole("button", { name: "Generar código" }).click();
   const code = (await card.getByLabel(`Código de la sección ${group}`).textContent())!.trim();
   expect(code).toMatch(/^DG-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
+  // ST-102: administration assigns who teaches the section.
+  const educators = card.getByRole("form", { name: `Asignar educador a ${group}` });
+  await educators.getByLabel(`Educador para ${group}`).selectOption("user-educator");
+  await educators.getByRole("button", { name: "Asignar" }).click();
+  await expect(toast(page)).toContainText(`imparte ${group}`);
+  await expect(card.locator(".section-educators")).toContainText("@educador-demo");
 
+  // The educator teaches it: the section is theirs to consult, but not to configure.
+  await signIn(page, "educador-demo", `/cursos/${course}/asignaciones`);
+  await expect(page.getByRole("button", { name: "Nueva sección", exact: true })).toHaveCount(0);
+  await expect(card.getByRole("form", { name: `Asignar estudiante a ${group}` })).toHaveCount(0);
   await expect(card).toContainText("Sin horario.");
 
   // Add today's class with a lesson: the schedule shows its activities and resources, without choosing them again.
@@ -114,8 +124,8 @@ test("HL-61 ST-035 ST-097 ST-098 ST-101: an educator assigns students, plans the
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Greetings");
 
   // Disabling the code ends the section's access at once.
-  const educator = await sessionToken("educador-demo");
-  const disabled = await fetch(`${origin}/api/courses/${course}/groups/${groupId}/code`, { method: "DELETE", headers: { Origin: origin, Cookie: `hl_session=${educator}` } });
+  const admin = await sessionToken("admin-demo");
+  const disabled = await fetch(`${origin}/api/courses/${course}/groups/${groupId}/code`, { method: "DELETE", headers: { Origin: origin, Cookie: `hl_session=${admin}` } });
   expect(disabled.status).toBe(200);
   await page.goto("/estudiante");
   await expect(page.getByRole("heading", { name: "Escribe el código de tu sección" })).toBeVisible();
@@ -164,8 +174,10 @@ test("HL-62 ST-036: the course shows upcoming classes with time and the history 
 });
 
 test("HL-61 ST-070: a section is renamed, loses a student, closes without new classes and reopens", async ({}, info) => {
-  const cookie = `hl_session=${await sessionToken("educador-demo")}`;
-  const call = (method: string, path: string, data?: unknown) => fetch(`${origin}/api/courses/${course}${path}`, { method, headers: { Origin: origin, Cookie: cookie, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
+  // Administration manages the section; the course's lead plans its classes.
+  const cookie = `hl_session=${await sessionToken("admin-demo")}`, lead = `hl_session=${await sessionToken("educador-demo")}`;
+  const request = (session: string) => (method: string, path: string, data?: unknown) => fetch(`${origin}/api/courses/${course}${path}`, { method, headers: { Origin: origin, Cookie: session, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
+  const call = request(cookie), teach = request(lead);
   const studentLogin = (code: string) => fetch(`${origin}/api/student/login`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
   const name = e2eName(info, "Ciclo");
   const { id } = await (await call("POST", "/groups", { name })).json() as { id: string };
@@ -183,16 +195,16 @@ test("HL-61 ST-070: a section is renamed, loses a student, closes without new cl
   // A closed section keeps its history but takes no new classes, students, schedule or student sessions.
   expect((await call("PUT", `/groups/${id}`, { status: "archived" })).status).toBe(200);
   expect((await group()).status).toBe("archived");
-  expect((await call("POST", "/sessions", { groupId: id, sessionDate: day(1) })).status).toBe(400);
+  expect((await teach("POST", "/sessions", { groupId: id, sessionDate: day(1) })).status).toBe(400);
   expect((await call("POST", `/groups/${id}/learners`, { displayName: `${E2E_PREFIX} Tres` })).status).toBe(409);
   expect((await call("PUT", `/groups/${id}/schedule`, { weekdays: [1], startsAt: "08:00", durationMinutes: 45, from: day(1), until: day(8) })).status).toBe(409);
   expect((await studentLogin(accessCode)).status).toBe(404);
 
   expect((await call("PUT", `/groups/${id}`, { status: "active" })).status).toBe(200);
-  const planned = await call("POST", "/sessions", { groupId: id, sessionDate: day(1) });
+  const planned = await teach("POST", "/sessions", { groupId: id, sessionDate: day(1) });
   expect(planned.status).toBe(201);
   const { id: sessionId } = await planned.json() as { id: string };
-  const detail = await (await call("GET", `/sessions/${sessionId}`)).json() as { learners: { learnerId: string }[] };
+  const detail = await (await teach("GET", `/sessions/${sessionId}`)).json() as { learners: { learnerId: string }[] };
   expect(detail.learners.map(learner => learner.learnerId)).toEqual([learners[0]]);
   expect((await call("PUT", `/groups/${id}`, { status: "archived" })).status).toBe(200);
 });

@@ -18,12 +18,12 @@ function metadataBody(courseId: string, lesson: Lesson, patch: { title?: string;
 }
 
 export function Content() {
-  const { course, units, lessons, writable, reload, settings, noun } = useCourse();
+  const { course, units, lessons, writable, publisher, reload, settings, noun } = useCourse();
   const { url, navigate } = useNavigation();
   const { toast, confirm } = useFeedback();
   const [expanded, setExpanded] = useState(() => new Set(units.map(unit => unit.id)));
   const [showArchived, setShowArchived] = useState(false);
-  const [creating, setCreating] = useState(url.searchParams.get("crear") === "unidad" || (writable && !units.length));
+  const [creating, setCreating] = useState(url.searchParams.get("crear") === "unidad" || (publisher && !units.length));
   const [editing, setEditing] = useState<LearningUnit | null>(null), [busy, setBusy] = useState(false);
   const [focusUnit, setFocusUnit] = useState<string>();
   const base = `/cursos/${course.id}`;
@@ -103,12 +103,13 @@ export function Content() {
     <PageHeader crumbs={[{ label: "Cursos", href: "/cursos" }, { label: course.title, href: base }, { label: "Contenido" }]} title="Contenido"
       description={`${plural(stats.units, noun.one, noun.many)} · ${plural(stats.lessons, "lección", "lecciones")} · ${stats.published} publicadas`}
       actions={units.length > 0 && <Button variant="ghost" onClick={() => setExpanded(expanded.size ? new Set() : new Set(units.map(unit => unit.id)))}>{expanded.size ? "Contraer todo" : "Expandir todo"}</Button>}
-      primary={writable && units.length > 0 && <PrimaryAction icon="plus" onClick={() => { setCreating(true); setTimeout(() => document.getElementById("new-unit-name")?.focus(), 0); }}>{`Crear ${noun.one}`}</PrimaryAction>}/>
-    {!writable && <p className="notice"><Icon name="info" size={18}/>{course.status === "archived" ? "El curso está archivado. Restáuralo desde Configuración para editar su contenido." : "Consulta el contenido publicado. Solo educadores pueden editarlo."}</p>}
+      primary={publisher && units.length > 0 && <PrimaryAction icon="plus" onClick={() => { setCreating(true); setTimeout(() => document.getElementById("new-unit-name")?.focus(), 0); }}>{`Crear ${noun.one}`}</PrimaryAction>}/>
+    {!writable && <p className="notice"><Icon name="info" size={18}/>{course.status === "archived" ? "El curso está archivado. Administración puede restaurarlo desde Configuración." : "Consulta el contenido del curso. Su equipo docente lo prepara y su responsable lo publica."}</p>}
+    {writable && !publisher && <p className="notice"><Icon name="info" size={18}/>Prepara y edita lecciones; cuando una esté lista, envíala a revisión. La persona responsable del curso la publica y organiza {noun.theMany}.</p>}
     {(archivedCount > 0 || showArchived) && <label className="switch"><input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)}/><span>Mostrar archivados ({archivedCount})</span></label>}
-    {units.length ? <LessonOutline courseId={course.id} units={units} lessons={lessons} writable={writable && !busy} noun={noun} showArchived={showArchived} actions={actions} expanded={expanded} setExpanded={setExpanded} focusUnit={focusUnit}/>
-      : !creating && <EmptyState icon="content" title={`Este curso aún no tiene ${noun.many}`} action={writable && <PrimaryAction icon="plus" onClick={() => setCreating(true)}>{`Crear ${noun.one}`}</PrimaryAction>}>{`${noun.A} agrupa lecciones sobre un mismo tema. Por ejemplo: “Greetings” o “Colores”.`}</EmptyState>}
-    {writable && creating && <form className="inline-form unit-form" onSubmit={createUnit} aria-label={noun.New} onKeyDown={event => { if (event.key === "Escape" && units.length) setCreating(false); }}>
+    {units.length ? <LessonOutline courseId={course.id} units={units} lessons={lessons} writable={writable && !busy} organize={publisher && !busy} noun={noun} showArchived={showArchived} actions={actions} expanded={expanded} setExpanded={setExpanded} focusUnit={focusUnit}/>
+      : !creating && <EmptyState icon="content" title={`Este curso aún no tiene ${noun.many}`} action={publisher && <PrimaryAction icon="plus" onClick={() => setCreating(true)}>{`Crear ${noun.one}`}</PrimaryAction>}>{`${noun.A} agrupa lecciones sobre un mismo tema. Por ejemplo: “Greetings” o “Colores”.`}</EmptyState>}
+    {publisher && creating && <form className="inline-form unit-form" onSubmit={createUnit} aria-label={noun.New} onKeyDown={event => { if (event.key === "Escape" && units.length) setCreating(false); }}>
       <h2>{noun.New}</h2>
       <fieldset disabled={busy}>
         <div className="field"><label htmlFor="new-unit-name">{`Nombre ${noun.ofThe}`}</label><input id="new-unit-name" name="name" required maxLength={100} autoFocus={!units.length} placeholder="Ej. Greetings"/></div>

@@ -441,6 +441,14 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: dialog-in
 .roster-number { color: var(--color-muted); font-variant-numeric: tabular-nums; font-size: var(--text-xs); padding-top: 2px; }
 .add-row { display: flex; gap: var(--space-2); }
 .add-row input { flex: 1; }
+.add-row select { flex: 1; min-width: 0; }
+.review-banner { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--sky-soft, var(--color-surface)); border: 1px solid var(--color-border); }
+.review-banner > div { flex: 1; display: grid; gap: var(--space-1); }
+.review-banner p { margin: 0; }
+.review-banner.is-returned { background: var(--amber-soft, var(--color-surface)); }
+.section-educators { display: grid; gap: var(--space-2); }
+.section-educators h3 { font-family: var(--font-sans); font-size: var(--text-xs); color: var(--color-muted); letter-spacing: var(--tracking-caps); text-transform: uppercase; margin: 0; }
+.team-list.compact li { padding: var(--space-1) var(--space-2); }
 .group-sessions h3 { font-family: var(--font-sans); font-size: var(--text-xs); color: var(--color-muted); letter-spacing: var(--tracking-caps); text-transform: uppercase; margin-bottom: var(--space-2); }
 .group-sessions ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); font-size: var(--text-sm); }
 .group-sessions a { display: inline-flex; padding: 3px 10px; border-radius: var(--radius-pill); background: var(--coral-soft); color: var(--coral-ink); text-decoration: none; font-weight: var(--weight-medium); }

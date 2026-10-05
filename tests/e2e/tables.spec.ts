@@ -3,9 +3,11 @@ import { E2E_PREFIX, activity, publish, saveStatus, sessionToken, signIn } from 
 
 test("ST-069 insert a table, edit rows and columns with the keyboard, and keep it when saving and publishing", async ({ page, playwright, baseURL }, info) => {
   const educator = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("educador-demo")}` } });
+  // DEC-023: administration creates the course with educador-demo as its lead, who prepares the content.
+  const admin = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("admin-demo")}` } });
   try {
     const body = { title: `${E2E_PREFIX} Tablas ${info.project.name}`, objective: "Organizar vocabulario.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", area: "011", settings: {}, programId: null };
-    const courseId = (await (await educator.post("/api/courses", { data: body })).json()).id;
+    const courseId = (await (await admin.post("/api/courses", { data: { ...body, leadId: "user-educator" } })).json()).id;
     const courseUnitId = (await (await educator.post(`/api/courses/${courseId}/units`, { data: { name: `${E2E_PREFIX} Vocabulario`, objective: "Practicar.", status: "active", version: 1 } })).json()).id;
     const lesson = (await (await educator.post("/api/lessons", { data: { title: `${E2E_PREFIX} Colores`, objective: "Nombrar colores.", courseId, courseUnitId, instructions: "Completa la tabla.", duration: 15 } })).json()).lesson;
 
@@ -59,5 +61,5 @@ test("ST-069 insert a table, edit rows and columns with the keyboard, and keep i
     await expect(page.getByRole("columnheader", { name: "Inglés" })).toBeVisible();
     await expect(page.getByRole("cell", { name: "rojo" })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  } finally { await educator.dispose(); }
+  } finally { await educator.dispose(); await admin.dispose(); }
 });

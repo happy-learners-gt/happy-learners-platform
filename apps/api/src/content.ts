@@ -1,24 +1,69 @@
-import type { Activity, Lesson, Member, Resource } from "@happy-learners/contracts";
+import type { Activity, Lesson, LessonReview, Member, Resource, ReviewItem } from "@happy-learners/contracts";
 import { assesses, moduleNavigation, lessonOutcomes, outcomeCodes, resourceIdsOf, sequenceTemplates, studentActivities, validActivities, validOutcomeIds } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { configurationOf, curriculumFor, materialsFor } from "./courses";
-import { recordEvent } from "./team";
+import { event, recordEvent } from "./team";
 import { filesFor } from "./files";
+import { accessTo, forbidden, reachableCourses } from "./access";
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
-type LessonRow = { id: string; content: string; published_content: string | null; unit_id: string | null; course_unit_id: string | null; course_id: string | null; position: number; status: "draft" | "published"; archived: number; revision: number; draft_version: number; published_version: number; updated_at: string; completions: number };
-const lessonQuery = "SELECT l.*,c.id AS course_id,(SELECT count(*) FROM lesson_completions lc WHERE lc.lesson_id=l.id) AS completions FROM lessons l JOIN programs p ON p.id=l.program_id LEFT JOIN courses c ON c.legacy_program_id=p.id LEFT JOIN learning_units cu ON cu.id=l.course_unit_id LEFT JOIN units u ON u.id=l.unit_id LEFT JOIN levels lv ON lv.id=u.level_id WHERE p.organization_id=?";
+type LessonRow = { id: string; content: string; published_content: string | null; unit_id: string | null; course_unit_id: string | null; course_id: string | null; position: number; status: "draft" | "published"; archived: number; revision: number; draft_version: number; published_version: number; updated_at: string; completions: number; review: string | null };
+/** The latest review of the lesson, with the names of who asked and who decided. */
+const reviewColumn = `(SELECT json_object('id',r.id,'status',r.status,'note',r.note,'requestedById',r.requested_by,'requestedByName',COALESCE(ru.display_name,ru.username),'requestedAt',r.requested_at,'decidedByName',COALESCE(du.display_name,du.username),'decidedAt',r.decided_at,'decisionNote',r.decision_note)
+  FROM lesson_reviews r JOIN users ru ON ru.id=r.requested_by LEFT JOIN users du ON du.id=r.decided_by WHERE r.lesson_id=l.id ORDER BY r.requested_at DESC,r.rowid DESC LIMIT 1) AS review`;
+const lessonQuery = `SELECT l.*,c.id AS course_id,(SELECT count(*) FROM lesson_completions lc WHERE lc.lesson_id=l.id) AS completions,${reviewColumn} FROM lessons l JOIN programs p ON p.id=l.program_id LEFT JOIN courses c ON c.legacy_program_id=p.id LEFT JOIN learning_units cu ON cu.id=l.course_unit_id LEFT JOIN units u ON u.id=l.unit_id LEFT JOIN levels lv ON lv.id=u.level_id WHERE p.organization_id=?`;
 function lessonView(row: LessonRow, draft: boolean): Lesson {
-  return { ...JSON.parse(draft ? row.content : row.published_content || row.content), unitId: row.unit_id || undefined, courseUnitId: row.course_unit_id || undefined, courseId: row.course_id || undefined, position: row.position, status: row.archived ? "archived" : row.status, revision: row.revision, draftVersion: row.draft_version, hasDraft: row.draft_version !== row.published_version, updatedAt: row.updated_at, completions: row.completions };
+  const review = draft && row.review ? JSON.parse(row.review) as LessonReview : null;
+  return { ...JSON.parse(draft ? row.content : row.published_content || row.content), unitId: row.unit_id || undefined, courseUnitId: row.course_unit_id || undefined, courseId: row.course_id || undefined, position: row.position, status: row.archived ? "archived" : row.status, revision: row.revision, draftVersion: row.draft_version, hasDraft: row.draft_version !== row.published_version, updatedAt: row.updated_at, completions: row.completions,
+    ...(draft ? { review: review && review.status !== "approved" ? review : null } : {}) };
 }
 export async function resources(db: Database, organization: string) {
   const rows = await db.prepare("SELECT id,title,description,level,skill,topic,tags,content,status,archived,kind,updated_at AS updatedAt FROM resources WHERE organization_id=? ORDER BY title").bind(organization).all<Omit<Resource, "tags"> & { tags: string; archived: number }>();
   return rows.results.map(({ archived, ...r }) => ({ ...r, tags: JSON.parse(r.tags) as string[], status: archived ? "archived" as const : r.status }));
 }
+const noteOf = (value: unknown) => typeof value === "string" && value.trim().length <= 600 && !/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(value) ? value.trim() : null;
+
+/**
+ * What a lesson's publication would contain, or why it cannot be published yet. Publishing and asking for a
+ * review apply the same rules, so the lead never receives a lesson that could not be published.
+ */
+async function publication(db: Database, current: Member, row: LessonRow) {
+  if (row.course_id && !await db.prepare("SELECT c.id FROM courses c JOIN learning_units u ON u.course_id=c.id WHERE c.id=? AND u.id=? AND c.status='active' AND u.status='active'").bind(row.course_id, row.course_unit_id).first()) return { error: "Restaura el curso y su unidad antes de publicar.", status: 409 };
+  const lesson = JSON.parse(row.content) as Lesson;
+  if (!lesson.title.trim() || !lesson.objective.trim() || !lesson.activities.length) return { error: "Completa título, objetivo y al menos una actividad.", status: 400 };
+  const library = [...await resources(db, current.organizationId), ...await materialsFor(db, current.organizationId), ...await filesFor(db, current.organizationId)];
+  const resourceIds = resourceIdsOf(lesson.activities);
+  if (resourceIds.some(rid => !library.some(r => r.id === rid))) return { error: "Hay un recurso no disponible. Revisa las actividades.", status: 400 };
+  if (row.archived) return { error: "Restaura la lección antes de publicarla.", status: 409 };
+  // Students see the wording of the outcomes as it is today; later edits to the plan need a new publication.
+  const outcomes = row.course_id ? (await curriculumFor(db, row.course_id)).outcomes : [];
+  const codes = outcomeCodes(outcomes);
+  // What the course's configuration requires before publishing.
+  const settings = row.course_id ? (await configurationOf(db, current.organizationId, row.course_id))?.settings : undefined;
+  if (settings?.outcomesRequired && !lessonOutcomes(lesson).some(oid => codes.has(oid))) return { error: "Este curso exige que la lección trabaje al menos un resultado de aprendizaje antes de publicarla.", status: 400 };
+  if (settings?.assessmentRequired && !lesson.activities.some(assesses)) return { error: "Este curso exige una pregunta o una actividad de evaluación antes de publicar.", status: 400 };
+  const learning = lessonOutcomes(lesson).filter(oid => codes.has(oid)).sort((a, b) => codes.get(a)!.localeCompare(codes.get(b)!, "es", { numeric: true })).map(oid => ({ id: oid, code: codes.get(oid)!, statement: outcomes.find(o => o.id === oid)!.statement }));
+  // Teacher notes stay in the draft; students only receive what is meant for them.
+  return { lesson, published: { ...lesson, outcomes: learning, activities: studentActivities(lesson.activities), resources: resourceIds.map(rid => library.find(r => r.id === rid)!), publishedAt: new Date().toISOString(), revision: row.revision + 1 } };
+}
+
+/** GET /api/reviews — what the lead has to decide, and what the person sent for review that is still open. */
+export async function reviews(current: Member, db: Database) {
+  const columns = "r.id,r.status,r.note,r.requested_by AS requestedById,COALESCE(ru.display_name,ru.username) AS requestedByName,r.requested_at AS requestedAt,COALESCE(du.display_name,du.username) AS decidedByName,r.decided_at AS decidedAt,r.decision_note AS decisionNote,r.lesson_id AS lessonId,json_extract(l.content,'$.title') AS lessonTitle,c.id AS courseId,c.title AS courseTitle";
+  const joins = "FROM lesson_reviews r JOIN users ru ON ru.id=r.requested_by LEFT JOIN users du ON du.id=r.decided_by JOIN lessons l ON l.id=r.lesson_id AND l.archived=0 JOIN courses c ON c.id=r.course_id AND c.status='active'";
+  const [toReview, mine] = await db.batch([
+    db.prepare(`SELECT ${columns} ${joins} JOIN course_members cm ON cm.course_id=r.course_id AND cm.user_id=? AND cm.role='lead' WHERE r.organization_id=? AND r.status='pending' ORDER BY r.requested_at`).bind(current.id, current.organizationId),
+    // Only the latest request of each lesson: a returned one stays until it is sent again or published.
+    db.prepare(`SELECT ${columns} ${joins} WHERE r.organization_id=? AND r.requested_by=? AND r.status IN ('pending','returned') AND NOT EXISTS(SELECT 1 FROM lesson_reviews n WHERE n.lesson_id=r.lesson_id AND (n.requested_at>r.requested_at OR (n.requested_at=r.requested_at AND n.rowid>r.rowid))) ORDER BY COALESCE(r.decided_at,r.requested_at) DESC LIMIT 20`).bind(current.organizationId, current.id),
+  ]) as unknown as [ReviewItem[], ReviewItem[]];
+  return reply({ toReview, mine });
+}
+
 export async function content(url: URL, method: string, input: unknown, current: Member, db: Database): Promise<Response> {
   const path = url.pathname; const id = path.split("/")[3]; const resourceRoute = path.startsWith("/api/resources");
   const draft = url.searchParams.has("draft") || url.searchParams.has("drafts");
-  if ((method !== "GET" || draft) && current.role !== "educator") return reply({ error: "Solo educadores pueden modificar contenido." }, 403);
   if (resourceRoute) {
+    // The organization's general library: every educator adds to it and everyone reads it.
+    if (method !== "GET" && current.role !== "educator") return reply({ error: "Solo educadores pueden modificar la biblioteca." }, 403);
     const list = await resources(db, current.organizationId);
     if (method === "GET") { const one = list.find(r => r.id === id); return id ? one ? reply({ resource: one }) : reply({ error: "Recurso no disponible." }, 404) : reply({ resources: list }); }
     if (method === "DELETE") return reply({ error: "Conserva los vínculos: archiva el recurso desde su formulario." }, 409);
@@ -45,39 +90,66 @@ export async function content(url: URL, method: string, input: unknown, current:
   }
   const courseFilter = url.searchParams.get("course");
   if (courseFilter && !await db.prepare("SELECT id FROM courses WHERE id=? AND organization_id=?").bind(courseFilter, current.organizationId).first()) return reply({ error: "Curso no disponible." }, 404);
-  const rows = (await db.prepare(lessonQuery + (courseFilter ? " AND c.id=?" : "") + " ORDER BY c.title,COALESCE(cu.position,u.position),l.position,l.id").bind(current.organizationId, ...(courseFilter ? [courseFilter] : [])).all<LessonRow>()).results;
+  // Educators reach the lessons of their courses only; administration reads every course.
+  const reachable = await reachableCourses(db, current);
+  const rows = (await db.prepare(lessonQuery + (courseFilter ? " AND c.id=?" : "") + " ORDER BY c.title,COALESCE(cu.position,u.position),l.position,l.id").bind(current.organizationId, ...(courseFilter ? [courseFilter] : [])).all<LessonRow>()).results
+    .filter(r => !reachable || (r.course_id !== null && reachable.has(r.course_id)));
+  const accessOf = async (courseId: string | null) => courseId ? await accessTo(db, current, courseId) : null;
   if (id === "order" && method === "PUT") {
     const v = input as { unitId?: string; courseUnitId?: string; ids?: string[] } | null;
     if (!v?.unitId && !v?.courseUnitId) return reply({ error: "Selecciona una unidad." }, 400);
     const selected = rows.filter(r => v?.courseUnitId ? r.course_unit_id === v.courseUnitId : r.unit_id === v?.unitId);
     if (!v || !Array.isArray(v.ids) || v.ids.length !== selected.length || new Set(v.ids).size !== selected.length || v.ids.some(x => !selected.some(r => r.id === x))) return reply({ error: "El orden debe incluir todas las lecciones de la unidad una sola vez." }, 400);
+    if (selected.length && !(await accessOf(selected[0].course_id))?.publish) return forbidden("Solo la persona responsable del curso ordena sus lecciones.");
     await db.batch(v.ids.map((item, i) => db.prepare("UPDATE lessons SET position=? WHERE id=?").bind(i, item))); return reply({ ok: true });
   }
   const row = rows.find(r => r.id === id);
   if (id && (!row || (method === "GET" && !draft && (!row.published_content || row.archived)))) return reply({ error: "Lección no disponible." }, 404);
   if (method === "GET") return id ? reply({ lesson: lessonView(row!, draft) }) : reply({ lessons: rows.filter(r => draft || (r.published_content && !r.archived)).map(r => lessonView(r, draft)) });
+  const access = row ? await accessOf(row.course_id) : null;
+  if (row && !access?.edit) return forbidden("Solo el equipo docente del curso edita sus lecciones.");
+  const lessonTitle = row ? (JSON.parse(row.content) as Lesson).title : "";
   if (path.endsWith("/publish") && row) {
-    if (row.course_id && !await db.prepare("SELECT c.id FROM courses c JOIN learning_units u ON u.course_id=c.id WHERE c.id=? AND u.id=? AND c.status='active' AND u.status='active'").bind(row.course_id, row.course_unit_id).first()) return reply({ error: "Restaura el curso y su unidad antes de publicar." }, 409);
-    const lesson = JSON.parse(row.content) as Lesson;
-    if (!lesson.title.trim() || !lesson.objective.trim() || !lesson.activities.length) return reply({ error: "Completa título, objetivo y al menos una actividad." }, 400);
-    const library = [...await resources(db, current.organizationId), ...await materialsFor(db, current.organizationId), ...await filesFor(db, current.organizationId)];
-    const resourceIds = resourceIdsOf(lesson.activities);
-    if (resourceIds.some(rid => !library.some(r => r.id === rid))) return reply({ error: "Hay un recurso no disponible. Revisa las actividades." }, 400);
-    if (row.archived) return reply({ error: "Restaura la lección antes de publicarla." }, 409);
-    // Students see the wording of the outcomes as it is today; later edits to the plan need a new publication.
-    const outcomes = row.course_id ? (await curriculumFor(db, row.course_id)).outcomes : [];
-    const codes = outcomeCodes(outcomes);
-    // What the course's configuration requires before publishing.
-    const settings = row.course_id ? (await configurationOf(db, current.organizationId, row.course_id))?.settings : undefined;
-    if (settings?.outcomesRequired && !lessonOutcomes(lesson).some(oid => codes.has(oid))) return reply({ error: "Este curso exige que la lección trabaje al menos un resultado de aprendizaje antes de publicarla." }, 400);
-    if (settings?.assessmentRequired && !lesson.activities.some(assesses)) return reply({ error: "Este curso exige una pregunta o una actividad de evaluación antes de publicar." }, 400);
-    const learning = lessonOutcomes(lesson).filter(oid => codes.has(oid)).sort((a, b) => codes.get(a)!.localeCompare(codes.get(b)!, "es", { numeric: true })).map(oid => ({ id: oid, code: codes.get(oid)!, statement: outcomes.find(o => o.id === oid)!.statement }));
-    // Teacher notes stay in the draft; students only receive what is meant for them.
-    const published = { ...lesson, outcomes: learning, activities: studentActivities(lesson.activities), resources: resourceIds.map(rid => library.find(r => r.id === rid)!), publishedAt: new Date().toISOString(), revision: row.revision + 1 };
-    const written = await db.prepare("UPDATE lessons SET published_content=?,published_version=draft_version,revision=revision+1,status='published' WHERE id=? AND draft_version=? RETURNING id").bind(JSON.stringify(published), row.id, row.draft_version).first();
+    if (!access!.publish) return forbidden("La persona responsable del curso publica sus lecciones. Envía la lección a revisión.");
+    const expected = url.searchParams.get("draftVersion");
+    if (expected !== null && Number(expected) !== row.draft_version) return reply({ error: "La lección cambió desde que la abriste. Recarga para revisar la versión actual antes de publicar." }, 409);
+    const result = await publication(db, current, row);
+    if ("error" in result) return reply({ error: result.error }, result.status);
+    const now = new Date().toISOString();
+    const written = await db.guardedBatch(
+      db.prepare("UPDATE lessons SET published_content=?,published_version=draft_version,revision=revision+1,status='published' WHERE id=? AND draft_version=? RETURNING id").bind(JSON.stringify(result.published), row.id, row.draft_version),
+      // Publishing what a co-teacher sent for review approves it.
+      [db.prepare("UPDATE lesson_reviews SET status='approved',decided_by=?,decided_at=? WHERE lesson_id=? AND status='pending'").bind(current.id, now, row.id),
+        event(db, current, { action: "published", targetType: "lesson", targetId: row.id, courseId: row.course_id, summary: `Publicó «${result.lesson.title}» (publicación ${row.revision + 1})` })]);
     if (!written) return reply({ error: "El borrador cambió. Recarga y vuelve a publicar." }, 409);
-    await recordEvent(db, current, { action: "published", targetType: "lesson", targetId: row.id, courseId: row.course_id, summary: `Publicó «${lesson.title}» (publicación ${row.revision + 1})` });
-    return reply({ lesson: published });
+    return reply({ lesson: result.published });
+  }
+  if (path.endsWith("/review") && row && method === "POST") {
+    if (access!.publish) return reply({ error: "Como responsable del curso, publica la lección directamente." }, 409);
+    const note = noteOf((input as Record<string, unknown> | null)?.note ?? "");
+    if (note === null) return reply({ error: "Escribe un comentario de hasta 600 caracteres." }, 400);
+    const result = await publication(db, current, row);
+    if ("error" in result) return reply({ error: result.error }, result.status);
+    const now = new Date().toISOString();
+    // Sending again while a request is open updates it: one open request per lesson.
+    await db.batch([
+      db.prepare("INSERT INTO lesson_reviews(id,lesson_id,course_id,organization_id,status,note,requested_by,requested_at) VALUES (?,?,?,?,'pending',?,?,?) ON CONFLICT(lesson_id) WHERE status='pending' DO UPDATE SET note=excluded.note,requested_by=excluded.requested_by,requested_at=excluded.requested_at")
+        .bind(`review-${crypto.randomUUID()}`, row.id, row.course_id!, current.organizationId, note, current.id, now),
+      event(db, current, { action: "updated", targetType: "lesson", targetId: row.id, courseId: row.course_id, summary: `Envió a revisión «${lessonTitle}»` }),
+    ]);
+    const updated = await db.prepare(lessonQuery + " AND l.id=?").bind(current.organizationId, row.id).first<LessonRow>();
+    return reply({ lesson: lessonView(updated!, true) }, 201);
+  }
+  if (path.endsWith("/review/return") && row && method === "POST") {
+    if (!access!.publish) return forbidden("Solo la persona responsable del curso revisa sus lecciones.");
+    const note = noteOf((input as Record<string, unknown> | null)?.note);
+    if (!note) return reply({ error: "Escribe qué falta ajustar, en hasta 600 caracteres." }, 400);
+    const returned = await db.guardedBatch(
+      db.prepare("UPDATE lesson_reviews SET status='returned',decided_by=?,decided_at=?,decision_note=? WHERE lesson_id=? AND status='pending' RETURNING id").bind(current.id, new Date().toISOString(), note, row.id),
+      [event(db, current, { action: "updated", targetType: "lesson", targetId: row.id, courseId: row.course_id, summary: `Devolvió «${lessonTitle}» con comentarios` })]);
+    if (!returned) return reply({ error: "La lección ya no tiene una revisión pendiente. Recarga para ver su estado." }, 409);
+    const updated = await db.prepare(lessonQuery + " AND l.id=?").bind(current.organizationId, row.id).first<LessonRow>();
+    return reply({ lesson: lessonView(updated!, true) });
   }
   if (path.endsWith("/duplicate") && row) {
     // A new draft in the same module, right after the original: new identity and share code, no publication,
@@ -145,17 +217,21 @@ export async function content(url: URL, method: string, input: unknown, current:
   // resolve the explicit course/unit mapping instead of creating a course per level.
   let programId = unit.programId;
   let courseUnitId = generic ? unit.id : null;
+  let courseId = generic ? unit.courseId! : row?.course_id || null;
+  if (!generic && !row) {
+    const existing = await db.prepare("SELECT p.id FROM programs p JOIN courses c ON c.legacy_program_id=p.id WHERE p.organization_id=? AND c.id=\'course-\'||p.id ORDER BY CASE WHEN EXISTS(SELECT 1 FROM lessons l WHERE l.program_id=p.id AND l.unit_id=?) THEN 0 ELSE 1 END,p.id LIMIT 1").bind(current.organizationId, unit.id).first<{ id: string }>();
+    courseId = existing ? `course-${existing.id}` : null;
+  }
+  // Creating, editing and archiving a lesson belong to the course's team; archiving or restoring it, to its lead.
+  const target = row ? access : await accessOf(courseId);
+  if (!target?.edit) return forbidden("Solo el equipo docente del curso edita sus lecciones.");
+  const archivedNow = v.status === "archived" ? 1 : 0;
+  if (row && row.archived !== archivedNow && !target.publish) return forbidden("Solo la persona responsable del curso archiva o restaura sus lecciones.");
   if (!generic) {
-    const existing = row ? await db.prepare("SELECT program_id AS id FROM lessons WHERE id=?").bind(row.id).first<{ id: string }>() : await db.prepare("SELECT p.id FROM programs p JOIN courses c ON c.legacy_program_id=p.id WHERE p.organization_id=? AND c.id=\'course-\'||p.id ORDER BY CASE WHEN EXISTS(SELECT 1 FROM lessons l WHERE l.program_id=p.id AND l.unit_id=?) THEN 0 ELSE 1 END,p.id LIMIT 1").bind(current.organizationId, unit.id).first<{ id: string }>();
-    programId = existing?.id || `curriculum-${current.organizationId}`;
-    let course = await db.prepare("SELECT id,status FROM courses WHERE legacy_program_id=? AND organization_id=?").bind(programId, current.organizationId).first<{ id: string; status: string }>();
-    if (!course) {
-      course = { id: `course-${programId}`, status: "active" };
-      await db.batch([
-        db.prepare("INSERT OR IGNORE INTO programs(id,organization_id,title) VALUES (?,?,?)").bind(programId, current.organizationId, "Contenido existente"),
-        db.prepare("INSERT OR IGNORE INTO courses(id,organization_id,legacy_program_id,title,profile,unit_label,updated_at) SELECT ?,organization_id,id,title,'free','Unidades',? FROM programs WHERE id=?").bind(course.id, now, programId),
-      ]);
-    }
+    const existing = row ? await db.prepare("SELECT program_id AS id FROM lessons WHERE id=?").bind(row.id).first<{ id: string }>() : { id: courseId!.slice("course-".length) };
+    programId = existing!.id;
+    const course = await db.prepare("SELECT id,status FROM courses WHERE legacy_program_id=? AND organization_id=?").bind(programId, current.organizationId).first<{ id: string; status: string }>();
+    if (!course) return reply({ error: "Selecciona una unidad de un curso de tu organización." }, 400);
     if (course.status === "archived") return reply({ error: "Restaura el curso antes de editar sus lecciones." }, 409);
     courseUnitId = `${course.id}--${unit.id}`;
     await db.prepare("INSERT OR IGNORE INTO learning_units(id,course_id,legacy_unit_id,name,objective,position,status,updated_at) SELECT ?,?,id,name,objective,(SELECT count(*) FROM learning_units WHERE course_id=?),status,updated_at FROM units WHERE id=?").bind(courseUnitId, course.id, course.id, unit.id).run();
@@ -163,7 +239,7 @@ export async function content(url: URL, method: string, input: unknown, current:
   }
   if (row) {
     if (v.draftVersion !== row.draft_version) return reply({ error: "Hay cambios más recientes. Recarga antes de guardar." }, 409);
-    const written = await db.prepare("UPDATE lessons SET content=?,unit_id=?,course_unit_id=?,archived=?,draft_version=draft_version+1,updated_at=? WHERE id=? AND draft_version=? RETURNING id").bind(JSON.stringify(lesson), generic ? unit.legacyUnitId || null : unit.id, courseUnitId, v.status === "archived" ? 1 : 0, now, lid, row.draft_version).first();
+    const written = await db.prepare("UPDATE lessons SET content=?,unit_id=?,course_unit_id=?,archived=?,draft_version=draft_version+1,updated_at=? WHERE id=? AND draft_version=? RETURNING id").bind(JSON.stringify(lesson), generic ? unit.legacyUnitId || null : unit.id, courseUnitId, archivedNow, now, lid, row.draft_version).first();
     if (!written) return reply({ error: "Hay cambios más recientes. Recarga antes de guardar." }, 409);
     if (courseUnitId !== row.course_unit_id) {
       await db.batch([
@@ -175,7 +251,6 @@ export async function content(url: URL, method: string, input: unknown, current:
     await db.prepare("INSERT INTO lessons(id,program_id,status,content,unit_id,course_unit_id,position,updated_at) VALUES (?,?,'draft',?,?,?,?,?)").bind(lid, programId!, JSON.stringify(lesson), generic ? unit.legacyUnitId || null : unit.id, courseUnitId, rows.filter(r => r.course_unit_id === courseUnitId).length, now).run();
   }
   // Autosave is not an event; creating, archiving and restoring a lesson are.
-  const archivedNow = v.status === "archived" ? 1 : 0;
   if (!row || row.archived !== archivedNow) await recordEvent(db, current, { action: !row ? "created" : archivedNow ? "archived" : "restored", targetType: "lesson", targetId: lid, courseId: lesson.courseId || null, summary: `${!row ? "Creó" : archivedNow ? "Archivó" : "Restauró"} la lección «${lesson.title}»` });
   const updated = await db.prepare(lessonQuery + " AND l.id=?").bind(current.organizationId, lid).first<LessonRow>();
   return reply({ lesson: lessonView(updated!, true) }, row ? 200 : 201);
