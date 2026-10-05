@@ -12,7 +12,8 @@ try {
   await check("health", async () => assert((await (await call("/api/health")).json()).status === "ok"));
   await check("version", async () => { observedSha = (await (await call("/api/version")).json()).sha; assert(/^[a-f0-9]{40}$/.test(observedSha)); if (process.env.EXPECTED_SHA) assert(observedSha === process.env.EXPECTED_SHA); });
   await check("anonymous_denied", async () => assert((await call("/api/organization")).status === 401));
-  await check("login", async () => { const response = await call("/api/login", "POST", { username: "instructor-demo", password: "Aprender-2026!" }); assert(response.ok); const value = response.headers.get("set-cookie"); assert(value?.includes("HttpOnly") && value.includes("Secure")); cookie = value.split(";")[0]; });
+  // The demo lesson belongs to Exploradores; only its team reads it, and educador-demo is its lead.
+  await check("login", async () => { const response = await call("/api/login", "POST", { username: "educador-demo", password: "Aprender-2026!" }); assert(response.ok); const value = response.headers.get("set-cookie"); assert(value?.includes("HttpOnly") && value.includes("Secure")); cookie = value.split(";")[0]; });
   await check("organization", async () => { const data = await (await call("/api/organization")).json(); assert(data.organization.id === "org-demo"); });
   // Educators edit the demo lesson in production, so check its shape, not a fixed number of activities.
   await check("published_lesson", async () => { const response = await call("/api/lessons/colores-en-equipo"); assert(response.ok); const { lesson } = await response.json(); assert(lesson.revision >= 1 && lesson.activities.length >= 1 && lesson.activities.every(activity => typeof activity.title === "string" && activity.title)); });
