@@ -256,12 +256,45 @@ El acceso a un curso se calcula a partir del rol en la organización y del rol e
 | Capacidad | Administración | Responsable | Colaborador |
 | --- | --- | --- | --- |
 | Crear y configurar el curso, su equipo, sus secciones, estudiantes, códigos y horarios | Sí | No | No |
-| Ver el curso, su contenido (borradores incluidos), plan y clases | Todas las secciones | Todas las secciones | Solo sus secciones |
+| Ver el curso, su contenido (borradores incluidos) y su plan | Sí | Sí | Sí |
+| Ver las secciones, sus clases, estudiantes, horario e indicadores | Todas las secciones | Solo sus secciones | Solo sus secciones |
 | Editar lecciones y recursos | Solo si integra el equipo | Sí | Sí |
 | Publicar, ordenar y archivar lecciones; módulos y plan curricular | Solo como responsable | Sí | No: envía a revisión |
-| Planificar e impartir clases (lecciones, comentarios, fecha u hora puntual, clase adicional, asistencia) | Solo si integra el equipo | Todas las secciones | Solo sus secciones |
+| Planificar e impartir clases (lecciones, comentarios, fecha u hora puntual, clase adicional, asistencia) | Solo sus secciones, si integra el equipo | Solo sus secciones | Solo sus secciones |
 
 Una persona fuera del equipo recibe 403 en el curso y sus rutas, y otra organización recibe 404. Publicar aprueba la solicitud pendiente en la misma transacción, siempre que el borrador no haya cambiado desde que la persona responsable lo abrió (`?draftVersion=`). Duplicar un curso es una operación de servidor reservada a administración. Copia la configuración, el equipo, los módulos, el plan, los recursos y sus archivos, y deja las lecciones como borrador; no copia secciones, horarios, clases ni asistencia.
+
+## Cada sección, una impartición propia del curso (DEC-024)
+
+```mermaid
+erDiagram
+  courses ||--o{ course_groups : "se imparte en"
+  course_groups ||--o{ section_educators : imparte
+  course_groups ||--o{ class_sessions : cronograma
+  course_groups ||--o{ activity_events : "actividad de la sección"
+  course_groups ||--o{ lesson_completions : "aperturas con su código"
+  activity_events {
+    TEXT id PK
+    TEXT course_id FK
+    TEXT group_id FK "nullable: eventos de una sección o de sus clases"
+    TEXT target_type
+    TEXT target_id
+  }
+  lesson_completions {
+    TEXT id PK
+    TEXT lesson_id FK
+    TEXT completed_at
+    TEXT group_id FK "nullable: sección cuyo código abrió la lección"
+  }
+```
+
+El curso es la definición de lo que se enseña: su configuración, su equipo, sus módulos, sus lecciones, su plan curricular y su biblioteca. Cada sección es una impartición de ese curso con registros propios: sus educadores, elegidos solo del equipo del curso; sus estudiantes y su código; su horario; su cronograma de clases con lecciones, comentarios y asistencia; su actividad, y sus indicadores.
+
+`0022_section_instances.sql` agrega `group_id` a `activity_events` y a `lesson_completions`, con índices por sección. La migración completa `activity_events.group_id` en los eventos de una sección y en los de sus clases. Desde v0.8.7 la API escribe la sección en cada evento de sección o de clase, y en cada apertura de una lección hecha con el código de una sección cuando esa lección está en alguna de sus clases no canceladas.
+
+`GET /api/sections` y `GET /api/sections/:id` entregan cada sección con su curso, sus educadores, su próxima clase y sus indicadores: estudiantes, clases (impartidas, próximas y sin registrar), asistencia promedio de las clases impartidas o en curso, lecciones publicadas del curso que se impartieron o se planificaron en la sección, y aperturas con su código. Administración recibe todas las secciones de la organización. Cualquier otra persona, incluida la responsable del curso, recibe solo las secciones que imparte: una sección ajena responde 403 y una inexistente, 404. La actividad (`GET /api/activity`) y el avance (`GET /api/progress`) aplican el mismo alcance; un evento de sección o de clase sin sección conocida no se muestra a los educadores.
+
+Asignar educadores a una sección (`PUT /api/courses/:id/groups/:gid/educators`) acepta solo integrantes activos del equipo del curso y responde 400 con cualquier otra persona; ya no suma a nadie al equipo. Las asignaciones vigentes se conservan: la migración 0021 asignó cada sección a todo su equipo, así nadie pierde acceso con este cambio.
 
 Un curso puede existir sin unidades ni programa académico. Una lección nueva necesita una unidad activa del curso. No hay anidamiento ilimitado. Los perfiles cambian el vocabulario inicial; no crean reglas de evaluación ni requisitos inferidos.
 

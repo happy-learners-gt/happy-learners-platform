@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.7 — 2026-10-05
+
+Parche de REL-004 (DEC-024): cada sección es una impartición propia del curso. El curso define qué se enseña (plan curricular, contenido, biblioteca y configuración); cada sección tiene sus educadores, estudiantes, horario, cronograma, asistencia, actividad e indicadores, y cada educador ve solo las secciones que imparte.
+
+- ST-105: cada sección tiene su propio espacio en **Secciones › sección**, con **Resumen**, **Cronograma**, **Estudiantes** y **Horario**. El Resumen muestra sus indicadores (estudiantes, clases impartidas, asistencia promedio y clases sin registrar), el avance de las lecciones del curso impartidas y planificadas en esa sección, su próxima clase, quién la imparte y su actividad. El menú del curso queda en Resumen, Contenido, Plan curricular, Biblioteca del curso, Secciones y Configuración. Los enlaces anteriores a Clases, Asignaciones y Horario llevan a la sección correspondiente.
+- ST-106: **Mis secciones** reúne las secciones de cada educador, cada una con su avance, sus clases y su asistencia, y **Mi semana** muestra sus horarios. Inicio muestra a cada educador sus secciones con sus indicadores. Administración ve todas las secciones de la organización, con búsqueda y filtro por curso.
+- ST-102: los educadores de una sección se eligen solo del equipo docente del curso; para sumar a alguien, administración lo agrega antes al equipo en Configuración.
+- ST-103: la persona responsable ve e imparte solo las secciones que tiene asignadas, igual que quien colabora, y conserva la publicación del contenido. Una sección ajena indica «Esta sección no está asignada a tu cuenta».
+- Datos: `0022_section_instances.sql` agrega la sección a la actividad (`activity_events.group_id`, completada para los eventos existentes de secciones y clases) y a las aperturas de lecciones hechas con el código de una sección (`lesson_completions.group_id`). Las asignaciones actuales se conservan.
+- API: `GET /api/sections` y `GET /api/sections/:id` entregan cada sección con sus indicadores. `GET /api/courses/:id/groups/:gid` entrega una sección con su lista. `GET /api/activity` acepta `section=`, y la actividad y el avance se limitan a las secciones de cada educador. `PUT /api/courses/:id/groups/:gid/educators` responde 400 si alguien no integra el equipo. Se mantiene la autorización de v0.8.1: quien no integra el equipo recibe 403 y salir del equipo retira el acceso.
+
 ## 0.8.6 — 2026-10-05
 
 Parche de REL-004 (DEC-023): roles del curso. Administración prepara el curso y sus secciones, la persona responsable publica el contenido, y cada educador ve e imparte solo lo que tiene asignado.
