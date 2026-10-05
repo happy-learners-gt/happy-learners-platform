@@ -170,3 +170,27 @@ test("HL-61 ST-070: a group is renamed, loses a participant, closes without new 
   expect(detail.learners.map(learner => learner.learnerId)).toEqual([learners[0]]);
   expect((await call("PUT", `/groups/${id}`, { status: "archived" })).status).toBe(200);
 });
+
+test("the general library adds a resource to a chosen course and edits it", async ({ page }, info) => {
+  const title = e2eName(info, "Recurso general");
+  await signIn(page, "educador-demo", "/biblioteca");
+  await page.getByRole("button", { name: "Agregar recurso" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Agregar recurso" });
+  await dialog.getByLabel("Curso").selectOption({ label: "Exploradores" });
+  await dialog.getByLabel("Título").fill(title);
+  await dialog.getByLabel("Descripción breve").fill("Saludo para empezar la clase");
+  await dialog.getByRole("textbox", { name: "Texto" }).fill("Good morning, class!");
+  await dialog.getByRole("button", { name: "Agregar recurso" }).click();
+  await expect(dialog).toBeHidden();
+  await page.getByLabel("Buscar en la biblioteca").fill(title);
+  await page.getByText(title, { exact: true }).click();
+  await page.getByRole("dialog", { name: title }).getByRole("button", { name: "Editar" }).click();
+  const edit = page.getByRole("dialog", { name: "Editar recurso" });
+  await edit.getByLabel("Título").fill(`${title} B`);
+  await edit.getByRole("button", { name: "Guardar recurso" }).click();
+  await expect(edit).toBeHidden();
+  await page.getByLabel("Buscar en la biblioteca").fill(`${title} B`);
+  await expect(page.getByText(`${title} B`, { exact: true })).toBeVisible();
+  await page.goto(`/cursos/${course}/biblioteca`);
+  await expect(page.getByText(`${title} B`, { exact: true })).toBeVisible();
+});
