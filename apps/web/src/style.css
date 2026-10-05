@@ -430,8 +430,6 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: dialog-in
 .timetable-day a:hover { background: var(--color-primary-soft); }
 .weekday-picker { margin: 0; }
 .weekday-picker legend { font-weight: var(--weight-medium); margin-bottom: var(--space-2); }
-.inline-select { width: auto; max-width: min(320px, 100%); min-height: 32px; padding: 2px 28px 2px 8px; font-size: var(--text-sm); }
-.class-row-lesson { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
 @media (max-width: 760px) { .timetable-grid { grid-template-columns: minmax(0, 1fr); } }
 .group-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: var(--space-4); }
 .group-card { display: grid; gap: var(--space-4); align-content: start; padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-xs); scroll-margin-top: calc(var(--topbar-h) + 16px); border-top: 4px solid var(--pink-vivid); }
@@ -481,7 +479,7 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: dialog-in
 .setting-row h3 { font-family: var(--font-sans); font-size: var(--text-base); margin-bottom: 2px; }
 .setting-row p { max-width: 52ch; font-size: var(--text-sm); }
 .danger-zone { border-color: color-mix(in srgb, var(--color-danger) 30%, transparent); }
-.table-card { max-width: 100%; min-width: 0; overflow-x: auto; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-xs); }
+.table-card { position: relative; max-width: 100%; min-width: 0; overflow-x: auto; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-xs); }
 table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
 th, td { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border); text-align: left; }
 thead th { color: var(--color-muted); font-size: var(--text-xs); font-weight: var(--weight-bold); letter-spacing: var(--tracking-caps); text-transform: uppercase; background: var(--color-surface-muted); }
@@ -937,12 +935,53 @@ dialog.modal.viewer .modal-body > .usage, dialog.modal.viewer .modal-body > p { 
 .login-privacy { display: flex; align-items: center; gap: var(--space-2); color: var(--color-ink-soft); font-size: var(--text-sm); }
 .login-privacy .icon { color: var(--teal-ink); }
 
-/* Classes: list, detail with attendance next to lesson, resources and notes, and the student space. */
+/* Classes: the schedule table (planning and tracking), the class detail with attendance next to its lessons, and the student space. */
+.schedule-table { width: 100%; min-width: 1000px; border-collapse: separate; border-spacing: 0; font-size: var(--text-sm); }
+.schedule-table th, .schedule-table td { padding: var(--space-3); border-top: 1px solid var(--color-border); text-align: left; vertical-align: top; }
+.schedule-table thead th { border-top: 0; background: var(--color-surface-hover); color: var(--color-ink-soft); font-size: var(--text-xs); font-weight: var(--weight-bold); text-transform: uppercase; letter-spacing: .02em; white-space: nowrap; }
+.schedule-table tbody th { min-width: 128px; font-weight: var(--weight-regular); }
+.schedule-table th:first-child { position: sticky; left: 0; z-index: 1; background: var(--color-surface); box-shadow: inset -1px 0 0 var(--color-border); }
+.schedule-table thead th:first-child { background: var(--color-surface-hover); }
+.schedule-table td:nth-child(2) { min-width: 120px; }
+.schedule-table td:nth-child(3) { min-width: 160px; }
+.schedule-table td:nth-child(4) { min-width: 200px; }
+.schedule-table td:nth-child(5) { min-width: 140px; max-width: 220px; }
+.schedule-table td:nth-child(6) { min-width: 150px; }
+.schedule-table tr.is-today > * { background: var(--color-primary-soft); }
+.schedule-table tr.is-cancelled > * { color: var(--color-muted); }
+.cell-date { display: grid; gap: 2px; }
+.nowrap { white-space: nowrap; }
+.cell-list { margin: 0; padding-left: 1.1em; display: grid; gap: 2px; }
+ul.cell-list { list-style: none; padding-left: 0; }
+.cell-list li { overflow-wrap: anywhere; }
+ul.cell-list li svg { display: inline-block; vertical-align: -2px; margin-right: var(--space-1); color: var(--color-muted); }
+.cell-notes { margin: 0; white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.cell-status { display: grid; justify-items: start; gap: var(--space-1); min-width: 136px; }
+.cell-status .button { margin-top: var(--space-1); }
+.disclosure summary { cursor: pointer; font-weight: var(--weight-medium); padding: var(--space-1) 0; }
+.disclosure[open] summary { margin-bottom: var(--space-2); }
+.lesson-picker { display: grid; gap: var(--space-2); margin: 0; padding: 0; border: 0; min-width: 0; }
+.lesson-picker legend { padding: 0; margin-bottom: var(--space-2); font-weight: var(--weight-medium); }
+.lesson-picker-list { list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.lesson-picker-list li { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3); border-top: 1px solid var(--color-border); }
+.lesson-picker-list li:first-child { border-top: 0; }
+.lesson-picker-list li > span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.lesson-picker .select-inline select { max-width: 100%; }
+.class-lessons { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); }
+.class-lessons li + li { padding-top: var(--space-4); border-top: 1px solid var(--color-border); }
+@media (max-width: 760px) {
+  .schedule-table { min-width: 0; }
+  .schedule-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .schedule-table, .schedule-table tbody, .schedule-table tr, .schedule-table th, .schedule-table td { display: block; }
+  .schedule-table tr { padding: var(--space-3) var(--space-4); border-top: 1px solid var(--color-border); }
+  .schedule-table tbody tr:first-child { border-top: 0; }
+  .schedule-table th, .schedule-table td { padding: var(--space-1) 0; border: 0; min-width: 0 !important; max-width: none !important; }
+  .schedule-table th:first-child { position: static; box-shadow: none; background: transparent; }
+  .schedule-table tr.is-today { background: var(--color-primary-soft); }
+  .schedule-table tr.is-today > * { background: transparent; }
+  .schedule-table td[data-label]::before { content: attr(data-label); display: block; color: var(--color-ink-soft); font-size: var(--text-xs); font-weight: var(--weight-bold); }
+}
 .class-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.class-list { list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-xs); }
-.class-list li { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--color-border); }
-.class-list li:first-child { border-top: 0; }
-.class-row-main { display: grid; gap: 2px; flex: 1; min-width: 0; }
 .class-row-title { font-weight: var(--weight-bold); text-decoration: none; }
 .class-row-title:hover { text-decoration: underline; }
 .class-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); gap: var(--space-4); align-items: start; }
@@ -997,7 +1036,6 @@ dialog.modal.viewer .modal-body > .usage, dialog.modal.viewer .modal-body > p { 
 @media (max-width: 767px) {
   .editor-layout, .attendance-layout, .class-layout { grid-template-columns: minmax(0, 1fr); }
   .class-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .class-list li { flex-wrap: wrap; }
   .activity-outline, .session-nav { position: static; max-height: none; }
   .overview-grid { grid-template-columns: minmax(0, 1fr); }
   .overview-grid .span-2 { grid-column: auto; }

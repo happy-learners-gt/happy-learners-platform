@@ -205,3 +205,6 @@ export async function duplicateCourse(course: Course, onProgress?: (step: string
   }
   return id;
 }
+
+/** The lessons a class plans, as one line: «Saludos · Colores». */
+export const lessonNames = (session: { lessons: { title: string }[] }) => session.lessons.map(lesson => lesson.title).join(" · ");

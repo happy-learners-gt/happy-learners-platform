@@ -157,7 +157,8 @@ erDiagram
   course_groups ||--o{ group_learners : asigna
   course_groups ||--o{ class_sessions : reúne
   courses ||--o{ class_sessions : programa
-  lessons o|--o{ class_sessions : trabaja
+  class_sessions ||--o{ class_session_lessons : planifica
+  lessons ||--o{ class_session_lessons : trabaja
   class_sessions ||--o{ attendance_marks : registra
   group_learners ||--o{ attendance_marks : recibe
   course_groups {
@@ -186,13 +187,20 @@ erDiagram
     TEXT group_id FK
     TEXT course_id FK
     TEXT organization_id FK
-    TEXT lesson_id FK "nullable"
+    TEXT lesson_id FK "nullable; primera lección"
     TEXT session_date
     TEXT starts_at
     INTEGER duration_minutes
     TEXT status "planned, in_progress, completed, cancelled"
     TEXT origin "schedule, manual"
+    TEXT notes "comentarios del equipo"
     INTEGER lesson_revision "publicación usada"
+  }
+  class_session_lessons {
+    TEXT session_id PK,FK
+    TEXT lesson_id PK,FK
+    INTEGER position "0 a 5; único por clase"
+    INTEGER revision "nullable; publicación usada"
   }
   attendance_marks {
     TEXT session_id PK,FK
@@ -202,11 +210,15 @@ erDiagram
   }
 ```
 
-Una sección (`course_groups`) reúne a los estudiantes asignados al curso, su código de acceso y su horario semanal. `0019_section_schedule.sql` agrega el horario y el origen de cada clase. Guardar el horario genera las clases del periodo con `origin='schedule'`; al cambiarlo, la API rehace solo las clases generadas que siguen pendientes desde hoy, conserva las impartidas, en curso, canceladas y las agregadas a mano (`origin='manual'`), y reasigna en el mismo orden las lecciones que ya tenían. Los recursos de una clase son los de su lección: el equipo ve los del borrador y los estudiantes, los de la publicación vigente. El mapa de cobertura cuenta como impartida una lección de una clase finalizada.
+Una sección (`course_groups`) reúne a los estudiantes asignados al curso, su código de acceso y su horario semanal. `0019_section_schedule.sql` agrega el horario y el origen de cada clase. Guardar el horario genera las clases del periodo con `origin='schedule'`; al cambiarlo, la API rehace solo las clases generadas que siguen pendientes desde hoy, conserva las impartidas, en curso, canceladas y las agregadas a mano (`origin='manual'`), y pasa en el mismo orden a las nuevas fechas lo que ya estaba planificado (lecciones y comentarios). Una clase agregada a mano necesita solo su fecha: toma la hora y la duración del horario de la sección.
+
+`0020_class_lessons.sql` agrega `class_session_lessons`: una clase planifica de cero a seis lecciones, en orden y una vez cada una, y registra por lección la publicación con que se impartió (al comenzar la clase o al agregarla mientras está en curso). La migración copia la lección y la publicación de cada clase existente en la posición 0. `class_sessions.lesson_id` y `lesson_revision` siguen reflejando la primera lección para poder restaurar v0.8.4. Una clase pendiente cambia de fecha, hora, lecciones y comentarios; una en curso, solo de lecciones y comentarios; una impartida, solo de comentarios.
+
+El cronograma de una sección se arma con esas tablas: fecha y hora de la clase, semana del periodo y número entre las clases que se imparten, módulo de sus lecciones, actividades y recursos que las lecciones traen, comentarios y seguimiento (estado y asistencia). Los recursos de una clase son los de sus lecciones: el equipo ve los del borrador y los estudiantes, los de la publicación vigente. El mapa de cobertura cuenta como impartidas todas las lecciones de una clase finalizada.
 
 La API autoriza consulta y escritura solo al equipo docente del curso y verifica que sección, estudiante, clase, curso y organización coincidan. La clave primaria compuesta evita duplicar marcas para una persona dentro de una clase.
 
-`lesson_assignments` (0016) y `class_session_resources` (0018) ya no se leen desde v0.8.4. Se conservan sin cambios para poder restaurar v0.8.3 y se retirarán con ST-076.
+`lesson_assignments` (0016) y `class_session_resources` (0018) ya no se leen desde v0.8.4; `class_sessions.lesson_id` deja de leerse desde v0.8.5. Se conservan sin cambios para poder restaurar v0.8.3 y se retirarán con ST-076.
 
 Un curso puede existir sin unidades ni programa académico. Una lección nueva necesita una unidad activa del curso. No hay anidamiento ilimitado. Los perfiles cambian el vocabulario inicial; no crean reglas de evaluación ni requisitos inferidos.
 

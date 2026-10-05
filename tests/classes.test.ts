@@ -20,17 +20,20 @@ describe("class lifecycle (HL-61 ST-035, ST-097)", () => {
 
 describe("class plan input", () => {
   it("normalizes a complete plan", () => {
-    expect(classPlanInput({ sessionDate: "2026-10-12", startsAt: "08:00", durationMinutes: "45", lessonId: "lesson-1", notes: "  Repasar  " }))
-      .toEqual({ sessionDate: "2026-10-12", startsAt: "08:00", durationMinutes: 45, lessonId: "lesson-1", notes: "Repasar" });
+    expect(classPlanInput({ sessionDate: "2026-10-12", startsAt: "08:00", durationMinutes: "45", lessonIds: ["lesson-1", "lesson-2"], notes: "  Repasar  " }))
+      .toEqual({ sessionDate: "2026-10-12", startsAt: "08:00", durationMinutes: 45, lessonIds: ["lesson-1", "lesson-2"], notes: "Repasar" });
   });
   it("accepts a plan with only a date", () => {
-    expect(classPlanInput({ sessionDate: "2026-10-12" })).toEqual({ sessionDate: "2026-10-12", startsAt: null, durationMinutes: null, lessonId: null, notes: "" });
+    expect(classPlanInput({ sessionDate: "2026-10-12" })).toEqual({ sessionDate: "2026-10-12", startsAt: null, durationMinutes: null, lessonIds: [], notes: "" });
   });
   it.each([
     [{ sessionDate: "12/10/2026" }, "fecha"],
     [{ sessionDate: "2026-10-12", startsAt: "25:00" }, "hora"],
     [{ sessionDate: "2026-10-12", durationMinutes: 600 }, "duración"],
-    [{ sessionDate: "2026-10-12", notes: "x".repeat(2001) }, "notas"],
+    [{ sessionDate: "2026-10-12", notes: "x".repeat(2001) }, "comentarios"],
+    [{ sessionDate: "2026-10-12", lessonIds: "lesson-1" }, "lecciones"],
+    [{ sessionDate: "2026-10-12", lessonIds: ["lesson-1", "lesson-1"] }, "una sola vez"],
+    [{ sessionDate: "2026-10-12", lessonIds: ["l-1", "l-2", "l-3", "l-4", "l-5", "l-6", "l-7"] }, "hasta 6"],
   ])("rejects %j", (input, word) => {
     const result = classPlanInput(input);
     expect("error" in result && result.error.toLowerCase()).toContain(word);
