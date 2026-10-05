@@ -43,6 +43,7 @@ export async function openCourse(page: Page, title = "Exploradores") {
 }
 
 export const courseNav = (page: Page) => page.getByRole("navigation", { name: "Navegación del curso" });
+export const sectionNav = (page: Page) => page.getByRole("navigation", { name: "Navegación de la sección" });
 export const saveStatus = (page: Page) => page.locator(".save-indicator");
 export const toast = (page: Page) => page.locator(".toast-region");
 
