@@ -107,7 +107,7 @@ export async function sessions(parts: string[], method: string, input: unknown, 
       const rows = (await db.prepare(`SELECT ${sessionColumns} ${sessionJoins} WHERE s.course_id=? AND s.organization_id=? ORDER BY s.session_date DESC,s.starts_at DESC,s.created_at DESC LIMIT 400`).bind(courseId, current.organizationId).all<StoredSession>()).results.map(withLessons).filter(row => seesSection(access, row.groupId));
       return reply({ sessions: rows, lessonPlans: await lessonPlans(db, current.organizationId, rows.flatMap(row => row.lessons.map(lesson => lesson.id))), today: await todayFor(db, current.organizationId) });
     }
-    if (!access.teach) return notTeaching();
+    if (!access.assigned.length) return notTeaching();
     // An extra class (a make-up, a review) takes the time of its section's schedule unless another one is given.
     const plan = classPlanInput(input);
     if ("error" in plan) return reply(plan, 400);
@@ -122,7 +122,7 @@ export async function sessions(parts: string[], method: string, input: unknown, 
       db.prepare("INSERT INTO class_sessions(id,group_id,course_id,organization_id,lesson_id,session_date,starts_at,duration_minutes,notes,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,'planned',?,?)")
         .bind(id, group.id, courseId, current.organizationId, plan.lessonIds[0] ?? null, plan.sessionDate, plan.startsAt ?? group.startsAt, plan.durationMinutes ?? group.durationMinutes, plan.notes, now, now),
       ...planLessons(db, id, plan.lessonIds),
-      event(db, current, { action: "planned", targetType: "session", targetId: id, courseId, summary: `Agregó una clase el ${plan.sessionDate} en «${group.name}»` }),
+      event(db, current, { action: "planned", targetType: "session", targetId: id, courseId, groupId: group.id, summary: `Agregó una clase el ${plan.sessionDate} en «${group.name}»` }),
     ]);
     return reply({ id }, 201);
   }
@@ -164,7 +164,7 @@ export async function sessions(parts: string[], method: string, input: unknown, 
       db.prepare("UPDATE class_sessions SET session_date=?,starts_at=?,duration_minutes=?,lesson_id=?,notes=?,version=version+1,updated_at=? WHERE id=? AND organization_id=? AND version=? AND status<>'cancelled' RETURNING id")
         .bind(plan.sessionDate, plan.startsAt, plan.durationMinutes, plan.lessonIds[0] ?? null, plan.notes, now, sessionId, current.organizationId, Number.isInteger(version) ? version : -1),
       [...(sameList(plan.lessonIds, currentIds) ? [] : planLessons(db, sessionId, plan.lessonIds, new Map(session.lessons.map(lesson => [lesson.id, lesson.revision])), session.status === "in_progress")),
-        event(db, current, { action: "updated", targetType: "session", targetId: sessionId, courseId, summary: `Actualizó la planificación de la clase del ${plan.sessionDate} en «${session.groupName}»` })]);
+        event(db, current, { action: "updated", targetType: "session", targetId: sessionId, courseId, groupId: session.groupId, summary: `Actualizó la planificación de la clase del ${plan.sessionDate} en «${session.groupName}»` })]);
     return ok ? reply({ ok: true }) : stale();
   }
   if (sub === "attendance") {
@@ -181,7 +181,7 @@ export async function sessions(parts: string[], method: string, input: unknown, 
       ...list.map(mark => db.prepare("INSERT INTO attendance_marks(session_id,learner_id,status,updated_at) VALUES (?,?,?,?) ON CONFLICT(session_id,learner_id) DO UPDATE SET status=excluded.status,updated_at=excluded.updated_at").bind(sessionId, String(mark.learnerId), String(mark.status), now)),
       // Taking the roll opens a planned class: it is being taught now, by this educator, with the lessons' current publications.
       ...(session.status === "planned" ? start(db, sessionId, current, now) : []),
-      event(db, current, { action: "recorded", targetType: "session", targetId: sessionId, courseId, summary: `Pasó lista del ${session.sessionDate} en «${session.groupName}»: ${present} de ${list.length} presentes` }),
+      event(db, current, { action: "recorded", targetType: "session", targetId: sessionId, courseId, groupId: session.groupId, summary: `Pasó lista del ${session.sessionDate} en «${session.groupName}»: ${present} de ${list.length} presentes` }),
     ]);
     return reply({ saved: list.length, status: session.status === "planned" ? "in_progress" : session.status });
   }
@@ -200,7 +200,7 @@ export async function sessions(parts: string[], method: string, input: unknown, 
       db.prepare(`UPDATE class_session_lessons SET revision=COALESCE(revision,${currentRevision}) WHERE session_id=?`).bind(sessionId)]
     : [db.prepare("UPDATE class_sessions SET status=?,version=version+1,updated_at=? WHERE id=?").bind(target, now, sessionId)];
   const ok = await db.guardedBatch(db.prepare("SELECT id FROM class_sessions WHERE id=? AND status=?").bind(sessionId, session.status), [...statements,
-    event(db, current, { action: action === "cancel" ? "archived" : action === "restore" ? "restored" : "recorded", targetType: "session", targetId: sessionId, courseId, summary: `${actionSummary[action]} la clase del ${session.sessionDate} en «${session.groupName}»` })]);
+    event(db, current, { action: action === "cancel" ? "archived" : action === "restore" ? "restored" : "recorded", targetType: "session", targetId: sessionId, courseId, groupId: session.groupId, summary: `${actionSummary[action]} la clase del ${session.sessionDate} en «${session.groupName}»` })]);
   return ok ? reply({ status: target as ClassStatus }) : reply({ error: "La clase cambió mientras tanto. Recarga para ver su estado." }, 409);
 }
 const currentRevision = "(SELECT CASE WHEN l.revision>0 THEN l.revision END FROM lessons l WHERE l.id=class_session_lessons.lesson_id)";
