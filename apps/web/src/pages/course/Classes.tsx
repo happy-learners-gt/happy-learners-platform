@@ -87,7 +87,7 @@ function ClassList() {
       <div className="class-row-main">
         <Link href={`${page}/${session.id}`} className="class-row-title">{sessionDay(session.sessionDate)}{session.startsAt ? `, ${session.startsAt}` : ""}<span className="sr-only"> · {session.groupName}</span></Link>
         <span className="muted">{session.groupName} · {session.lessonTitle || "Sin lección"}{session.durationMinutes ? ` · ${session.durationMinutes} min` : ""}</span>
-        {session.status === "completed" && <span className="muted small">{session.attended} de {session.marked} presentes{rate(session) !== null ? ` (${rate(session)} %)` : ""}{session.taughtByName ? ` · impartió ${session.taughtByName}` : ""}</span>}
+        {session.status === "completed" && <span className="muted small">{session.attended} de {session.marked} presentes{rate(session) !== null ? ` (${rate(session)} %)` : ""}{session.lessonRevision ? ` · publicación ${session.lessonRevision}` : ""}{session.taughtByName ? ` · impartió ${session.taughtByName}` : ""}</span>}
       </div>
       {classBadge(session, today)}
     </li>)}</ol>
