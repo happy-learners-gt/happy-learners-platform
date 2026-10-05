@@ -67,6 +67,7 @@ test("HL-61 ST-035 ST-097 ST-098: an educator plans and teaches a class; the gro
   await page.goto(`/cursos/${course}/clases?vista=historial&grupo=${groupId}`);
   await expect(page.locator(".class-list li")).toHaveCount(1);
   await expect(page.locator(".class-list li").first()).toContainText("Impartida");
+  await expect(page.locator(".class-list li").first()).toContainText(/1 de 2 presentes .*· publicación \d+ · impartió /);
   await expect(page.locator(".class-stats")).toContainText("%");
 
   // The group enters with the code — no account — and sees the next class and its resources.
@@ -135,4 +136,61 @@ test("HL-62 ST-036: the course shows upcoming classes with time and the history 
   // Old links to attendance land on the classes.
   await page.goto("/cursos/seed-course-matematicas/asistencia");
   await expect(page).toHaveURL(/\/cursos\/seed-course-matematicas\/clases$/);
+});
+
+test("HL-61 ST-070: a group is renamed, loses a participant, closes without new classes and reopens", async ({}, info) => {
+  const cookie = `hl_session=${await sessionToken("educador-demo")}`;
+  const call = (method: string, path: string, data?: unknown) => fetch(`${origin}/api/courses/${course}${path}`, { method, headers: { Origin: origin, Cookie: cookie, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
+  const studentLogin = (code: string) => fetch(`${origin}/api/student/login`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+  const name = e2eName(info, "Ciclo");
+  const { id } = await (await call("POST", "/groups", { name })).json() as { id: string };
+  const learners: string[] = [];
+  for (const displayName of [`${E2E_PREFIX} Uno`, `${E2E_PREFIX} Dos`]) learners.push((await (await call("POST", `/groups/${id}/learners`, { displayName })).json() as { id: string }).id);
+  const group = async () => ((await (await call("GET", "/groups")).json()).groups as { id: string; name: string; status: string; learners: { id: string }[] }[]).find(item => item.id === id)!;
+
+  expect((await call("PUT", `/groups/${id}`, { name: `${name} B` })).status).toBe(200);
+  expect((await call("PUT", `/groups/${id}/learners/${learners[0]}`, { displayName: `${E2E_PREFIX} Uno bis` })).status).toBe(200);
+  expect((await call("PUT", `/groups/${id}/learners/${learners[1]}`, { status: "archived" })).status).toBe(200);
+  expect(await group()).toMatchObject({ name: `${name} B`, status: "active", learners: [{ id: learners[0], displayName: `${E2E_PREFIX} Uno bis` }] });
+  const { accessCode } = await (await call("POST", `/groups/${id}/code`)).json() as { accessCode: string };
+  expect((await studentLogin(accessCode)).status).toBe(200);
+
+  // A closed group keeps its history but takes no new classes, participants or student sessions.
+  expect((await call("PUT", `/groups/${id}`, { status: "archived" })).status).toBe(200);
+  expect((await group()).status).toBe("archived");
+  expect((await call("POST", "/sessions", { groupId: id, sessionDate: day(1) })).status).toBe(400);
+  expect((await call("POST", `/groups/${id}/learners`, { displayName: `${E2E_PREFIX} Tres` })).status).toBe(409);
+  expect((await studentLogin(accessCode)).status).toBe(404);
+
+  expect((await call("PUT", `/groups/${id}`, { status: "active" })).status).toBe(200);
+  const planned = await call("POST", "/sessions", { groupId: id, sessionDate: day(1) });
+  expect(planned.status).toBe(201);
+  const { id: sessionId } = await planned.json() as { id: string };
+  const detail = await (await call("GET", `/sessions/${sessionId}`)).json() as { learners: { learnerId: string }[] };
+  expect(detail.learners.map(learner => learner.learnerId)).toEqual([learners[0]]);
+  expect((await call("PUT", `/groups/${id}`, { status: "archived" })).status).toBe(200);
+});
+
+test("the general library adds a resource to a chosen course and edits it", async ({ page }, info) => {
+  const title = e2eName(info, "Recurso general");
+  await signIn(page, "educador-demo", "/biblioteca");
+  await page.getByRole("button", { name: "Agregar recurso" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Agregar recurso" });
+  await dialog.getByLabel("Curso").selectOption({ label: "Exploradores" });
+  await dialog.getByLabel("Título").fill(title);
+  await dialog.getByLabel("Descripción breve").fill("Saludo para empezar la clase");
+  await dialog.getByRole("textbox", { name: "Texto" }).fill("Good morning, class!");
+  await dialog.getByRole("button", { name: "Agregar recurso" }).click();
+  await expect(dialog).toBeHidden();
+  await page.getByLabel("Buscar en la biblioteca").fill(title);
+  await page.getByText(title, { exact: true }).click();
+  await page.getByRole("dialog", { name: title }).getByRole("button", { name: "Editar" }).click();
+  const edit = page.getByRole("dialog", { name: "Editar recurso" });
+  await edit.getByLabel("Título").fill(`${title} B`);
+  await edit.getByRole("button", { name: "Guardar recurso" }).click();
+  await expect(edit).toBeHidden();
+  await page.getByLabel("Buscar en la biblioteca").fill(`${title} B`);
+  await expect(page.getByText(`${title} B`, { exact: true })).toBeVisible();
+  await page.goto(`/cursos/${course}/biblioteca`);
+  await expect(page.getByText(`${title} B`, { exact: true })).toBeVisible();
 });
