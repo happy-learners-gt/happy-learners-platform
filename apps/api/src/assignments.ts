@@ -47,7 +47,7 @@ export async function assignmentsFor(db: Database, organizationId: string, cours
 
 /** GET /api/assignments — current assignments of the courses whose teaching team includes the educator (ST-029). */
 export async function currentAssignments(current: Member, db: Database) {
-  if (current.role !== "educator") return reply({ error: "Solo educadores consultan sus asignaciones." }, 403);
+  if (current.role !== "educator") return reply({ error: "Solo educadores consultan su cronograma." }, 403);
   const today = await organizationToday(db, current.organizationId);
   const rows = await db.prepare(assignmentQuery + " AND a.status='active' AND c.status='active' AND g.status='active' AND a.starts_on<=? AND (a.ends_on IS NULL OR a.ends_on>=?) AND EXISTS(SELECT 1 FROM course_members m WHERE m.course_id=a.course_id AND m.user_id=?) ORDER BY c.title,g.name,title,a.id")
     .bind(current.organizationId, today, today, current.id).all<Row>();
@@ -59,7 +59,7 @@ async function publishedLesson(db: Database, courseId: string, lessonId: unknown
   const lesson = await db.prepare("SELECT l.id,json_extract(COALESCE(l.published_content,l.content),'$.title') AS title,l.revision,l.archived,(l.published_content IS NOT NULL) AS published FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id WHERE l.id=? AND u.course_id=?").bind(lessonId, courseId).first<LessonFacts>();
   if (!lesson) return { error: reply({ error: "La lección seleccionada no pertenece a este curso." }, 400) };
   // Only content students can open may be assigned: never a draft, an unpublished or an archived lesson.
-  if (lesson.archived || !lesson.published || lesson.revision < 1) return { error: reply({ error: "Solo se pueden asignar lecciones publicadas. Publica la lección antes de asignarla." }, 400) };
+  if (lesson.archived || !lesson.published || lesson.revision < 1) return { error: reply({ error: "Solo se pueden programar lecciones publicadas. Publica la lección antes de asignarla." }, 400) };
   return { lesson };
 }
 
@@ -77,7 +77,7 @@ export async function assignments(parts: string[], method: string, input: unknow
     if (periodError) return reply({ error: periodError }, 400);
     const endsOn = typeof value?.endsOn === "string" && value.endsOn ? value.endsOn : null;
     if (await db.prepare("SELECT id FROM lesson_assignments WHERE group_id=? AND lesson_id=? AND status='active'").bind(group.id, lesson!.id).first())
-      return reply({ error: `«${lesson!.title}» ya está asignada a ${group.name}. Retira la asignación actual para cambiar sus fechas.` }, 409);
+      return reply({ error: `«${lesson!.title}» ya está programada para ${group.name}. Retírala del cronograma para cambiar sus fechas.` }, 409);
     const id = `assignment-${crypto.randomUUID()}`;
     await db.batch([
       db.prepare("INSERT INTO lesson_assignments(id,organization_id,course_id,group_id,lesson_id,starts_on,ends_on,assigned_revision,status,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,'active',?,?,?)")
@@ -88,7 +88,7 @@ export async function assignments(parts: string[], method: string, input: unknow
   }
   if (parts.length !== 6 || method !== "PUT") return reply({ error: "Ruta no disponible." }, 404);
   const row = await db.prepare(assignmentQuery + " AND a.course_id=? AND a.id=? AND a.status='active'").bind(current.organizationId, courseId, parts[5]).first<Row>();
-  if (!row) return reply({ error: "La asignación no está disponible en este curso." }, 404);
+  if (!row) return reply({ error: "La lección programada no está disponible en este curso." }, 404);
   const value = input as Record<string, unknown> | null;
   const title = row.title || "la lección";
   if (value?.action === "withdraw") {
@@ -111,7 +111,7 @@ export async function assignments(parts: string[], method: string, input: unknow
     const { lesson, error } = await publishedLesson(db, courseId, value.lessonId);
     if (error) return error;
     if (lesson!.id !== row.lesson_id && await db.prepare("SELECT id FROM lesson_assignments WHERE group_id=? AND lesson_id=? AND status='active'").bind(row.group_id, lesson!.id).first())
-      return reply({ error: `«${lesson!.title}» ya está asignada a ${row.group_name}.` }, 409);
+      return reply({ error: `«${lesson!.title}» ya está programada para ${row.group_name}.` }, 409);
     await db.batch([
       db.prepare("UPDATE lesson_assignments SET lesson_id=?,assigned_revision=?,updated_at=? WHERE id=?").bind(lesson!.id, lesson!.revision, now, row.id),
       event(db, current, { action: "assigned", targetType: "lesson", targetId: lesson!.id, courseId, summary: `Sustituyó «${title}» por «${lesson!.title}» en ${row.group_name}` }),

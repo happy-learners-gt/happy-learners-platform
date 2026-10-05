@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.3 — 2026-10-04
+
+Parche de REL-004 (DEC-020): nombres del aula alineados con el uso del equipo docente.
+
+- ST-027 / HL-48: la página que programa qué lección publicada usa cada grupo y en qué fechas se llama Cronograma (`/cursos/:id/cronograma`). Los enlaces anteriores a Asignaciones redirigen. Inicio muestra «Tu cronograma vigente» y el espacio del grupo, «Lecciones del cronograma».
+- Asignación significa ahora la inscripción de un estudiante en el curso: se asigna al agregarlo a la lista de un grupo. La Ayuda y la página Grupos lo explican.
+- Sin cambios de datos, permisos ni API.
+
 ## 0.8.2 — 2026-10-04
 
 Parche de REL-004 (DEC-019): el ciclo de una clase queda completo y el grupo la sigue con su código.

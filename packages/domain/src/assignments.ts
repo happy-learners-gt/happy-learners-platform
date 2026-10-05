@@ -27,7 +27,7 @@ export function isCalendarDay(value: unknown): value is string {
 
 /** Validates the period of an assignment; returns an error message or null. */
 export function assignmentPeriodError(startsOn: unknown, endsOn: unknown): string | null {
-  if (!isCalendarDay(startsOn)) return "Indica desde qué fecha aplica la asignación.";
+  if (!isCalendarDay(startsOn)) return "Indica desde qué fecha aplica la lección programada.";
   if (endsOn !== null && endsOn !== undefined && endsOn !== "") {
     if (!isCalendarDay(endsOn)) return "La fecha de término no es válida.";
     if (endsOn < startsOn) return "La fecha de término debe ser igual o posterior a la de inicio.";

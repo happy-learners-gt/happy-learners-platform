@@ -12,7 +12,7 @@ async function clients(playwright: { request: APIRequest }, baseURL: string, use
 
 /** A course with groups enabled, one module, two published lessons and one draft. */
 async function courseWithLessons(educator: APIRequestContext, label: string) {
-  const body = { title: `${E2E_PREFIX} Asignaciones ${label}`, objective: "Organizar qué lección usa cada grupo.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", area: "011", settings: { attendance: true }, programId: null };
+  const body = { title: `${E2E_PREFIX} Cronograma ${label}`, objective: "Organizar qué lección usa cada grupo.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", area: "011", settings: { attendance: true }, programId: null };
   const created = await educator.post("/api/courses", { data: body }); expect(created.status(), await created.text()).toBe(201);
   const courseId = (await created.json()).id, path = `/api/courses/${courseId}`;
   const unit = await educator.post(`${path}/units`, { data: { name: `${E2E_PREFIX} Módulo 1`, objective: "Practicar.", status: "active", version: 1 } }); expect(unit.status()).toBe(201);
@@ -39,7 +39,7 @@ test("ST-027 API: only published lessons are assigned, with recipient and period
     // Only published content can be assigned.
     const notPublished = await educator.post(`${path}/assignments`, { data: { groupId, lessonId: draft.id, startsOn: "2026-10-05" } });
     expect(notPublished.status()).toBe(400);
-    expect((await notPublished.json()).error).toContain("Solo se pueden asignar lecciones publicadas");
+    expect((await notPublished.json()).error).toContain("Solo se pueden programar lecciones publicadas");
     // Recipient and period are required and coherent.
     expect((await educator.post(`${path}/assignments`, { data: { groupId: "group-unknown", lessonId: first.id, startsOn: "2026-10-05" } })).status()).toBe(400);
     expect((await educator.post(`${path}/assignments`, { data: { groupId, lessonId: first.id } })).status()).toBe(400);
@@ -77,30 +77,32 @@ test("ST-027 UI: assign a published lesson to a group and see distinct messages 
     const emptyBody = { title: `${E2E_PREFIX} Sin publicar ${info.project.name}`, objective: "Curso sin lecciones publicadas.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", area: "011", settings: { attendance: true }, programId: null };
     const empty = (await (await educator.post("/api/courses", { data: emptyBody })).json()).id;
     expect((await educator.post(`/api/courses/${empty}/groups`, { data: { name: `${E2E_PREFIX} Grupo sin contenido` } })).status()).toBe(201);
+    // Links to the former Asignaciones page open the schedule.
     await signIn(page, "educador-demo", `/cursos/${empty}/asignaciones`);
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Asignaciones");
+    await expect(page).toHaveURL(new RegExp(`/cursos/${empty}/cronograma$`));
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Cronograma");
     await expect(page.getByRole("status").filter({ hasText: "Este curso no tiene lecciones publicadas" })).toBeVisible();
-    await expect(page.getByText("Este grupo aún no tiene lecciones asignadas.")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Asignar lección", exact: true })).toHaveCount(0);
+    await expect(page.getByText("Este grupo aún no tiene lecciones en el cronograma.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Programar lección", exact: true })).toHaveCount(0);
 
     const { courseId, first } = await courseWithLessons(educator, `UI ${info.project.name}`);
     const groupName = `${E2E_PREFIX} Grupo jueves`;
     expect((await educator.post(`/api/courses/${courseId}/groups`, { data: { name: groupName } })).status()).toBe(201);
     await page.goto(`/cursos/${courseId}`);
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Asignaciones UI");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Cronograma UI");
     await openNavigation(page);
-    await courseNav(page).getByRole("link", { name: "Asignaciones", exact: true }).click();
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Asignaciones");
+    await courseNav(page).getByRole("link", { name: "Cronograma", exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Cronograma");
     const panel = page.locator(".assignment-group").filter({ has: page.getByRole("heading", { name: groupName, exact: true }) });
-    await expect(panel.getByText("Este grupo aún no tiene lecciones asignadas.")).toBeVisible();
-    await panel.getByRole("button", { name: `Asignar a ${groupName}` }).click();
-    const dialog = page.getByRole("dialog", { name: "Asignar lección" });
+    await expect(panel.getByText("Este grupo aún no tiene lecciones en el cronograma.")).toBeVisible();
+    await panel.getByRole("button", { name: `Programar para ${groupName}` }).click();
+    const dialog = page.getByRole("dialog", { name: "Programar lección" });
     await expect(dialog.getByLabel("Grupo").locator("option:checked")).toHaveText(groupName);
     // Drafts are never offered.
     await expect(dialog.getByLabel("Lección").locator("option")).toHaveCount(2);
     await dialog.getByLabel("Lección").selectOption(first.id);
-    await dialog.getByRole("button", { name: "Asignar", exact: true }).click();
-    await expect(toast(page)).toContainText(`Lección asignada a ${groupName}.`);
+    await dialog.getByRole("button", { name: "Programar", exact: true }).click();
+    await expect(toast(page)).toContainText(`Lección programada para ${groupName}.`);
     const row = panel.locator(".assignment-row").filter({ hasText: first.title });
     await expect(row.getByText("Vigente", { exact: true })).toBeVisible();
     await expect(row.getByText("Publicación 1", { exact: true })).toBeVisible();
@@ -111,6 +113,6 @@ test("ST-027 UI: assign a published lesson to a group and see distinct messages 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.locator(".assignment-row").filter({ hasText: first.title }).getByRole("button", { name: "Retirar" }).click();
     await expect(toast(page)).toContainText("se retiró de");
-    await expect(panel.getByText("Este grupo aún no tiene lecciones asignadas.")).toBeVisible();
+    await expect(panel.getByText("Este grupo aún no tiene lecciones en el cronograma.")).toBeVisible();
   } finally { await educator.dispose(); }
 });
