@@ -7,8 +7,10 @@ export { OrganizationStore } from "./storage";
 import { cookie, digest, newToken, sessionToken, verifyPassword } from "./auth";
 import { roles } from "./roles";
 import { curriculum } from "./curriculum";
-import { content, shared } from "./content";
+import { content, reviews, shared } from "./content";
 import { courses, programs, taxonomy } from "./courses";
+import { duplicateCourse } from "./duplicate";
+import { accessTo } from "./access";
 import { activity, people, progress } from "./team";
 import { classroom } from "./attendance";
 import { myClasses, student, studentScope, studentToken } from "./classes";
@@ -77,7 +79,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/courses\/[a-z0-9-]+\/(competencies|outcomes)$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/units\/[a-z0-9-]+\/outcomes$/.test(path)) methods[path] = ["PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/team$/.test(path)) methods[path] = ["PUT"];
-  if (path === "/api/activity" || path === "/api/progress" || path === "/api/people") methods[path] = ["GET"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/duplicate$/.test(path)) methods[path] = ["POST"];
+  if (path === "/api/activity" || path === "/api/progress" || path === "/api/people" || path === "/api/reviews") methods[path] = ["GET"];
   if (/^\/api\/courses\/[a-z0-9-]+\/files$/.test(path)) methods[path] = ["GET", "POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/files\/[a-z0-9-]+\/content$/.test(path)) methods[path] = ["GET"];
   if (/^\/api\/courses\/[a-z0-9-]+\/files\/[a-z0-9-]+\/archive$/.test(path)) methods[path] = ["POST"];
@@ -85,6 +88,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions)$/.test(path)) methods[path] = ["GET", "POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/schedule$/.test(path)) methods[path] = ["PUT", "DELETE"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/lessons$/.test(path)) methods[path] = ["POST"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/educators$/.test(path)) methods[path] = ["PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/learners$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/learners\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
@@ -99,7 +103,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/programs\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET", "PUT"];
   if (/^\/api\/(vocabularies|terms)$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/(vocabularies|terms)\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
-  const allowed = methods[path] || (path === "/api/curriculum" ? ["GET"] : /^\/api\/(levels|units)$/.test(path) ? ["POST"] : /^\/api\/(levels|units)\/[a-z0-9-]+$/.test(path) ? ["PUT"] : path === "/api/members" ? ["GET"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/(lessons|resources)\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/(publish|duplicate)$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+\/files\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
+  const allowed = methods[path] || (path === "/api/curriculum" ? ["GET"] : /^\/api\/(levels|units)$/.test(path) ? ["POST"] : /^\/api\/(levels|units)\/[a-z0-9-]+$/.test(path) ? ["PUT"] : path === "/api/members" ? ["GET"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/(lessons|resources)\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/(publish|duplicate|review|review\/return)$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+\/files\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
   if (!allowed) return json({ error: "Not found" }, 404);
   if (!allowed.includes(method)) return json({ error: "Method not allowed" }, 405, { Allow: allowed.join(", ") });
   if (!["GET", "HEAD"].includes(method)) {
@@ -142,9 +146,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/courses\/[a-z0-9-]+\/files(?:\/|$)/.test(path)) return courseFiles(path, method, request, current, db, env.COURSE_FILES);
   const collaborationMatch = path.match(/^\/api\/courses\/([a-z0-9-]+)\/lessons\/([a-z0-9-]+)\/collaborate$/);
   if (collaborationMatch) {
-    if (current.role !== "educator") return json({ error: "Solo educadores pueden editar lecciones." }, 403);
-    if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket" || request.headers.get("Origin") !== url.origin) return json({ error: "Se requiere una conexión segura del mismo origen." }, 400);
     const [courseId, lessonId] = [collaborationMatch[1], collaborationMatch[2]];
+    if (!(await accessTo(db, current, courseId))?.edit) return json({ error: "Solo el equipo docente del curso edita sus lecciones." }, 403);
+    if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket" || request.headers.get("Origin") !== url.origin) return json({ error: "Se requiere una conexión segura del mismo origen." }, 400);
     const lesson = await db.prepare("SELECT l.content FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id JOIN courses c ON c.id=u.course_id WHERE l.id=? AND c.id=? AND c.organization_id=? AND c.status='active' AND u.status='active' AND l.archived=0").bind(lessonId, courseId, current.organizationId).first<{ content: string }>();
     if (!lesson) return json({ error: "Lección no disponible en este curso." }, 404);
     const roomIdentity = { organizationId: current.organizationId, courseId, lessonId };
@@ -164,15 +168,16 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
   if (/^\/api\/(taxonomy|vocabularies|terms)(\/|$)/.test(path)) return taxonomy(path, method, input, current, db);
   if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions)(\/|$)/.test(path)) return classroom(path, method, input, current, db);
+  if (/^\/api\/courses\/[a-z0-9-]+\/duplicate$/.test(path)) return duplicateCourse(path.split("/")[3], current, db, env.COURSE_FILES);
   if (/^\/api\/courses(\/|$)/.test(path)) return courses(path, method, input, current, db);
   if (/^\/api\/programs(\/|$)/.test(path)) return programs(path, method, input, current, db);
   if (path === "/api/activity") return activity(url, current, db);
   if (path === "/api/classes") return myClasses(current, db);
   if (path === "/api/progress") return progress(current, db);
   if (path === "/api/people") return people(current, db);
+  if (path === "/api/reviews") return reviews(current, db);
   if (path.startsWith("/api/members")) return roles(path, method, input, current, db);
   if (/^\/api\/(curriculum|levels|units)(\/|$)/.test(path)) return curriculum(path, method, input, current, db);
-  if (!["GET", "HEAD"].includes(method) && path !== "/api/organization" && current.role !== "educator") return json({ error: "Solo educadores pueden modificar contenido." }, 403);
   if (path === "/api/organization") {
     if (method === "PUT") {
       if (current.role !== "admin") return json({ error: "Solo administración puede configurar la organización." }, 403);

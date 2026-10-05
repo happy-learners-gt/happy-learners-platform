@@ -19,6 +19,7 @@ import demoAssignmentMigration from "../../../database/migrations/0017_demo_clas
 import classPlanningMigration from "../../../database/migrations/0018_class_planning.sql";
 import sectionScheduleMigration from "../../../database/migrations/0019_section_schedule.sql";
 import classLessonsMigration from "../../../database/migrations/0020_class_lessons.sql";
+import rolesReviewsMigration from "../../../database/migrations/0021_roles_and_reviews.sql";
 
 type Statement = { sql: string; values: (string | number | null)[] };
 /**
@@ -43,7 +44,8 @@ export class OrganizationStore extends DurableObject<Env> {
       JOIN memberships m ON m.user_id=s.user_id AND m.organization_id=? AND m.active=1
       JOIN courses c ON c.organization_id=m.organization_id AND c.id=? AND c.status='active'
       JOIN lessons l ON l.id=? AND l.program_id=c.legacy_program_id AND l.archived=0
-      WHERE s.token_hash=? AND s.user_id=? AND s.expires_at>? AND CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END='educator'` , values: [organizationId, courseId, lessonId, tokenHash, userId, Date.now()] }]);
+      JOIN course_members cm ON cm.course_id=c.id AND cm.organization_id=c.organization_id AND cm.user_id=s.user_id
+      WHERE s.token_hash=? AND s.user_id=? AND s.expires_at>?` , values: [organizationId, courseId, lessonId, tokenHash, userId, Date.now()] }]);
     return result[0].length === 1;
   }
 
@@ -82,6 +84,7 @@ export class OrganizationStore extends DurableObject<Env> {
       if (!applied.length || applied[0].version < 18) { this.ctx.storage.sql.exec(classPlanningMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (18,?)", scope); }
       if (!applied.length || applied[0].version < 19) { this.ctx.storage.sql.exec(sectionScheduleMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (19,?)", scope); }
       if (!applied.length || applied[0].version < 20) { this.ctx.storage.sql.exec(classLessonsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (20,?)", scope); }
+      if (!applied.length || applied[0].version < 21) { this.ctx.storage.sql.exec(rolesReviewsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (21,?)", scope); }
       // Compare-and-write plus dependent writes belong to one SQLite transaction.
       if (guard && !this.ctx.storage.sql.exec(guard.sql, ...guard.values).toArray().length) return [];
       return statements.map(statement => this.ctx.storage.sql.exec(statement.sql, ...statement.values).toArray());
