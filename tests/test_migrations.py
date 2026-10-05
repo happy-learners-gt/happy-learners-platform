@@ -300,11 +300,27 @@ class UpgradeTests(unittest.TestCase):
         other = self.scoped("org-other")
         self.assertEqual(other.execute("SELECT count(*) FROM course_groups WHERE schedule_weekdays IS NOT NULL").fetchone()[0], 0)
 
+    def test_class_lessons_keep_each_planned_lesson_and_its_publication(self):
+        """0020: every class with a lesson keeps it as its first lesson; a class can hold several, once each."""
+        demo = self.scoped("org-demo")
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+        self.assertEqual(demo.execute("SELECT count(*) FROM class_sessions WHERE lesson_id IS NOT NULL").fetchone()[0], demo.execute("SELECT count(*) FROM class_session_lessons").fetchone()[0])
+        self.assertEqual(demo.execute("SELECT count(*) FROM class_sessions s LEFT JOIN class_session_lessons p ON p.session_id=s.id AND p.position=0 WHERE s.lesson_id IS NOT NULL AND (p.lesson_id IS NOT s.lesson_id OR p.revision IS NOT s.lesson_revision)").fetchone()[0], 0)
+        session, first, second = demo.execute("SELECT s.id,p.lesson_id,(SELECT l.id FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id WHERE u.course_id=s.course_id AND l.id<>p.lesson_id LIMIT 1) FROM class_sessions s JOIN class_session_lessons p ON p.session_id=s.id WHERE s.status='planned' LIMIT 1").fetchone()
+        demo.execute("INSERT INTO class_session_lessons(session_id,lesson_id,position) VALUES (?,?,1)", (session, second))
+        for row in ((session, first, 2), (session, "missing-lesson", 3)):
+            with self.assertRaises(sqlite3.IntegrityError):
+                demo.execute("INSERT INTO class_session_lessons(session_id,lesson_id,position) VALUES (?,?,?)", row)
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("INSERT INTO class_session_lessons(session_id,lesson_id,position) VALUES (?,?,6)", (session, "seed-lesson-x"))
+        other = self.scoped("org-other")
+        self.assertEqual(other.execute("SELECT count(*) FROM class_session_lessons").fetchone()[0], 0)
+
     def test_class_planning_keeps_a_renamed_organization(self):
         db = sqlite3.connect(":memory:")
         migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
-        for path in migrations[:-1]:
+        for path in migrations:
+            if path.name.startswith("0018_"):
+                db.execute("UPDATE organizations SET name='Colegio Real' WHERE id='org-demo'")
             db.executescript(path.read_text())
-        db.execute("UPDATE organizations SET name='Colegio Real' WHERE id='org-demo'")
-        db.executescript(migrations[-1].read_text())
         self.assertEqual(db.execute("SELECT name FROM organizations WHERE id='org-demo'").fetchone()[0], "Colegio Real")

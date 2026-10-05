@@ -47,10 +47,29 @@ export function scheduleSummary(schedule: Pick<SectionSchedule, "weekdays" | "st
 }
 
 /**
- * Lessons for the classes still without one, in content order: lessons the section already has in a class are
- * skipped, and classes beyond the last lesson stay empty.
+ * Lessons for the classes still without any, in content order and `perClass` at a time: lessons the section already
+ * has in a class are skipped, and classes beyond the last lesson stay empty.
  */
-export function lessonsInOrder(classes: { id: string; lessonId?: string | null }[], ordered: string[], used: string[]) {
+export function lessonsInOrder(classes: { id: string; lessonIds: string[] }[], ordered: string[], used: string[], perClass = 1) {
   const queue = ordered.filter(id => !used.includes(id));
-  return classes.filter(item => !item.lessonId).slice(0, queue.length).map((item, index) => ({ sessionId: item.id, lessonId: queue[index] }));
+  const size = Math.max(1, Math.min(3, Math.trunc(perClass) || 1));
+  return classes.filter(item => !item.lessonIds.length).slice(0, Math.ceil(queue.length / size))
+    .map((item, index) => ({ sessionId: item.id, lessonIds: queue.slice(index * size, index * size + size) }));
+}
+
+const mondayOf = (day: string) => { const date = new Date(`${day}T00:00:00Z`); date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7); return date.getTime(); };
+/** Week of the period a class falls in, counting Monday-to-Sunday weeks from the period's first day: 1, 2, … */
+export function periodWeek(day: string, first: string) {
+  return Math.floor((mondayOf(day) - mondayOf(first)) / (7 * 86400000)) + 1;
+}
+
+/**
+ * Where each class sits in its section's schedule of classes: the week of the period and its number among the
+ * classes that are held (cancelled ones keep their week but take no number).
+ */
+export function classSequence<T extends { id: string; sessionDate: string; startsAt?: string | null; status: string }>(classes: T[], first?: string | null) {
+  const ordered = [...classes].sort((a, b) => a.sessionDate.localeCompare(b.sessionDate) || (a.startsAt || "").localeCompare(b.startsAt || ""));
+  const start = first && ordered[0] && first < ordered[0].sessionDate ? first : ordered[0]?.sessionDate;
+  let number = 0;
+  return new Map(ordered.map(item => [item.id, { week: start ? periodWeek(item.sessionDate, start) : 1, number: item.status === "cancelled" ? null : ++number }]));
 }

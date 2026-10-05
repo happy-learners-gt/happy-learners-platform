@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.5 — 2026-10-05
+
+Parche de REL-004 (DEC-022): Clases es el cronograma de la sección. Se planifica con el horario y los contenidos, y se sigue clase por clase con su asistencia.
+
+- ST-101 / ST-097: **Clases** muestra el cronograma de cada sección como tabla: fecha (con semana del periodo y número de clase), módulo, lecciones, actividades, comentarios, recursos y seguimiento (estado y asistencia). En el celular cada clase se muestra como tarjeta. Filtros: todo el periodo, próximas e historial.
+- ST-101: **Planificar** en cada fila elige las lecciones de la clase en orden y sus comentarios. La lección es opcional y una clase puede cubrir hasta seis. La fecha y la hora vienen del horario; una clase pendiente puede cambiarlas desde «Cambiar fecha u hora».
+- ST-097 / ST-027: «Asignar lecciones en orden» admite de una a tres lecciones por clase. «Agregar clase» pide solo la sección y la fecha: toma la hora y la duración del horario de la sección.
+- ST-035 / ST-071: la ejecución queda en la página de la clase: comenzar, pasar lista y finalizar. Una clase en curso conserva su fecha y hora; una impartida conserva sus lecciones, registra la publicación de cada una y solo cambia sus comentarios.
+- ST-099: al cambiar el horario, lo planificado en las clases pendientes (lecciones y comentarios) pasa en orden a las nuevas fechas.
+- ST-098 / ST-100: el espacio de la sección muestra todas las lecciones de cada clase y sus recursos; el mapa de cobertura cuenta todas las lecciones de las clases finalizadas.
+- Datos: `0020_class_lessons.sql` agrega `class_session_lessons` (orden, publicación usada) y copia la lección de cada clase existente. `class_sessions.lesson_id` sigue reflejando la primera lección para poder restaurar v0.8.4.
+- API: `PUT /api/courses/:id/sessions/:sid` recibe `lessonIds` y `POST /api/courses/:id/groups/:gid/lessons` recibe `perClass`; `GET /api/courses/:id/sessions` entrega las actividades y recursos de las lecciones planificadas. Se retira `PUT /api/courses/:id/sessions/:sid/lesson`. La autorización por equipo del curso (ST-096) se conserva.
+
 ## 0.8.4 — 2026-10-05
 
 Parche de REL-004 (DEC-021): el aula sigue el orden de trabajo del equipo docente. Las secciones agrupan a los estudiantes asignados, el horario genera las clases y cada clase trabaja una lección con sus recursos.

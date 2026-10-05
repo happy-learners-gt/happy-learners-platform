@@ -22,7 +22,7 @@ function useDelivery(courseId: string, enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
     Promise.all([api<{ sessions: ClassSession[] }>(`/courses/${courseId}/sessions`), api<{ groups: { id: string; name: string }[] }>(`/courses/${courseId}/groups`)])
-      .then(([s, g]) => setDelivery({ sessions: s.sessions.filter(session => session.status === "completed" && session.lessonId), sections: g.groups })).catch(() => setDelivery(null));
+      .then(([s, g]) => setDelivery({ sessions: s.sessions.filter(session => session.status === "completed" && session.lessons.length), sections: g.groups })).catch(() => setDelivery(null));
   }, [courseId, enabled]);
   return delivery;
 }
@@ -40,7 +40,7 @@ export function Plan() {
   const base = `/cursos/${course.id}`;
   const delivery = useDelivery(course.id, classroom && settings.attendance && course.status === "active");
   const [section, setSection] = useState("");
-  const delivered = (delivery?.sessions || []).filter(session => !section || session.groupId === section).map(session => session.lessonId!);
+  const delivered = (delivery?.sessions || []).filter(session => !section || session.groupId === section).flatMap(session => session.lessons.map(lesson => lesson.id));
   const map = coverage(curriculum, units, lessons, delivered);
   const codeOf = new Map(map.outcomes.map(item => [item.outcome.id, item.code]));
   const coverageOf = new Map(map.outcomes.map(item => [item.outcome.id, item]));

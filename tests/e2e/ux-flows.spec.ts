@@ -157,6 +157,8 @@ test("5 · assign a student to a section and record attendance", async ({ page }
   await expect(dialog.getByLabel("Sección")).toHaveValue(/group-/);
   await expect(dialog.getByLabel("Sección").locator("option:checked")).toContainText(group);
   await dialog.getByRole("button", { name: "Agregar clase" }).click();
+  await expect(toast(page)).toContainText("Clase agregada al cronograma.");
+  await page.getByRole("table", { name: /Cronograma de clases de/ }).getByRole("row").nth(1).getByRole("link").first().click();
   await expect(page).toHaveURL(/\/clases\/class-/);
   const marks = page.getByRole("radiogroup", { name: learner });
   await expect(page.getByRole("button", { name: "Guardar asistencia" })).toBeDisabled();
