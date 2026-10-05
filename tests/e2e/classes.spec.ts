@@ -1,46 +1,55 @@
 import { test, expect } from "./local-test";
-import { E2E_PREFIX, courseNav, e2eName, openNavigation, origin, sessionToken, signIn, toast } from "./helpers";
+import { E2E_PREFIX, e2eName, openNavigation, origin, sectionNav, sessionToken, signIn, toast } from "./helpers";
 
 const course = "course-exploradores";
 const day = (offset: number) => { const date = new Date(); date.setDate(date.getDate() + offset); return date.toLocaleDateString("en-CA"); };
 
 test("HL-61 ST-035 ST-097 ST-098 ST-101 ST-102: administration prepares a section, its educator plans and teaches a class and the section follows it with its code", async ({ page }, info) => {
   const group = e2eName(info, "Clase"), first = `${E2E_PREFIX} Ana`, second = `${E2E_PREFIX} Beto`;
-  await signIn(page, "admin-demo", `/cursos/${course}/asignaciones`);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Asignaciones");
+  // DEC-024: the course defines what is taught; each section is its own instance, created by administration.
+  await signIn(page, "admin-demo", `/cursos/${course}/secciones`);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Secciones");
   await page.getByRole("button", { name: "Nueva sección", exact: true }).click();
   const form = page.getByRole("form", { name: "Nueva sección" });
   await form.getByLabel("Nombre de la sección").fill(group);
   await form.getByRole("button", { name: "Crear sección" }).click();
-  const card = page.locator(".group-card").filter({ has: page.getByRole("heading", { name: group, exact: true }) });
-  for (const learner of [first, second]) {
-    await card.getByLabel(`Nombre o código de lista para ${group}`).fill(learner);
-    await card.getByRole("form", { name: `Asignar estudiante a ${group}` }).getByRole("button", { name: "Asignar" }).click();
-    await expect(card.getByText(learner, { exact: true })).toBeVisible();
-  }
-  await card.getByRole("button", { name: "Generar código" }).click();
-  const code = (await card.getByLabel(`Código de la sección ${group}`).textContent())!.trim();
-  expect(code).toMatch(/^DG-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
-  // ST-102: administration assigns who teaches the section.
-  const educators = card.getByRole("form", { name: `Asignar educador a ${group}` });
+  await expect(page).toHaveURL(/\/secciones\/group-[a-z0-9-]+$/);
+  const groupId = new URL(page.url()).pathname.split("/")[2];
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(group);
+  // ST-102: administration assigns who teaches the section, from the course's team.
+  const educators = page.getByRole("form", { name: `Asignar educador a ${group}` });
   await educators.getByLabel(`Educador para ${group}`).selectOption("user-educator");
   await educators.getByRole("button", { name: "Asignar" }).click();
   await expect(toast(page)).toContainText(`imparte ${group}`);
-  await expect(card.locator(".section-educators")).toContainText("@educador-demo");
+  await expect(page.locator(".section-educators")).toContainText("@educador-demo");
+  await openNavigation(page);
+  await sectionNav(page).getByRole("link", { name: "Estudiantes", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Estudiantes");
+  for (const learner of [first, second]) {
+    await page.getByLabel(`Nombre o código de lista para ${group}`).fill(learner);
+    await page.getByRole("form", { name: `Asignar estudiante a ${group}` }).getByRole("button", { name: "Asignar" }).click();
+    await expect(page.locator(".roster").getByText(learner, { exact: true })).toBeVisible();
+  }
+  await page.getByRole("button", { name: "Generar código" }).click();
+  const code = (await page.getByLabel(`Código de la sección ${group}`).textContent())!.trim();
+  expect(code).toMatch(/^DG-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
 
   // The educator teaches it: the section is theirs to consult, but not to configure.
-  await signIn(page, "educador-demo", `/cursos/${course}/asignaciones`);
-  await expect(page.getByRole("button", { name: "Nueva sección", exact: true })).toHaveCount(0);
-  await expect(card.getByRole("form", { name: `Asignar estudiante a ${group}` })).toHaveCount(0);
-  await expect(card).toContainText("Sin horario.");
+  await signIn(page, "educador-demo", `/secciones/${groupId}/estudiantes`);
+  await expect(page.locator(".roster")).toContainText(first);
+  await expect(page.getByRole("form", { name: `Asignar estudiante a ${group}` })).toHaveCount(0);
+  await page.goto(`/secciones/${groupId}`);
+  await expect(page.locator(".page-header")).toContainText("sin horario");
+  await expect(page.getByRole("button", { name: `Acciones de la sección ${group}` })).toHaveCount(0);
+  await expect(page.getByRole("form", { name: `Asignar educador a ${group}` })).toHaveCount(0);
 
   // Add today's class with a lesson: the schedule shows its activities and resources, without choosing them again.
-  await card.getByRole("link", { name: "Ver clases" }).click();
-  await expect(page).toHaveURL(/\/clases\?seccion=group-/);
-  const groupId = new URL(page.url()).searchParams.get("seccion")!;
+  await page.getByRole("link", { name: "Ver cronograma" }).click();
+  await expect(page).toHaveURL(new RegExp(`/secciones/${groupId}/clases$`));
   await page.getByRole("button", { name: "Agregar clase" }).click();
   let dialog = page.getByRole("dialog", { name: "Agregar clase" });
-  await expect(dialog.getByLabel("Sección").locator("option:checked")).toContainText(group);
+  // The class belongs to this section: there is no other section to choose.
+  await expect(dialog.getByLabel("Sección")).toHaveCount(0);
   await expect(dialog.getByRole("checkbox")).toHaveCount(0);
   await dialog.getByLabel("Hora").fill("08:00");
   await dialog.getByLabel("Agregar lección").selectOption({ label: "Greetings and Introductions" });
@@ -56,7 +65,7 @@ test("HL-61 ST-035 ST-097 ST-098 ST-101 ST-102: administration prepares a sectio
   await expect(today).toContainText("Introduce yourself");
   await expect(today).toContainText("Hoy");
   await today.getByRole("link").first().click();
-  await expect(page).toHaveURL(/\/clases\/class-/);
+  await expect(page).toHaveURL(new RegExp(`/secciones/${groupId}/clases/class-`));
   await expect(page.locator(".page-meta .badge")).toHaveText("Hoy");
   await expect(page.locator(".class-side")).toContainText("Greetings and Introductions");
   await expect(page.getByRole("heading", { name: "Recursos (1)" })).toBeVisible();
@@ -80,11 +89,10 @@ test("HL-61 ST-035 ST-097 ST-098 ST-101 ST-102: administration prepares a sectio
 
   // Add the next class with only its date, then plan it from the schedule; the schedule tracks the class just taught.
   await openNavigation(page);
-  await courseNav(page).getByRole("link", { name: "Clases", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Clases");
+  await sectionNav(page).getByRole("link", { name: "Cronograma", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Cronograma");
   await page.getByRole("button", { name: "Agregar clase" }).click();
   dialog = page.getByRole("dialog", { name: "Agregar clase" });
-  await dialog.getByLabel("Sección").selectOption(groupId);
   await dialog.getByLabel("Fecha").fill(day(1));
   await dialog.getByLabel("Hora").fill("09:15");
   await dialog.getByRole("button", { name: "Agregar clase" }).click();
@@ -98,11 +106,15 @@ test("HL-61 ST-035 ST-097 ST-098 ST-101 ST-102: administration prepares a sectio
   await expect(next).toContainText("Clase 2");
   await expect(next).toContainText("Greetings and Introductions");
   await expect(table.getByRole("row").filter({ hasText: "Impartida" })).toContainText("1 de 2 presentes (50 %)");
-  await page.goto(`/cursos/${course}/clases?vista=historial&seccion=${groupId}`);
+  await page.goto(`/secciones/${groupId}/clases?vista=historial`);
   await expect(table.locator("tbody tr")).toHaveCount(1);
   await expect(table.locator("tbody tr").first()).toContainText("Impartida");
   await expect(page.locator(".class-stats")).toContainText("50 %");
   await expect(page.locator(".class-stats")).toContainText("2 de 2");
+  // The section's summary has its own indicators.
+  await page.goto(`/secciones/${groupId}`);
+  await expect(page.locator(".stat-tiles").first()).toContainText("1 de 2");
+  await expect(page.locator(".stat-tiles").first()).toContainText("50 %");
 
   // The section enters with the code — no account — and sees the next class with its lesson's resources.
   await page.context().clearCookies();
@@ -161,16 +173,20 @@ test("HL-62 ST-036: the course shows upcoming classes with time and the history 
   await expect(upcoming.locator("li").first()).toBeVisible();
   await expect(upcoming.locator("li").first()).toContainText(/\d{2}:\d{2}/);
   await upcoming.getByRole("link").first().click();
-  await expect(page).toHaveURL(/\/clases\/seed-/);
+  await expect(page).toHaveURL(/\/secciones\/seed-group-[a-z0-9-]+\/clases\/seed-/);
   await expect(page.getByRole("heading", { name: "Lección", exact: true })).toBeVisible();
-  await page.goto("/cursos/seed-course-matematicas/clases?vista=historial&seccion=seed-group-mat-3b");
+  await page.goto("/secciones/seed-group-mat-3b/clases?vista=historial");
   const rows = page.locator(".schedule-table tbody tr");
   await expect(rows.filter({ hasText: "Impartida" }).first()).toContainText(/\d+ de \d+ presentes/);
   await expect(rows.filter({ hasText: "Sin registrar" }).first()).toBeVisible();
   await expect(page.locator(".class-stats")).toContainText("%");
-  // Old links to attendance land on the classes.
+  // Links from before sections were their own instance land in the section, or in the course's sections.
+  await page.goto("/cursos/seed-course-matematicas/clases?seccion=seed-group-mat-3b&vista=historial");
+  await expect(page).toHaveURL(/\/secciones\/seed-group-mat-3b\/clases\?vista=historial$/);
+  await page.goto("/cursos/seed-course-matematicas/horario#horario-seed-group-mat-3b");
+  await expect(page).toHaveURL(/\/secciones\/seed-group-mat-3b\/horario$/);
   await page.goto("/cursos/seed-course-matematicas/asistencia");
-  await expect(page).toHaveURL(/\/cursos\/seed-course-matematicas\/clases$/);
+  await expect(page).toHaveURL(/\/cursos\/seed-course-matematicas\/secciones$/);
 });
 
 test("HL-61 ST-070: a section is renamed, loses a student, closes without new classes and reopens", async ({}, info) => {
@@ -181,6 +197,7 @@ test("HL-61 ST-070: a section is renamed, loses a student, closes without new cl
   const studentLogin = (code: string) => fetch(`${origin}/api/student/login`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
   const name = e2eName(info, "Ciclo");
   const { id } = await (await call("POST", "/groups", { name })).json() as { id: string };
+  expect((await call("PUT", `/groups/${id}/educators`, { userIds: ["user-educator"] })).status).toBe(200);
   const learners: string[] = [];
   for (const displayName of [`${E2E_PREFIX} Uno`, `${E2E_PREFIX} Dos`]) learners.push((await (await call("POST", `/groups/${id}/learners`, { displayName })).json() as { id: string }).id);
   const group = async () => ((await (await call("GET", "/groups")).json()).groups as { id: string; name: string; status: string; learners: { id: string }[] }[]).find(item => item.id === id)!;

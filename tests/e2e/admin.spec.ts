@@ -28,11 +28,11 @@ test("sign-in errors, organization settings, roles, help, logout and 404", async
   await expect(toast(page)).toContainText("Organización guardada");
   await page.reload();
   await expect(page.getByLabel("Nombre de la organización")).toHaveValue("Jardín de Colores");
-  // DEC-023: administration reads the course's sections and classes; only those who teach a section record its classes.
+  // DEC-023, DEC-024: administration reads every section and its classes; only those who teach a section record its classes.
   await page.goto("/cursos/course-exploradores");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Exploradores");
   await openNavigation(page);
-  await expect(page.getByRole("navigation", { name: "Navegación del curso" }).getByRole("link", { name: "Clases", exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Navegación del curso" }).getByRole("link", { name: "Secciones", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   expect(await page.evaluate(async () => (await fetch("/api/courses/course-exploradores/groups")).status)).toBe(200);
   expect(await page.evaluate(async () => (await fetch("/api/courses/course-exploradores/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ groupId: "none", sessionDate: "2026-10-05" }) })).status)).toBe(403);
@@ -133,7 +133,7 @@ test("DEC-023: administration creates a course with its lead, keeps unsaved inpu
   // In-person workshops get sections and attendance: administration starts by creating them.
   await expect(page.getByRole("link", { name: "Crear secciones", exact: true })).toBeVisible();
   await openNavigation(page);
-  await expect(page.getByRole("navigation", { name: "Navegación del curso" }).getByRole("link", { name: "Clases", exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Navegación del curso" }).getByRole("link", { name: "Secciones", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   // Duplicate and archive from the course list menu.
   await page.goto("/cursos");
