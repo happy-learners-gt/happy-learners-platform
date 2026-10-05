@@ -53,7 +53,8 @@ test("main routes have no WCAG 2.2 A/AA violations detectable by axe", async ({ 
 });
 
 test("keyboard: skip link, visible focus, menus and dialogs work without a pointer", async ({ page }) => {
-  await signIn(page, "educador-demo", "/cursos");
+  // The course menu is administration's: it configures, duplicates and archives courses.
+  await signIn(page, "admin-demo", "/cursos");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Cursos");
   await page.keyboard.press("Tab");
   const skip = page.getByRole("link", { name: "Saltar al contenido" });

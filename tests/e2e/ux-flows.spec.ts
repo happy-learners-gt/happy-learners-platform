@@ -136,9 +136,9 @@ test("4 · open a lesson as a student, one activity at a time", async ({ page, c
   void info;
 });
 
-test("5 · assign a student to a section and record attendance", async ({ page }, info) => {
+test("5 · administration assigns a student and an educator to a section; the educator records attendance", async ({ page }, info) => {
   const group = e2eName(info, "Sección"), learner = `${E2E_PREFIX} Estudiante 01`;
-  await signIn(page, "educador-demo", "/cursos/course-exploradores/grupos");
+  await signIn(page, "admin-demo", "/cursos/course-exploradores/grupos");
   await expect(page).toHaveURL(/\/cursos\/course-exploradores\/asignaciones$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Asignaciones");
   await page.getByRole("button", { name: "Nueva sección", exact: true }).click();
@@ -148,8 +148,12 @@ test("5 · assign a student to a section and record attendance", async ({ page }
   await expect(toast(page)).toContainText(`Sección «${group}» creada`);
   const card = page.locator(".group-card").filter({ has: page.getByRole("heading", { name: group, exact: true }) });
   await card.getByLabel(`Nombre o código de lista para ${group}`).fill(learner);
-  await card.getByRole("button", { name: "Asignar" }).click();
+  await card.getByRole("form", { name: `Asignar estudiante a ${group}` }).getByRole("button", { name: "Asignar" }).click();
   await expect(card.getByText(learner, { exact: true })).toBeVisible();
+  await card.getByLabel(`Educador para ${group}`).selectOption("user-educator");
+  await card.getByRole("form", { name: `Asignar educador a ${group}` }).getByRole("button", { name: "Asignar" }).click();
+  await expect(card.locator(".section-educators")).toContainText("@educador-demo");
+  await signIn(page, "educador-demo", "/cursos/course-exploradores/asignaciones");
   await card.getByRole("link", { name: "Ver clases" }).click();
   await expect(page.getByRole("heading", { name: "Esta sección aún no tiene clases" })).toBeVisible();
   await page.getByRole("button", { name: "Agregar clase" }).click();
@@ -203,7 +207,8 @@ test("6 · mobile navigation opens the course drawer, closes on selection and wi
 });
 
 test("7 · no E2E contamination is visible: only curated data or cleanable E2E-prefixed records", async ({ playwright, baseURL }) => {
-  const api = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("educador-demo")}` } });
+  // Administration reads every course of the organization, with its sections.
+  const api = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("admin-demo")}` } });
   try {
     const names: string[] = [];
     const { courses } = await (await api.get("/api/courses")).json();
@@ -212,8 +217,7 @@ test("7 · no E2E contamination is visible: only curated data or cleanable E2E-p
       const detail = await (await api.get(`/api/courses/${course.id}`)).json();
       names.push(...detail.units.map((unit: { name: string }) => unit.name));
       names.push(...(await (await api.get(`/api/courses/${course.id}/materials`)).json()).materials.map((item: { title: string }) => item.title));
-      // Groups are visible only to the course's teaching team (HL-140 / ST-096).
-      if (course.status === "active" && course.team.some((person: { userId: string }) => person.userId === "user-educator")) names.push(...(await (await api.get(`/api/courses/${course.id}/groups`)).json()).groups.map((group: { name: string }) => group.name));
+      if (course.status === "active") names.push(...(await (await api.get(`/api/courses/${course.id}/groups`)).json()).groups.map((group: { name: string }) => group.name));
     }
     names.push(...(await (await api.get("/api/lessons?drafts=1")).json()).lessons.map((lesson: { title: string }) => lesson.title));
     names.push(...(await (await api.get("/api/resources")).json()).resources.map((item: { title: string }) => item.title));
