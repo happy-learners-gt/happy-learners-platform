@@ -123,7 +123,7 @@ class UpgradeTests(unittest.TestCase):
             db.execute("INSERT INTO learning_units(id,course_id,legacy_unit_id,name,objective,position,status,updated_at) VALUES (?,?,?,?,?,?,?,?)", (f"course-exploradores--unit-{key}", "course-exploradores", f"unit-{key}", f"Greetings {tail}", "x", 5, "active", "t"))
             content = '{"title":"Greetings %s","activities":[{"resourceId":"resource-%s"}]}' % (tail, key)
             db.execute("INSERT INTO lessons(id,program_id,status,content,unit_id,course_unit_id,published_content,revision) VALUES (?,?,?,?,?,?,?,?)", (f"lesson-{key}", "exploradores", "published", content, f"unit-{key}", f"course-exploradores--unit-{key}", content, 2))
-            db.execute("INSERT INTO lesson_completions VALUES (?,?,?)", (f"completion-{key}", f"lesson-{key}", 1))
+            db.execute("INSERT INTO lesson_completions(id,lesson_id,completed_at) VALUES (?,?,?)", (f"completion-{key}", f"lesson-{key}", 1))
             db.execute("INSERT INTO resources(id,organization_id,title,description,level,skill,topic,tags,content,status) VALUES (?,?,?,?,?,?,?,?,?,?)", (f"resource-{key}", "org-demo", f"Hello {tail}", "x", "B", "lectura", "t", "[]", "x", "draft"))
         # Human content that merely contains digits must survive.
         db.execute("INSERT INTO resources(id,organization_id,title,description,level,skill,topic,tags,content,status) VALUES (?,?,?,?,?,?,?,?,?,?)", ("resource-human", "org-demo", "Agenda 2026 desktop", "x", "B", "lectura", "t", "[]", "x", "draft"))
@@ -344,6 +344,20 @@ class UpgradeTests(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             demo.execute("INSERT INTO lesson_reviews(id,lesson_id,course_id,organization_id,status,note,requested_by,requested_at) VALUES (?,?,?,?,?,?,?,?)", ("review-3", lesson, course, "org-demo", "returned", "x" * 601, user, "2026-10-05T00:02:00Z"))
         self.assertEqual(self.scoped("org-other").execute("SELECT count(*) FROM section_educators").fetchone()[0], 0)
+
+    def test_section_activity_and_openings_belong_to_their_section(self):
+        """0022: the activity of a section and of its classes is the section's own; openings start without a section."""
+        demo = self.scoped("org-demo")
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+        scoped = demo.execute("SELECT count(*) FROM activity_events WHERE group_id IS NOT NULL").fetchone()[0]
+        self.assertGreater(scoped, 0)
+        self.assertEqual(demo.execute("SELECT count(*) FROM activity_events e JOIN course_groups g ON g.id=e.target_id WHERE e.target_type='group' AND e.group_id IS NOT g.id").fetchone()[0], 0)
+        self.assertEqual(demo.execute("SELECT count(*) FROM activity_events e JOIN class_sessions s ON s.id=e.target_id WHERE e.target_type='session' AND e.group_id IS NOT s.group_id").fetchone()[0], 0)
+        self.assertEqual(demo.execute("SELECT count(*) FROM activity_events WHERE target_type NOT IN ('group','session') AND group_id IS NOT NULL").fetchone()[0], 0)
+        self.assertEqual(demo.execute("SELECT count(*) FROM lesson_completions WHERE group_id IS NOT NULL").fetchone()[0], 0)
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("INSERT INTO lesson_completions(id,lesson_id,completed_at,group_id) VALUES ('c-x',(SELECT id FROM lessons LIMIT 1),1,'missing-group')")
+        self.assertEqual(self.scoped("org-other").execute("SELECT count(*) FROM activity_events WHERE group_id IS NOT NULL").fetchone()[0], 0)
 
     def test_class_planning_keeps_a_renamed_organization(self):
         db = sqlite3.connect(":memory:")

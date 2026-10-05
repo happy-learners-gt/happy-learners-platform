@@ -5,9 +5,9 @@ export type CourseRole = "lead" | "co-teacher";
 /** Someone on a course's teaching team: the lead or a co-teacher. */
 export interface CourseMember { userId: string; username: string; name: string; role: CourseRole }
 /**
- * What the signed-in person can do in a course (DEC-023). Administration configures the course, its sections and
- * schedules; the lead decides and publishes the content; co-teachers prepare lessons for review and teach the
- * sections assigned to them.
+ * What the signed-in person can do in a course (DEC-023, DEC-024). Administration configures the course, its
+ * sections and schedules; the lead decides and publishes the content; co-teachers prepare lessons for review.
+ * Each educator, the lead included, sees and teaches only the sections assigned to them.
  */
 export interface CourseAccess {
   role: CourseRole | null;
@@ -17,11 +17,9 @@ export interface CourseAccess {
   edit: boolean;
   /** Publishing and archiving lessons, modules, the curriculum plan and reviews. */
   publish: boolean;
-  /** Sections whose classes the person plans and teaches. */
-  teach: "all" | "assigned" | null;
-  /** Sections the person sees. */
+  /** Sections the person sees: every one for administration, otherwise those assigned. */
   sections: "all" | "assigned";
-  /** Sections assigned to the person as educator. */
+  /** Sections assigned to the person as educator; they plan and teach their classes. */
   assigned: string[];
 }
 /** A request to publish a lesson, sent by a co-teacher and decided by the lead. */
@@ -124,6 +122,25 @@ export interface Material {
 export interface SectionSchedule { weekdays: number[]; startsAt: string; durationMinutes: number; from: string; until: string }
 /** A section of a course: the students assigned to it, its access code and its schedule (ST-026, ST-099). */
 export interface ClassGroup { id: string; courseId: string; name: string; status: "active" | "archived"; learnerCount: number; accessCode?: string | null; schedule?: SectionSchedule | null; educators: SectionEducator[] }
+/** How far a section has come with its course, from its own records only (DEC-024). */
+export interface SectionIndicators {
+  learners: number;
+  /** Classes of the section that are not cancelled, and how many were taught, are coming or were not recorded. */
+  classes: number; taught: number; upcoming: number; unrecorded: number;
+  attendanceRate: number | null;
+  /** Published lessons of the course, and how many of them the section taught or has planned. */
+  lessonsPublished: number; lessonsTaught: number; lessonsPlanned: number;
+  /** Times the section's students opened one of its lessons with the section code. */
+  openings: number;
+}
+/** A section as an instance of its course: who teaches it, its students, its schedule and its own progress (DEC-024). */
+export interface SectionSummary extends ClassGroup {
+  course: { id: string; title: string; status: "active" | "archived" };
+  indicators: SectionIndicators;
+  next: { id: string; sessionDate: string; startsAt?: string | null; status: ClassStatus } | null;
+  /** Whether the signed-in person teaches it. */
+  teaches: boolean;
+}
 /** An educator who teaches a section's classes (DEC-023). */
 export interface SectionEducator { userId: string; name: string; username: string }
 export interface GroupLearner { id: string; groupId: string; displayName: string; status: "active" | "archived" }

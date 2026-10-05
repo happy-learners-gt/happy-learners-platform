@@ -5,6 +5,8 @@ import { configurationOf, curriculumFor, materialsFor } from "./courses";
 import { event, recordEvent } from "./team";
 import { filesFor } from "./files";
 import { accessTo, forbidden, reachableCourses } from "./access";
+import { digest } from "./auth";
+import { studentToken } from "./classes";
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
 type LessonRow = { id: string; content: string; published_content: string | null; unit_id: string | null; course_unit_id: string | null; course_id: string | null; position: number; status: "draft" | "published"; archived: number; revision: number; draft_version: number; published_version: number; updated_at: string; completions: number; review: string | null };
 /** The latest review of the lesson, with the names of who asked and who decided. */
@@ -271,6 +273,12 @@ export async function shared(path: string, method: string, request: Request, db:
   if (!row) return reply({ error: "Lección no disponible." }, 404);
   if (method === "GET") return reply({ lesson: JSON.parse(row.published_content), navigation: await navigationOf(db, row.id, row.course_unit_id) });
   const name = `hl_completed_${row.id.replaceAll("-", "_")}`;
-  if (!(request.headers.get("Cookie") || "").split(";").some(c => c.trim() === `${name}=1`)) await db.prepare("INSERT INTO lesson_completions VALUES (?,?,?)").bind(crypto.randomUUID(), row.id, Date.now()).run();
+  if (!(request.headers.get("Cookie") || "").split(";").some(c => c.trim() === `${name}=1`)) {
+    // With the section code, the opening is the section's when the lesson is in one of its classes (DEC-024).
+    const token = studentToken(request), now = Date.now();
+    await db.prepare(`INSERT INTO lesson_completions(id,lesson_id,completed_at,group_id) VALUES (?,?,?,(SELECT a.group_id FROM group_access_sessions a JOIN course_groups g ON g.id=a.group_id AND g.status='active'
+      WHERE a.token_hash=? AND a.expires_at>? AND EXISTS(SELECT 1 FROM class_sessions s JOIN class_session_lessons p ON p.session_id=s.id WHERE s.group_id=a.group_id AND s.status<>'cancelled' AND p.lesson_id=?)))`)
+      .bind(crypto.randomUUID(), row.id, now, token ? await digest(token) : "", now, row.id).run();
+  }
   return Response.json({ ok: true }, { headers: { "Set-Cookie": `${name}=1; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000${new URL(request.url).protocol === "https:" ? "; Secure" : ""}` } });
 }
