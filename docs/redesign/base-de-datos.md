@@ -148,24 +148,30 @@ erDiagram
 
 La colaboración en tiempo real usa un Durable Object por lección, separado de las tablas de curso. SQLite de ese objeto guarda una instantánea Yjs y una secuencia acotada de actualizaciones; presencia y sockets son efímeros. El API comprueba membresía y sesión antes de conectar y mientras procesa mensajes.
 
-## Grupos, clases y asistencia
+## Secciones, horario, clases y asistencia
 
 ```mermaid
 erDiagram
   organizations ||--o{ courses : posee
   courses ||--o{ course_groups : organiza
-  course_groups ||--o{ group_learners : contiene
+  course_groups ||--o{ group_learners : asigna
   course_groups ||--o{ class_sessions : reúne
   courses ||--o{ class_sessions : programa
-  lessons o|--o{ class_sessions : apoya
+  lessons o|--o{ class_sessions : trabaja
   class_sessions ||--o{ attendance_marks : registra
   group_learners ||--o{ attendance_marks : recibe
   course_groups {
     TEXT id PK
     TEXT course_id FK
     TEXT organization_id FK
-    TEXT name
+    TEXT name "sección"
     TEXT status
+    TEXT access_code "nullable; único"
+    TEXT schedule_weekdays "nullable; 0 = domingo"
+    TEXT schedule_starts_at "HH:MM"
+    INTEGER schedule_duration "5 a 480 min"
+    TEXT schedule_from "día"
+    TEXT schedule_until "día"
   }
   group_learners {
     TEXT id PK
@@ -182,6 +188,11 @@ erDiagram
     TEXT organization_id FK
     TEXT lesson_id FK "nullable"
     TEXT session_date
+    TEXT starts_at
+    INTEGER duration_minutes
+    TEXT status "planned, in_progress, completed, cancelled"
+    TEXT origin "schedule, manual"
+    INTEGER lesson_revision "publicación usada"
   }
   attendance_marks {
     TEXT session_id PK,FK
@@ -191,28 +202,11 @@ erDiagram
   }
 ```
 
-La API autoriza consulta y escritura de asistencia al rol educador y verifica que grupo, participante, sesión, curso y organización coincidan. La clave primaria compuesta evita duplicar marcas para una persona dentro de una sesión. La migración incluye una lista sintética y no crea sesiones ni resultados históricos.
+Una sección (`course_groups`) reúne a los estudiantes asignados al curso, su código de acceso y su horario semanal. `0019_section_schedule.sql` agrega el horario y el origen de cada clase. Guardar el horario genera las clases del periodo con `origin='schedule'`; al cambiarlo, la API rehace solo las clases generadas que siguen pendientes desde hoy, conserva las impartidas, en curso, canceladas y las agregadas a mano (`origin='manual'`), y reasigna en el mismo orden las lecciones que ya tenían. Los recursos de una clase son los de su lección: el equipo ve los del borrador y los estudiantes, los de la publicación vigente. El mapa de cobertura cuenta como impartida una lección de una clase finalizada.
 
-### Asignaciones de lecciones
+La API autoriza consulta y escritura solo al equipo docente del curso y verifica que sección, estudiante, clase, curso y organización coincidan. La clave primaria compuesta evita duplicar marcas para una persona dentro de una clase.
 
-```mermaid
-erDiagram
-  course_groups ||--o{ lesson_assignments : recibe
-  lessons ||--o{ lesson_assignments : asignada
-  lesson_assignments {
-    TEXT id PK
-    TEXT organization_id FK
-    TEXT course_id FK
-    TEXT group_id FK
-    TEXT lesson_id FK
-    TEXT starts_on "día de inicio"
-    TEXT ends_on "nullable; igual o posterior al inicio"
-    INTEGER assigned_revision "publicación al asignar"
-    TEXT status "active, withdrawn"
-  }
-```
-
-`0016_lesson_assignments.sql` asigna una lección publicada a un grupo del mismo curso durante un periodo. La API rechaza borradores, lecciones sin publicar y archivadas. La asignación conserva la publicación con la que se hizo: si la lección se vuelve a publicar se identifica como actualizada, y si se archiva o pierde su publicación requiere sustitución. Retirar una asignación conserva el registro con estado `withdrawn`.
+`lesson_assignments` (0016) y `class_session_resources` (0018) ya no se leen desde v0.8.4. Se conservan sin cambios para poder restaurar v0.8.3 y se retirarán con ST-076.
 
 Un curso puede existir sin unidades ni programa académico. Una lección nueva necesita una unidad activa del curso. No hay anidamiento ilimitado. Los perfiles cambian el vocabulario inicial; no crean reglas de evaluación ni requisitos inferidos.
 

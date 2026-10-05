@@ -49,13 +49,13 @@ export const assesses = (activity: Activity) => activity.purpose === "assess" ||
 export const lessonOutcomes = (lesson: Lesson) => [...new Set([...(lesson.outcomeIds || []), ...lesson.activities.flatMap(activity => activity.outcomeIds || [])])];
 
 export type Gap = "no-unit" | "no-lesson" | "no-assessment";
-export type OutcomeCoverage = { outcome: LearningOutcome; code: string; units: string[]; lessons: string[]; assessedIn: string[]; published: boolean; gaps: Gap[] };
+export type OutcomeCoverage = { outcome: LearningOutcome; code: string; units: string[]; lessons: string[]; assessedIn: string[]; deliveredIn: string[]; published: boolean; gaps: Gap[] };
 export type UnitCoverage = { unit: LearningUnit; planned: string[]; taught: string[]; missing: string[] };
 /**
- * Where each active outcome is planned (units), worked on (lessons) and evidenced (assessing activities),
- * and what is missing. Archived units and lessons do not count.
+ * Where each active outcome is planned (units), worked on (lessons), evidenced (assessing activities) and
+ * delivered (lessons given in completed classes), and what is missing. Archived units and lessons do not count.
  */
-export function coverage(curriculum: Curriculum, units: LearningUnit[], lessons: Lesson[]) {
+export function coverage(curriculum: Curriculum, units: LearningUnit[], lessons: Lesson[], delivered: string[] = []) {
   const codes = outcomeCodes(curriculum.outcomes);
   const activeUnits = units.filter(unit => unit.status === "active").sort((a, b) => a.position - b.position);
   const live = lessons.filter(lesson => lesson.status !== "archived" && activeUnits.some(unit => unit.id === lesson.courseUnitId));
@@ -67,7 +67,7 @@ export function coverage(curriculum: Curriculum, units: LearningUnit[], lessons:
     if (!planned.length && !teaching.length) gaps.push("no-unit");
     if (!teaching.length) gaps.push("no-lesson");
     else if (!assessedIn.length) gaps.push("no-assessment");
-    return { outcome, code: codes.get(outcome.id)!, units: planned, lessons: teaching.map(lesson => lesson.id), assessedIn, published: teaching.some(lesson => !!lesson.revision), gaps };
+    return { outcome, code: codes.get(outcome.id)!, units: planned, lessons: teaching.map(lesson => lesson.id), assessedIn, deliveredIn: teaching.filter(lesson => delivered.includes(lesson.id)).map(lesson => lesson.id), published: teaching.some(lesson => !!lesson.revision), gaps };
   });
   const unitCoverage: UnitCoverage[] = activeUnits.map(unit => {
     const planned = outcomes.filter(item => item.units.includes(unit.id)).map(item => item.outcome.id);
@@ -76,7 +76,7 @@ export function coverage(curriculum: Curriculum, units: LearningUnit[], lessons:
   });
   // Outcomes that still need something (a unit, a lesson or an assessment); each counts once.
   const gaps = outcomes.filter(item => item.gaps.length).length;
-  return { outcomes, units: unitCoverage, summary: { total: outcomes.length, taught: outcomes.filter(item => item.lessons.length).length, assessed: outcomes.filter(item => item.assessedIn.length).length, gaps } };
+  return { outcomes, units: unitCoverage, summary: { total: outcomes.length, taught: outcomes.filter(item => item.lessons.length).length, assessed: outcomes.filter(item => item.assessedIn.length).length, delivered: outcomes.filter(item => item.deliveredIn.length).length, gaps } };
 }
 
 /** Resources used by other lessons that work on the same outcomes, most used first. */

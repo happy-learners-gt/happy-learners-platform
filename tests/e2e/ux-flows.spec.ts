@@ -14,7 +14,7 @@ test("1 · login → course → content, with one navigation system and working 
   // Entering a course swaps the sidebar context; there is no second, horizontal navigation.
   await expect(page.getByRole("navigation", { name: "Navegación principal" })).toHaveCount(0);
   await openNavigation(page);
-  for (const label of ["Todos los cursos", "Resumen", "Contenido", "Biblioteca del curso", "Clases", "Grupos", "Cronograma", "Configuración"]) await expect(courseNav(page).getByRole("link", { name: label, exact: true })).toBeVisible();
+  for (const label of ["Todos los cursos", "Resumen", "Clases", "Asignaciones", "Horario", "Contenido", "Biblioteca del curso", "Configuración"]) await expect(courseNav(page).getByRole("link", { name: label, exact: true })).toBeVisible();
   await courseNav(page).getByRole("link", { name: "Contenido", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Contenido");
   await expect(page.getByRole("heading", { level: 2, name: "Greetings", exact: true })).toBeVisible();
@@ -103,7 +103,7 @@ test("3 · edit with autosave, then publish", async ({ page }, info) => {
 test("4 · open a lesson as a student, one activity at a time", async ({ page, context }, info) => {
   const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
   await page.goto("/");
-  await page.getByLabel("Código de grupo o de lección").fill("greetings");
+  await page.getByLabel("Código de sección o de lección").fill("greetings");
   await page.getByRole("button", { name: "Abrir", exact: true }).click();
   await expect(page).toHaveURL(/\/aprender\/GREETINGS$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Greetings and Introductions");
@@ -136,24 +136,27 @@ test("4 · open a lesson as a student, one activity at a time", async ({ page, c
   void info;
 });
 
-test("5 · create a group and record attendance", async ({ page }, info) => {
-  const group = e2eName(info, "Grupo"), learner = `${E2E_PREFIX} Participante 01`;
+test("5 · assign a student to a section and record attendance", async ({ page }, info) => {
+  const group = e2eName(info, "Sección"), learner = `${E2E_PREFIX} Estudiante 01`;
   await signIn(page, "educador-demo", "/cursos/course-exploradores/grupos");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Grupos");
-  await page.getByRole("button", { name: "Crear grupo", exact: true }).click();
-  const form = page.getByRole("form", { name: "Nuevo grupo" });
-  await form.getByLabel("Nombre del grupo").fill(group);
-  await form.getByRole("button", { name: "Crear grupo" }).click();
-  await expect(toast(page)).toContainText(`Grupo «${group}» creado`);
+  await expect(page).toHaveURL(/\/cursos\/course-exploradores\/asignaciones$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Asignaciones");
+  await page.getByRole("button", { name: "Nueva sección", exact: true }).click();
+  const form = page.getByRole("form", { name: "Nueva sección" });
+  await form.getByLabel("Nombre de la sección").fill(group);
+  await form.getByRole("button", { name: "Crear sección" }).click();
+  await expect(toast(page)).toContainText(`Sección «${group}» creada`);
   const card = page.locator(".group-card").filter({ has: page.getByRole("heading", { name: group, exact: true }) });
   await card.getByLabel(`Nombre o código de lista para ${group}`).fill(learner);
-  await card.getByRole("button", { name: "Agregar" }).click();
+  await card.getByRole("button", { name: "Asignar" }).click();
   await expect(card.getByText(learner, { exact: true })).toBeVisible();
-  await card.getByRole("button", { name: "Planificar clase" }).click();
-  const dialog = page.getByRole("dialog", { name: "Planificar clase" });
-  await expect(dialog.getByLabel("Grupo")).toHaveValue(/group-/);
-  await expect(dialog.getByLabel("Grupo").locator("option:checked")).toContainText(group);
-  await dialog.getByRole("button", { name: "Planificar clase" }).click();
+  await card.getByRole("link", { name: "Ver clases" }).click();
+  await expect(page.getByRole("heading", { name: "Esta sección aún no tiene clases" })).toBeVisible();
+  await page.getByRole("button", { name: "Agregar clase" }).click();
+  const dialog = page.getByRole("dialog", { name: "Agregar clase" });
+  await expect(dialog.getByLabel("Sección")).toHaveValue(/group-/);
+  await expect(dialog.getByLabel("Sección").locator("option:checked")).toContainText(group);
+  await dialog.getByRole("button", { name: "Agregar clase" }).click();
   await expect(page).toHaveURL(/\/clases\/class-/);
   const marks = page.getByRole("radiogroup", { name: learner });
   await expect(page.getByRole("button", { name: "Guardar asistencia" })).toBeDisabled();
@@ -166,7 +169,7 @@ test("5 · create a group and record attendance", async ({ page }, info) => {
   await page.getByRole("button", { name: "Finalizar clase" }).click();
   await expect(page.locator(".page-meta .badge")).toHaveText("Impartida");
   await openNavigation(page);
-  await courseNav(page).getByRole("link", { name: "Grupos", exact: true }).click();
+  await courseNav(page).getByRole("link", { name: "Asignaciones", exact: true }).click();
   await expect(page.locator(".group-card").filter({ hasText: group }).getByRole("link", { name: /\d/ })).toHaveCount(1);
 });
 

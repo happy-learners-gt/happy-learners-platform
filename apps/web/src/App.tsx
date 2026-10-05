@@ -27,7 +27,7 @@ function Application() {
   const code = url.searchParams.get("code") || (url.pathname.startsWith("/aprender/") ? decodeURIComponent(url.pathname.slice(10)) : "");
   useFocusHeading(url.pathname + (code ? "?lesson" : ""));
   if (code) return <Suspense fallback={<main className="splash"><p role="status">Abriendo lección…</p></main>}><StudentLesson key={code} code={code}/></Suspense>;
-  if (url.pathname.replace(/\/+$/, "") === "/estudiante") return <Suspense fallback={<main className="splash"><p role="status">Abriendo tu grupo…</p></main>}><StudentSpace/></Suspense>;
+  if (url.pathname.replace(/\/+$/, "") === "/estudiante") return <Suspense fallback={<main className="splash"><p role="status">Abriendo tu sección…</p></main>}><StudentSpace/></Suspense>;
   return <AuthenticatedApp/>;
 }
 

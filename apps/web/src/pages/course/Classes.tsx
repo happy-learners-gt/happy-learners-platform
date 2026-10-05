@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { ClassResource, ClassSession, ClassStatus, Course, Material } from "@happy-learners/contracts";
+import type { ClassResource, ClassSession, ClassStatus } from "@happy-learners/contracts";
 import { classStatusLabels } from "@happy-learners/domain";
 import { api, message } from "../../api";
 import { Link, useNavigation, useUnsavedChanges } from "../../navigation";
-import { matches, plural, sessionDay } from "../../model";
+import { plural, sessionDay } from "../../model";
 import { Modal, useFeedback } from "../../ui/feedback";
 import { Icon } from "../../ui/icons";
 import { Menu } from "../../ui/Menu";
@@ -13,11 +13,11 @@ import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryActi
 import type { Tone } from "../../ui/primitives";
 import { ResourcePreview } from "../resources";
 import { useCourse } from "./context";
-import type { GroupView } from "./Groups";
+import type { SectionView } from "./Sections";
 
 type Mark = "unmarked" | "present" | "late" | "absent" | "excused";
 type Row = { learnerId: string; displayName: string; status: Mark };
-type Detail = { session: ClassSession & { notes: string; resourceIds: string[] }; lesson: { id: string; title: string; revision: number; archived: boolean; shareCode: string | null } | null; resources: ClassResource[]; learners: Row[]; groupActive: boolean };
+type Detail = { session: ClassSession & { notes: string }; lesson: { id: string; title: string; revision: number; archived: boolean; shareCode: string | null } | null; resources: ClassResource[]; learners: Row[]; groupActive: boolean };
 const markLabels: [Exclude<Mark, "unmarked">, string][] = [["present", "Presente"], ["late", "Tarde"], ["absent", "Ausente"], ["excused", "Justificada"]];
 const statusTone: Record<ClassStatus, Tone> = { planned: "info", in_progress: "warning", completed: "success", cancelled: "neutral" };
 
@@ -36,15 +36,15 @@ export function Classes({ sessionId }: { sessionId?: string }) {
 function ClassList() {
   const { course, writable } = useCourse();
   const { url, navigate } = useNavigation();
-  const [groups, setGroups] = useState<GroupView[] | null>(null), [sessions, setSessions] = useState<ClassSession[]>([]), [today, setToday] = useState(""), [error, setError] = useState("");
-  const [planning, setPlanning] = useState(url.searchParams.get("nueva") === "1");
+  const [groups, setGroups] = useState<SectionView[] | null>(null), [sessions, setSessions] = useState<ClassSession[]>([]), [today, setToday] = useState(""), [error, setError] = useState("");
+  const [planning, setPlanning] = useState(url.searchParams.get("nueva") === "1"), [filling, setFilling] = useState(false);
   const [all, setAll] = useState(false);
-  const view = url.searchParams.get("vista") === "historial" ? "history" : "upcoming", groupFilter = url.searchParams.get("grupo") || "";
+  const view = url.searchParams.get("vista") === "historial" ? "history" : "upcoming", groupFilter = url.searchParams.get("seccion") || "";
   const base = `/courses/${course.id}`, page = `/cursos/${course.id}/clases`;
   async function load() {
     setError("");
     try {
-      const [g, s] = await Promise.all([api<{ groups: GroupView[] }>(`${base}/groups`), api<{ sessions: ClassSession[]; today: string }>(`${base}/sessions`)]);
+      const [g, s] = await Promise.all([api<{ groups: SectionView[] }>(`${base}/groups`), api<{ sessions: ClassSession[]; today: string }>(`${base}/sessions`)]);
       setGroups(g.groups); setSessions(s.sessions); setToday(s.today);
     } catch (cause) { setError(message(cause)); }
   }
@@ -53,12 +53,15 @@ function ClassList() {
   function filter(key: string, value: string) { const next = new URL(url); if (value) next.searchParams.set(key, value); else next.searchParams.delete(key); next.searchParams.delete("nueva"); navigate(next.pathname + next.search, true); }
   const activeGroups = (groups || []).filter(group => group.status === "active");
   const header = <PageHeader crumbs={[{ label: "Cursos", href: "/cursos" }, { label: course.title, href: `/cursos/${course.id}` }, { label: "Clases" }]} title="Clases"
-    description="Planifica cada clase con su lección y sus recursos. Al impartirla pasas lista y la finalizas desde la misma página."
-    primary={writable && activeGroups.length > 0 && <PrimaryAction icon="plus" onClick={() => setPlanning(true)}>Planificar clase</PrimaryAction>}/>;
+    description="El cronograma de clases de cada sección se genera con su horario. Elige la lección de cada clase, pasa lista y finalízala; el plan curricular se actualiza solo."
+    actions={writable && activeGroups.length > 0 && <Button icon="plus" onClick={() => setPlanning(true)}>Agregar clase</Button>}
+    primary={writable && activeGroups.length > 0 && sessions.length > 0 && <PrimaryAction icon="list" onClick={() => setFilling(true)}>Asignar lecciones en orden</PrimaryAction>}/>;
   if (course.status !== "active") return <>{header}<EmptyState icon="archive" title="Curso archivado">Restaura el curso desde Configuración para consultar sus clases.</EmptyState></>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
   if (!groups) return <>{header}<Loading label="Cargando clases…" lines={6}/></>;
-  if (!activeGroups.length && !sessions.length) return <>{header}<EmptyState icon="users" title="Primero crea un grupo" action={<Link className="button primary" href={`/cursos/${course.id}/grupos`}>Ir a Grupos</Link>}>Cada clase pertenece a un grupo. Crea uno y agrega a sus participantes.</EmptyState></>;
+  if (!activeGroups.length && !sessions.length) return <>{header}<EmptyState icon="users" title="Primero crea una sección" action={<Link className="button primary" href={`/cursos/${course.id}/asignaciones`}>Ir a Asignaciones</Link>}>Cada clase pertenece a una sección del curso. Crea una y asígnale sus estudiantes.</EmptyState></>;
+  if (!sessions.length) return <>{header}<EmptyState icon="calendar" title="Configura el horario del curso" action={<Link className="button primary" href={`/cursos/${course.id}/horario`}>Ir a Horario</Link>}>Al guardar el horario de una sección se generan todas sus clases del periodo. También puedes agregar una clase suelta.</EmptyState>
+    {planning && <PlanDialog groups={activeGroups} initialGroup={groupFilter} onClose={() => setPlanning(false)} onSaved={async id => { setPlanning(false); navigate(`${page}/${id}`); }}/>}</>;
   const ofGroup = sessions.filter(session => !groupFilter || session.groupId === groupFilter);
   const upcoming = ofGroup.filter(session => session.status === "in_progress" || (session.status === "planned" && session.sessionDate >= today))
     .sort((a, b) => a.sessionDate.localeCompare(b.sessionDate) || (a.startsAt || "").localeCompare(b.startsAt || ""));
@@ -80,89 +83,121 @@ function ClassList() {
         <label><input type="radio" name="class-view" checked={view === "upcoming"} onChange={() => filter("vista", "")}/><span>Próximas ({upcoming.length})</span></label>
         <label><input type="radio" name="class-view" checked={view === "history"} onChange={() => filter("vista", "historial")}/><span>Historial ({history.length})</span></label>
       </fieldset>
-      <label className="select-inline"><span>Grupo</span><select value={groupFilter} onChange={event => filter("grupo", event.target.value)}><option value="">Todos</option>{groups.map(group => <option key={group.id} value={group.id}>{group.name}{group.status === "archived" ? " (cerrado)" : ""}</option>)}</select></label>
+      <label className="select-inline"><span>Sección</span><select value={groupFilter} onChange={event => filter("seccion", event.target.value)}><option value="">Todas</option>{groups.map(group => <option key={group.id} value={group.id}>{group.name}{group.status === "archived" ? " (cerrada)" : ""}</option>)}</select></label>
     </div>
     {list.length ? <ol className="class-list" aria-label={view === "upcoming" ? "Próximas clases" : "Historial de clases"}>{list.map(session => <li key={session.id}>
       <span className="date-chip" aria-hidden="true"><strong>{session.sessionDate.slice(8)}</strong>{sessionDay(session.sessionDate, "short").replace(/^\d+\s*/, "")}</span>
       <div className="class-row-main">
         <Link href={`${page}/${session.id}`} className="class-row-title">{sessionDay(session.sessionDate)}{session.startsAt ? `, ${session.startsAt}` : ""}<span className="sr-only"> · {session.groupName}</span></Link>
-        <span className="muted">{session.groupName} · {session.lessonTitle || "Sin lección"}{session.durationMinutes ? ` · ${session.durationMinutes} min` : ""}</span>
+        {writable && session.status === "planned" && session.sessionDate >= today && activeGroups.some(group => group.id === session.groupId)
+          ? <span className="muted class-row-lesson">{session.groupName}{session.durationMinutes ? ` · ${session.durationMinutes} min` : ""} · <LessonSelect session={session} onSaved={load}/></span>
+          : <span className="muted">{session.groupName} · {session.lessonTitle || "Sin lección"}{session.durationMinutes ? ` · ${session.durationMinutes} min` : ""}</span>}
+        {session.lessonAvailable === 0 && <LessonWarning session={session}/>}
         {session.status === "completed" && <span className="muted small">{session.attended} de {session.marked} presentes{rate(session) !== null ? ` (${rate(session)} %)` : ""}{session.lessonRevision ? ` · publicación ${session.lessonRevision}` : ""}{session.taughtByName ? ` · impartió ${session.taughtByName}` : ""}</span>}
       </div>
       {classBadge(session, today)}
     </li>)}</ol>
-      : <EmptyState icon="calendar" title={view === "upcoming" ? "No hay clases próximas" : "Aún no hay clases en el historial"} action={writable && view === "upcoming" && activeGroups.length > 0 && <PrimaryAction icon="plus" onClick={() => setPlanning(true)}>Planificar clase</PrimaryAction>}>
-        {view === "upcoming" ? "Planifica la siguiente clase con su fecha, lección y recursos." : "Las clases impartidas, canceladas o sin registrar aparecerán aquí."}
+      : groupFilter && !ofGroup.length ? <EmptyState icon="calendar" title="Esta sección aún no tiene clases" action={writable && <Link className="button primary" href={`/cursos/${course.id}/horario#horario-${groupFilter}`}>Configurar horario</Link>}>
+        Configura su horario para generar sus clases del periodo, o agrega una clase suelta.
+      </EmptyState>
+      : <EmptyState icon="calendar" title={view === "upcoming" ? "No hay clases próximas" : "Aún no hay clases en el historial"} action={writable && view === "upcoming" && <Link className="button primary" href={`/cursos/${course.id}/horario`}>Revisar el horario</Link>}>
+        {view === "upcoming" ? "Amplía el periodo del horario de la sección o agrega una clase suelta." : "Las clases impartidas, canceladas o sin registrar aparecerán aquí."}
       </EmptyState>}
     {full.length > list.length && <Button variant="ghost" icon="chevronDown" onClick={() => setAll(true)}>Mostrar {full.length - list.length} más</Button>}
-    {planning && <PlanDialog groups={activeGroups} initialGroup={url.searchParams.get("grupo") || ""} onClose={() => { setPlanning(false); if (url.searchParams.has("nueva")) filter("nueva", ""); }}
+    {filling && <FillDialog groups={activeGroups} sessions={sessions} today={today} initialGroup={groupFilter} onClose={() => setFilling(false)} onDone={async () => { setFilling(false); await load(); }}/>}
+    {planning && <PlanDialog groups={activeGroups} initialGroup={groupFilter} onClose={() => { setPlanning(false); if (url.searchParams.has("nueva")) filter("nueva", ""); }}
       onSaved={async id => { setPlanning(false); navigate(`${page}/${id}`); }}/>}
   </>;
 }
 
-type PlanValues = { groupId?: string; sessionDate: string; startsAt: string; durationMinutes: string; lessonId: string; notes: string; resourceIds: string[] };
-/** Plans a new class or edits the plan of an existing one. */
-function PlanDialog({ groups, initialGroup, detail, onClose, onSaved }: { groups?: GroupView[]; initialGroup?: string; detail?: Detail; onClose: () => void; onSaved: (id: string) => Promise<void> }) {
+/** Changes the lesson of an upcoming class without opening it; the date, time and notes stay. */
+function LessonSelect({ session, onSaved }: { session: ClassSession; onSaved: () => Promise<void> }) {
   const { course, lessons } = useCourse();
   const { toast } = useFeedback();
-  const session = detail?.session;
-  const [values, setValues] = useState<PlanValues>(() => session
-    ? { sessionDate: session.sessionDate, startsAt: session.startsAt || "", durationMinutes: session.durationMinutes ? String(session.durationMinutes) : "", lessonId: session.lessonId || "", notes: session.notes, resourceIds: session.resourceIds }
-    : { groupId: groups?.some(group => group.id === initialGroup) ? initialGroup : groups?.[0]?.id, sessionDate: new Date().toLocaleDateString("en-CA"), startsAt: "", durationMinutes: "45", lessonId: "", notes: "", resourceIds: [] });
-  const [busy, setBusy] = useState(false), [error, setError] = useState("");
-  const set = (patch: Partial<PlanValues>) => setValues(current => ({ ...current, ...patch }));
-  const available = lessons.filter(lesson => lesson.status !== "archived" || lesson.id === session?.lessonId);
+  const [busy, setBusy] = useState(false);
+  const available = lessons.filter(lesson => (lesson.status !== "archived" && !!lesson.revision) || lesson.id === session.lessonId);
+  async function change(lessonId: string) {
+    setBusy(true);
+    try { await api(`/courses/${course.id}/sessions/${session.id}/lesson`, "PUT", { lessonId: lessonId || null, version: session.version }); await onSaved(); toast({ message: lessonId ? "Lección asignada a la clase." : "La clase quedó sin lección." }); }
+    catch (cause) { toast({ tone: "error", message: message(cause) }); }
+    finally { setBusy(false); }
+  }
+  return <select className="inline-select" aria-label={`Lección de la clase del ${sessionDay(session.sessionDate)} en ${session.groupName}`} value={session.lessonId || ""} disabled={busy} onChange={event => void change(event.target.value)}>
+    <option value="">Sin lección</option>{available.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title}{lesson.status === "archived" ? " (archivada)" : lesson.revision ? "" : " (borrador)"}</option>)}
+  </select>;
+}
+/** A lesson students cannot open: still a draft, or archived and in need of a replacement (ST-029). */
+function LessonWarning({ session }: { session: ClassSession }) {
+  const { lessons } = useCourse();
+  const lesson = lessons.find(item => item.id === session.lessonId);
+  return lesson && lesson.status !== "archived" && !lesson.revision ? <StatusBadge tone="neutral">Borrador: aún no la ven los estudiantes</StatusBadge> : <StatusBadge tone="warning">Requiere sustitución</StatusBadge>;
+}
+
+/** Gives the upcoming classes of a section without a lesson the next published lessons, in content order. */
+function FillDialog({ groups, sessions, today, initialGroup, onClose, onDone }: { groups: SectionView[]; sessions: ClassSession[]; today: string; initialGroup: string; onClose: () => void; onDone: () => Promise<void> }) {
+  const { course } = useCourse();
+  const { toast } = useFeedback();
+  const [groupId, setGroupId] = useState(groups.some(group => group.id === initialGroup) ? initialGroup : groups[0]?.id || ""), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const empty = sessions.filter(session => session.groupId === groupId && session.status === "planned" && session.sessionDate >= today && !session.lessonId).length;
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
-    const body = { ...values, durationMinutes: values.durationMinutes ? Number(values.durationMinutes) : null, ...(session ? { version: session.version } : {}) };
     try {
-      if (session) { await api(`/courses/${course.id}/sessions/${session.id}`, "PUT", body); toast({ message: "Planificación guardada." }); await onSaved(session.id); }
-      else { const { id } = await api<{ id: string }>(`/courses/${course.id}/sessions`, "POST", body); toast({ message: "Clase planificada. Ábrela el día de la clase para pasar lista." }); await onSaved(id); }
+      const { assigned } = await api<{ assigned: number }>(`/courses/${course.id}/groups/${groupId}/lessons`, "POST");
+      toast({ message: assigned ? `Se asignaron ${plural(assigned, "lección", "lecciones")} en orden.` : "No quedan lecciones publicadas por asignar a esta sección." });
+      await onDone();
     } catch (cause) { setError(message(cause)); setBusy(false); }
   }
-  return <Modal title={session ? "Editar planificación" : "Planificar clase"} onClose={onClose} wide>
+  return <Modal title="Asignar lecciones en orden" onClose={onClose}>
     <form className="stack" onSubmit={submit}>
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
       <fieldset disabled={busy} className="stack">
-        {!session && <Field label="Grupo"><select value={values.groupId} onChange={event => set({ groupId: event.target.value })} required>{groups!.map(group => <option key={group.id} value={group.id}>{group.name} · {plural(group.learnerCount, "participante", "participantes")}</option>)}</select></Field>}
-        <div className="field-row">
-          <Field label="Fecha"><input type="date" value={values.sessionDate} onChange={event => set({ sessionDate: event.target.value })} required/></Field>
-          <Field label="Hora" optional><input type="time" value={values.startsAt} onChange={event => set({ startsAt: event.target.value })}/></Field>
-          <Field label="Duración (min)" optional><input type="number" min={5} max={480} step={5} value={values.durationMinutes} onChange={event => set({ durationMinutes: event.target.value })}/></Field>
-        </div>
-        <Field label="Lección" optional hint="Los estudiantes la ven cuando está publicada.">
-          <select value={values.lessonId} onChange={event => set({ lessonId: event.target.value })}><option value="">Sin lección</option>{available.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title}{lesson.revision ? "" : " (borrador)"}</option>)}</select>
-        </Field>
-        <ResourcePicker selected={values.resourceIds} onChange={resourceIds => set({ resourceIds })}/>
-        <Field label="Notas para el equipo" optional hint="Solo las ve el equipo docente. No escribas datos personales de los participantes."><textarea rows={3} maxLength={2000} value={values.notes} onChange={event => set({ notes: event.target.value })}/></Field>
-        <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">{busy ? "Guardando…" : session ? "Guardar planificación" : "Planificar clase"}</button></div>
+        <Field label="Sección"><select value={groupId} onChange={event => setGroupId(event.target.value)} required>{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select></Field>
+        <p className="muted">{empty ? `${plural(empty, "clase próxima no tiene", "clases próximas no tienen")} lección.` : "Todas las clases próximas de esta sección tienen lección."} Se usan las lecciones publicadas en el orden de Contenido y se omiten las que la sección ya tiene en una clase. Las clases que ya tienen lección no cambian.</p>
+        <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary" disabled={!empty}>{busy ? "Asignando…" : "Asignar lecciones"}</button></div>
       </fieldset>
     </form>
   </Modal>;
 }
 
-type PickerItem = { id: string; title: string; kind: Material["kind"]; courseTitle: string };
-/** Chooses resources of the library in order: this course first, then, on request, the rest of the organization. */
-function ResourcePicker({ selected, onChange }: { selected: string[]; onChange: (ids: string[]) => void }) {
-  const { course, materials, legacyResources } = useCourse();
-  const own: PickerItem[] = [...materials.filter(item => item.status !== "archived").map(item => ({ id: item.id, title: item.title, kind: item.kind, courseTitle: course.title })),
-    ...legacyResources.filter(item => item.status !== "archived").map(item => ({ id: item.id, title: item.title, kind: (item.kind === "link" ? "link" : "text") as Material["kind"], courseTitle: "Recursos generales" }))];
-  const [others, setOthers] = useState<PickerItem[] | null>(null), [query, setQuery] = useState("");
-  async function loadOthers() {
-    const { courses } = await api<{ courses: Course[] }>("/courses");
-    const lists = await Promise.all(courses.filter(item => item.id !== course.id && item.status === "active").map(item => api<{ materials: Material[] }>(`/courses/${item.id}/materials`).then(result => result.materials.filter(material => material.status !== "archived").map(material => ({ id: material.id, title: material.title, kind: material.kind, courseTitle: item.title })))));
-    setOthers(lists.flat());
+type PlanValues = { groupId?: string; sessionDate: string; startsAt: string; durationMinutes: string; lessonId: string; notes: string };
+/** Adds a class outside the schedule or edits the plan of an existing one. */
+function PlanDialog({ groups, initialGroup, detail, onClose, onSaved }: { groups?: SectionView[]; initialGroup?: string; detail?: Detail; onClose: () => void; onSaved: (id: string) => Promise<void> }) {
+  const { course, lessons } = useCourse();
+  const { toast } = useFeedback();
+  const session = detail?.session;
+  const [values, setValues] = useState<PlanValues>(() => session
+    ? { sessionDate: session.sessionDate, startsAt: session.startsAt || "", durationMinutes: session.durationMinutes ? String(session.durationMinutes) : "", lessonId: session.lessonId || "", notes: session.notes }
+    : { groupId: groups?.some(group => group.id === initialGroup) ? initialGroup : groups?.[0]?.id, sessionDate: new Date().toLocaleDateString("en-CA"), startsAt: "", durationMinutes: "45", lessonId: "", notes: "" });
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const set = (patch: Partial<PlanValues>) => setValues(current => ({ ...current, ...patch }));
+  const available = lessons.filter(lesson => (lesson.status !== "archived" && !!lesson.revision) || lesson.id === session?.lessonId);
+  async function submit(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError("");
+    const body = { ...values, durationMinutes: values.durationMinutes ? Number(values.durationMinutes) : null, ...(session ? { version: session.version } : {}) };
+    try {
+      if (session) { await api(`/courses/${course.id}/sessions/${session.id}`, "PUT", body); toast({ message: "Planificación guardada." }); await onSaved(session.id); }
+      else { const { id } = await api<{ id: string }>(`/courses/${course.id}/sessions`, "POST", body); toast({ message: "Clase agregada. Ábrela el día de la clase para pasar lista." }); await onSaved(id); }
+    } catch (cause) { setError(message(cause)); setBusy(false); }
   }
-  const items = [...own, ...(others || [])];
-  const visible = items.filter(item => selected.includes(item.id) || matches(query, item.title, item.courseTitle));
-  const toggle = (id: string) => onChange(selected.includes(id) ? selected.filter(value => value !== id) : [...selected, id]);
-  return <fieldset className="resource-picker">
-    <legend>Recursos de la biblioteca <span className="muted">({selected.length} {selected.length === 1 ? "elegido" : "elegidos"})</span></legend>
-    <div className="search-field"><Icon name="search" size={18}/><label htmlFor="picker-search" className="sr-only">Buscar recursos</label><input id="picker-search" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar por título o curso"/></div>
-    {visible.length ? <ul>{visible.map(item => <li key={item.id}><label><input type="checkbox" checked={selected.includes(item.id)} onChange={() => toggle(item.id)}/><span><strong>{item.title}</strong><span className="muted small">{{ text: "Texto", link: "Enlace", file: "Documento" }[item.kind]} · {item.courseTitle}</span></span></label></li>)}</ul>
-      : <p className="muted small">{items.length ? "Ningún recurso coincide con la búsqueda." : "La biblioteca de este curso está vacía."} <Link href={`/cursos/${course.id}/biblioteca`}>Agregar recursos</Link></p>}
-    {others === null && <Button variant="ghost" className="small" icon="library" onClick={() => void loadOthers().catch(() => setOthers([]))}>Mostrar recursos de otros cursos</Button>}
-  </fieldset>;
+  return <Modal title={session ? "Editar planificación" : "Agregar clase"} onClose={onClose} wide>
+    <form className="stack" onSubmit={submit}>
+      {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
+      <fieldset disabled={busy} className="stack">
+        {!session && <p className="muted">Las clases del horario se generan solas. Agrega aquí una clase extra, como una recuperación o un repaso.</p>}
+        {!session && <Field label="Sección"><select value={values.groupId} onChange={event => set({ groupId: event.target.value })} required>{groups!.map(group => <option key={group.id} value={group.id}>{group.name} · {plural(group.learnerCount, "estudiante", "estudiantes")}</option>)}</select></Field>}
+        <div className="field-row">
+          <Field label="Fecha"><input type="date" value={values.sessionDate} onChange={event => set({ sessionDate: event.target.value })} required/></Field>
+          <Field label="Hora" optional><input type="time" value={values.startsAt} onChange={event => set({ startsAt: event.target.value })}/></Field>
+          <Field label="Duración (min)" optional><input type="number" min={5} max={480} step={5} value={values.durationMinutes} onChange={event => set({ durationMinutes: event.target.value })}/></Field>
+        </div>
+        <Field label="Lección" optional hint="Solo lecciones publicadas. Los estudiantes la ven con sus recursos.">
+          <select value={values.lessonId} onChange={event => set({ lessonId: event.target.value })}><option value="">Sin lección</option>{available.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title}{lesson.revision ? "" : " (borrador)"}</option>)}</select>
+        </Field>
+        <Field label="Notas para el equipo" optional hint="Solo las ve el equipo docente. No escribas datos personales de los estudiantes."><textarea rows={3} maxLength={2000} value={values.notes} onChange={event => set({ notes: event.target.value })}/></Field>
+        <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">{busy ? "Guardando…" : session ? "Guardar planificación" : "Agregar clase"}</button></div>
+      </fieldset>
+    </form>
+  </Modal>;
 }
 
 function ClassDetail({ id }: { id: string }) {
@@ -182,7 +217,7 @@ function ClassDetail({ id }: { id: string }) {
   const { session, lesson, resources } = detail;
   const editable = writable && detail.groupActive;
   async function act(action: "start" | "complete" | "cancel" | "restore") {
-    if (action === "cancel" && !await confirm({ title: "¿Cancelar esta clase?", body: <p>Deja de aparecer en las próximas clases del grupo y de sus estudiantes. Puedes reprogramarla después.</p>, confirm: "Cancelar clase", cancel: "Volver", danger: true })) return;
+    if (action === "cancel" && !await confirm({ title: "¿Cancelar esta clase?", body: <p>Deja de aparecer en las próximas clases de la sección y de sus estudiantes. Puedes reprogramarla después.</p>, confirm: "Cancelar clase", cancel: "Volver", danger: true })) return;
     setBusy(true);
     try {
       await api(`${path}/${action}`, "POST");
@@ -203,7 +238,7 @@ function ClassDetail({ id }: { id: string }) {
       meta={classBadge(session, new Date().toLocaleDateString("en-CA"))}
       actions={<>{editable && session.status !== "cancelled" && <Button icon="edit" onClick={() => setEditing(true)}>Editar planificación</Button>}{menu.length > 0 && <Menu label="Más acciones de la clase" items={menu}/>}</>}
       primary={primary}/>
-    {!detail.groupActive && <p className="notice"><Icon name="info" size={18}/>El grupo está cerrado: la clase se consulta, pero no se modifica.</p>}
+    {!detail.groupActive && <p className="notice"><Icon name="info" size={18}/>La sección está cerrada: la clase se consulta, pero no se modifica.</p>}
     <div className="class-layout">
       <div className="class-main">
         {session.status === "cancelled" ? <EmptyState icon="calendar" title="Clase cancelada">Reprográmala para planificarla de nuevo y pasar lista.</EmptyState>
@@ -213,18 +248,19 @@ function ClassDetail({ id }: { id: string }) {
         <Section title="Lección">
           {lesson ? <div className="class-lesson">
             <strong>{lesson.title}</strong>
-            <span className="muted small">{lesson.archived ? "Archivada" : lesson.revision ? `Publicación ${lesson.revision}` : "Borrador: los estudiantes aún no la ven"}{session.lessonRevision && session.lessonRevision !== lesson.revision ? ` · en clase se usó la publicación ${session.lessonRevision}` : ""}</span>
+            <span className="muted small">{lesson.archived ? "Archivada: requiere sustitución" : lesson.revision ? `Publicación ${lesson.revision}` : "Borrador: los estudiantes aún no la ven"}{session.lessonRevision && session.lessonRevision !== lesson.revision ? ` · en clase se usó la publicación ${session.lessonRevision}` : ""}</span>
             <div className="button-row">
               {lessonState && <Link className="button secondary small" href={`/cursos/${course.id}/lecciones/${lesson.id}`}><Icon name="edit" size={16}/>Abrir lección</Link>}
               {lesson.shareCode && <a className="button ghost small" href={`/aprender/${lesson.shareCode}`} target="_blank" rel="noopener"><Icon name="present" size={16}/>Presentar</a>}
             </div>
           </div> : <p className="muted">Sin lección. {editable && session.status !== "cancelled" && <button type="button" className="link-button" onClick={() => setEditing(true)}>Elegir una lección</button>}</p>}
         </Section>
-        <Section title={`Recursos (${resources.length})`}>
+        <Section title={`Recursos de la lección (${resources.length})`}>
           {resources.length ? <ul className="class-resources">{resources.map(item => <li key={item.id}>
             <button type="button" className="link-button" onClick={() => setPreview(item)}><Icon name={item.kind === "link" ? "link" : item.kind === "file" ? "file" : "text"} size={16}/>{item.title}</button>
             {!item.available && <StatusBadge tone="warning">No disponible para estudiantes</StatusBadge>}
-          </li>)}</ul> : <p className="muted">Sin recursos. {editable && session.status !== "cancelled" && <button type="button" className="link-button" onClick={() => setEditing(true)}>Agregar desde la biblioteca</button>}</p>}
+          </li>)}</ul> : <p className="muted">{lesson ? "La lección no usa recursos de la biblioteca." : "Los recursos llegan con la lección."}</p>}
+          {lesson && lessonState && writable && <p className="muted small">Se agregan o quitan en la lección, desde <Link href={`/cursos/${course.id}/lecciones/${lesson.id}`}>Contenido</Link>.</p>}
         </Section>
         <Notes detail={detail} editable={editable && session.status !== "cancelled"} onSaved={load}/>
       </div>
@@ -245,7 +281,7 @@ function Notes({ detail, editable, onSaved }: { detail: Detail; editable: boolea
   async function save() {
     setBusy(true);
     try {
-      await api(`/courses/${course.id}/sessions/${session.id}`, "PUT", { sessionDate: session.sessionDate, startsAt: session.startsAt, durationMinutes: session.durationMinutes, lessonId: session.lessonId, resourceIds: session.resourceIds, notes, version: session.version });
+      await api(`/courses/${course.id}/sessions/${session.id}`, "PUT", { sessionDate: session.sessionDate, startsAt: session.startsAt, durationMinutes: session.durationMinutes, lessonId: session.lessonId, notes, version: session.version });
       toast({ message: "Notas guardadas." }); await onSaved();
     } catch (cause) { toast({ tone: "error", message: message(cause) }); }
     finally { setBusy(false); }
@@ -283,10 +319,10 @@ function Sheet({ sessionId, status, initial, writable, groupId, onSaved }: { ses
   const title = status === "completed" ? "Asistencia registrada" : "Pasar lista";
   return <section className="sheet" aria-labelledby="sheet-title">
     <header className="sheet-header">
-      <div><h2 id="sheet-title">{title}</h2><p className="muted">{status === "completed" ? "Puedes corregir una marca y volver a guardar." : status === "planned" ? "Al guardar la lista, la clase queda en curso." : "Marca a cada participante y guarda antes de finalizar."}</p></div>
+      <div><h2 id="sheet-title">{title}</h2><p className="muted">{status === "completed" ? "Puedes corregir una marca y volver a guardar." : status === "planned" ? "Al guardar la lista, la clase queda en curso." : "Marca a cada estudiante y guarda antes de finalizar."}</p></div>
       <StatusBadge tone={dirty ? "warning" : complete ? "success" : "neutral"}>{dirty ? "Cambios sin guardar" : complete ? "Guardada" : "Sin registrar"}</StatusBadge>
     </header>
-    {!rows.length ? <EmptyState compact icon="users" title="Este grupo no tiene participantes" action={writable && <Link className="button secondary" href={`/cursos/${course.id}/grupos#grupo-${groupId}`}>Agregar participantes</Link>}/> : <>
+    {!rows.length ? <EmptyState compact icon="users" title="Esta sección no tiene estudiantes" action={writable && <Link className="button secondary" href={`/cursos/${course.id}/asignaciones#seccion-${groupId}`}>Asignar estudiantes</Link>}/> : <>
       <p className="attendance-counts" aria-live="polite">{counts.map(([label, count]) => <span key={label}><strong>{count}</strong> {label.toLowerCase()}</span>)}</p>
       {writable && pending > 0 && <button type="button" className="button ghost small" onClick={() => setRows(rows.map(row => row.status === "unmarked" ? { ...row, status: "present" } : row))}><Icon name="check" size={16}/>Marcar {plural(pending, "pendiente", "pendientes")} como presente</button>}
       <ol className="attendance-list">{rows.map((row, index) => <li key={row.learnerId}>
@@ -297,7 +333,7 @@ function Sheet({ sessionId, status, initial, writable, groupId, onSaved }: { ses
         </div>
       </li>)}</ol>
       {writable && <div className="sheet-footer">
-        <p className="muted" aria-live="polite">{pending ? `Faltan ${plural(pending, "participante", "participantes")} por marcar.` : "Todos los participantes tienen un estado."}</p>
+        <p className="muted" aria-live="polite">{pending ? `Faltan ${plural(pending, "estudiante", "estudiantes")} por marcar.` : "Todos los estudiantes tienen un estado."}</p>
         <button type="button" className="button primary" disabled={busy || pending > 0 || !dirty} onClick={() => void save()}>{busy ? "Guardando…" : "Guardar asistencia"}</button>
       </div>}
     </>}

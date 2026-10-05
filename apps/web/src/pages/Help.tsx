@@ -18,21 +18,20 @@ export function Help() {
       </ol>
       <p>Después de publicar, puedes seguir editando: los estudiantes ven la versión publicada hasta que eliges <strong>Publicar cambios</strong>.</p>
       <p>Para adaptar una lección sin tocar la original, usa <strong>Duplicar</strong> en el menú de la lección: la copia queda como borrador justo después, con las mismas actividades y recursos, y se publica por separado.</p>
-      <h2>Clases, grupos y asistencia</h2>
-      <p>Están disponibles en los cursos presenciales o híbridos, o cuando la configuración del curso los activa, para el equipo docente del curso. En <strong>Grupos</strong>, crea un grupo y agrega a sus participantes con un nombre de lista o un código; desde el menú puedes renombrarlo, retirar participantes o cerrar el grupo al terminar el ciclo.</p>
+      <h2>Asignaciones, horario y clases</h2>
+      <p>Están disponibles en los cursos presenciales o híbridos, o cuando la configuración del curso los activa, para el equipo docente del curso. El trabajo sigue este orden:</p>
       <ol>
-        <li>En <strong>Clases</strong>, usa <strong>Planificar clase</strong>: elige el grupo, la fecha y la hora, la lección y los recursos de la biblioteca que usarás.</li>
+        <li>En <strong>Asignaciones</strong>, crea las secciones del curso y asigna a cada una sus estudiantes con un nombre de lista o un código. Un estudiante queda asignado al curso cuando está en la lista de una de sus secciones; si lo retiras, su asistencia anterior se conserva.</li>
+        <li>En <strong>Horario</strong>, elige los días, la hora, la duración y el periodo de cada sección y usa <strong>Guardar horario</strong>. Se generan todas las clases del periodo. Si cambias el horario, solo se rehacen las clases generadas que aún no comienzan, y sus lecciones pasan en el mismo orden a las nuevas fechas.</li>
+        <li>En <strong>Clases</strong>, elige la lección de cada clase en su fila o usa <strong>Asignar lecciones en orden</strong> para dar a las clases sin lección las lecciones publicadas en el orden de Contenido. Los recursos de la clase son los de su lección: se editan en la lección. Con <strong>Agregar clase</strong> programas una clase extra, como una recuperación.</li>
         <li>Al llegar la hora, abre la clase y elige <strong>Comenzar clase</strong>. Presenta la lección y pasa lista; los cambios se guardan con <strong>Guardar asistencia</strong>.</li>
-        <li>Elige <strong>Finalizar clase</strong> cuando todos estén marcados. La clase pasa al <strong>Historial</strong> y cuenta en los indicadores del curso.</li>
+        <li>Elige <strong>Finalizar clase</strong> cuando todos estén marcados. La clase pasa al <strong>Historial</strong>, y el mapa de cobertura del <strong>Plan curricular</strong> marca como <strong>Impartido</strong> los resultados que trabaja su lección.</li>
       </ol>
-      <p>Cada grupo tiene un <strong>código para estudiantes</strong>. Con él, los estudiantes ven la próxima clase de su grupo, su lección y sus recursos, sin cuenta. Puedes cambiar o desactivar el código en cualquier momento.</p>
-      <h2>Asignaciones</h2>
-      <p>Un estudiante queda asignado a un curso cuando lo agregas a la lista de uno de sus grupos en <strong>Grupos</strong>. Si lo retiras del grupo, deja de estar asignado y su asistencia anterior se conserva.</p>
-      <h2>Cronograma</h2>
-      <p>En <strong>Cronograma</strong>, programa qué lección publicada usa cada grupo y desde qué fecha, con un término opcional. Solo se ofrecen lecciones publicadas. Si la lección se vuelve a publicar, verás su número de publicación nuevo y podrás confirmarlo; si se archiva, la lección programada muestra <strong>Requiere sustitución</strong> para que elijas otra lección publicada. En <strong>Inicio</strong>, “Tu cronograma vigente” abre siempre la publicación vigente de cada lección programada en tus cursos, nunca un borrador, y avisa si alguna quedó sin una versión válida.</p>
+      <p>Si una lección programada se archiva, la clase muestra <strong>Requiere sustitución</strong> para que elijas otra. Una lección en borrador se puede programar, pero los estudiantes la ven cuando se publica.</p>
+      <p>Cada sección tiene un <strong>código para estudiantes</strong>. Con él, los estudiantes ven la próxima clase de su sección, su lección y sus recursos, sin cuenta. Puedes cambiar o desactivar el código en cualquier momento.</p>
       <h2>Datos y privacidad</h2>
-      <p>La asistencia guarda solo el nombre de lista, el grupo, la fecha y el estado. No pide correo, teléfono, fecha de nacimiento ni notas. Solo el equipo docente del curso la consulta.</p>
-      <p>Las lecciones publicadas y el espacio del grupo se abren sin cuenta. Solo se cuenta cuántas veces se terminó una lección; no se guardan nombres ni respuestas. La sesión del equipo dura hasta ocho horas.</p>
+      <p>La asistencia guarda solo el nombre de lista, la sección, la fecha y el estado. No pide correo, teléfono, fecha de nacimiento ni notas. Solo el equipo docente del curso la consulta.</p>
+      <p>Las lecciones publicadas y el espacio de la sección se abren sin cuenta. Solo se cuenta cuántas veces se terminó una lección; no se guardan nombres ni respuestas. La sesión del equipo dura hasta ocho horas.</p>
       <h2>Diseño</h2>
       <p>La interfaz sigue Fluent Design de Microsoft. La <Link href="/guia-de-estilo">guía de estilo</Link> muestra sus principios y todos los componentes.</p>
       <h2>Esta demostración</h2>

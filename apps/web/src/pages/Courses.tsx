@@ -22,7 +22,7 @@ export function useCourseActions(reload: () => Promise<void>) {
     catch (error) { toast({ tone: "error", message: `${message(error)} Recarga la página e inténtalo de nuevo.` }); }
   }
   async function duplicate(course: Course) {
-    if (!await confirm({ title: `¿Duplicar «${course.title}»?`, body: <p>Se crea una copia con su configuración, módulos, plan curricular, recursos y lecciones. Todas las lecciones de la copia quedan como borrador; los grupos y la asistencia no se copian.</p>, confirm: "Duplicar curso" })) return;
+    if (!await confirm({ title: `¿Duplicar «${course.title}»?`, body: <p>Se crea una copia con su configuración, módulos, plan curricular, recursos y lecciones. Todas las lecciones de la copia quedan como borrador; las secciones, el horario, las clases y la asistencia no se copian.</p>, confirm: "Duplicar curso" })) return;
     toast({ tone: "info", message: "Creando la copia…" });
     try { const id = await duplicateCourse(course); await reload(); toast({ message: `Copia creada: «${course.title} (copia)».`, action: { label: "Abrir", onSelect: () => navigate(`/cursos/${id}`) } }); }
     catch (error) { await reload(); toast({ tone: "error", message: `La copia quedó incompleta: ${message(error)} Revísala en la lista de cursos o archívala.` }); }

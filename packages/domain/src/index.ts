@@ -1,8 +1,8 @@
 export const timezones = ["America/Guatemala", "America/Mexico_City", "America/Bogota"] as const;
 export { moduleNavigation } from "./navigation";
 export type { ModuleLesson } from "./navigation";
-export { assignmentAvailability, assignmentPeriod, assignmentPeriodError, effectivePublication, isCalendarDay } from "./assignments";
-export type { AssignedLessonFacts, EffectivePublication } from "./assignments";
+export { isCalendarDay, weekdays, scheduleInput, scheduleDates, scheduleSummary, lessonsInOrder, maxScheduleDays, maxScheduledClasses } from "./schedule";
+export type { SectionSchedule } from "./schedule";
 export { acceptsAttendance, classActions, classPlanInput, classStatusLabels, groupCodePattern, localDay, newGroupCode, nextClassStatus, normalizeGroupCode, upcomingClasses } from "./classes";
 export type { ClassAction, ClassPlan } from "./classes";
 export { materialInput, record, cleanText, validTermIds, completeOrder } from "./courses";
