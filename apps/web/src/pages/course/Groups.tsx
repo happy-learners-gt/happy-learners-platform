@@ -54,7 +54,7 @@ export function Groups() {
     await run(() => api(`${base}/groups/${group.id}/learners/${learner.id}`, "PUT", { status: "archived" }), `${learner.displayName} se retiró de ${group.name}.`);
   }
   const header = <PageHeader crumbs={[{ label: "Cursos", href: "/cursos" }, { label: course.title, href: page }, { label: "Grupos" }]} title="Grupos"
-    description="Cada grupo tiene su lista, su código para estudiantes y sus clases."
+    description="Cada grupo tiene su lista de estudiantes asignados al curso, su código de acceso y sus clases."
     primary={writable && groups !== null && <PrimaryAction icon="plus" onClick={() => setCreating(true)}>Crear grupo</PrimaryAction>}/>;
   if (course.status !== "active") return <>{header}<EmptyState icon="archive" title="Curso archivado">Restaura el curso desde Configuración para consultar sus grupos.</EmptyState></>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;

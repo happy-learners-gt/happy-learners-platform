@@ -31,7 +31,7 @@ export function StudentSpace() {
       {space.next ? <ClassCard item={space.next} today={space.today} headingId="next-title" big/> : <><h2 id="next-title">No hay clases programadas</h2><p className="muted">Cuando tu educador planifique la siguiente clase, aparecerá aquí con sus recursos.</p></>}
     </section>
     {space.lessons.length > 0 && <section aria-labelledby="lessons-title" className="stack">
-      <h2 id="lessons-title">Lecciones asignadas</h2>
+      <h2 id="lessons-title">Lecciones del cronograma</h2>
       <ul className="student-resources">{space.lessons.map(lesson => <li key={lesson.shareCode}><Link href={`/aprender/${lesson.shareCode}`}><Icon name="play" size={16}/>{lesson.title}</Link></li>)}</ul>
     </section>}
     {space.upcoming.length > 0 && <section aria-labelledby="upcoming-title" className="stack">

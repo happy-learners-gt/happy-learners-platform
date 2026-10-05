@@ -43,7 +43,7 @@ test("ST-029 an assignment resolves the current publication, warns without a val
 
     // The dashboard opens the resolved publication.
     await signIn(page, "educador-demo", "/inicio");
-    const section = page.getByRole("region", { name: "Tus asignaciones vigentes" });
+    const section = page.getByRole("region", { name: "Tu cronograma vigente" });
     const row = section.getByRole("listitem").filter({ hasText: groupName });
     await expect(row.getByRole("link", { name: `Abrir «${lessonBody.title}», publicación 2` })).toHaveAttribute("href", `/aprender/${lesson.shareCode}`);
     // Archived: no valid version, a warning instead of a link.
@@ -52,9 +52,9 @@ test("ST-029 an assignment resolves the current publication, warns without a val
     [item] = await current();
     expect(item).toMatchObject({ effective: null, availability: "unavailable" });
     await page.reload();
-    const warned = page.getByRole("region", { name: "Tus asignaciones vigentes" }).getByRole("listitem").filter({ hasText: groupName });
+    const warned = page.getByRole("region", { name: "Tu cronograma vigente" }).getByRole("listitem").filter({ hasText: groupName });
     await expect(warned.getByText("Sin versión válida", { exact: true })).toBeVisible();
-    await expect(warned.getByRole("link", { name: "Sustitúyela en Asignaciones" })).toHaveAttribute("href", `/cursos/${courseId}/asignaciones`);
+    await expect(warned.getByRole("link", { name: "Sustitúyela en el Cronograma" })).toHaveAttribute("href", `/cursos/${courseId}/cronograma`);
     await expect(warned.getByRole("link", { name: /Abrir/ })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   } finally { await Promise.all([educator.dispose(), admin.dispose()]); }
@@ -62,6 +62,6 @@ test("ST-029 an assignment resolves the current publication, warns without a val
 
 test("ST-029 the demo educator sees the seeded class assignment with its current publication", async ({ page }) => {
   await signIn(page, "educador-demo", "/inicio");
-  const section = page.getByRole("region", { name: "Tus asignaciones vigentes" });
+  const section = page.getByRole("region", { name: "Tu cronograma vigente" });
   await expect(section.getByRole("listitem").filter({ hasText: "Grupo de demostración" }).getByRole("link", { name: /Abrir .*publicación \d+/ })).toBeVisible();
 });

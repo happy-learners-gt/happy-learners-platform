@@ -21,7 +21,7 @@ export function validity(assignment: Pick<LessonAssignment, "startsOn" | "endsOn
   return assignment.endsOn ? `Del ${start} al ${sessionDay(assignment.endsOn, "short")}` : `Desde el ${start}`;
 }
 
-export function Assignments() {
+export function Schedule() {
   const { course, lessons, units, writable } = useCourse();
   const { toast } = useFeedback();
   const [groups, setGroups] = useState<GroupView[] | null>(null), [items, setItems] = useState<LessonAssignment[]>([]), [error, setError] = useState("");
@@ -47,22 +47,22 @@ export function Assignments() {
     finally { setBusy(""); }
   }
   const canAssign = writable && !!groups?.length && published.length > 0;
-  const header = <PageHeader crumbs={[{ label: "Cursos", href: "/cursos" }, { label: course.title, href: page }, { label: "Asignaciones" }]} title="Asignaciones"
-    description="Indica qué lección publicada usa cada grupo y durante qué fechas. Si la lección cambia o se archiva, aquí lo verás."
-    primary={canAssign && <PrimaryAction icon="plus" onClick={() => setCreating("")}>Asignar lección</PrimaryAction>}/>;
-  if (course.status !== "active") return <>{header}<EmptyState icon="archive" title="Curso archivado">Restaura el curso desde Configuración para gestionar sus asignaciones.</EmptyState></>;
+  const header = <PageHeader crumbs={[{ label: "Cursos", href: "/cursos" }, { label: course.title, href: page }, { label: "Cronograma" }]} title="Cronograma"
+    description="Programa qué lección publicada usa cada grupo y durante qué fechas. Si la lección cambia o se archiva, aquí lo verás."
+    primary={canAssign && <PrimaryAction icon="plus" onClick={() => setCreating("")}>Programar lección</PrimaryAction>}/>;
+  if (course.status !== "active") return <>{header}<EmptyState icon="archive" title="Curso archivado">Restaura el curso desde Configuración para gestionar su cronograma.</EmptyState></>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
-  if (!groups) return <>{header}<Loading label="Cargando asignaciones…" lines={5}/></>;
-  if (!groups.length) return <>{header}<EmptyState icon="users" title="Primero crea un grupo" action={<Link className="button primary" href={`${page}/grupos`}>Ir a Grupos</Link>}>Las lecciones se asignan a un grupo. Crea uno para empezar.</EmptyState></>;
+  if (!groups) return <>{header}<Loading label="Cargando cronograma…" lines={5}/></>;
+  if (!groups.length) return <>{header}<EmptyState icon="users" title="Primero crea un grupo" action={<Link className="button primary" href={`${page}/grupos`}>Ir a Grupos</Link>}>El cronograma se organiza por grupo. Crea uno para empezar.</EmptyState></>;
   return <>
     {header}
     {/* No published lesson is a different situation from a group without assignments. */}
-    {!published.length && <div className="notice warning" role="status"><Icon name="alert" size={18}/><div><strong>Este curso no tiene lecciones publicadas</strong><p>Publica una lección desde Contenido para poder asignarla a un grupo.</p><Link className="button secondary small" href={`${page}/contenido`}>Ir a Contenido</Link></div></div>}
+    {!published.length && <div className="notice warning" role="status"><Icon name="alert" size={18}/><div><strong>Este curso no tiene lecciones publicadas</strong><p>Publica una lección desde Contenido para poder programarla.</p><Link className="button secondary small" href={`${page}/contenido`}>Ir a Contenido</Link></div></div>}
     <div className="assignment-groups">{groups.map(group => {
       const own = items.filter(item => item.groupId === group.id);
       return <section key={group.id} className="panel assignment-group" aria-labelledby={`assign-${group.id}`}>
         <div className="panel-header"><h2 id={`assign-${group.id}`}>{group.name}</h2>
-          {canAssign && <button type="button" className="button secondary small" onClick={() => setCreating(group.id)}><Icon name="plus" size={16}/>Asignar a {group.name}</button>}</div>
+          {canAssign && <button type="button" className="button secondary small" onClick={() => setCreating(group.id)}><Icon name="plus" size={16}/>Programar para {group.name}</button>}</div>
         {own.length ? <ul className="assignment-list">{own.map(item => {
           const [label, tone] = period[item.period];
           return <li key={item.id} className={`assignment-row${item.requiresSubstitution ? " needs-action" : ""}`} aria-busy={busy === item.id || undefined}>
@@ -73,22 +73,22 @@ export function Assignments() {
             <div className="assignment-state">
               <StatusBadge tone={tone}>{label}</StatusBadge>
               {item.availability === "current" && <StatusBadge tone="success">Publicación {item.assignedRevision}</StatusBadge>}
-              {item.availability === "updated" && <StatusBadge tone="info">Publicación {item.publishedRevision} (asignada la {item.assignedRevision})</StatusBadge>}
+              {item.availability === "updated" && <StatusBadge tone="info">Publicación {item.publishedRevision} (programada la {item.assignedRevision})</StatusBadge>}
               {item.availability === "unavailable" && <StatusBadge tone="danger">Requiere sustitución</StatusBadge>}
             </div>
             {item.availability === "updated" && <p className="assignment-note"><Icon name="info" size={16}/>La lección se volvió a publicar. El grupo ya recibe la publicación {item.publishedRevision}.</p>}
             {item.availability !== "unavailable" && !item.effective && <MissingLink assignment={item}/>}
-            {item.availability === "unavailable" && <p className="assignment-note danger"><Icon name="alert" size={16}/>La lección asignada ya no tiene una publicación vigente: fue archivada o retirada. Sustitúyela por otra lección publicada.</p>}
+            {item.availability === "unavailable" && <p className="assignment-note danger"><Icon name="alert" size={16}/>La lección programada ya no tiene una publicación vigente: fue archivada o retirada. Sustitúyela por otra lección publicada.</p>}
             <div className="assignment-actions">
               <OpenPublication assignment={item}/>
               {writable && <>
               {item.availability === "updated" && <button type="button" className="button secondary small" disabled={!!busy} onClick={() => void change(item, { action: "adopt" }, `Confirmaste la publicación ${item.publishedRevision} para ${group.name}.`)}><Icon name="check" size={16}/>Confirmar publicación vigente</button>}
-              {item.availability === "unavailable" && published.length > 0 && <Substitute item={item} options={published} disabled={!!busy} onSubmit={lessonId => change(item, { action: "substitute", lessonId }, `Asignación de ${group.name} actualizada.`)}/>}
+              {item.availability === "unavailable" && published.length > 0 && <Substitute item={item} options={published} disabled={!!busy} onSubmit={lessonId => change(item, { action: "substitute", lessonId }, `Cronograma de ${group.name} actualizado.`)}/>}
               <button type="button" className="button ghost small" disabled={!!busy} onClick={() => void change(item, { action: "withdraw" }, `«${item.lessonTitle}» se retiró de ${group.name}.`)}>Retirar</button>
               </>}
             </div>
           </li>;
-        })}</ul> : <p className="muted">Este grupo aún no tiene lecciones asignadas.</p>}
+        })}</ul> : <p className="muted">Este grupo aún no tiene lecciones en el cronograma.</p>}
       </section>;
     })}</div>
     {creating !== null && <NewAssignment groups={groups} initialGroup={creating} lessons={published} today={orgToday} onClose={() => setCreating(null)} onCreate={async () => { await load(); setCreating(null); }}/>}
@@ -113,11 +113,11 @@ function NewAssignment({ groups, initialGroup, lessons, today, onClose, onCreate
     const data = Object.fromEntries(new FormData(event.currentTarget)) as Record<string, string>;
     try {
       await api(`/courses/${course.id}/assignments`, "POST", data);
-      toast({ message: `Lección asignada a ${groups.find(group => group.id === data.groupId)?.name}.` });
+      toast({ message: `Lección programada para ${groups.find(group => group.id === data.groupId)?.name}.` });
       await onCreate();
     } catch (cause) { setError(message(cause)); setBusy(false); }
   }
-  return <Modal title="Asignar lección" onClose={onClose}>
+  return <Modal title="Programar lección" onClose={onClose}>
     <form className="stack" onSubmit={submit}>
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
       <fieldset disabled={busy} className="stack">
@@ -127,7 +127,7 @@ function NewAssignment({ groups, initialGroup, lessons, today, onClose, onCreate
           <Field label="Desde"><input name="startsOn" type="date" required defaultValue={today}/></Field>
           <Field label="Hasta" optional hint="Déjalo vacío si no tiene fecha de término."><input name="endsOn" type="date"/></Field>
         </div>
-        <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">{busy ? "Asignando…" : "Asignar"}</button></div>
+        <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">{busy ? "Programando…" : "Programar"}</button></div>
       </fieldset>
     </form>
   </Modal>;
