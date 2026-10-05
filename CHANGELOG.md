@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.6 — 2026-10-05
+
+Parche de REL-004 (DEC-023): roles del curso. Administración prepara el curso y sus secciones, la persona responsable publica el contenido, y cada educador ve e imparte solo lo que tiene asignado.
+
+- ST-102: solo **administración** crea cursos (con su responsable, que es obligatorio), cambia su configuración y su equipo, y crea secciones, inscribe estudiantes, gestiona códigos y configura horarios. En **Asignaciones** asigna a cada sección de una a seis personas que la imparten; quien no estaba en el equipo se suma como colaborador. Consulta todo el contenido, el plan y las clases en modo lectura, salvo que forme parte del equipo del curso.
+- ST-103: cada educador ve en **Cursos** e **Inicio** solo los cursos de su equipo; fuera de ellos recibe «Este curso no está asignado a tu cuenta». La **persona responsable** ve e imparte todas las secciones, por ejemplo para cubrir una clase. **Quien colabora** ve e imparte solo sus secciones: planifica las lecciones y los comentarios de cada clase, mueve una clase puntual, agrega una clase adicional, la comienza, pasa lista, la finaliza o la cancela.
+- ST-104: la persona responsable publica las lecciones y organiza los módulos, el orden y el archivo de lecciones y el plan curricular. Quien colabora edita borradores y recursos y elige **Enviar a revisión**, con una nota opcional. La persona responsable ve los envíos en **Por revisar** (Inicio), elige **Aprobar y publicar** o **Devolver** con comentarios, y quien envió ve el resultado en **Mis envíos a revisión** y en el editor. Los recursos no pasan por revisión.
+- Duplicar un curso pasa al servidor y queda en manos de administración. Copia la configuración, el equipo, los módulos, el plan, los recursos y sus archivos en una sola operación, y deja las lecciones como borrador.
+- Datos: `0021_roles_and_reviews.sql` agrega `section_educators` y `lesson_reviews`. Asigna cada sección existente a todo el equipo de su curso, así nadie pierde el acceso que tenía.
+- API: `PUT /api/courses/:id/groups/:gid/educators`, `POST /api/lessons/:id/review`, `POST /api/lessons/:id/review/return`, `GET /api/reviews` y `POST /api/courses/:id/duplicate`. `GET /api/courses/:id` entrega `access` (qué puede hacer la persona en el curso). `POST /api/lessons/:id/publish` acepta `?draftVersion=` para publicar exactamente la versión revisada. `POST /api/courses` exige `leadId`. Se mantiene la autorización de v0.8.1: quien no integra el equipo recibe 403 y salir del equipo retira el acceso.
+
 ## 0.8.5 — 2026-10-05
 
 Parche de REL-004 (DEC-022): Clases es el cronograma de la sección. Se planifica con el horario y los contenidos, y se sigue clase por clase con su asistencia.

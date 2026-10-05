@@ -216,9 +216,52 @@ Una sección (`course_groups`) reúne a los estudiantes asignados al curso, su c
 
 El cronograma de una sección se arma con esas tablas: fecha y hora de la clase, semana del periodo y número entre las clases que se imparten, módulo de sus lecciones, actividades y recursos que las lecciones traen, comentarios y seguimiento (estado y asistencia). Los recursos de una clase son los de sus lecciones: el equipo ve los del borrador y los estudiantes, los de la publicación vigente. El mapa de cobertura cuenta como impartidas todas las lecciones de una clase finalizada.
 
-La API autoriza consulta y escritura solo al equipo docente del curso y verifica que sección, estudiante, clase, curso y organización coincidan. La clave primaria compuesta evita duplicar marcas para una persona dentro de una clase.
+La API autoriza según DEC-023 (sección siguiente) y verifica que sección, estudiante, clase, curso y organización coincidan. La clave primaria compuesta evita duplicar marcas para una persona dentro de una clase.
 
 `lesson_assignments` (0016) y `class_session_resources` (0018) ya no se leen desde v0.8.4; `class_sessions.lesson_id` deja de leerse desde v0.8.5. Se conservan sin cambios para poder restaurar v0.8.3 y se retirarán con ST-076.
+
+## Roles, educadores por sección y revisión (DEC-023)
+
+```mermaid
+erDiagram
+  courses ||--o{ course_members : "equipo docente"
+  course_groups ||--o{ section_educators : imparte
+  course_members ||--o{ section_educators : asigna
+  lessons ||--o{ lesson_reviews : "se revisa"
+  section_educators {
+    TEXT group_id PK,FK
+    TEXT user_id PK,FK
+    TEXT course_id FK "con user_id, en course_members; diferida"
+    TEXT organization_id
+    TEXT added_at
+  }
+  lesson_reviews {
+    TEXT id PK
+    TEXT lesson_id FK
+    TEXT course_id FK
+    TEXT status "pending, returned, approved"
+    TEXT note "hasta 600"
+    TEXT requested_by FK
+    TEXT requested_at
+    TEXT decided_by FK "nullable"
+    TEXT decided_at "nullable"
+    TEXT decision_note "hasta 600"
+  }
+```
+
+`0021_roles_and_reviews.sql` agrega dos tablas. `section_educators` registra quién imparte cada sección; cada persona asignada pertenece al equipo del curso (`course_members`). La llave hacia el equipo es diferida, porque guardar un equipo reescribe sus filas en una sola transacción, y quitar a alguien del equipo retira también sus secciones. La migración asigna cada sección existente a todo el equipo de su curso, así nadie pierde el acceso que ya tenía. `lesson_reviews` guarda cada envío a revisión. Un índice único parcial permite una sola solicitud pendiente por lección; enviar de nuevo actualiza la nota de la solicitud abierta.
+
+El acceso a un curso se calcula a partir del rol en la organización y del rol en el curso, que se suman:
+
+| Capacidad | Administración | Responsable | Colaborador |
+| --- | --- | --- | --- |
+| Crear y configurar el curso, su equipo, sus secciones, estudiantes, códigos y horarios | Sí | No | No |
+| Ver el curso, su contenido (borradores incluidos), plan y clases | Todas las secciones | Todas las secciones | Solo sus secciones |
+| Editar lecciones y recursos | Solo si integra el equipo | Sí | Sí |
+| Publicar, ordenar y archivar lecciones; módulos y plan curricular | Solo como responsable | Sí | No: envía a revisión |
+| Planificar e impartir clases (lecciones, comentarios, fecha u hora puntual, clase adicional, asistencia) | Solo si integra el equipo | Todas las secciones | Solo sus secciones |
+
+Una persona fuera del equipo recibe 403 en el curso y sus rutas, y otra organización recibe 404. Publicar aprueba la solicitud pendiente en la misma transacción, siempre que el borrador no haya cambiado desde que la persona responsable lo abrió (`?draftVersion=`). Duplicar un curso es una operación de servidor reservada a administración. Copia la configuración, el equipo, los módulos, el plan, los recursos y sus archivos, y deja las lecciones como borrador; no copia secciones, horarios, clases ni asistencia.
 
 Un curso puede existir sin unidades ni programa académico. Una lección nueva necesita una unidad activa del curso. No hay anidamiento ilimitado. Los perfiles cambian el vocabulario inicial; no crean reglas de evaluación ni requisitos inferidos.
 
