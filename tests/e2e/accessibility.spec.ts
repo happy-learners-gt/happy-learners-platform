@@ -24,7 +24,7 @@ test("main routes have no WCAG 2.2 A/AA violations detectable by axe", async ({ 
     ["inicio", "/inicio"], ["cursos", "/cursos"], ["nuevo curso", "/cursos/nuevo"], ["resumen", "/cursos/course-exploradores"], ["plan curricular", "/cursos/course-exploradores/plan"],
     ["contenido", "/cursos/course-exploradores/contenido"], ["editor", "/cursos/course-exploradores/lecciones/greetings-and-introductions"],
     ["vista previa", "/cursos/course-exploradores/lecciones/greetings-and-introductions?vista=previa"], ["biblioteca del curso", "/cursos/course-exploradores/biblioteca"],
-    ["grupos", "/cursos/course-exploradores/grupos"], ["cronograma", "/cursos/course-exploradores/cronograma"], ["clases", "/cursos/course-exploradores/clases"], ["configuración", "/cursos/course-exploradores/configuracion"],
+    ["asignaciones", "/cursos/course-exploradores/asignaciones"], ["horario", "/cursos/course-exploradores/horario"], ["clases", "/cursos/course-exploradores/clases"], ["configuración", "/cursos/course-exploradores/configuracion"],
     ["biblioteca", "/biblioteca"], ["buscar", "/buscar?q=greet"], ["ayuda", "/ayuda"], ["guía de estilo", "/guia-de-estilo"],
   ]) {
     await page.goto(path);

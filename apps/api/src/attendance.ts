@@ -3,47 +3,45 @@ import { newGroupCode } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { configurationOf } from "./courses";
 import { event, onCourseTeam } from "./team";
-import { assignments } from "./assignments";
-import { sessions } from "./classes";
+import { fillLessons, saveSchedule, scheduleOf, sessions } from "./classes";
 
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
-const unavailable = () => reply({ error: "El grupo no está disponible en este curso." }, 404);
+const unavailable = () => reply({ error: "La sección no está disponible en este curso." }, 404);
 const validName = (value: unknown, limit: number) => typeof value === "string" && value.trim().length > 0 && value.trim().length <= limit && !/[<>\x00-\x1f]/.test(value);
 
 export async function classroom(path: string, method: string, input: unknown, current: Member, db: Database) {
   const parts = path.split("/");
   const courseId = parts[3];
   const course = await db.prepare("SELECT id FROM courses WHERE id=? AND organization_id=? AND status='active'").bind(courseId, current.organizationId).first();
-  if (!course) return reply({ error: "El grupo o la clase no está disponible en este curso." }, 404);
-  // Groups list minors by name: only the course's own teaching team reads or changes them, assignments and attendance.
-  if (!(await onCourseTeam(db, current, courseId))) return reply({ error: "Solo el equipo docente del curso puede consultar y administrar sus grupos y asistencia." }, 403);
-  // Records stay readable when attendance is turned off; new groups, learners, classes and marks are not accepted.
+  if (!course) return reply({ error: "La sección o la clase no está disponible en este curso." }, 404);
+  // Sections list minors by name: only the course's own teaching team reads or changes them, their classes and attendance.
+  if (!(await onCourseTeam(db, current, courseId))) return reply({ error: "Solo el equipo docente del curso puede consultar y administrar sus secciones, clases y asistencia." }, 403);
+  // Records stay readable when attendance is turned off; new sections, students, classes and marks are not accepted.
   if (method !== "GET" && !(await configurationOf(db, current.organizationId, courseId))!.settings.attendance) return reply({ error: "La asistencia está desactivada en la configuración de este curso." }, 409);
-  if (parts[4] === "assignments") return assignments(parts, method, input, current, db, courseId);
   if (parts[4] === "sessions") return sessions(parts, method, input, current, db, courseId);
   const now = new Date().toISOString();
   const value = input as Record<string, unknown> | null;
   const [groupId, sub, learnerId] = [parts[5], parts[6], parts[7]];
   if (!groupId) {
     if (method === "GET") {
-      const groups = await db.prepare("SELECT g.id,g.course_id AS courseId,g.name,g.status,g.access_code AS accessCode,count(l.id) AS learnerCount FROM course_groups g LEFT JOIN group_learners l ON l.group_id=g.id AND l.status='active' WHERE g.course_id=? AND g.organization_id=? GROUP BY g.id ORDER BY g.status,g.name,g.created_at").bind(courseId, current.organizationId).all<ClassGroup>();
+      const groups = await db.prepare("SELECT g.id,g.course_id AS courseId,g.name,g.status,g.access_code AS accessCode,g.schedule_weekdays AS weekdays,g.schedule_starts_at AS startsAt,g.schedule_duration AS durationMinutes,g.schedule_from AS \"from\",g.schedule_until AS until,count(l.id) AS learnerCount FROM course_groups g LEFT JOIN group_learners l ON l.group_id=g.id AND l.status='active' WHERE g.course_id=? AND g.organization_id=? GROUP BY g.id ORDER BY g.status,g.name,g.created_at").bind(courseId, current.organizationId).all<ClassGroup & Parameters<typeof scheduleOf>[0]>();
       const learners = await db.prepare("SELECT id,group_id AS groupId,display_name AS displayName,status FROM group_learners WHERE course_id=? AND organization_id=? AND status='active' ORDER BY display_name,id").bind(courseId, current.organizationId).all<GroupLearner>();
-      return reply({ groups: groups.results.map(group => ({ ...group, learners: learners.results.filter(learner => learner.groupId === group.id) })) });
+      return reply({ groups: groups.results.map(({ weekdays, startsAt, durationMinutes, from, until, ...group }) => ({ ...group, schedule: scheduleOf({ weekdays, startsAt, durationMinutes, from, until }), learners: learners.results.filter(learner => learner.groupId === group.id) })) });
     }
-    if (!validName(value?.name, 100)) return reply({ error: "Escribe un nombre de grupo de hasta 100 caracteres." }, 400);
+    if (!validName(value?.name, 100)) return reply({ error: "Escribe un nombre de sección de hasta 100 caracteres." }, 400);
     const name = String(value!.name).trim();
     const id = `group-${crypto.randomUUID()}`;
-    await db.batch([db.prepare("INSERT INTO course_groups(id,course_id,organization_id,name,created_at) VALUES (?,?,?,?,?)").bind(id, courseId, current.organizationId, name, now), event(db, current, { action: "created", targetType: "group", targetId: id, courseId, summary: `Creó el grupo «${name}»` })]);
+    await db.batch([db.prepare("INSERT INTO course_groups(id,course_id,organization_id,name,created_at) VALUES (?,?,?,?,?)").bind(id, courseId, current.organizationId, name, now), event(db, current, { action: "created", targetType: "group", targetId: id, courseId, summary: `Creó la sección «${name}»` })]);
     return reply({ id }, 201);
   }
   const group = await db.prepare("SELECT id,name,status,access_code AS accessCode FROM course_groups WHERE id=? AND course_id=? AND organization_id=?").bind(groupId, courseId, current.organizationId).first<{ id: string; name: string; status: "active" | "archived"; accessCode: string | null }>();
   if (!group) return unavailable();
   if (!sub && method === "PUT") {
-    // ST-070: rename, close and reopen. A closed group keeps its history but takes no new classes or participants.
+    // ST-070: rename, close and reopen. A closed section keeps its history but takes no new classes or students.
     const name = value?.name === undefined ? group.name : validName(value.name, 100) ? String(value.name).trim() : null;
     const status = value?.status === undefined ? group.status : ["active", "archived"].includes(String(value.status)) ? String(value.status) as "active" | "archived" : null;
-    if (!name || !status) return reply({ error: "Revisa el nombre (hasta 100 caracteres) y el estado del grupo." }, 400);
-    const summary = status !== group.status ? `${status === "archived" ? "Cerró" : "Reactivó"} el grupo «${name}»` : `Renombró el grupo «${group.name}» como «${name}»`;
+    if (!name || !status) return reply({ error: "Revisa el nombre (hasta 100 caracteres) y el estado de la sección." }, 400);
+    const summary = status !== group.status ? `${status === "archived" ? "Cerró" : "Reactivó"} la sección «${name}»` : `Renombró la sección «${group.name}» como «${name}»`;
     await db.batch([
       db.prepare("UPDATE course_groups SET name=?,status=? WHERE id=?").bind(name, status, groupId),
       ...(status === "archived" ? [db.prepare("DELETE FROM group_access_sessions WHERE group_id=?").bind(groupId)] : []),
@@ -51,7 +49,9 @@ export async function classroom(path: string, method: string, input: unknown, cu
     ]);
     return reply({ ok: true });
   }
-  if (group.status !== "active") return reply({ error: "El grupo está cerrado. Reactívalo para hacer cambios." }, 409);
+  if (group.status !== "active") return reply({ error: "La sección está cerrada. Reactívala para hacer cambios." }, 409);
+  if (sub === "schedule" && (method === "PUT" || method === "DELETE")) return saveSchedule(method, input, current, db, courseId, group);
+  if (sub === "lessons" && method === "POST") return fillLessons(current, db, courseId, group);
   if (sub === "code") {
     // A new code replaces the previous one at once: whoever entered with it loses access on the next request.
     if (method === "DELETE") {
@@ -76,13 +76,13 @@ export async function classroom(path: string, method: string, input: unknown, cu
   }
   if (sub === "learners" && learnerId && method === "PUT") {
     const learner = await db.prepare("SELECT id,display_name AS displayName,status FROM group_learners WHERE id=? AND group_id=?").bind(learnerId, groupId).first<GroupLearner>();
-    if (!learner) return reply({ error: "El participante ya no está en este grupo." }, 404);
+    if (!learner) return reply({ error: "El estudiante ya no está en esta sección." }, 404);
     const displayName = value?.displayName === undefined ? learner.displayName : validName(value.displayName, 80) ? String(value.displayName).trim() : null;
     const status = value?.status === undefined ? learner.status : ["active", "archived"].includes(String(value.status)) ? String(value.status) : null;
     if (!displayName || !status) return reply({ error: "Escribe un nombre o identificador de lista de hasta 80 caracteres." }, 400);
-    // Withdrawing keeps the attendance already recorded; the participant leaves the roll of later classes.
+    // Withdrawing keeps the attendance already recorded; the student leaves the roll of later classes.
     await db.batch([db.prepare("UPDATE group_learners SET display_name=?,status=? WHERE id=?").bind(displayName, status, learnerId),
-      ...(status !== learner.status ? [event(db, current, { action: status === "archived" ? "archived" : "restored", targetType: "group", targetId: groupId, courseId, summary: `${status === "archived" ? "Retiró a un participante de" : "Reincorporó a un participante en"} «${group.name}»` })] : [])]);
+      ...(status !== learner.status ? [event(db, current, { action: status === "archived" ? "archived" : "restored", targetType: "group", targetId: groupId, courseId, summary: `${status === "archived" ? "Retiró a un estudiante de" : "Reincorporó a un estudiante en"} «${group.name}»` })] : [])]);
     return reply({ ok: true });
   }
   return reply({ error: "Ruta no disponible." }, 404);

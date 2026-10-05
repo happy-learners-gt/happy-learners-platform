@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { CognitiveLevel, Competency, LearningOutcome, Lesson } from "@happy-learners/contracts";
+import type { ClassSession, CognitiveLevel, Competency, LearningOutcome, Lesson } from "@happy-learners/contracts";
 import { assesses, activityOutcomes, cognitiveLevels, coverage, lessonOutcomes } from "@happy-learners/domain";
 import type { OutcomeCoverage } from "@happy-learners/domain";
 import { api, message } from "../../api";
@@ -15,17 +15,33 @@ import { useCourse } from "./context";
 const levelLabel = Object.fromEntries(cognitiveLevels.map(level => [level.value, level.label])) as Record<CognitiveLevel, string>;
 type Editing = { kind: "competency"; item?: Competency } | { kind: "outcome"; item?: LearningOutcome; competencyId?: string };
 
+type Delivery = { sessions: ClassSession[]; sections: { id: string; name: string }[] };
+/** Completed classes of the course and its sections, for the teaching team (ST-100). */
+function useDelivery(courseId: string, enabled: boolean) {
+  const [delivery, setDelivery] = useState<Delivery | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    Promise.all([api<{ sessions: ClassSession[] }>(`/courses/${courseId}/sessions`), api<{ groups: { id: string; name: string }[] }>(`/courses/${courseId}/groups`)])
+      .then(([s, g]) => setDelivery({ sessions: s.sessions.filter(session => session.status === "completed" && session.lessonId), sections: g.groups })).catch(() => setDelivery(null));
+  }, [courseId, enabled]);
+  return delivery;
+}
+
 /**
  * The course plan: competencies, the learning outcomes that evidence them, and a coverage map showing where
- * each outcome is planned (units), worked on (lessons) and checked (assessing activities), with what is missing.
+ * each outcome is planned (units), worked on (lessons), checked (assessing activities) and delivered (completed
+ * classes), with what is missing.
  */
 export function Plan() {
-  const { course, units, lessons, curriculum, writable, reload, settings, noun } = useCourse();
+  const { course, units, lessons, curriculum, writable, reload, settings, noun, classroom } = useCourse();
   const { toast, confirm } = useFeedback();
   const { navigate } = useNavigation();
   const [editing, setEditing] = useState<Editing | null>(null), [creating, setCreating] = useState<OutcomeCoverage | null>(null), [showArchived, setShowArchived] = useState(false);
   const base = `/cursos/${course.id}`;
-  const map = coverage(curriculum, units, lessons);
+  const delivery = useDelivery(course.id, classroom && settings.attendance && course.status === "active");
+  const [section, setSection] = useState("");
+  const delivered = (delivery?.sessions || []).filter(session => !section || session.groupId === section).map(session => session.lessonId!);
+  const map = coverage(curriculum, units, lessons, delivered);
   const codeOf = new Map(map.outcomes.map(item => [item.outcome.id, item.code]));
   const coverageOf = new Map(map.outcomes.map(item => [item.outcome.id, item]));
   const ordered = [...curriculum.outcomes].sort((a, b) => a.position - b.position);
@@ -92,6 +108,7 @@ export function Plan() {
       { label: "Resultados", value: map.summary.total, icon: "spark", hue: "violet" },
       { label: "Trabajados en lecciones", value: map.summary.taught, icon: "content", hue: "sky" },
       { label: "Evaluados", value: map.summary.assessed, icon: "check", hue: "green" },
+      ...(delivery ? [{ label: "Impartidos en clase", value: map.summary.delivered, icon: "calendar" as const, hue: "violet" as const }] : []),
       { label: "Resultados con huecos", value: map.summary.gaps, icon: "alert", hue: "coral" },
     ]}/>}
     {!curriculum.outcomes.length && !curriculum.competencies.length ? <EmptyState icon="spark" title="Define lo que aprenderán"
@@ -114,14 +131,14 @@ export function Plan() {
             : <p className="muted small">Sin resultados todavía.{writable && competency?.status === "active" && <> <button type="button" className="link-button" onClick={() => setEditing({ kind: "outcome", competencyId: competency.id })}>Agregar resultado</button></>}</p>}
         </article>)}</div>
       </Section>
-      {map.outcomes.length > 0 && <Section title="Mapa de cobertura">
-        <p className="muted">Cada fila es un resultado y cada columna {noun.a}. {writable ? `Marca dónde se planifica; ` : ""}las lecciones alineadas cuentan como trabajado y las preguntas o actividades de evaluación como evaluado.</p>
+      {map.outcomes.length > 0 && <Section title="Mapa de cobertura" action={delivery && delivery.sections.length > 1 && <label className="select-inline"><span>Sección</span><select value={section} onChange={event => setSection(event.target.value)}><option value="">Todas</option>{delivery.sections.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}>
+        <p className="muted">Cada fila es un resultado y cada columna {noun.a}. {writable ? `Marca dónde se planifica; ` : ""}las lecciones alineadas cuentan como trabajado, las preguntas o actividades de evaluación como evaluado{delivery ? " y las lecciones dadas en clases finalizadas como impartido; se actualiza al finalizar cada clase" : ""}.</p>
         {activeUnits.length ? <div className="coverage-scroll" role="region" aria-label="Mapa de cobertura" tabIndex={0}>
           <table className="coverage-table">
             <thead><tr><th scope="col">Resultado</th>{activeUnits.map(({ unit }) => <th key={unit.id} scope="col">{unit.name}</th>)}<th scope="col">Estado</th></tr></thead>
             <tbody>{map.outcomes.map(item => <tr key={item.outcome.id}>
               <th scope="row"><div className="row-outcome"><span className="outcome-code" aria-hidden="true">{item.code}</span><span><span className="sr-only">{item.code}: </span>{item.outcome.statement}</span></div></th>
-              {activeUnits.map(({ unit }) => <td key={unit.id}><Cell item={item} unitId={unit.id} unitName={unit.name} lessons={lessons} writable={writable} onToggle={() => void togglePlan(unit.id, item.outcome.id)}/></td>)}
+              {activeUnits.map(({ unit }) => <td key={unit.id}><Cell item={item} unitId={unit.id} unitName={unit.name} lessons={lessons} delivered={delivered} writable={writable} onToggle={() => void togglePlan(unit.id, item.outcome.id)}/></td>)}
               <td><GapAction item={item} lessons={lessons} base={base} writable={writable} onCreate={() => setCreating(item)}/></td>
             </tr>)}</tbody>
             {activeUnits.some(item => item.missing.length) && <tfoot><tr><th scope="row">{`Pendiente en ${noun.the}`}</th>{activeUnits.map(item => <td key={item.unit.id}>{item.missing.length ? <span className="gap-text"><Icon name="alert" size={14}/>Falta trabajar {item.missing.map(id => codeOf.get(id)).join(", ")}</span> : <span className="muted small">Al día</span>}</td>)}<td/></tr></tfoot>}
@@ -156,13 +173,14 @@ function CoverageBadge({ item }: { item: OutcomeCoverage }) {
   return <StatusBadge tone="success">Trabajado y evaluado</StatusBadge>;
 }
 
-function Cell({ item, unitId, unitName, lessons, writable, onToggle }: { item: OutcomeCoverage; unitId: string; unitName: string; lessons: Lesson[]; writable: boolean; onToggle: () => void }) {
+function Cell({ item, unitId, unitName, lessons, delivered, writable, onToggle }: { item: OutcomeCoverage; unitId: string; unitName: string; lessons: Lesson[]; delivered: string[]; writable: boolean; onToggle: () => void }) {
   const planned = item.units.includes(unitId);
   const here = lessons.filter(lesson => lesson.courseUnitId === unitId && lesson.status !== "archived" && lessonOutcomes(lesson).includes(item.outcome.id));
   const assessed = here.some(lesson => lesson.activities.some(activity => assesses(activity) && activityOutcomes(activity, lesson).includes(item.outcome.id)));
   const state = <>
     {here.length > 0 && <span className="cell-taught"><Icon name="content" size={14}/>{plural(here.length, "lección", "lecciones")}</span>}
     {assessed && <span className="cell-assessed"><Icon name="check" size={14}/>Evaluado</span>}
+    {here.some(lesson => delivered.includes(lesson.id)) && <span className="cell-delivered"><Icon name="calendar" size={14}/>Impartido</span>}
   </>;
   return <div className={`coverage-cell${planned ? " is-planned" : ""}${here.length ? " is-taught" : ""}`}>
     {writable ? <button type="button" className="cell-plan" aria-pressed={planned} aria-label={`Planificar ${item.code} en ${unitName}`} onClick={onToggle}><Icon name={planned ? "check" : "plus"} size={14}/>{planned ? "Planificado" : "Planificar"}</button>
@@ -179,7 +197,7 @@ function GapAction({ item, lessons, base, writable, onCreate }: { item: OutcomeC
     const lesson = lessons.find(item2 => item2.id === item.lessons[0]);
     return <div className="gap-action"><span className="gap-text"><Icon name="info" size={14}/>Se trabaja pero no se comprueba</span>{writable && lesson && <Link className="button secondary small" href={`${base}/lecciones/${lesson.id}`}>Agregar evaluación en «{lesson.title}»</Link>}</div>;
   }
-  return <span className="gap-ok"><Icon name="check" size={14}/>{item.published ? "Cubierto" : "Cubierto en borrador"}</span>;
+  return <span className="gap-ok"><Icon name="check" size={14}/>{item.deliveredIn.length ? "Cubierto e impartido" : item.published ? "Cubierto" : "Cubierto en borrador"}</span>;
 }
 
 function CompetencyDialog({ item, onClose, onSave }: { item?: Competency; onClose: () => void; onSave: (data: { name: string; description: string }) => Promise<void> }) {
