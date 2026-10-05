@@ -231,6 +231,11 @@ export async function sharedFile(code: string, fileId: string, organizationId: s
   const snapshot = JSON.parse(lesson.published_content) as { resources?: Material[] };
   const reference = snapshot.resources?.find(resource => resource.kind === "file" && resource.fileId === fileId);
   if (!reference) return reply({ error: "El archivo no forma parte de esta publicación." }, 404);
+  return deliverFile(fileId, organizationId, db, bucket);
+}
+
+/** Streams a private file to a learner after checking that the stored copy is the one that was uploaded. */
+export async function deliverFile(fileId: string, organizationId: string, db: Database, bucket: R2Bucket): Promise<Response> {
   const row = await db.prepare("SELECT object_key,original_name,size_bytes,sha256,status FROM course_files WHERE id=? AND organization_id=?").bind(fileId, organizationId).first<{ object_key: string; original_name: string; size_bytes: number; sha256: string; status: string }>();
   if (!row || !["ready", "archived"].includes(row.status)) return reply({ error: "El archivo no está disponible." }, 404);
   const object = await bucket.get(row.object_key);

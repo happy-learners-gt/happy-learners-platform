@@ -31,7 +31,7 @@ test("sign-in errors, organization settings, roles, help, logout and 404", async
   // Administration does not see the course's private attendance.
   await page.goto("/cursos/course-exploradores");
   await openNavigation(page);
-  await expect(page.getByRole("navigation", { name: "Navegación del curso" }).getByRole("link", { name: "Asistencia" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Navegación del curso" }).getByRole("link", { name: "Clases", exact: true })).toHaveCount(0);
   expect(await page.evaluate(async () => (await fetch("/api/courses/course-exploradores/groups")).status)).toBe(403);
   await page.getByRole("button", { name: /^Perfil de / }).click();
   await page.getByRole("menuitem", { name: "Cerrar sesión" }).click();
@@ -122,7 +122,7 @@ test("creating a course keeps unsaved input when leaving is cancelled, then land
   await expect(page.getByRole("form", { name: "Nueva sesión" })).toBeVisible();
   // In-person workshops get groups and attendance.
   await openNavigation(page);
-  await expect(page.getByRole("navigation", { name: "Navegación del curso" }).getByRole("link", { name: "Asistencia" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Navegación del curso" }).getByRole("link", { name: "Clases", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   // Duplicate and archive from the course list menu.
   await page.goto("/cursos");

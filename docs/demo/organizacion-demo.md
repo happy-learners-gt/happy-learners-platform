@@ -18,7 +18,7 @@ Todas las cuentas usan la contraseña **`Aprender-2026!`**. Son datos ficticios:
 | `ana.lopez` | Ana López | Educadora | Responsable de English Explorers A1 y del club de lectura archivado. Colabora en Arte y en Exploradores. |
 | `diego.ramirez` | Diego Ramírez | Educador | Responsable del Taller de robótica; tiene el reto final en borrador. |
 | `sofia.castillo` | Sofía Castillo | Educadora | Responsable de Arte (preprimaria) y colabora en inglés. |
-| `educador-demo`, `admin-demo`, `instructor-demo` | Cuentas originales | Educador / Administración | Exploradores sigue como antes, ahora con equipo e historial de asistencia. |
+| `educador-demo`, `admin-demo`, `instructor-demo` | Cuentas originales | Educador / Administración | Exploradores sigue como antes, ahora con equipo, clases planificadas e historial de asistencia. |
 
 ## Programas y cursos
 
@@ -32,7 +32,19 @@ Todas las cuentas usan la contraseña **`Aprender-2026!`**. Son datos ficticios:
 | Exploradores | — | Curso libre · Idiomas | Contenido original; hueco curricular a propósito (un resultado sin módulo ni lecciones). |
 | Club de lectura 2025 | — | Seminario | **Archivado**: se consulta, no se edita; su lección publicada sigue disponible. |
 
-Cada curso activo tiene competencias, resultados, planificación por módulo, recursos etiquetados (enlaces reales a Khan Academy, PhET, NASA, British Council, Scratch, Code.org y Google Arts & Culture), lecciones con momentos, propósito, organización, bloques y notas para el docente, grupos con 12 a 20 participantes ficticios y clases de septiembre con asistencia. También hay clases programadas para la primera semana de octubre.
+Cada curso activo tiene competencias, resultados, planificación por módulo, recursos etiquetados (enlaces reales a Khan Academy, PhET, NASA, British Council, Scratch, Code.org y Google Arts & Culture), lecciones con momentos, propósito, organización, bloques y notas para el docente, grupos con 12 a 20 participantes ficticios y clases de septiembre con asistencia. La migración `0018_class_planning.sql` agrega hora, duración y estado a cada clase, planifica las clases de cada grupo hasta el 27 de noviembre de 2026 con su lección y dos recursos de la biblioteca, y asigna a cada grupo activo un código para estudiantes:
+
+| Grupo | Curso | Horario | Código |
+|---|---|---|---|
+| 3.º A | Matemáticas 3.º primaria | lunes y miércoles, 08:00 | `DG-MATE-3A` |
+| 3.º B | Matemáticas 3.º primaria | martes y jueves, 10:00 | `DG-MATE-3B` |
+| 4.º A | Ciencias Naturales 4.º primaria | lunes y jueves, 13:00 | `DG-CIEN-4A` |
+| Sábados 9:00 | English Explorers A1 | sábados, 09:00 | `DG-ENGL-SAB` |
+| Martes 15:00 | Taller de robótica educativa | martes, 15:00 | `DG-ROBO-MAR` |
+| Preprimaria K2 | Arte y expresión creativa | lunes, miércoles y viernes, 09:30 | `DG-ARTE-K2` |
+| Grupo de demostración | Exploradores | martes y jueves, 11:00 | `DG-EXPL-DEMO` |
+
+Las clases de septiembre con asistencia quedan como **Impartidas**; las de octubre anteriores a hoy sin lista aparecen como **Sin registrar**.
 
 ## Flujos para evaluar
 
@@ -42,10 +54,10 @@ Cada curso activo tiene competencias, resultados, planificación por módulo, re
 4. **Publicación con requisitos:** en un curso de Primaria bilingüe, una lección sin resultados no se puede publicar; en Arte sí.
 5. **Plan curricular:** en Ciencias, el mapa muestra lo trabajado y lo evaluado. En Exploradores, el hueco se cierra con **Crear lección**.
 6. **Cambios sin publicar:** en Ciencias, «El ciclo del agua» tiene cambios en borrador. Los estudiantes ven la versión publicada hasta **Publicar cambios**.
-7. **Asistencia:** en Matemáticas → Asistencia hay clases de septiembre con presentes, tardanzas, ausencias y justificadas, más clases próximas.
+7. **Clases:** entra como `lucia.herrera`. En **Inicio → Próximas clases** abre la siguiente clase de 3.º A: muestra la lección, los recursos y la lista. Elige **Comenzar clase**, pasa lista, guarda y **Finalizar clase**. En **Matemáticas → Clases → Historial** aparece como impartida, con el porcentaje de asistencia. Con **Planificar clase** se elige grupo, fecha, hora, lección y recursos de cualquier curso.
 8. **Coordinación:** entra como `marta.ruiz`. En **Educadores** verás cada persona con sus cursos, lecciones creadas, publicaciones, clases registradas y última actividad; al elegir una persona se filtra su actividad. **Avance por curso** compara todos los cursos. En **Configuración académica** están los programas.
 9. **Filtros:** en **Cursos**, filtra por programa, nivel, formato, área, modalidad o responsable. En **Biblioteca**, filtra por etiqueta o área.
-10. **Estudiante:** desde una lección publicada, **Copiar enlace** y ábrelo en una ventana privada. Las notas para el docente no aparecen.
+10. **Estudiante:** en una ventana privada, escribe `DG-MATE-3A` en **¿Eres estudiante?**. El espacio del grupo muestra la próxima clase, su lección y sus recursos, sin cuenta ni datos personales. El código de una lección publicada (por ejemplo `GREETINGS`) abre solo esa lección. Las notas para el docente no aparecen.
 
 ## Regenerar el seed
 

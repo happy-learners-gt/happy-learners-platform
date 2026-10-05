@@ -14,7 +14,7 @@ test("1 · login → course → content, with one navigation system and working 
   // Entering a course swaps the sidebar context; there is no second, horizontal navigation.
   await expect(page.getByRole("navigation", { name: "Navegación principal" })).toHaveCount(0);
   await openNavigation(page);
-  for (const label of ["Todos los cursos", "Resumen", "Contenido", "Biblioteca del curso", "Grupos", "Asistencia", "Configuración"]) await expect(courseNav(page).getByRole("link", { name: label, exact: true })).toBeVisible();
+  for (const label of ["Todos los cursos", "Resumen", "Contenido", "Biblioteca del curso", "Clases", "Grupos", "Asignaciones", "Configuración"]) await expect(courseNav(page).getByRole("link", { name: label, exact: true })).toBeVisible();
   await courseNav(page).getByRole("link", { name: "Contenido", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Contenido");
   await expect(page.getByRole("heading", { level: 2, name: "Greetings", exact: true })).toBeVisible();
@@ -103,8 +103,8 @@ test("3 · edit with autosave, then publish", async ({ page }, info) => {
 test("4 · open a lesson as a student, one activity at a time", async ({ page, context }, info) => {
   const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
   await page.goto("/");
-  await page.getByLabel("Código de lección").fill("greetings");
-  await page.getByRole("button", { name: "Abrir lección", exact: true }).click();
+  await page.getByLabel("Código de grupo o de lección").fill("greetings");
+  await page.getByRole("button", { name: "Abrir", exact: true }).click();
   await expect(page).toHaveURL(/\/aprender\/GREETINGS$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Greetings and Introductions");
   await expect(page.getByText("Lo que aprenderás")).toBeVisible();
@@ -149,12 +149,12 @@ test("5 · create a group and record attendance", async ({ page }, info) => {
   await card.getByLabel(`Nombre o código de lista para ${group}`).fill(learner);
   await card.getByRole("button", { name: "Agregar" }).click();
   await expect(card.getByText(learner, { exact: true })).toBeVisible();
-  await card.getByRole("button", { name: "Registrar clase" }).click();
-  const dialog = page.getByRole("dialog", { name: "Registrar clase" });
+  await card.getByRole("button", { name: "Planificar clase" }).click();
+  const dialog = page.getByRole("dialog", { name: "Planificar clase" });
   await expect(dialog.getByLabel("Grupo")).toHaveValue(/group-/);
   await expect(dialog.getByLabel("Grupo").locator("option:checked")).toContainText(group);
-  await dialog.getByRole("button", { name: "Registrar y pasar lista" }).click();
-  await expect(page).toHaveURL(/\/asistencia\/class-/);
+  await dialog.getByRole("button", { name: "Planificar clase" }).click();
+  await expect(page).toHaveURL(/\/clases\/class-/);
   const marks = page.getByRole("radiogroup", { name: learner });
   await expect(page.getByRole("button", { name: "Guardar asistencia" })).toBeDisabled();
   await marks.getByLabel("Presente").check();
@@ -163,9 +163,11 @@ test("5 · create a group and record attendance", async ({ page }, info) => {
   await expect(page.locator(".sheet-header .badge")).toHaveText("Guardada");
   await page.reload();
   await expect(page.getByRole("radiogroup", { name: learner }).getByLabel("Presente")).toBeChecked();
+  await page.getByRole("button", { name: "Finalizar clase" }).click();
+  await expect(page.locator(".page-meta .badge")).toHaveText("Impartida");
   await openNavigation(page);
   await courseNav(page).getByRole("link", { name: "Grupos", exact: true }).click();
-  await expect(page.locator(".group-card").filter({ hasText: group }).locator(".group-sessions a")).toHaveCount(1);
+  await expect(page.locator(".group-card").filter({ hasText: group }).getByRole("link", { name: /\d/ })).toHaveCount(1);
 });
 
 test("6 · mobile navigation opens the course drawer, closes on selection and with Escape", async ({ page }) => {
@@ -182,8 +184,8 @@ test("6 · mobile navigation opens the course drawer, closes on selection and wi
   await expect(courseNav(page)).toBeHidden();
   await expect(toggle).toBeFocused();
   await toggle.click();
-  await courseNav(page).getByRole("link", { name: "Asistencia", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Asistencia");
+  await courseNav(page).getByRole("link", { name: "Clases", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Clases");
   await expect(courseNav(page)).toBeHidden();
   await toggle.click();
   await page.getByRole("link", { name: "Todos los cursos" }).click();

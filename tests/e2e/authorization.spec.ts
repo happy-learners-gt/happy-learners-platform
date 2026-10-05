@@ -53,40 +53,55 @@ test("HL-140 ST-096: only the course's teaching team reaches its groups, learner
   const groups = (await (await lead.get(`${course}/groups`)).json()).groups as { id: string; learners: { id: string }[] }[];
   expect(groups.length).toBeGreaterThan(0);
   expect((await coTeacher.get(`${course}/groups`)).status()).toBe(200);
-  const sessions = (await (await coTeacher.get(`${course}/sessions`)).json()).sessions as { id: string }[];
+  const sessions = (await (await coTeacher.get(`${course}/sessions`)).json()).sessions as { id: string; status: string; version: number }[];
   expect(sessions.length).toBeGreaterThan(0);
   const attendance = `${course}/sessions/${sessions[0].id}/attendance`;
   const roster = (await (await lead.get(attendance)).json()).learners as { learnerId: string; status: string }[];
   expect(roster.length).toBeGreaterThan(0);
 
   const requests = (api: APIRequestContext) => [
-    api.get(`${course}/groups`), api.get(`${course}/sessions`), api.get(`${course}/assignments`), api.get(attendance),
-    api.post(`${course}/groups`, { data: { name: "Grupo no autorizado" } }),
-    api.post(`${course}/groups/${groups[0].id}/learners`, { data: { displayName: "Estudiante no autorizado" } }),
-    api.post(`${course}/sessions`, { data: { groupId: groups[0].id, sessionDate: "2026-10-05" } }),
-    api.put(attendance, { data: { marks: roster.map(row => ({ learnerId: row.learnerId, status: "absent" })) } }),
+    () => api.get(`${course}/groups`), () => api.get(`${course}/sessions`), () => api.get(`${course}/assignments`), () => api.get(attendance),
+    () => api.post(`${course}/groups`, { data: { name: "Grupo no autorizado" } }),
+    () => api.post(`${course}/groups/${groups[0].id}/learners`, { data: { displayName: "Estudiante no autorizado" } }),
+    () => api.post(`${course}/sessions`, { data: { groupId: groups[0].id, sessionDate: "2026-10-05" } }),
+    () => api.put(attendance, { data: { marks: roster.map(row => ({ learnerId: row.learnerId, status: "absent" })) } }),
+    () => api.get(`${course}/sessions/${sessions[0].id}`),
+    () => api.put(`${course}/sessions/${sessions[0].id}`, { data: { sessionDate: "2026-10-05", version: 1 } }),
+    ...["start", "complete", "cancel", "restore"].map(action => () => api.post(`${course}/sessions/${sessions[0].id}/${action}`)),
+    () => api.put(`${course}/groups/${groups[0].id}`, { data: { name: "Grupo renombrado sin permiso" } }),
+    () => api.post(`${course}/groups/${groups[0].id}/code`), () => api.delete(`${course}/groups/${groups[0].id}/code`),
+    () => api.put(`${course}/groups/${groups[0].id}/learners/${groups[0].learners[0].id}`, { data: { status: "archived" } }),
   ];
-  const statuses = async (api: APIRequestContext) => (await Promise.all(requests(api))).map(response => response.status());
+  const total = requests(lead).length;
+  const statuses = async (api: APIRequestContext) => (await Promise.all(requests(api).map(send => send()))).map(response => response.status());
   // Deny by default: an educator outside the team, administration and anonymous visitors get nothing; another
   // organization does not even see the course.
-  expect(await statuses(outsider)).toEqual(Array(8).fill(403));
-  expect(await statuses(admin)).toEqual(Array(8).fill(403));
-  expect(await statuses(demoAdmin)).toEqual(Array(8).fill(403));
-  expect(await statuses(anon)).toEqual(Array(8).fill(401));
-  expect(await statuses(other)).toEqual(Array(8).fill(404));
+  expect(await statuses(outsider)).toEqual(Array(total).fill(403));
+  expect(await statuses(admin)).toEqual(Array(total).fill(403));
+  expect(await statuses(demoAdmin)).toEqual(Array(total).fill(403));
+  expect(await statuses(anon)).toEqual(Array(total).fill(401));
+  expect(await statuses(other)).toEqual(Array(total).fill(404));
   expect(Object.keys(await (await outsider.get(`${course}/groups`)).json())).toEqual(["error"]);
-  // Nothing changed for the team.
+  // Nothing changed for the team, and the outsider's own list of classes leaves this course out.
   expect((await (await lead.get(attendance)).json()).learners).toEqual(roster);
+  const after = (await (await lead.get(`${course}/sessions`)).json()).sessions as typeof sessions;
+  expect(after.find(item => item.id === sessions[0].id)).toEqual(sessions[0]);
+  expect((await (await lead.get(`${course}/groups`)).json()).groups).toEqual(groups);
+  expect((await (await outsider.get("/api/classes")).json()).classes.some((item: { courseId: string }) => item.courseId === "seed-course-matematicas")).toBe(false);
+  expect((await (await lead.get("/api/classes")).json()).classes.some((item: { courseId: string }) => item.courseId === "seed-course-matematicas")).toBe(true);
 
   // Access follows team membership: joining the team grants it, leaving revokes it.
   try {
     await setTeam(admin, [...original, { userId: "user-educator", role: "co-teacher" }]);
     expect((await outsider.get(`${course}/groups`)).status()).toBe(200);
     expect((await outsider.get(attendance)).status()).toBe(200);
+    expect((await outsider.get(`${course}/sessions/${sessions[0].id}`)).status()).toBe(200);
   } finally {
     await setTeam(admin, original);
   }
   expect((await outsider.get(`${course}/groups`)).status()).toBe(403);
+  expect((await outsider.get(`${course}/sessions/${sessions[0].id}`)).status()).toBe(403);
+  expect((await outsider.post(`${course}/groups/${groups[0].id}/code`)).status()).toBe(403);
 });
 
 test("HL-140 ST-096: educators outside the team see no groups or attendance in the course", async ({ page }) => {
@@ -94,8 +109,8 @@ test("HL-140 ST-096: educators outside the team see no groups or attendance in t
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Matemáticas 3.º primaria");
   await openNavigation(page);
   const nav = page.getByRole("navigation", { name: "Navegación del curso" });
-  for (const name of ["Grupos", "Asignaciones", "Asistencia"]) await expect(nav.getByRole("link", { name, exact: true })).toHaveCount(0);
-  await page.goto("/cursos/seed-course-matematicas/asistencia");
+  for (const name of ["Clases", "Grupos", "Asignaciones"]) await expect(nav.getByRole("link", { name, exact: true })).toHaveCount(0);
+  await page.goto("/cursos/seed-course-matematicas/clases");
   await expect(page.getByRole("heading", { name: "Solo el equipo docente del curso" })).toBeVisible();
   // The team still works with them.
   await signIn(page, "lucia.herrera", "/cursos/seed-course-matematicas/grupos");

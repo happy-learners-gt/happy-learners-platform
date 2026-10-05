@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { Lesson, Material, Resource, Taxonomy } from "@happy-learners/contracts";
+import type { Course, Lesson, Material, Resource, Taxonomy } from "@happy-learners/contracts";
 import { api, fileAccept, message, uploadCourseFile } from "../api";
 import { Link } from "../navigation";
 import { resourceStatusLabel } from "../model";
@@ -32,9 +32,10 @@ export function ResourcePreview({ item, lessons, onClose, onEdit }: { item: Libr
 }
 
 type Kind = "text" | "link" | "file";
-/** Create a text/link resource or upload a document; edit text/link resources. */
-export function ResourceForm({ courseId, item, onClose, onSaved }: { courseId: string; item?: Material; onClose: () => void; onSaved: (text: string) => Promise<void> }) {
+/** Create a text/link resource or upload a document; edit text/link resources. Without a course, asks which one it belongs to. */
+export function ResourceForm({ courseId: fixedCourse, courses, item, onClose, onSaved }: { courseId?: string; courses?: Course[]; item?: Material; onClose: () => void; onSaved: (text: string) => Promise<void> }) {
   const [kind, setKind] = useState<Kind>(item?.kind || "text");
+  const [courseId, setCourseId] = useState(fixedCourse || item?.courseId || courses?.[0]?.id || "");
   const [taxonomy, setTaxonomy] = useState<Taxonomy>({ vocabularies: [], terms: [] }), [terms, setTerms] = useState(item?.termIds || []);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   useEffect(() => { api<Taxonomy>("/taxonomy").then(setTaxonomy).catch(() => undefined); }, []);
@@ -59,6 +60,7 @@ export function ResourceForm({ courseId, item, onClose, onSaved }: { courseId: s
   return <Modal title={item ? "Editar recurso" : "Agregar recurso"} onClose={onClose}>
     <form className="stack" onSubmit={submit}>
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
+      {!fixedCourse && !item && courses && <Field label="Curso" hint="El recurso vive en la biblioteca de ese curso y se puede usar en lecciones y clases de cualquier curso."><select value={courseId} onChange={event => setCourseId(event.target.value)} required>{courses.map(course => <option key={course.id} value={course.id}>{course.title}</option>)}</select></Field>}
       {!item && <fieldset className="choice-field"><legend>Tipo de recurso</legend><div className="segmented wide">
         {([["text", "Texto"], ["link", "Enlace"], ["file", "Documento"]] as const).map(([value, label]) => <label key={value}><input type="radio" name="kind" checked={kind === value} onChange={() => setKind(value)}/><span>{label}</span></label>)}
       </div></fieldset>}

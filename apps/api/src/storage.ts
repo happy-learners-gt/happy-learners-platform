@@ -16,6 +16,7 @@ import teamsMigration from "../../../database/migrations/0014_course_teams_activ
 import demoMigration from "../../../database/migrations/0015_demo_organization.sql";
 import assignmentsMigration from "../../../database/migrations/0016_lesson_assignments.sql";
 import demoAssignmentMigration from "../../../database/migrations/0017_demo_class_assignment.sql";
+import classPlanningMigration from "../../../database/migrations/0018_class_planning.sql";
 
 type Statement = { sql: string; values: (string | number | null)[] };
 /**
@@ -76,6 +77,7 @@ export class OrganizationStore extends DurableObject<Env> {
       if (!applied.length || applied[0].version < 15) { runScript(this.ctx.storage.sql, demoMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (15,?)", scope); }
       if (!applied.length || applied[0].version < 16) { this.ctx.storage.sql.exec(assignmentsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (16,?)", scope); }
       if (!applied.length || applied[0].version < 17) { this.ctx.storage.sql.exec(demoAssignmentMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (17,?)", scope); }
+      if (!applied.length || applied[0].version < 18) { this.ctx.storage.sql.exec(classPlanningMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (18,?)", scope); }
       // Compare-and-write plus dependent writes belong to one SQLite transaction.
       if (guard && !this.ctx.storage.sql.exec(guard.sql, ...guard.values).toArray().length) return [];
       return statements.map(statement => this.ctx.storage.sql.exec(statement.sql, ...statement.values).toArray());

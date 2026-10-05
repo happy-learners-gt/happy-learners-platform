@@ -8,12 +8,16 @@ import { matches, newest, plural, usage } from "../model";
 import { ResourceCard } from "../ui/cards";
 import type { LibraryItem } from "../ui/cards";
 import { Icon } from "../ui/icons";
-import { Button, EmptyState, ErrorState, Loading, PageHeader } from "../ui/primitives";
-import { legacyItem, ResourcePreview } from "./resources";
+import { useFeedback } from "../ui/feedback";
+import { Button, EmptyState, ErrorState, Loading, PageHeader, PrimaryAction } from "../ui/primitives";
+import { legacyItem, ResourceForm, ResourcePreview } from "./resources";
 
-/** Every resource of the organization in one place; editing happens in each course's library. */
+/** Every resource of the organization in one place: find, preview, add and edit without leaving the library. */
 export function Library() {
   const { member } = useSession();
+  const educator = isEducator(member);
+  const { toast } = useFeedback();
+  const [form, setForm] = useState<LibraryItem | "new" | null>(null);
   const { url, navigate } = useNavigation();
   const [data, setData] = useState<{ items: LibraryItem[]; courses: Course[]; lessons: Lesson[]; taxonomy: Taxonomy } | null>(null), [error, setError] = useState("");
   const [preview, setPreview] = useState<LibraryItem | null>(null);
@@ -28,9 +32,10 @@ export function Library() {
   }
   useEffect(() => { void load(); }, []);
   function filter(key: string, value: string) { const next = new URL(url); if (value) next.searchParams.set(key, value); else next.searchParams.delete(key); navigate(next.pathname + next.search, true); }
-  const header = <PageHeader title="Biblioteca" description="Los recursos de todos tus cursos. Para agregar o editar, abre la biblioteca de cada curso."/>;
+  const header = <PageHeader title="Biblioteca" description="Textos, enlaces y documentos de todos los cursos. Úsalos en lecciones y clases de cualquier curso." primary={educator && data && data.courses.some(course => course.status === "active") && <PrimaryAction icon="plus" onClick={() => setForm("new")}>Agregar recurso</PrimaryAction>}/>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
   if (!data) return <>{header}<Loading label="Cargando biblioteca…" lines={6}/></>;
+  const editable = (item: LibraryItem) => data.courses.some(course => course.id === item.courseId && course.status === "active");
   const areaOf = (item: LibraryItem) => data.courses.find(course => course.id === item.courseId)?.area?.slice(0, 2);
   // Each filter counts what the other active filters leave, so no option leads to an empty list by surprise.
   const base = (skip?: "tag" | "area") => data.items.filter(item => item.status !== "archived" && (!type || item.kind === type) && (!courseFilter || item.courseId === courseFilter || (courseFilter === "general" && item.legacy)) && matches(query, item.title, item.description, item.fileName, item.courseTitle)
@@ -52,10 +57,12 @@ export function Library() {
     <p className="toolbar-count" aria-live="polite">{plural(visible.length, "recurso", "recursos")}</p>
     {visible.length ? <div className="resource-list">{visible.map(item => <ResourceCard key={`${item.courseId}-${item.id}`} item={item} onOpen={() => setPreview(item)} menu={[
       { label: "Vista previa", icon: "eye", onSelect: () => setPreview(item) },
+      ...(educator && !item.legacy && item.kind !== "file" && editable(item) ? [{ label: "Editar", icon: "edit" as const, onSelect: () => setForm(item) }] : []),
       ...(!item.legacy ? [{ label: "Abrir en su curso", icon: "arrowRight" as const, onSelect: () => navigate(`/cursos/${item.courseId}/biblioteca`) }] : []),
     ]}/>)}</div>
       : data.items.length ? <EmptyState icon="search" title="No hay recursos con esos filtros" action={<Button onClick={() => navigate("/biblioteca", true)}>Limpiar filtros</Button>}/>
-      : <EmptyState icon="library" title="Aún no hay recursos">Abre un curso y usa “Agregar recurso” en su biblioteca.</EmptyState>}
-    {preview && <ResourcePreview item={preview} lessons={usage(preview.id, data.lessons)} onClose={() => setPreview(null)}/>}
+      : <EmptyState icon="library" title="Aún no hay recursos" action={educator && <PrimaryAction icon="plus" onClick={() => setForm("new")}>Agregar recurso</PrimaryAction>}>Agrega un texto, un enlace o un documento para usarlo en lecciones y clases.</EmptyState>}
+    {preview && <ResourcePreview item={preview} lessons={usage(preview.id, data.lessons)} onClose={() => setPreview(null)} onEdit={educator && !preview.legacy && preview.kind !== "file" && editable(preview) ? () => { setForm(preview); setPreview(null); } : undefined}/>}
+    {form && <ResourceForm courses={data.courses.filter(course => course.status === "active")} item={form === "new" ? undefined : form} courseId={form === "new" ? undefined : form.courseId} onClose={() => setForm(null)} onSaved={async text => { setForm(null); await load(); toast({ message: text }); }}/>}
   </>;
 }
