@@ -18,7 +18,8 @@ Todas las cuentas usan la contraseña **`Aprender-2026!`**. Son datos ficticios:
 | `ana.lopez` | Ana López | Educadora | Responsable de English Explorers A1 y del club de lectura archivado. Colabora en Arte y en Exploradores. |
 | `diego.ramirez` | Diego Ramírez | Educador | Responsable del Taller de robótica; tiene el reto final en borrador. |
 | `sofia.castillo` | Sofía Castillo | Educadora | Responsable de Arte (preprimaria) y colabora en inglés. |
-| `educador-demo`, `admin-demo`, `instructor-demo` | Cuentas originales | Educador / Administración | Exploradores sigue como antes, ahora con equipo, clases planificadas e historial de asistencia. |
+| `educador-demo`, `admin-demo` | Cuentas originales | Educador / Administración | `educador-demo` es responsable de Exploradores, con equipo, clases planificadas e historial de asistencia. |
+| `instructor-demo` | Cuenta original | Educador | No forma parte de ningún equipo: muestra **Aún no tienes cursos asignados** hasta que administración lo asigne. |
 
 ## Programas y cursos
 
@@ -49,11 +50,12 @@ Las clases de septiembre con asistencia quedan como **Impartidas**; las de octub
 ## Flujos para evaluar
 
 1. **Avance de una educadora:** entra como `lucia.herrera`. En **Inicio** aparecen *Mis cursos* (con su rol, lecciones publicadas, resultados evaluados y asistencia) y *Actividad en mis cursos*.
-2. **Equipo y responsabilidades:** abre **Matemáticas → Resumen** (equipo docente y actividad del curso) y **Configuración → Equipo docente** para agregar o quitar personas.
+2. **Equipo y responsabilidades:** abre **Matemáticas → Resumen** (equipo docente y actividad del curso). Como `marta.ruiz`, **Configuración → Equipo docente** agrega o quita personas y **Asignaciones** elige quién imparte cada sección; las educadoras y los educadores ven ambas en modo lectura.
 3. **Configuración heredada:** en Matemáticas, *Nombre de las partes del curso* aparece como **Fijado por el programa**. En Arte, los ajustes aparecen como **Definido en el curso**.
 4. **Publicación con requisitos:** en un curso de Primaria bilingüe, una lección sin resultados no se puede publicar; en Arte sí.
 5. **Plan curricular:** en Ciencias, el mapa muestra lo trabajado y lo evaluado. En Exploradores, el hueco se cierra con **Crear lección**.
 6. **Cambios sin publicar:** en Ciencias, «El ciclo del agua» tiene cambios en borrador. Los estudiantes ven la versión publicada hasta **Publicar cambios**.
+   **Revisión:** como `carlos.mejia`, edita una lección de Matemáticas y elige **Enviar a revisión**. Como `lucia.herrera`, aparece en **Inicio → Por revisar**: **Aprobar y publicar** o **Devolver con comentarios**.
 7. **Clases:** entra como `lucia.herrera`. En **Matemáticas → Asignaciones** están las secciones con sus estudiantes y en **Horario**, sus días y horas. En **Clases**, cada clase pendiente muestra su lección y se cambia desde la misma fila; **Asignar lecciones en orden** completa las que no tienen. En **Inicio → Próximas clases** abre la siguiente clase de 3.º A: muestra la lección, los recursos de la lección y la lista. Elige **Comenzar clase**, pasa lista, guarda y **Finalizar clase**. En **Clases → Historial** aparece como impartida, con el porcentaje de asistencia, y en **Plan curricular** sus resultados cuentan como impartidos.
 8. **Coordinación:** entra como `marta.ruiz`. En **Educadores** verás cada persona con sus cursos, lecciones creadas, publicaciones, clases registradas y última actividad; al elegir una persona se filtra su actividad. **Avance por curso** compara todos los cursos. En **Configuración académica** están los programas.
 9. **Filtros:** en **Cursos**, filtra por programa, nivel, formato, área, modalidad o responsable. En **Biblioteca**, filtra por etiqueta o área.
