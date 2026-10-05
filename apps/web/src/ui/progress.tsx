@@ -25,11 +25,11 @@ export function TeamLine({ team }: { team?: CourseMember[] }) {
 /**
  * Who did what, newest first: from the activity log. Filter by course or person.
  */
-export function ActivityFeed({ course, actor, mine, limit = 8, courseTitles, empty = "Todavía no hay actividad registrada." }: { course?: string; actor?: string; mine?: boolean; limit?: number; courseTitles?: Record<string, string>; empty?: string }) {
+export function ActivityFeed({ course, section, actor, mine, limit = 8, courseTitles, empty = "Todavía no hay actividad registrada." }: { course?: string; section?: string; actor?: string; mine?: boolean; limit?: number; courseTitles?: Record<string, string>; empty?: string }) {
   const [events, setEvents] = useState<ActivityEvent[] | null>(null), [error, setError] = useState("");
-  const query = new URLSearchParams({ limit: String(limit), ...(course ? { course } : {}), ...(actor ? { actor } : {}), ...(mine ? { mine: "1" } : {}) });
+  const query = new URLSearchParams({ limit: String(limit), ...(course ? { course } : {}), ...(section ? { section } : {}), ...(actor ? { actor } : {}), ...(mine ? { mine: "1" } : {}) });
   const load = () => api<{ events: ActivityEvent[] }>(`/activity?${query}`).then(result => setEvents(result.events)).catch(cause => setError(message(cause)));
-  useEffect(() => { void load(); }, [course, actor, mine, limit]);
+  useEffect(() => { void load(); }, [course, section, actor, mine, limit]);
   if (error) return <ErrorState error={error} retry={() => void load()}/>;
   if (!events) return <Skeleton lines={4}/>;
   if (!events.length) return <p className="muted">{empty}</p>;
