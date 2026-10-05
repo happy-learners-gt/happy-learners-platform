@@ -14,7 +14,7 @@ test("1 · login → course → content, with one navigation system and working 
   // Entering a course swaps the sidebar context; there is no second, horizontal navigation.
   await expect(page.getByRole("navigation", { name: "Navegación principal" })).toHaveCount(0);
   await openNavigation(page);
-  for (const label of ["Todos los cursos", "Resumen", "Contenido", "Biblioteca del curso", "Clases", "Grupos", "Asignaciones", "Configuración"]) await expect(courseNav(page).getByRole("link", { name: label, exact: true })).toBeVisible();
+  for (const label of ["Todos los cursos", "Resumen", "Contenido", "Biblioteca del curso", "Clases", "Grupos", "Cronograma", "Configuración"]) await expect(courseNav(page).getByRole("link", { name: label, exact: true })).toBeVisible();
   await courseNav(page).getByRole("link", { name: "Contenido", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Contenido");
   await expect(page.getByRole("heading", { level: 2, name: "Greetings", exact: true })).toBeVisible();

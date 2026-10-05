@@ -27,7 +27,7 @@ export function CurrentAssignments() {
   useEffect(() => { void load(); }, []);
   if (error) return <ErrorState error={error} retry={() => void load()}/>;
   if (!items) return <Skeleton lines={3}/>;
-  if (!items.length) return <EmptyState compact icon="list" title="Sin asignaciones vigentes">Cuando un grupo de tus cursos tenga una lección asignada para hoy, aparecerá aquí.</EmptyState>;
+  if (!items.length) return <EmptyState compact icon="list" title="Sin lecciones programadas">Cuando un grupo de tus cursos tenga una lección programada para hoy, aparecerá aquí.</EmptyState>;
   return <ul className="current-assignments">{items.map(item => <li key={item.id} className={item.effective ? undefined : "needs-action"}>
     <div>
       <strong>{item.lessonTitle}</strong>
@@ -35,7 +35,7 @@ export function CurrentAssignments() {
     </div>
     {item.effective ? <OpenPublication assignment={item}/> : item.availability === "unavailable" ? <>
       <StatusBadge tone="danger">Sin versión válida</StatusBadge>
-      <p className="assignment-note danger"><Icon name="alert" size={16}/>La lección asignada ya no tiene una publicación vigente. <Link href={`/cursos/${item.courseId}/asignaciones`}>Sustitúyela en Asignaciones</Link>.</p>
+      <p className="assignment-note danger"><Icon name="alert" size={16}/>La lección programada ya no tiene una publicación vigente. <Link href={`/cursos/${item.courseId}/cronograma`}>Sustitúyela en el Cronograma</Link>.</p>
     </> : <MissingLink assignment={item}/>}
   </li>)}</ul>;
 }

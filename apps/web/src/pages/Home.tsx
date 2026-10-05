@@ -96,7 +96,7 @@ export function Home() {
         </Section>
       </div>
       <div className="dashboard-side">
-        {educator && <Section title="Tus asignaciones vigentes" className="order-2">
+        {educator && <Section title="Tu cronograma vigente" className="order-2">
           <CurrentAssignments/>
         </Section>}
         {educator && <Section title="Próximas clases" className="order-2">

@@ -109,7 +109,7 @@ test("HL-140 ST-096: educators outside the team see no groups or attendance in t
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Matemáticas 3.º primaria");
   await openNavigation(page);
   const nav = page.getByRole("navigation", { name: "Navegación del curso" });
-  for (const name of ["Clases", "Grupos", "Asignaciones"]) await expect(nav.getByRole("link", { name, exact: true })).toHaveCount(0);
+  for (const name of ["Clases", "Grupos", "Cronograma"]) await expect(nav.getByRole("link", { name, exact: true })).toHaveCount(0);
   await page.goto("/cursos/seed-course-matematicas/clases");
   await expect(page.getByRole("heading", { name: "Solo el equipo docente del curso" })).toBeVisible();
   // The team still works with them.

@@ -27,7 +27,9 @@ export function Help() {
       </ol>
       <p>Cada grupo tiene un <strong>código para estudiantes</strong>. Con él, los estudiantes ven la próxima clase de su grupo, su lección y sus recursos, sin cuenta. Puedes cambiar o desactivar el código en cualquier momento.</p>
       <h2>Asignaciones</h2>
-      <p>En <strong>Asignaciones</strong>, indica qué lección publicada usa cada grupo y desde qué fecha, con un término opcional. Solo se ofrecen lecciones publicadas. Si la lección se vuelve a publicar, verás su número de publicación nuevo y podrás confirmarlo; si se archiva, la asignación muestra <strong>Requiere sustitución</strong> para que elijas otra lección publicada. En <strong>Inicio</strong>, “Tus asignaciones vigentes” abre siempre la publicación vigente de cada asignación de tus cursos, nunca un borrador, y avisa si alguna quedó sin una versión válida.</p>
+      <p>Un estudiante queda asignado a un curso cuando lo agregas a la lista de uno de sus grupos en <strong>Grupos</strong>. Si lo retiras del grupo, deja de estar asignado y su asistencia anterior se conserva.</p>
+      <h2>Cronograma</h2>
+      <p>En <strong>Cronograma</strong>, programa qué lección publicada usa cada grupo y desde qué fecha, con un término opcional. Solo se ofrecen lecciones publicadas. Si la lección se vuelve a publicar, verás su número de publicación nuevo y podrás confirmarlo; si se archiva, la lección programada muestra <strong>Requiere sustitución</strong> para que elijas otra lección publicada. En <strong>Inicio</strong>, “Tu cronograma vigente” abre siempre la publicación vigente de cada lección programada en tus cursos, nunca un borrador, y avisa si alguna quedó sin una versión válida.</p>
       <h2>Datos y privacidad</h2>
       <p>La asistencia guarda solo el nombre de lista, el grupo, la fecha y el estado. No pide correo, teléfono, fecha de nacimiento ni notas. Solo el equipo docente del curso la consulta.</p>
       <p>Las lecciones publicadas y el espacio del grupo se abren sin cuenta. Solo se cuenta cuántas veces se terminó una lección; no se guardan nombres ni respuestas. La sesión del equipo dura hasta ocho horas.</p>
