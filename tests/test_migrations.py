@@ -316,6 +316,35 @@ class UpgradeTests(unittest.TestCase):
         other = self.scoped("org-other")
         self.assertEqual(other.execute("SELECT count(*) FROM class_session_lessons").fetchone()[0], 0)
 
+    def test_roles_keep_every_team_member_on_every_section_and_one_open_review(self):
+        """0021: team members keep teaching every section of their course; a lesson has one pending review at most."""
+        demo = self.scoped("org-demo")
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+        expected = demo.execute("SELECT g.id,m.user_id FROM course_groups g JOIN course_members m ON m.course_id=g.course_id ORDER BY 1,2").fetchall()
+        self.assertTrue(expected)
+        self.assertEqual(demo.execute("SELECT group_id,user_id FROM section_educators ORDER BY 1,2").fetchall(), expected)
+        self.assertEqual({row[0] for row in demo.execute("SELECT user_id FROM section_educators WHERE group_id='seed-group-mat-3a'")}, {row[0] for row in demo.execute("SELECT user_id FROM course_members WHERE course_id='seed-course-matematicas'")})
+        # Saving a team rewrites its rows in one transaction; only a section educator left off the team is rejected.
+        group, user, course = demo.execute("SELECT group_id,user_id,course_id FROM section_educators LIMIT 1").fetchone()
+        role, added = demo.execute("SELECT role,added_at FROM course_members WHERE course_id=? AND user_id=?", (course, user)).fetchone()
+        demo.execute("DELETE FROM course_members WHERE course_id=? AND user_id=?", (course, user))
+        demo.execute("INSERT INTO course_members(course_id,organization_id,user_id,role,added_at) VALUES (?,?,?,?,?)", (course, "org-demo", user, role, added))
+        demo.commit()
+        demo.execute("DELETE FROM course_members WHERE course_id=? AND user_id=?", (course, user))
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.commit()
+        demo.rollback()
+        lesson = demo.execute("SELECT l.id FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id WHERE u.course_id=? LIMIT 1", (course,)).fetchone()[0]
+        insert = "INSERT INTO lesson_reviews(id,lesson_id,course_id,organization_id,status,requested_by,requested_at) VALUES (?,?,?,?,?,?,?)"
+        demo.execute(insert, ("review-1", lesson, course, "org-demo", "pending", user, "2026-10-05T00:00:00Z"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute(insert, ("review-2", lesson, course, "org-demo", "pending", user, "2026-10-05T00:01:00Z"))
+        demo.execute("UPDATE lesson_reviews SET status='returned' WHERE id='review-1'")
+        demo.execute(insert, ("review-2", lesson, course, "org-demo", "pending", user, "2026-10-05T00:01:00Z"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("INSERT INTO lesson_reviews(id,lesson_id,course_id,organization_id,status,note,requested_by,requested_at) VALUES (?,?,?,?,?,?,?,?)", ("review-3", lesson, course, "org-demo", "returned", "x" * 601, user, "2026-10-05T00:02:00Z"))
+        self.assertEqual(self.scoped("org-other").execute("SELECT count(*) FROM section_educators").fetchone()[0], 0)
+
     def test_class_planning_keeps_a_renamed_organization(self):
         db = sqlite3.connect(":memory:")
         migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))

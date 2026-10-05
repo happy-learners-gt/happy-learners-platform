@@ -3,6 +3,7 @@ import { cleanText, competencyInput, competencyLimit, completeOrder, courseInput
 import type { Database } from "./storage";
 import { filesFor } from "./files";
 import { event, recordEvent, teamsFor, updateTeam } from "./team";
+import { accessTo, forbidden, outsider, reachableCourses } from "./access";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
 const missing = () => reply({ error: "El elemento no está disponible en tu organización." }, 404);
@@ -103,22 +104,29 @@ export async function courses(path: string, method: string, input: unknown, curr
   const list = await coursesFor(db, current.organizationId);
   const course = list.find(c => c.id === id);
   if (id && !course) return missing();
+  const access = id ? await accessTo(db, current, id) : null;
+  if (id && !access) return outsider();
   if (method === "GET") {
     const teams = await teamsFor(db, current.organizationId);
-    if (!id) return reply({ courses: list.map(({ legacyProgramId: _, ...c }) => ({ ...c, team: teams.get(c.id) || [] })) });
+    if (!id) {
+      const reachable = await reachableCourses(db, current);
+      return reply({ courses: list.filter(c => !reachable || reachable.has(c.id)).map(({ legacyProgramId: _, ...c }) => ({ ...c, team: teams.get(c.id) || [] })) });
+    }
     if (area === "materials") return reply({ materials: [...await materialsFor(db, current.organizationId, id), ...await filesFor(db, current.organizationId, id)] });
     const { legacyProgramId: _, ...view } = course!;
-    return reply({ course: { ...view, team: teams.get(view.id) || [] }, units: await unitsFor(db, id), curriculum: await curriculumFor(db, id) });
+    return reply({ course: { ...view, team: teams.get(view.id) || [], access }, units: await unitsFor(db, id), curriculum: await curriculumFor(db, id) });
   }
-  // The team decides who reaches the course's groups and attendance, so only administration changes it.
+  // The team decides who reaches the course's sections, classes and attendance, so only administration changes it.
   if (area === "team") {
-    if (current.role !== "admin") return reply({ error: "Solo administración puede cambiar el equipo de un curso." }, 403);
+    if (!access!.configure) return forbidden("Solo administración puede cambiar el equipo de un curso.");
     const v = record(input);
     if (!v) return reply({ error: "Completa los datos." }, 400);
     if (course?.status === "archived") return reply({ error: "Restaura el curso antes de modificarlo. Sus enlaces publicados se conservan." }, 409);
     return updateTeam(id, Number.isInteger(v.version) ? Number(v.version) : -1, v, current, db);
   }
-  if (current.role !== "educator") return reply({ error: "Solo educadores pueden preparar cursos y materiales." }, 403);
+  if (!area && current.role !== "admin") return forbidden("Solo administración crea cursos y cambia su configuración.");
+  if (area === "materials" && !access!.edit) return forbidden("Solo el equipo docente del curso prepara sus recursos.");
+  if (area && area !== "materials" && !access!.publish) return forbidden("Solo la persona responsable del curso organiza sus módulos y su plan curricular.");
   const v = record(input);
   if (!v) return reply({ error: "Completa los datos." }, 400);
   const now = new Date().toISOString();
@@ -127,6 +135,9 @@ export async function courses(path: string, method: string, input: unknown, curr
   if (!area) {
     const data = courseInput(v);
     if (!data) return reply({ error: "Revisa el nombre, el objetivo y la configuración académica del curso: la educación formal necesita un nivel." }, 400);
+    // Every active course has a lead: the person who decides and publishes its content.
+    const leadId = course ? null : typeof v.leadId === "string" ? v.leadId : "";
+    if (leadId !== null && !await db.prepare("SELECT 1 AS ok FROM memberships WHERE user_id=? AND organization_id=? AND active=1").bind(leadId, current.organizationId).first()) return reply({ error: "Elige a la persona responsable del curso entre las personas activas de tu organización." }, 400);
     // Inside a program the course takes its type, level, modality and pacing, and cannot change fixed settings.
     if (data.programId) {
       const program = (await programsFor(db, current.organizationId)).find(item => item.id === data.programId);
@@ -140,11 +151,10 @@ export async function courses(path: string, method: string, input: unknown, curr
       const updated = await db.prepare("UPDATE courses SET title=?,objective=?,profile=?,program_id=?,education_type=?,level=?,format=?,modality=?,pacing=?,area=?,settings=?,status=?,updated_at=?,version=version+1 WHERE id=? AND organization_id=? AND version=? RETURNING id").bind(...values, cid, current.organizationId, Number.isInteger(v.version) ? Number(v.version) : -1).first();
       if (!updated) return conflict();
     } else {
-      // Whoever creates a course leads it until the team changes.
       await db.batch([
         db.prepare("INSERT INTO programs(id,organization_id,title) VALUES (?,?,?)").bind(cid, current.organizationId, data.title),
         db.prepare("INSERT INTO courses(title,objective,profile,program_id,education_type,level,format,modality,pacing,area,settings,status,updated_at,id,organization_id,legacy_program_id,unit_label) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'Módulos')").bind(...values, cid, current.organizationId, cid),
-        db.prepare("INSERT INTO course_members(course_id,organization_id,user_id,role,added_at) VALUES (?,?,?,'lead',?)").bind(cid, current.organizationId, current.id, now),
+        db.prepare("INSERT INTO course_members(course_id,organization_id,user_id,role,added_at) VALUES (?,?,?,'lead',?)").bind(cid, current.organizationId, leadId!, now),
         event(db, current, { action: "created", targetType: "course", targetId: cid, courseId: cid, summary: `Creó el curso «${data.title}»` }),
       ]);
       return reply({ id: cid }, 201);

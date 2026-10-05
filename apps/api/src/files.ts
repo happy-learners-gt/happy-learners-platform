@@ -1,6 +1,7 @@
 import type { Material, Member } from "@happy-learners/contracts";
 import type { Database } from "./storage";
 import { recordEvent } from "./team";
+import { accessTo } from "./access";
 
 const MAX_BYTES = 15 * 1024 * 1024;
 const MAX_EXPANDED_BYTES = 100 * 1024 * 1024;
@@ -122,9 +123,11 @@ function fileView(row: FileRow): Material {
 export async function courseFiles(path: string, method: string, request: Request, current: Member, db: Database, bucket: R2Bucket): Promise<Response> {
   const parts = path.split("/");
   const courseId = parts[3];
-  if (current.role !== "educator") return reply({ error: "Solo educadores pueden consultar los archivos del curso." }, 403);
   const course = await db.prepare("SELECT id FROM courses WHERE id=? AND organization_id=? AND status='active'").bind(courseId, current.organizationId).first();
   if (!course) return reply({ error: "El curso no está disponible." }, 404);
+  const access = await accessTo(db, current, courseId);
+  if (!access) return reply({ error: "Solo administración y el equipo docente del curso consultan sus archivos." }, 403);
+  if (method !== "GET" && !access.edit) return reply({ error: "Solo el equipo docente del curso sube y archiva sus archivos." }, 403);
   if (parts.length === 5 && method === "GET") {
     const result = await db.prepare(`SELECT ${fileColumns} FROM course_files WHERE course_id=? AND organization_id=? ORDER BY created_at DESC,id`).bind(courseId, current.organizationId).all<FileRow>();
     return reply({ files: result.results.map(fileView) });
