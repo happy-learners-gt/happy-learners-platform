@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.8.2 — 2026-10-04
+
+Parche de REL-004 (DEC-019): el ciclo de una clase queda completo y el grupo la sigue con su código.
+
+- ST-035 / HL-61 y ST-097: planificar una clase con grupo, fecha, hora, duración, lección publicada, hasta 20 recursos de la biblioteca y notas; comenzarla, pasar lista, finalizarla con la lista completa, cancelarla y reprogramarla. Solo el equipo del curso lo hace (ST-096 se conserva).
+- ST-036 / HL-62 y ST-071: próximas clases con hora y estado en Inicio y en el curso; historial con asistencia, quién impartió y la publicación usada; indicadores de clases impartidas, asistencia promedio y clases sin registrar.
+- ST-070: nombres de grupos y participantes editables.
+- ST-098: cada grupo tiene un código. Sin cuenta ni datos personales, el estudiante ve su próxima clase, abre sus recursos y las lecciones asignadas; el código se rota o desactiva.
+- Biblioteca general: agregar y editar recursos de cualquier curso activo, como antes de v0.2.3.
+- La sección Asistencia se integra en Clases; los enlaces anteriores redirigen.
+- Pruebas E2E del ciclo completo de la clase, del ciclo de vida del grupo, del espacio del grupo y de la biblioteca general, en escritorio y móvil.
+
 ## 0.8.1 — 2026-10-04
 
 Parche de seguridad de REL-004 (DEC-018): dos defectos HIGH de autorización, corregidos en el servidor con denegación por defecto.
