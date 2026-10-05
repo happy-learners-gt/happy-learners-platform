@@ -1,10 +1,11 @@
 import { test, expect } from "./local-test";
 import { E2E_PREFIX, courseNav, openNavigation, sessionToken, signIn } from "./helpers";
 
-type Session = { id: string; groupId: string; lessonId: string | null; sessionDate: string; startsAt: string | null; status: string; origin: string; version: number; lessonAvailable: number | null };
+type Session = { id: string; groupId: string; lessons: { id: string; available: boolean; revision?: number | null }[]; sessionDate: string; startsAt: string | null; durationMinutes: number | null; status: string; origin: string; version: number; notes: string };
+const ids = (session: Session) => session.lessons.map(lesson => lesson.id);
 const day = (offset: number) => { const date = new Date(); date.setDate(date.getDate() + offset); return date.toLocaleDateString("en-CA"); };
 
-test("ST-099 ST-097 ST-029 ST-100: the section schedule generates its classes, lessons follow content order and completed classes feed coverage", async ({ page, playwright, baseURL }, info) => {
+test("ST-099 ST-097 ST-101 ST-029 ST-100: the section schedule generates its classes, planned with optional lessons in order, and completed classes feed coverage", async ({ page, playwright, baseURL }, info) => {
   const educator = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("educador-demo")}` } });
   try {
     const body = { title: `${E2E_PREFIX} Horario ${info.project.name}`, objective: "Seguir un horario.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", area: "011", settings: { attendance: true }, programId: null };
@@ -28,38 +29,49 @@ test("ST-099 ST-097 ST-029 ST-100: the section schedule generates its classes, l
     expect(saved.status(), await saved.text()).toBe(200);
     expect((await saved.json()).classes).toBe(7);
     let list = await sessions();
-    expect(list.map(item => [item.sessionDate, item.startsAt, item.origin, item.lessonId])).toEqual(Array.from({ length: 7 }, (_, index) => [day(index), "08:00", "schedule", null]));
+    expect(list.map(item => [item.sessionDate, item.startsAt, item.origin, ids(item)])).toEqual(Array.from({ length: 7 }, (_, index) => [day(index), "08:00", "schedule", []]));
     const groups = (await (await educator.get(`${path}/groups`)).json()).groups as { id: string; schedule: unknown }[];
     expect(groups.find(group => group.id === groupId)!.schedule).toEqual({ weekdays: [0, 1, 2, 3, 4, 5, 6], startsAt: "08:00", durationMinutes: 45, from: day(0), until: day(6) });
 
-    // Lessons go to the classes in content order; classes beyond the last lesson stay empty.
-    expect((await (await educator.post(`${path}/groups/${groupId}/lessons`)).json()).assigned).toBe(3);
+    // Lessons go to the classes in content order; classes beyond the last lesson stay without lessons.
+    expect((await educator.post(`${path}/groups/${groupId}/lessons`, { data: { perClass: 4 } })).status()).toBe(400);
+    const filled = await (await educator.post(`${path}/groups/${groupId}/lessons`, { data: { perClass: 1 } })).json();
+    expect(filled).toEqual({ assigned: 3, classes: 3 });
     list = await sessions();
-    expect(list.map(item => item.lessonId)).toEqual([...lessons.map(lesson => lesson.id), null, null, null, null]);
-    expect((await (await educator.post(`${path}/groups/${groupId}/lessons`)).json()).assigned).toBe(0);
-    // Changing one lesson keeps the class notes.
-    const notes = await educator.put(`${path}/sessions/${list[3].id}`, { data: { sessionDate: list[3].sessionDate, startsAt: "08:00", durationMinutes: 45, lessonId: null, notes: "Repasar", version: list[3].version } });
-    expect(notes.status(), await notes.text()).toBe(200);
-    const current = (await sessions())[3];
-    expect((await educator.put(`${path}/sessions/${current.id}/lesson`, { data: { lessonId: lessons[0].id, version: current.version } })).status()).toBe(200);
-    expect((await (await educator.get(`${path}/sessions/${current.id}`)).json()).session).toMatchObject({ lessonId: lessons[0].id, notes: "Repasar" });
-    expect((await educator.put(`${path}/sessions/${current.id}/lesson`, { data: { lessonId: null, version: current.version } })).status()).toBe(409);
-    // Only published lessons are assigned to a class.
+    expect(list.map(ids)).toEqual([...lessons.map(lesson => [lesson.id]), [], [], [], []]);
+    expect((await (await educator.post(`${path}/groups/${groupId}/lessons`, { data: { perClass: 2 } })).json()).assigned).toBe(0);
+    // A long class covers several lessons in the chosen order, with comments; a stale edit is refused.
+    const plan = { sessionDate: list[3].sessionDate, startsAt: "08:00", durationMinutes: 45, lessonIds: [lessons[1].id, lessons[0].id], notes: "Repasar" };
+    const planned = await educator.put(`${path}/sessions/${list[3].id}`, { data: { ...plan, version: list[3].version } });
+    expect(planned.status(), await planned.text()).toBe(200);
+    expect((await (await educator.get(`${path}/sessions/${list[3].id}`)).json()).session).toMatchObject({ lessons: [{ id: lessons[1].id, position: 0 }, { id: lessons[0].id, position: 1 }], notes: "Repasar" });
+    expect((await educator.put(`${path}/sessions/${list[3].id}`, { data: { ...plan, lessonIds: [], version: list[3].version } })).status()).toBe(409);
+    const overview = await (await educator.get(`${path}/sessions`)).json();
+    expect(overview.lessonPlans[lessons[0].id].activities.length).toBeGreaterThan(0);
+    // Only published lessons of the course are planned.
     const unpublished = (await (await educator.post("/api/lessons", { data: { title: `${E2E_PREFIX} Borrador`, objective: "Practicar.", courseId, courseUnitId, instructions: "Sigue las indicaciones.", duration: 15 } })).json()).lesson;
     const refreshed = (await sessions())[4];
-    expect((await educator.put(`${path}/sessions/${refreshed.id}/lesson`, { data: { lessonId: unpublished.id, version: refreshed.version } })).status()).toBe(400);
+    expect((await educator.put(`${path}/sessions/${refreshed.id}`, { data: { sessionDate: refreshed.sessionDate, lessonIds: [unpublished.id], version: refreshed.version } })).status()).toBe(400);
 
     // A class added by hand and a started class survive a schedule change; pending generated classes are rebuilt with their lessons in order.
-    const extra = await educator.post(`${path}/sessions`, { data: { groupId, sessionDate: day(1), startsAt: "15:00", durationMinutes: 30 } });
+    // An extra class needs only its date: it takes the time and length of the section's schedule.
+    const extra = await educator.post(`${path}/sessions`, { data: { groupId, sessionDate: day(1) } });
     expect(extra.status()).toBe(201);
+    expect((await (await educator.get(`${path}/sessions/${(await extra.json()).id}`)).json()).session).toMatchObject({ startsAt: "08:00", durationMinutes: 45, origin: "manual", lessons: [] });
     expect((await educator.put(`${path}/sessions/${list[0].id}/attendance`, { data: { marks: [{ learnerId, status: "present" }] } })).status()).toBe(200);
+    // Once started, a class keeps its day and time; its lessons may still change and record their current publication.
+    const started = (await sessions())[0];
+    expect((await educator.put(`${path}/sessions/${started.id}`, { data: { sessionDate: day(2), startsAt: "08:00", durationMinutes: 45, lessonIds: ids(started), notes: "", version: started.version } })).status()).toBe(409);
+    expect((await educator.put(`${path}/sessions/${started.id}`, { data: { sessionDate: started.sessionDate, startsAt: "08:00", durationMinutes: 45, lessonIds: [lessons[0].id, lessons[1].id], notes: "", version: started.version } })).status()).toBe(200);
+    expect((await sessions())[0].lessons.every(lesson => lesson.revision === 1)).toBe(true);
     const changed = await educator.put(`${path}/groups/${groupId}/schedule`, { data: { weekdays: [0, 1, 2, 3, 4, 5, 6], startsAt: "09:30", durationMinutes: 50, from: day(0), until: day(3) } });
     expect(changed.status(), await changed.text()).toBe(200);
     list = await sessions();
     expect(list.map(item => [item.sessionDate, item.startsAt, item.origin, item.status])).toEqual([
-      [day(0), "08:00", "schedule", "in_progress"], [day(1), "15:00", "manual", "planned"], [day(2), "09:30", "schedule", "planned"], [day(3), "09:30", "schedule", "planned"],
+      [day(0), "08:00", "schedule", "in_progress"], [day(1), "08:00", "manual", "planned"], [day(2), "09:30", "schedule", "planned"], [day(3), "09:30", "schedule", "planned"],
     ]);
-    expect(list.map(item => item.lessonId)).toEqual([lessons[0].id, null, lessons[1].id, lessons[2].id]);
+    // What was planned moves with the remaining classes, in order.
+    expect(list.map(ids)).toEqual([[lessons[0].id, lessons[1].id], [], [lessons[1].id], [lessons[2].id]]);
 
     // The student code shows the section's lessons once each; the class resources come from the lesson.
     const { accessCode } = await (await educator.post(`${path}/groups/${groupId}/code`)).json();
@@ -68,22 +80,29 @@ test("ST-099 ST-097 ST-029 ST-100: the section schedule generates its classes, l
       expect((await student.post("/api/student/login", { data: { code: accessCode } })).status()).toBe(200);
       const space = await (await student.get("/api/student/space")).json();
       expect(space.lessons.map((lesson: { title: string }) => lesson.title)).toEqual(lessons.map(lesson => lesson.title));
-      expect(space.next.lesson.title).toBe(lessons[0].title);
+      expect(space.next.lessons.map((lesson: { title: string }) => lesson.title)).toEqual([lessons[0].title, lessons[1].title]);
     } finally { await student.dispose(); }
 
     // An archived lesson asks for a replacement.
     const draft = (await (await educator.get(`/api/lessons/${lessons[2].id}?draft=1`)).json()).lesson;
     expect((await educator.put(`/api/lessons/${lessons[2].id}`, { data: { title: draft.title, objective: "Practicar.", courseId, courseUnitId, instructions: "Sigue las indicaciones.", duration: 15, draftVersion: draft.draftVersion, status: "archived" } })).status()).toBe(200);
-    expect((await sessions())[3].lessonAvailable).toBe(0);
+    expect((await sessions())[3].lessons[0].available).toBe(false);
 
-    // Finishing the class updates the coverage map.
+    // Finishing the class updates the coverage map; a taught class keeps its lessons and only its comments change.
     expect((await educator.post(`${path}/sessions/${list[0].id}/complete`)).status()).toBe(200);
+    const taught = (await sessions())[0];
+    expect((await educator.put(`${path}/sessions/${taught.id}`, { data: { sessionDate: taught.sessionDate, startsAt: "08:00", durationMinutes: 45, lessonIds: [lessons[0].id], notes: "", version: taught.version } })).status()).toBe(409);
+    expect((await educator.put(`${path}/sessions/${taught.id}`, { data: { sessionDate: taught.sessionDate, startsAt: "08:00", durationMinutes: 45, lessonIds: ids(taught), notes: "Se cubrieron las dos lecciones.", version: taught.version } })).status()).toBe(200);
     await signIn(page, "educador-demo", `/cursos/${courseId}/plan`);
     await expect(page.locator(".plan-stats")).toContainText("Impartidos en clase");
     await expect(page.locator(".coverage-table")).toContainText("Impartido");
     await openNavigation(page);
     await courseNav(page).getByRole("link", { name: "Clases", exact: true }).click();
-    await expect(page.locator(".class-list li").filter({ hasText: "Requiere sustitución" })).toHaveCount(1);
+    const schedule = page.getByRole("table", { name: /Cronograma de clases de/ });
+    await expect(schedule.locator("tbody tr").filter({ hasText: "Requiere sustitución" })).toHaveCount(1);
+    await expect(schedule.locator("tbody tr").first()).toContainText("Se cubrieron las dos lecciones.");
+    await expect(schedule.locator("tbody tr").first()).toContainText("1 de 1 presentes (100 %)");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await openNavigation(page);
     await courseNav(page).getByRole("link", { name: "Horario", exact: true }).click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Horario");

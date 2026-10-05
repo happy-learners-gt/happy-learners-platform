@@ -50,7 +50,7 @@ function ClassCard({ item, today, headingId, big }: { item: StudentClass; today:
   const Heading = big ? "h2" : "h3";
   return <>
     <Heading id={headingId}>{item.sessionDate === today ? "Hoy" : sessionDay(item.sessionDate)}{item.startsAt ? `, ${item.startsAt}` : ""}{item.status === "in_progress" && <> <StatusBadge tone="warning">En curso</StatusBadge></>}</Heading>
-    {item.lesson ? <p><Link className={big ? "button primary" : "button secondary small"} href={`/aprender/${item.lesson.shareCode}`}><Icon name="play" size={16}/>Abrir lección: {item.lesson.title}</Link></p> : big && <p className="muted">La lección de esta clase aún no está disponible.</p>}
+    {item.lessons.length ? <p className="button-row">{item.lessons.map((lesson, index) => <Link key={lesson.shareCode} className={big && !index ? "button primary" : "button secondary small"} href={`/aprender/${lesson.shareCode}`}><Icon name="play" size={16}/>Abrir lección: {lesson.title}</Link>)}</p> : big && <p className="muted">Las lecciones de esta clase aún no están disponibles.</p>}
     {big && item.resources.length > 0 && <ul className="student-resources" aria-label="Recursos de la clase">{item.resources.map(resource => <li key={resource.id}><ResourceLink resource={resource}/></li>)}</ul>}
   </>;
 }

@@ -4,7 +4,7 @@ import type { ClassSession, GroupLearner, SectionSchedule } from "@happy-learner
 import { scheduleSummary } from "@happy-learners/domain";
 import { api, message } from "../../api";
 import { Link } from "../../navigation";
-import { plural, sessionDay } from "../../model";
+import { lessonNames, plural, sessionDay } from "../../model";
 import { useFeedback } from "../../ui/feedback";
 import { Icon } from "../../ui/icons";
 import { Menu } from "../../ui/Menu";
@@ -87,7 +87,7 @@ export function Sections() {
           </div>}
         </header>
         <p className="muted small"><Icon name="clock" size={14}/> {group.schedule ? <>Horario: <Link href={`${page}/horario#horario-${group.id}`}>{scheduleSummary(group.schedule)}</Link></> : <>Sin horario. {writable && <Link href={`${page}/horario#horario-${group.id}`}>Configurar horario</Link>}</>}</p>
-        <p className="muted small">{next ? <>Próxima clase: <Link href={`${page}/clases/${next.id}`}>{sessionDay(next.sessionDate)}{next.startsAt ? `, ${next.startsAt}` : ""}</Link>{next.lessonTitle ? ` · ${next.lessonTitle}` : ""}</> : "Sin clases próximas."}</p>
+        <p className="muted small">{next ? <>Próxima clase: <Link href={`${page}/clases/${next.id}`}>{sessionDay(next.sessionDate)}{next.startsAt ? `, ${next.startsAt}` : ""}</Link>{next.lessons.length ? ` · ${lessonNames(next)}` : ""}</> : "Sin clases próximas."}</p>
         {group.learners.length ? <ol className="roster">{group.learners.map((learner, index) => <li key={learner.id}>
           <span className="roster-number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
           {renaming === learner.id

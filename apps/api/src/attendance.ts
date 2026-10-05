@@ -51,7 +51,7 @@ export async function classroom(path: string, method: string, input: unknown, cu
   }
   if (group.status !== "active") return reply({ error: "La sección está cerrada. Reactívala para hacer cambios." }, 409);
   if (sub === "schedule" && (method === "PUT" || method === "DELETE")) return saveSchedule(method, input, current, db, courseId, group);
-  if (sub === "lessons" && method === "POST") return fillLessons(current, db, courseId, group);
+  if (sub === "lessons" && method === "POST") return fillLessons(input, current, db, courseId, group);
   if (sub === "code") {
     // A new code replaces the previous one at once: whoever entered with it loses access on the next request.
     if (method === "DELETE") {
