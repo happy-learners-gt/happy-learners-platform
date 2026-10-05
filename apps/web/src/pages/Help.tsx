@@ -18,13 +18,19 @@ export function Help() {
       </ol>
       <p>Después de publicar, puedes seguir editando: los estudiantes ven la versión publicada hasta que eliges <strong>Publicar cambios</strong>.</p>
       <p>Para adaptar una lección sin tocar la original, usa <strong>Duplicar</strong> en el menú de la lección: la copia queda como borrador justo después, con las mismas actividades y recursos, y se publica por separado.</p>
-      <h2>Grupos y asistencia</h2>
-      <p>Están disponibles en los cursos presenciales o híbridos, o cuando la configuración del curso los activa. En <strong>Grupos</strong>, crea un grupo y agrega a sus participantes con un nombre de lista o un código. Desde el grupo o desde <strong>Asistencia</strong>, registra la clase del día y marca a cada participante.</p>
+      <h2>Clases, grupos y asistencia</h2>
+      <p>Están disponibles en los cursos presenciales o híbridos, o cuando la configuración del curso los activa, para el equipo docente del curso. En <strong>Grupos</strong>, crea un grupo y agrega a sus participantes con un nombre de lista o un código; desde el menú puedes renombrarlo, retirar participantes o cerrar el grupo al terminar el ciclo.</p>
+      <ol>
+        <li>En <strong>Clases</strong>, usa <strong>Planificar clase</strong>: elige el grupo, la fecha y la hora, la lección y los recursos de la biblioteca que usarás.</li>
+        <li>Al llegar la hora, abre la clase y elige <strong>Comenzar clase</strong>. Presenta la lección y pasa lista; los cambios se guardan con <strong>Guardar asistencia</strong>.</li>
+        <li>Elige <strong>Finalizar clase</strong> cuando todos estén marcados. La clase pasa al <strong>Historial</strong> y cuenta en los indicadores del curso.</li>
+      </ol>
+      <p>Cada grupo tiene un <strong>código para estudiantes</strong>. Con él, los estudiantes ven la próxima clase de su grupo, su lección y sus recursos, sin cuenta. Puedes cambiar o desactivar el código en cualquier momento.</p>
       <h2>Asignaciones</h2>
       <p>En <strong>Asignaciones</strong>, indica qué lección publicada usa cada grupo y desde qué fecha, con un término opcional. Solo se ofrecen lecciones publicadas. Si la lección se vuelve a publicar, verás su número de publicación nuevo y podrás confirmarlo; si se archiva, la asignación muestra <strong>Requiere sustitución</strong> para que elijas otra lección publicada. En <strong>Inicio</strong>, “Tus asignaciones vigentes” abre siempre la publicación vigente de cada asignación de tus cursos, nunca un borrador, y avisa si alguna quedó sin una versión válida.</p>
       <h2>Datos y privacidad</h2>
       <p>La asistencia guarda solo el nombre de lista, el grupo, la fecha y el estado. No pide correo, teléfono, fecha de nacimiento ni notas. Solo el equipo docente del curso la consulta.</p>
-      <p>Las lecciones publicadas se abren sin cuenta. Solo se cuenta cuántas veces se terminó una lección; no se guardan nombres ni respuestas. La sesión del equipo dura hasta ocho horas.</p>
+      <p>Las lecciones publicadas y el espacio del grupo se abren sin cuenta. Solo se cuenta cuántas veces se terminó una lección; no se guardan nombres ni respuestas. La sesión del equipo dura hasta ocho horas.</p>
       <h2>Diseño</h2>
       <p>La interfaz sigue Fluent Design de Microsoft. La <Link href="/guia-de-estilo">guía de estilo</Link> muestra sus principios y todos los componentes.</p>
       <h2>Esta demostración</h2>

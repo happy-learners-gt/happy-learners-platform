@@ -88,7 +88,7 @@ export interface Material {
   content: string; status: "draft" | "published" | "archived"; version: number; updatedAt: string; termIds: string[];
   fileId?: string; fileName?: string; mediaType?: string; sizeBytes?: number; sha256?: string;
 }
-export interface ClassGroup { id: string; courseId: string; name: string; status: "active" | "archived"; learnerCount: number }
+export interface ClassGroup { id: string; courseId: string; name: string; status: "active" | "archived"; learnerCount: number; accessCode?: string | null }
 export interface GroupLearner { id: string; groupId: string; displayName: string; status: "active" | "archived" }
 /** A published lesson next to the current one in its module, reachable by its share code. */
 export interface LessonLink { title: string; shareCode: string }
@@ -108,7 +108,30 @@ export interface LessonAssignment {
   effective: { revision: number; shareCode: string } | null;
   courseTitle?: string;
 }
-export interface ClassSession { id: string; groupId: string; courseId: string; lessonId?: string; sessionDate: string; groupName?: string; attendance?: { learnerId: string; status: "present" | "late" | "absent" | "excused" }[] }
+export type ClassStatus = "planned" | "in_progress" | "completed" | "cancelled";
+/** A class of a group: planned with a lesson and resources, then taught with attendance (ST-035, ST-097). */
+export interface ClassSession {
+  id: string; groupId: string; courseId: string; lessonId?: string | null; sessionDate: string; groupName?: string;
+  startsAt?: string | null; durationMinutes?: number | null; status: ClassStatus; notes?: string; version: number;
+  lessonTitle?: string | null; courseTitle?: string;
+  /** Publication of the lesson when the class started, and who taught it (ST-071). */
+  lessonRevision?: number | null; taughtByName?: string | null; startedAt?: string | null; completedAt?: string | null;
+  resourceIds?: string[];
+  /** Attendance totals: learners on the roster, learners marked, and present or late among them. */
+  learnerCount?: number; marked?: number; attended?: number;
+}
+/** A resource as a class shows it: enough to open it, without editorial fields. */
+export interface ClassResource { id: string; courseId?: string; title: string; description: string; kind: "text" | "link" | "file"; content?: string; fileName?: string; available: boolean }
+/** What a learner sees after entering a group code: the group's classes, lessons and resources, and nothing else. */
+export interface StudentSpace {
+  group: { name: string }; course: { title: string }; organization: string; today: string;
+  next: StudentClass | null; upcoming: StudentClass[]; recent: StudentClass[];
+  lessons: { title: string; shareCode: string }[];
+}
+export interface StudentClass {
+  id: string; sessionDate: string; startsAt?: string | null; durationMinutes?: number | null; status: ClassStatus;
+  lesson: { title: string; shareCode: string | null } | null; resources: ClassResource[];
+}
 
 /** What a course develops over time; groups learning outcomes. */
 export interface Competency { id: string; courseId: string; name: string; description: string; position: number; status: "active" | "archived"; updatedAt: string }

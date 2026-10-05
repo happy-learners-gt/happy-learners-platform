@@ -10,7 +10,7 @@ export async function roles(path: string, method: string, input: unknown, curren
       (SELECT count(*) FROM course_members cm JOIN courses c ON c.id=cm.course_id WHERE cm.user_id=u.id AND cm.role='co-teacher' AND c.status='active') AS coTeaches,
       (SELECT count(*) FROM activity_events e WHERE e.actor_id=u.id AND e.target_type='lesson' AND e.action='created') AS lessonsCreated,
       (SELECT count(*) FROM activity_events e WHERE e.actor_id=u.id AND e.action='published') AS publications,
-      (SELECT count(*) FROM activity_events e WHERE e.actor_id=u.id AND e.target_type='session') AS attendance,
+      (SELECT count(DISTINCT e.target_id) FROM activity_events e WHERE e.actor_id=u.id AND e.target_type='session' AND e.action='recorded') AS attendance,
       (SELECT count(*) FROM activity_events e WHERE e.actor_id=u.id) AS events,
       (SELECT max(e.occurred_at) FROM activity_events e WHERE e.actor_id=u.id) AS lastActivity
       FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.organization_id=? ORDER BY m.role,displayName`).bind(current.organizationId).all<Member & Record<string, number | string | null>>();

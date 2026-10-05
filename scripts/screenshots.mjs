@@ -20,7 +20,7 @@ const routes = [
   ["editor-vista-previa", `/cursos/${course}/lecciones/${lesson}?vista=previa`],
   ["curso-biblioteca", `/cursos/${course}/biblioteca`],
   ["curso-grupos", `/cursos/${course}/grupos`],
-  ["curso-asistencia", `/cursos/${course}/asistencia`],
+  ["curso-clases", `/cursos/${course}/clases`],
   ["curso-configuracion", `/cursos/${course}/configuracion`],
   ["biblioteca", "/biblioteca"],
   ["buscar", "/buscar?q=greet"],
@@ -59,11 +59,11 @@ async function states(page, name, out) {
   await page.goto(`${origin}/cursos/${course}/plan`);
   await page.getByRole("heading", { name: "Mapa de cobertura" }).waitFor();
   await shot(page, `${out}/51-plan-curricular.png`);
-  await page.goto(`${origin}/cursos/${course}/asistencia`);
-  await page.getByRole("button", { name: "Registrar clase" }).first().click();
+  await page.goto(`${origin}/cursos/${course}/clases`);
+  await page.getByRole("button", { name: "Planificar clase" }).first().click();
   await shot(page, `${out}/47-dialogo-clase.png`);
-  await page.getByRole("dialog").getByRole("button", { name: "Registrar y pasar lista" }).click();
-  await page.waitForURL(/asistencia\/class-/);
+  await page.getByRole("dialog").getByRole("button", { name: "Planificar clase" }).click();
+  await page.waitForURL(/clases\/class-/);
   const groups = page.locator(".mark-group");
   await groups.nth(0).getByLabel("Presente").check();
   await groups.nth(1).getByLabel("Tarde").check();
