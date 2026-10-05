@@ -10,6 +10,7 @@ Parche de REL-004 (DEC-019): el ciclo de una clase queda completo y el grupo la 
 - ST-098: cada grupo tiene un código. Sin cuenta ni datos personales, el estudiante ve su próxima clase, abre sus recursos y las lecciones asignadas; el código se rota o desactiva.
 - Biblioteca general: agregar y editar recursos de cualquier curso activo, como antes de v0.2.3.
 - La sección Asistencia se integra en Clases; los enlaces anteriores redirigen.
+- Pruebas E2E del ciclo completo de la clase, del ciclo de vida del grupo, del espacio del grupo y de la biblioteca general, en escritorio y móvil.
 
 ## 0.8.1 — 2026-10-04
 
