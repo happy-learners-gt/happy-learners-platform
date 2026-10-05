@@ -254,3 +254,35 @@ class UpgradeTests(unittest.TestCase):
         for table in ("study_programs", "course_members", "activity_events", "course_groups"):
             self.assertEqual(other.execute(f"SELECT count(*) FROM {table}").fetchone()[0], 0, table)
         self.assertEqual(other.execute("SELECT count(*) FROM users WHERE id LIKE 'seed-%'").fetchone()[0], 0)
+
+    def test_class_planning_backfills_taught_classes_and_plans_the_demo(self):
+        """0018: classes with marks become taught, the demo gets upcoming classes with lessons and resources."""
+        demo = self.scoped("org-demo")
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+        self.assertEqual(demo.execute("SELECT count(*) FROM class_sessions s WHERE EXISTS(SELECT 1 FROM attendance_marks m WHERE m.session_id=s.id) AND (s.status<>'completed' OR s.taught_by IS NULL OR s.completed_at IS NULL)").fetchone()[0], 0)
+        planned = demo.execute("SELECT count(*), min(session_date), count(starts_at), count(lesson_id) FROM class_sessions WHERE status='planned'").fetchone()
+        self.assertGreater(planned[0], 50)
+        self.assertGreaterEqual(demo.execute("SELECT min(session_date) FROM class_sessions WHERE id LIKE 'seed-plan-%'").fetchone()[0], "2026-10-09")
+        self.assertEqual(planned[0], planned[2])
+        self.assertEqual(planned[0], planned[3])
+        self.assertEqual(demo.execute("SELECT count(*) FROM class_sessions s WHERE status='planned' AND NOT EXISTS(SELECT 1 FROM class_session_resources r WHERE r.session_id=s.id)").fetchone()[0], 0)
+        self.assertEqual(demo.execute("SELECT count(*) FROM course_groups WHERE status='active' AND access_code IS NULL").fetchone()[0], 0)
+        self.assertEqual(demo.execute("SELECT access_code FROM course_groups WHERE id='seed-group-mat-3a'").fetchone()[0], "DG-MATE-3A")
+        self.assertEqual(demo.execute("SELECT name FROM organizations").fetchone()[0], "Colegio Horizonte (demostración)")
+        self.assertIsNone(demo.execute("SELECT name FROM sqlite_master WHERE name='demo_schedule'").fetchone())
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("UPDATE class_sessions SET status='done' WHERE id=(SELECT id FROM class_sessions LIMIT 1)")
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("UPDATE course_groups SET access_code='DG-MATE-3A' WHERE id='seed-group-mat-3b'")
+        other = self.scoped("org-other")
+        self.assertEqual(other.execute("SELECT count(*) FROM class_sessions").fetchone()[0], 0)
+        self.assertEqual(other.execute("SELECT count(*) FROM class_session_resources").fetchone()[0], 0)
+
+    def test_class_planning_keeps_a_renamed_organization(self):
+        db = sqlite3.connect(":memory:")
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        for path in migrations[:-1]:
+            db.executescript(path.read_text())
+        db.execute("UPDATE organizations SET name='Colegio Real' WHERE id='org-demo'")
+        db.executescript(migrations[-1].read_text())
+        self.assertEqual(db.execute("SELECT name FROM organizations WHERE id='org-demo'").fetchone()[0], "Colegio Real")

@@ -4,6 +4,7 @@ import { api, message } from "../api";
 import { useNavigation } from "../navigation";
 import { Modal } from "../ui/feedback";
 import { Icon } from "../ui/icons";
+import { groupCodePattern } from "@happy-learners/domain";
 
 function useLogin(onSuccess: () => Promise<void>, initial = "educador-demo") {
   const [username, setUsername] = useState(initial), [password, setPassword] = useState("");
@@ -20,7 +21,7 @@ function useLogin(onSuccess: () => Promise<void>, initial = "educador-demo") {
 export function Login({ onSignedIn }: { onSignedIn: () => Promise<void> }) {
   const form = useLogin(onSignedIn);
   const { navigate } = useNavigation();
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(""), [codeError, setCodeError] = useState(""), [busy, setBusy] = useState(false);
   return <div className="login-page">
     <a className="skip-link" href="#main">Saltar al contenido</a>
     <main id="main" className="login-main">
@@ -35,14 +36,25 @@ export function Login({ onSignedIn }: { onSignedIn: () => Promise<void> }) {
           <button className="button primary full" disabled={form.busy}>{form.busy ? "Entrando…" : "Entrar"}</button>
         </form>
         <details className="demo-help"><summary>Probar con cuentas de demostración</summary>
-          <p><code>educador-demo</code> prepara cursos y lecciones. <code>admin-demo</code> administra la organización.</p>
+          <p><code>lucia.herrera</code> imparte Matemáticas 3.º; <code>educador-demo</code> prepara Exploradores. <code>marta.ruiz</code> coordina la organización.</p>
+          <p>Como estudiante, entra con el código de grupo <code>DG-MATE-3A</code>.</p>
           <p>Contraseña: <code>Aprender-2026!</code></p>
           <p>Las cuentas son compartidas: no escribas información personal real.</p>
         </details>
       </section>
-      <form className="code-card" onSubmit={event => { event.preventDefault(); if (code.trim()) navigate(`/aprender/${encodeURIComponent(code.trim().toUpperCase())}`); }}>
-        <div><h2>¿Eres estudiante?</h2><p>Abre tu lección con el código que te compartieron. No necesitas cuenta.</p></div>
-        <div className="code-row"><label htmlFor="lesson-code" className="sr-only">Código de lección</label><input id="lesson-code" required maxLength={40} value={code} onChange={event => setCode(event.target.value)} placeholder="Código de lección" autoCapitalize="characters"/><button className="button secondary">Abrir lección</button></div>
+      <form className="code-card" aria-labelledby="student-title" onSubmit={async event => {
+        event.preventDefault();
+        const value = code.trim().toUpperCase().replace(/\s+/g, "");
+        if (!value) return;
+        // Group codes open the group's space; any other code is a lesson's share code.
+        if (!groupCodePattern.test(value)) { navigate(`/aprender/${encodeURIComponent(value)}`); return; }
+        setBusy(true); setCodeError("");
+        try { await api("/student/login", "POST", { code: value }); navigate("/estudiante"); }
+        catch (cause) { setCodeError(message(cause)); setBusy(false); }
+      }}>
+        <div><h2 id="student-title">¿Eres estudiante?</h2><p>Escribe el código de tu grupo o de una lección. No necesitas cuenta.</p></div>
+        {codeError && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{codeError}</p>}
+        <div className="code-row"><label htmlFor="lesson-code" className="sr-only">Código de grupo o de lección</label><input id="lesson-code" required maxLength={40} value={code} onChange={event => setCode(event.target.value)} placeholder="Ej. DG-MATE-3A" autoCapitalize="characters"/><button className="button secondary" disabled={busy}>{busy ? "Abriendo…" : "Abrir"}</button></div>
       </form>
       <p className="login-privacy"><Icon name="shield" size={16}/>Sin expedientes ni datos personales de estudiantes.</p>
     </main>

@@ -3,6 +3,8 @@ export { moduleNavigation } from "./navigation";
 export type { ModuleLesson } from "./navigation";
 export { assignmentAvailability, assignmentPeriod, assignmentPeriodError, effectivePublication, isCalendarDay } from "./assignments";
 export type { AssignedLessonFacts, EffectivePublication } from "./assignments";
+export { acceptsAttendance, classActions, classPlanInput, classStatusLabels, groupCodePattern, localDay, newGroupCode, nextClassStatus, normalizeGroupCode, upcomingClasses } from "./classes";
+export type { ClassAction, ClassPlan } from "./classes";
 export { materialInput, record, cleanText, validTermIds, completeOrder } from "./courses";
 export { educationTypes, educationLevels, knowledgeAreas, areaLabel, courseFormats, modalities, pacings, moduleLabels, moduleNoun, settingDefinitions, derivedSettings, sourceLabel, effectiveProfile, resolveSettings, settingsInput, profileInput, courseInput, programInput, coursePresets, labelOf } from "./academic";
 export type { ModuleNoun, SettingKey, SettingSource } from "./academic";
