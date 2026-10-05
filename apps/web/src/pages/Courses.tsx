@@ -5,8 +5,8 @@ import { areaLabel, courseFormats, coursePresets, derivedSettings, educationLeve
 import type { SettingKey } from "@happy-learners/domain";
 import { api, message } from "../api";
 import { Link, useNavigation, useUnsavedChanges } from "../navigation";
-import { isEducator, useSession } from "../session";
-import { courseBody, courseStats, duplicateCourse, matches, newest, plural } from "../model";
+import { useSession } from "../session";
+import { courseBody, courseStats, matches, newest, plural } from "../model";
 import type { CourseStats } from "../model";
 import { CourseCard } from "../ui/cards";
 import { useFeedback } from "../ui/feedback";
@@ -24,8 +24,8 @@ export function useCourseActions(reload: () => Promise<void>) {
   async function duplicate(course: Course) {
     if (!await confirm({ title: `¿Duplicar «${course.title}»?`, body: <p>Se crea una copia con su configuración, módulos, plan curricular, recursos y lecciones. Todas las lecciones de la copia quedan como borrador; las secciones, el horario, las clases y la asistencia no se copian.</p>, confirm: "Duplicar curso" })) return;
     toast({ tone: "info", message: "Creando la copia…" });
-    try { const id = await duplicateCourse(course); await reload(); toast({ message: `Copia creada: «${course.title} (copia)».`, action: { label: "Abrir", onSelect: () => navigate(`/cursos/${id}`) } }); }
-    catch (error) { await reload(); toast({ tone: "error", message: `La copia quedó incompleta: ${message(error)} Revísala en la lista de cursos o archívala.` }); }
+    try { const { id } = await api<{ id: string }>(`/courses/${course.id}/duplicate`, "POST"); await reload(); toast({ message: `Copia creada: «${course.title} (copia)», con el mismo equipo docente.`, action: { label: "Abrir", onSelect: () => navigate(`/cursos/${id}`) } }); }
+    catch (error) { toast({ tone: "error", message: message(error) }); }
   }
   return { setStatus, duplicate };
 }
@@ -42,14 +42,14 @@ const facets: { key: string; param: string; label: string; value: (course: Cours
 
 export function CourseList() {
   const { member } = useSession();
-  const educator = isEducator(member);
+  const admin = member.role === "admin";
   const { url, navigate } = useNavigation();
   const [courses, setCourses] = useState<Course[] | null>(null), [programs, setPrograms] = useState<StudyProgram[]>([]), [stats, setStats] = useState<Record<string, CourseStats>>({}), [error, setError] = useState("");
   const query = url.searchParams.get("q") || "", archived = url.searchParams.get("estado") === "archivados";
   async function load() {
     setError("");
     try {
-      const [{ courses }, { lessons }, { programs }] = await Promise.all([api<{ courses: Course[] }>("/courses"), api<{ lessons: Lesson[] }>(educator ? "/lessons?drafts=1" : "/lessons"), api<{ programs: StudyProgram[] }>("/programs")]);
+      const [{ courses }, { lessons }, { programs }] = await Promise.all([api<{ courses: Course[] }>("/courses"), api<{ lessons: Lesson[] }>("/lessons?drafts=1"), api<{ programs: StudyProgram[] }>("/programs")]);
       setCourses(courses); setPrograms(programs);
       const details = await Promise.all(courses.map(course => api<{ units: LearningUnit[] }>(`/courses/${course.id}`).then(detail => [course.id, courseStats(detail.units, lessons.filter(lesson => lesson.courseId === course.id))] as const)));
       setStats(Object.fromEntries(details));
@@ -66,7 +66,7 @@ export function CourseList() {
   const visible = newest(pool.filter(course => passes(course)));
   const filtered = facets.some(selected);
   return <>
-    <PageHeader title="Cursos" description={courses ? `${plural(active, "curso activo", "cursos activos")}` : undefined} primary={educator && (!courses || courses.length > 0) && <PrimaryAction href="/cursos/nuevo" icon="plus">Crear curso</PrimaryAction>}/>
+    <PageHeader title="Cursos" description={courses ? admin ? plural(active, "curso activo", "cursos activos") : `${plural(active, "curso asignado", "cursos asignados")} a tu cuenta` : undefined} primary={admin && (!courses || courses.length > 0) && <PrimaryAction href="/cursos/nuevo" icon="plus">Crear curso</PrimaryAction>}/>
     <div className="toolbar" role="group" aria-label="Filtrar cursos">
       <div className="search-field"><Icon name="search" size={18}/><label htmlFor="course-search" className="sr-only">Buscar cursos</label><input id="course-search" type="search" value={query} onChange={event => filter("q", event.target.value)} placeholder="Buscar por nombre u objetivo"/></div>
       <fieldset className="segmented"><legend className="sr-only">Estado</legend>
@@ -86,7 +86,7 @@ export function CourseList() {
       {filtered && <Button variant="ghost" icon="close" onClick={() => { const next = new URL(url); facets.forEach(facet => next.searchParams.delete(facet.param)); navigate(next.pathname + next.search, true); }}>Quitar filtros</Button>}
     </div>}
     {error ? <ErrorState error={error} retry={() => void load()}/> : !courses ? <Loading label="Cargando cursos…" cards={3}/> :
-      visible.length ? <div className="card-grid">{visible.map(course => <CourseCard key={course.id} course={course} program={programOf(course)} stats={stats[course.id]} menu={educator ? [
+      visible.length ? <div className="card-grid">{visible.map(course => <CourseCard key={course.id} course={course} program={programOf(course)} stats={stats[course.id]} menu={admin ? [
         { label: "Abrir", icon: "arrowRight", onSelect: () => navigate(`/cursos/${course.id}`) },
         { label: "Editar configuración", icon: "settings", onSelect: () => navigate(`/cursos/${course.id}/configuracion`) },
         { label: "Duplicar", icon: "copy", onSelect: () => void actions.duplicate(course) },
@@ -95,7 +95,8 @@ export function CourseList() {
       ] : undefined}/>)}</div>
       : query || filtered ? <EmptyState icon="search" title="Ningún curso coincide con la búsqueda y los filtros" action={<Button onClick={() => navigate(url.pathname, true)}>Limpiar búsqueda y filtros</Button>}>Prueba con otra palabra o quita algún filtro.</EmptyState>
       : archived ? <EmptyState icon="archive" title="No hay cursos archivados">Los cursos que archives aparecerán aquí y podrás restaurarlos.</EmptyState>
-      : <EmptyState icon="courses" title="Crea tu primer curso" action={educator && <PrimaryAction href="/cursos/nuevo" icon="plus">Crear curso</PrimaryAction>}>Un curso reúne módulos, lecciones y recursos. Puede ser una asignatura, un taller o un curso libre.</EmptyState>}
+      : admin ? <EmptyState icon="courses" title="Crea tu primer curso" action={<PrimaryAction href="/cursos/nuevo" icon="plus">Crear curso</PrimaryAction>}>Un curso reúne módulos, lecciones y recursos. Puede ser una asignatura, un taller o un curso libre.</EmptyState>
+      : <EmptyState icon="courses" title="Aún no tienes cursos asignados">Administración crea los cursos y te asigna como responsable o colaborador. Aquí aparecerán los cursos en los que participas.</EmptyState>}
   </>;
 }
 
@@ -113,8 +114,8 @@ type Dimensions = AcademicProfile & { format: CourseFormat; area: string; progra
  * Create and configure a course: a starting template, an optional program, the standard dimensions and
  * the resulting behaviour, where every setting shows its value and where it comes from.
  */
-export function CourseForm({ course, onSaved, cancelHref }: { course?: Course; onSaved: (id: string) => Promise<void> | void; cancelHref: string }) {
-  const [programs, setPrograms] = useState<StudyProgram[]>([]);
+export function CourseForm({ course, onSaved, cancelHref, readOnly = false }: { course?: Course; onSaved: (id: string) => Promise<void> | void; cancelHref: string; readOnly?: boolean }) {
+  const [programs, setPrograms] = useState<StudyProgram[]>([]), [people, setPeople] = useState<{ id: string; username: string; name: string }[]>([]);
   const [dims, setDims] = useState<Dimensions>(() => course
     ? { educationType: course.educationType, level: course.level, modality: course.modality, pacing: course.pacing, format: course.format, area: course.area || "", programId: course.programId || "" }
     : { ...coursePresets[0].values, area: "", programId: "" });
@@ -123,6 +124,7 @@ export function CourseForm({ course, onSaved, cancelHref }: { course?: Course; o
   const { guard } = useNavigation();
   useUnsavedChanges(dirty);
   useEffect(() => { api<{ programs: StudyProgram[] }>("/programs").then(result => setPrograms(result.programs)).catch(() => undefined); }, []);
+  useEffect(() => { if (!course) api<{ people: typeof people }>("/people").then(result => setPeople(result.people)).catch(() => undefined); }, []);
   const program = programs.find(item => item.id === dims.programId) || null;
   const choosable = programs.filter(item => item.status === "active" || item.id === course?.programId);
   const profile = program ? { educationType: program.educationType, level: program.level, modality: program.modality, pacing: program.pacing } : dims;
@@ -143,7 +145,7 @@ export function CourseForm({ course, onSaved, cancelHref }: { course?: Course; o
     const data = Object.fromEntries(new FormData(event.currentTarget)) as Record<string, string>;
     setBusy(true); setError("");
     try {
-      const body = { title: data.title, objective: data.objective, status: course?.status || "active", programId: dims.programId || null, ...profile, format: dims.format, area: dims.area || null, settings, version: course?.version };
+      const body = { title: data.title, objective: data.objective, status: course?.status || "active", programId: dims.programId || null, ...profile, format: dims.format, area: dims.area || null, settings, version: course?.version, ...(course ? {} : { leadId: data.leadId }) };
       const result = await api<{ id: string }>(course ? `/courses/${course.id}` : "/courses", course ? "PUT" : "POST", body);
       setDirty(false); guard(false);
       await onSaved(result.id);
@@ -153,9 +155,13 @@ export function CourseForm({ course, onSaved, cancelHref }: { course?: Course; o
   const valueText = (key: SettingKey, value: unknown) => key === "moduleLabel" ? moduleNoun(value as ModuleLabel).Many : key === "defaultSequence" ? sequenceOf(value as SequenceTemplate).label : value ? "Sí" : "No";
   return <form className="form-card course-form" onSubmit={save} onChange={() => setDirty(true)}>
     {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
-    <fieldset disabled={busy} className="stack">
+    {readOnly && <p className="notice"><Icon name="info" size={18}/>Administración configura el curso. Si necesitas un cambio, pídeselo.</p>}
+    <fieldset disabled={busy || readOnly} className="stack">
       <Field label="Nombre del curso"><input name="title" required maxLength={160} defaultValue={course?.title} placeholder="Ej. Exploradores"/></Field>
       <Field label="Objetivo" optional hint="Qué podrá hacer el grupo al terminar. Aparece en el resumen del curso."><textarea name="objective" maxLength={1000} rows={3} defaultValue={course?.objective}/></Field>
+      {!course && <Field label="Responsable del curso" hint="Prepara y publica el contenido y el plan curricular. Después asignas a quienes imparten cada sección.">
+        <select name="leadId" required defaultValue=""><option value="" disabled>Elige a la persona responsable…</option>{people.map(person => <option key={person.id} value={person.id}>{person.name} (@{person.username})</option>)}</select>
+      </Field>}
       {!course && !program && <fieldset className="preset-picker"><legend>Punto de partida</legend>
         <p className="muted small">Llena la configuración de una vez; después puedes ajustar cada valor.</p>
         <div className="preset-grid">{coursePresets.map(preset => { const on = Object.entries(preset.values).every(([key, value]) => dims[key as keyof Dimensions] === value); return <label key={preset.id} className={`preset${on ? " is-selected" : ""}`}>
@@ -204,7 +210,7 @@ export function CourseForm({ course, onSaved, cancelHref }: { course?: Course; o
           </li>;
         })}</ul>
       </section>
-      <div className="form-actions"><button className="button primary">{busy ? "Guardando…" : course ? "Guardar cambios" : "Crear curso"}</button><Link href={cancelHref} className="button ghost">Cancelar</Link></div>
+      {!readOnly && <div className="form-actions"><button className="button primary">{busy ? "Guardando…" : course ? "Guardar cambios" : "Crear curso"}</button><Link href={cancelHref} className="button ghost">Cancelar</Link></div>}
     </fieldset>
   </form>;
 }
@@ -213,9 +219,9 @@ export function CreateCourse() {
   const { member } = useSession();
   const { navigate } = useNavigation();
   const { toast } = useFeedback();
-  if (!isEducator(member)) return <><PageHeader title="Crear curso" crumbs={[{ label: "Cursos", href: "/cursos" }, { label: "Crear curso" }]}/><EmptyState icon="shield" title="Solo educadores pueden crear cursos">Administración configura la organización y los permisos.</EmptyState></>;
+  if (member.role !== "admin") return <><PageHeader title="Crear curso" crumbs={[{ label: "Cursos", href: "/cursos" }, { label: "Crear curso" }]}/><EmptyState icon="shield" title="Administración crea los cursos" action={<Link href="/cursos" className="button primary">Ver mis cursos</Link>}>Administración crea cada curso, sus secciones y su horario, y asigna a su equipo docente.</EmptyState></>;
   return <>
-    <PageHeader title="Crear curso" crumbs={[{ label: "Cursos", href: "/cursos" }, { label: "Crear curso" }]} description="Empieza por el nombre, el propósito y el tipo de curso. Después agregarás módulos y lecciones."/>
-    <div className="reading"><CourseForm cancelHref="/cursos" onSaved={id => { toast({ message: "Curso creado. Agrega su primer módulo." }); navigate(`/cursos/${id}/contenido`); }}/></div>
+    <PageHeader title="Crear curso" crumbs={[{ label: "Cursos", href: "/cursos" }, { label: "Crear curso" }]} description="Empieza por el nombre, el propósito, el tipo de curso y su responsable. Después creas sus secciones, su horario y asignas a quienes las imparten."/>
+    <div className="reading"><CourseForm cancelHref="/cursos" onSaved={id => { toast({ message: "Curso creado. Desde su resumen creas sus secciones y asignas a quienes las imparten." }); navigate(`/cursos/${id}`); }}/></div>
   </>;
 }

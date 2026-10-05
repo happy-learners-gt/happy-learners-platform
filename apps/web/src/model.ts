@@ -1,6 +1,5 @@
-import type { Activity, ActivityBlock, Course, Curriculum, LearningUnit, Lesson, Material, RichTextDocument, RichTextNode, SequenceTemplate } from "@happy-learners/contracts";
+import type { Activity, ActivityBlock, Course, LearningUnit, Lesson, Material, RichTextDocument, RichTextNode, SequenceTemplate } from "@happy-learners/contracts";
 import { blocksOf, phaseOf, resourceIdsOf, sequenceOf } from "@happy-learners/domain";
-import { api, uploadCourseFile } from "./api";
 
 export type LessonState = "draft" | "published" | "changes" | "archived";
 export function lessonState(lesson: Pick<Lesson, "status" | "revision" | "hasDraft">): LessonState {
@@ -146,65 +145,6 @@ export function usage(resourceId: string, lessons: Lesson[]) {
   return lessons.filter(lesson => lesson.status !== "archived" && resourceIdsOf(lesson.activities).includes(resourceId));
 }
 export function newest<T extends { updatedAt?: string }>(rows: T[]) { return [...rows].sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || "")); }
-
-/**
- * Copies a course as drafts through the public API: units, text and link resources, documents and lessons.
- * Returns the new course ID; if a step fails the partial copy remains and the error explains it.
- */
-export async function duplicateCourse(course: Course, onProgress?: (step: string) => void) {
-  const [{ units, curriculum }, { lessons }, { materials }] = await Promise.all([
-    api<{ units: LearningUnit[]; curriculum: Curriculum }>(`/courses/${course.id}`),
-    api<{ lessons: Lesson[] }>(`/lessons?drafts=1&course=${course.id}`),
-    api<{ materials: Material[] }>(`/courses/${course.id}/materials`),
-  ]);
-  onProgress?.("Creando el curso…");
-  const { id } = await api<{ id: string }>("/courses", "POST", { ...courseBody(course, { title: `${course.title} (copia)`.slice(0, 160), status: "active" }), version: undefined });
-  let version = 1;
-  const unitMap = new Map<string, string>();
-  for (const unit of units.filter(unit => unit.status === "active")) {
-    const created = await api<{ id: string }>(`/courses/${id}/units`, "POST", { name: unit.name, objective: unit.objective, status: "active", version });
-    unitMap.set(unit.id, created.id); version++;
-  }
-  onProgress?.("Copiando el plan curricular…");
-  const competencyMap = new Map<string, string>(), outcomeMap = new Map<string, string>();
-  for (const competency of curriculum.competencies.filter(item => item.status === "active")) {
-    const created = await api<{ id: string }>(`/courses/${id}/competencies`, "POST", { name: competency.name, description: competency.description, status: "active", version });
-    competencyMap.set(competency.id, created.id); version++;
-  }
-  for (const outcome of curriculum.outcomes.filter(item => item.status === "active")) {
-    const created = await api<{ id: string }>(`/courses/${id}/outcomes`, "POST", { statement: outcome.statement, level: outcome.level, evidence: outcome.evidence, competencyId: outcome.competencyId && competencyMap.get(outcome.competencyId) || null, status: "active", version });
-    outcomeMap.set(outcome.id, created.id); version++;
-  }
-  for (const [from, to] of unitMap) {
-    const outcomeIds = curriculum.unitOutcomes.filter(link => link.unitId === from && outcomeMap.has(link.outcomeId)).map(link => outcomeMap.get(link.outcomeId)!);
-    if (outcomeIds.length) { await api(`/courses/${id}/units/${to}/outcomes`, "PUT", { outcomeIds, version }); version++; }
-  }
-  const remap = (ids?: string[]) => (ids || []).flatMap(item => outcomeMap.has(item) ? [outcomeMap.get(item)!] : []);
-  onProgress?.("Copiando recursos…");
-  const resourceMap = new Map<string, string>();
-  for (const material of materials.filter(item => item.status !== "archived")) {
-    if (material.kind === "file" && material.fileId) {
-      const blob = await (await fetch(`/api/courses/${course.id}/files/${material.fileId}/content`, { credentials: "same-origin" })).blob();
-      const { file } = await uploadCourseFile<{ file: Material }>(id, blob, material.fileName || `${material.title}.docx`);
-      resourceMap.set(material.id, file.id);
-    } else if (material.kind !== "file") {
-      const { material: copy } = await api<{ material: Material }>(`/courses/${id}/materials`, "POST", { title: material.title, description: material.description, kind: material.kind, content: material.content, status: material.status, termIds: material.termIds });
-      resourceMap.set(material.id, copy.id);
-    }
-  }
-  onProgress?.("Copiando lecciones…");
-  for (const lesson of lessons.filter(item => item.status !== "archived" && item.courseUnitId && unitMap.has(item.courseUnitId))) {
-    const activities = normalizeActivities(lesson.activities, lesson.sequence).map(activity => ({ ...activity, outcomeIds: remap(activity.outcomeIds), blocks: activity.blocks!.map(block => {
-      if (block.kind !== "resource" || !block.resourceId) return block;
-      const mapped = resourceMap.get(block.resourceId);
-      if (mapped) return { ...block, resourceId: mapped };
-      // Archived course resources are not copied: leave a visible note instead of a broken link.
-      return materials.some(item => item.id === block.resourceId) ? { id: block.id, kind: "text" as const, instructions: "Recurso no copiado: estaba archivado en el curso original." } : block;
-    }) }));
-    await api("/lessons", "POST", lessonBody(id, { ...draftOf(lesson), unitId: unitMap.get(lesson.courseUnitId!)!, archived: false, outcomeIds: remap(lesson.outcomeIds), activities }));
-  }
-  return id;
-}
 
 /** The lessons a class plans, as one line: «Saludos · Colores». */
 export const lessonNames = (session: { lessons: { title: string }[] }) => session.lessons.map(lesson => lesson.title).join(" · ");

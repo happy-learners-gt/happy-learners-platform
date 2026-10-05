@@ -33,12 +33,13 @@ function useDelivery(courseId: string, enabled: boolean) {
  * classes), with what is missing.
  */
 export function Plan() {
-  const { course, units, lessons, curriculum, writable, reload, settings, noun, classroom } = useCourse();
+  // The lead keeps the curriculum plan; anyone on the team can create the lesson that covers a gap.
+  const { course, units, lessons, curriculum, writable: team, publisher: writable, reload, settings, noun } = useCourse();
   const { toast, confirm } = useFeedback();
   const { navigate } = useNavigation();
   const [editing, setEditing] = useState<Editing | null>(null), [creating, setCreating] = useState<OutcomeCoverage | null>(null), [showArchived, setShowArchived] = useState(false);
   const base = `/cursos/${course.id}`;
-  const delivery = useDelivery(course.id, classroom && settings.attendance && course.status === "active");
+  const delivery = useDelivery(course.id, settings.attendance && course.status === "active");
   const [section, setSection] = useState("");
   const delivered = (delivery?.sessions || []).filter(session => !section || session.groupId === section).flatMap(session => session.lessons.map(lesson => lesson.id));
   const map = coverage(curriculum, units, lessons, delivered);
@@ -139,7 +140,7 @@ export function Plan() {
             <tbody>{map.outcomes.map(item => <tr key={item.outcome.id}>
               <th scope="row"><div className="row-outcome"><span className="outcome-code" aria-hidden="true">{item.code}</span><span><span className="sr-only">{item.code}: </span>{item.outcome.statement}</span></div></th>
               {activeUnits.map(({ unit }) => <td key={unit.id}><Cell item={item} unitId={unit.id} unitName={unit.name} lessons={lessons} delivered={delivered} writable={writable} onToggle={() => void togglePlan(unit.id, item.outcome.id)}/></td>)}
-              <td><GapAction item={item} lessons={lessons} base={base} writable={writable} onCreate={() => setCreating(item)}/></td>
+              <td><GapAction item={item} lessons={lessons} base={base} writable={team} onCreate={() => setCreating(item)}/></td>
             </tr>)}</tbody>
             {activeUnits.some(item => item.missing.length) && <tfoot><tr><th scope="row">{`Pendiente en ${noun.the}`}</th>{activeUnits.map(item => <td key={item.unit.id}>{item.missing.length ? <span className="gap-text"><Icon name="alert" size={14}/>Falta trabajar {item.missing.map(id => codeOf.get(id)).join(", ")}</span> : <span className="muted small">Al día</span>}</td>)}<td/></tr></tfoot>}
           </table>
