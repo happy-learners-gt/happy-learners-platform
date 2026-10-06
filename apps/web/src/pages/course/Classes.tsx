@@ -7,6 +7,7 @@ import { Link, useNavigation, useUnsavedChanges } from "../../navigation";
 import { plural, sessionDay } from "../../model";
 import { Modal, useFeedback } from "../../ui/feedback";
 import { Icon } from "../../ui/icons";
+import { moveItem, SortHandle } from "../../ui/Sortable";
 import { Menu } from "../../ui/Menu";
 import type { MenuItem } from "../../ui/Menu";
 import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section, StatTiles, StatusBadge } from "../../ui/primitives";
@@ -180,16 +181,12 @@ function LessonPicker({ value, onChange, current, locked }: { value: string[]; o
   const groups = units.filter(unit => unit.status === "active").sort((a, b) => a.position - b.position)
     .map(unit => ({ unit, items: lessons.filter(lesson => lesson.courseUnitId === unit.id && lesson.status !== "archived" && !!lesson.revision && !value.includes(lesson.id)).sort((a, b) => (a.position || 0) - (b.position || 0)) }))
     .filter(group => group.items.length);
-  const move = (index: number, delta: number) => { const next = [...value]; [next[index], next[index + delta]] = [next[index + delta], next[index]]; onChange(next); };
   return <fieldset className="lesson-picker">
     <legend>Lecciones <span className="optional">(opcional)</span></legend>
-    {value.length ? <ol className="lesson-picker-list">{value.map((id, index) => <li key={id}>
-      <span className="roster-number" aria-hidden="true">{index + 1}</span><span>{title(id)}</span>
-      {!locked && <span className="button-row">
-        <button type="button" className="icon-button" disabled={!index} onClick={() => move(index, -1)} aria-label={`Subir «${title(id)}»`}><Icon name="up" size={16}/></button>
-        <button type="button" className="icon-button" disabled={index === value.length - 1} onClick={() => move(index, 1)} aria-label={`Bajar «${title(id)}»`}><Icon name="down" size={16}/></button>
-        <button type="button" className="icon-button" onClick={() => onChange(value.filter(item => item !== id))} aria-label={`Quitar «${title(id)}»`}><Icon name="close" size={16}/></button>
-      </span>}
+    {value.length ? <ol className="lesson-picker-list sortable-list">{value.map((id, index) => <li key={id}>
+      {!locked && value.length > 1 && <SortHandle id={`class-lesson-${id}`} label={`Reordenar «${title(id)}», lección ${index + 1} de ${value.length}`} index={index} count={value.length} onMove={to => onChange(moveItem(value, index, to))}/>}
+      <span className="roster-number" aria-hidden="true">{index + 1}</span><span className="lesson-picker-title">{title(id)}</span>
+      {!locked && <button type="button" className="icon-button" onClick={() => onChange(value.filter(item => item !== id))} aria-label={`Quitar «${title(id)}»`}><Icon name="close" size={16}/></button>}
     </li>)}</ol> : <p className="muted small">Sin lecciones: la clase queda en el cronograma y puedes planificarla después.</p>}
     {locked ? <p className="muted small">Una clase impartida conserva las lecciones que trabajó.</p>
       : value.length < maxClassLessons && <label className="select-inline"><span>Agregar lección</span><select value="" onChange={event => event.target.value && onChange([...value, event.target.value])}>

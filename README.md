@@ -2,7 +2,7 @@
 
 Aplicación para preparar cursos y compartir lecciones de distintas disciplinas. Cada curso reúne sus unidades de aprendizaje, materiales y lecciones. Las clasificaciones son configurables y opcionales. Los estudiantes abren las publicaciones sin cuenta.
 
-Consulta la [entrega de cursos](docs/redesign/cursos-implementacion.md), los [diagramas de base de datos](docs/redesign/base-de-datos.md), el [flujo actual de Studio](docs/redesign/studio-flujos-y-diseno.md) y las [guías de operación](docs/sprint-2/00-EMPEZAR-AQUI.md). La coedición en vivo sincroniza el texto enriquecido; los cambios de estructura usan control de versión. Los documentos Office se guardan en un bucket R2 privado.
+Consulta la [documentación de la plataforma](docs/README.md). La coedición en vivo sincroniza el texto enriquecido; los cambios de estructura usan control de versión. Los documentos Office se guardan en un bucket R2 privado.
 
 ## Desarrollo local
 
@@ -44,6 +44,3 @@ Un build local con cambios sin commit informa el SHA base del checkout: no repre
 ```
 
 El contexto proviene del repositorio hermano `happy-learners-ops` (o `HL_OPS_REPO`). No cargar el backlog completo. La Definition of Done conserva su estado `proposed`.
-# Entrega v0.2.4
-
-[Notas de v0.2.4](docs/redesign/release-notes-v0.2.4.md) · [Notas de v0.2.3](docs/redesign/release-notes-v0.2.3.md) · [Arquitectura de información](docs/redesign/arquitectura-informacion-v0.2.3.md) · [Empezar aquí](docs/sprint-2/00-EMPEZAR-AQUI.md): guías de usuario y demostración, arquitectura, Sprint Review y matriz Jira–código–pruebas.

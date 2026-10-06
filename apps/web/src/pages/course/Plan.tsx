@@ -87,8 +87,8 @@ export function Plan() {
       {item ? <CoverageBadge item={item}/> : <StatusBadge>Archivado</StatusBadge>}
       {writable && <Menu label={`Acciones de ${item?.code || "resultado archivado"}`} items={[
         { label: "Editar", icon: "edit", onSelect: () => setEditing({ kind: "outcome", item: outcome }) },
-        { label: "Subir", icon: "up", disabled: index === 0, onSelect: () => void moveOutcome(outcome, -1) },
-        { label: "Bajar", icon: "down", disabled: index === ordered.length - 1, onSelect: () => void moveOutcome(outcome, 1) },
+        { label: "Mover arriba", icon: "chevronUp", disabled: index === 0, onSelect: () => void moveOutcome(outcome, -1) },
+        { label: "Mover abajo", icon: "chevronDown", disabled: index === ordered.length - 1, onSelect: () => void moveOutcome(outcome, 1) },
         "separator",
         { label: outcome.status === "active" ? "Archivar" : "Restaurar", icon: "archive", danger: outcome.status === "active", onSelect: () => void archiveOutcome(outcome) },
       ]}/>}

@@ -9,6 +9,7 @@ import { Icon } from "../../ui/icons";
 import { LessonOutline } from "../../ui/LessonOutline";
 import type { OutlineActions } from "../../ui/LessonOutline";
 import { Button, EmptyState, Field, PageHeader, PrimaryAction } from "../../ui/primitives";
+import { moveItem } from "../../ui/Sortable";
 import { useCourse } from "./context";
 
 /** Renames and archives change only lesson metadata, so activities are omitted and kept by the API. */
@@ -51,10 +52,9 @@ export function Content() {
   const actions: OutlineActions = {
     renameUnit: (unit, name) => run(() => api(`/courses/${course.id}/units/${unit.id}`, "PUT", unitBody(unit, { name })), `${noun.One} ${noun.renamed}.`),
     editUnit: unit => setEditing(unit),
-    moveUnit: (unit, delta) => {
-      const ids = units.map(item => item.id), index = ids.indexOf(unit.id);
-      [ids[index], ids[index + delta]] = [ids[index + delta], ids[index]];
-      void run(() => api(`/courses/${course.id}/units/order`, "PUT", { version: course.version, ids }), `«${unit.name}» ahora es ${noun.the} ${index + delta + 1} de ${ids.length}.`);
+    moveUnit: (unit, to) => {
+      const ids = moveItem(units.map(item => item.id), units.indexOf(unit), to);
+      void run(() => api(`/courses/${course.id}/units/order`, "PUT", { version: course.version, ids }), `«${unit.name}» ahora es ${noun.the} ${to + 1} de ${ids.length}.`);
     },
     archiveUnit: async unit => {
       const archiving = unit.status === "active";
@@ -71,10 +71,10 @@ export function Content() {
       } catch (error) { toast({ tone: "error", message: `${message(error)} Revisa el título y el objetivo.` }); return false; }
     },
     renameLesson: (lesson, title) => run(() => api(`/lessons/${lesson.id}`, "PUT", metadataBody(course.id, lesson, { title })), "Lección renombrada. Publica los cambios para que los vean los estudiantes."),
-    moveLesson: (lesson, delta) => {
-      const ids = lessons.filter(item => item.courseUnitId === lesson.courseUnitId).map(item => item.id), index = ids.indexOf(lesson.id);
-      [ids[index], ids[index + delta]] = [ids[index + delta], ids[index]];
-      void run(() => api("/lessons/order", "PUT", { courseUnitId: lesson.courseUnitId, ids }), `«${lesson.title}» ahora es la lección ${index + delta + 1} de ${ids.length}.`);
+    moveLesson: (lesson, to) => {
+      const siblings = lessons.filter(item => item.courseUnitId === lesson.courseUnitId).map(item => item.id);
+      const ids = moveItem(siblings, siblings.indexOf(lesson.id), to);
+      void run(() => api("/lessons/order", "PUT", { courseUnitId: lesson.courseUnitId, ids }), `«${lesson.title}» ahora es la lección ${to + 1} de ${ids.length}.`);
     },
     archiveLesson: async lesson => {
       const archiving = lesson.status !== "archived";
