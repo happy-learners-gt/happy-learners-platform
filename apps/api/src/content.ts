@@ -285,7 +285,7 @@ export async function shared(path: string, method: string, request: Request, db:
   const inPath = access?.pacing === "self-paced" && !!await pathLesson(db, access.courseId, code);
   if (inPath && access.learnerId) {
     const at = new Date(now).toISOString();
-    await db.prepare("INSERT INTO learner_progress(organization_id,group_id,learner_id,lesson_id,opened_at,completed_at) VALUES (?,?,?,?,?,?) ON CONFLICT DO UPDATE SET completed_at=COALESCE(completed_at,excluded.completed_at)")
+    await db.prepare("INSERT INTO learner_progress(organization_id,group_id,learner_id,lesson_id,opened_at,completed_at) VALUES (?,?,?,?,?,?) ON CONFLICT DO UPDATE SET completed_at=COALESCE(completed_at,max(opened_at,excluded.completed_at))")
       .bind(access.organizationId, access.groupId, access.learnerId, row.id, at, at).run();
   }
   if (!(request.headers.get("Cookie") || "").split(";").some(c => c.trim() === `${name}=1`)) {
