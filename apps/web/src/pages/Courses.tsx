@@ -158,7 +158,7 @@ export function CourseForm({ course, onSaved, cancelHref, readOnly = false }: { 
     {readOnly && <p className="notice"><Icon name="info" size={18}/>Administración configura el curso. Si necesitas un cambio, pídeselo.</p>}
     <fieldset disabled={busy || readOnly} className="stack">
       <Field label="Nombre del curso"><input name="title" required maxLength={160} defaultValue={course?.title} placeholder="Ej. Exploradores"/></Field>
-      <Field label="Objetivo" optional hint="Qué podrá hacer el grupo al terminar. Aparece en el resumen del curso."><textarea name="objective" maxLength={1000} rows={3} defaultValue={course?.objective}/></Field>
+      <Field label="Objetivo" optional hint="Qué podrán hacer sus estudiantes al terminar. Aparece en el resumen del curso."><textarea name="objective" maxLength={1000} rows={3} defaultValue={course?.objective}/></Field>
       {!course && <Field label="Responsable del curso" hint="Prepara y publica el contenido y el plan curricular. Después asignas a quienes imparten cada sección.">
         <select name="leadId" required defaultValue=""><option value="" disabled>Elige a la persona responsable…</option>{people.map(person => <option key={person.id} value={person.id}>{person.name} (@{person.username})</option>)}</select>
       </Field>}

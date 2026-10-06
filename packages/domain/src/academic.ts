@@ -85,7 +85,8 @@ export type SettingKey = keyof CourseSettings;
 export const settingDefinitions: { key: SettingKey; label: string; description: string }[] = [
   { key: "moduleLabel", label: "Nombre de las partes del curso", description: "Cómo se llaman en pantalla los módulos del curso." },
   { key: "defaultSequence", label: "Secuencia didáctica de las lecciones nuevas", description: "Los momentos con que empieza cada lección nueva." },
-  { key: "attendance", label: "Grupos y asistencia", description: "Registrar clases por grupo y pasar lista." },
+  { key: "attendance", label: "Secciones y asistencia", description: "Organizar a los estudiantes en secciones con su lista, sus clases y su asistencia." },
+  { key: "workGroups", label: "Grupos de trabajo", description: "Formar grupos de estudiantes dentro de cada sección y asignarlos a las actividades en parejas o en equipos. Requiere secciones." },
   { key: "outcomesRequired", label: "Publicar exige resultados de aprendizaje", description: "Una lección solo se publica si trabaja al menos un resultado del curso." },
   { key: "assessmentRequired", label: "Publicar exige comprobar lo aprendido", description: "Una lección solo se publica si incluye una pregunta o una actividad de evaluación." },
 ];
@@ -97,6 +98,7 @@ export function derivedSettings(profile: AcademicProfile & { format: CourseForma
     moduleLabel: "modules",
     defaultSequence: profile.format === "workshop" ? "workshop" : profile.format === "laboratory" ? "five-e" : "start-develop-close",
     attendance: profile.modality !== "online",
+    workGroups: profile.modality !== "online",
     outcomesRequired: profile.educationType === "formal",
     assessmentRequired: profile.educationType === "formal",
   };
@@ -131,7 +133,7 @@ export function settingsInput(value: unknown): CourseSettings | null {
   const out: CourseSettings = {};
   if (v.moduleLabel !== undefined) { if (!moduleLabels.some(item => item.value === v.moduleLabel)) return null; out.moduleLabel = v.moduleLabel as ModuleLabel; }
   if (v.defaultSequence !== undefined) { if (!sequences.includes(v.defaultSequence as SequenceTemplate)) return null; out.defaultSequence = v.defaultSequence as SequenceTemplate; }
-  for (const key of ["attendance", "outcomesRequired", "assessmentRequired"] as const) {
+  for (const key of ["attendance", "workGroups", "outcomesRequired", "assessmentRequired"] as const) {
     if (v[key] !== undefined) { if (typeof v[key] !== "boolean") return null; out[key] = v[key]; }
   }
   return out;

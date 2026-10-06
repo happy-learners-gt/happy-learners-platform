@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import type { ActivityBlock, Lesson, LessonNavigation, Material, Resource } from "@happy-learners/contracts";
+import type { ActivityBlock, Lesson, LessonNavigation, Material, Resource, StudentActivityGroups } from "@happy-learners/contracts";
 import { blocksOf, groupings, phaseOf, purposes, sequenceOf } from "@happy-learners/domain";
 import { api, message } from "../api";
 import { FileViewer } from "../FileViewer";
@@ -8,12 +8,12 @@ import { Icon } from "../ui/icons";
 const RichText = lazy(() => import("../RichText").then(module => ({ default: module.RichText })));
 
 export function StudentLesson({ code }: { code: string }) {
-  const [lesson, setLesson] = useState<Lesson | null>(null), [navigation, setNavigation] = useState<LessonNavigation | null>(null), [error, setError] = useState("");
+  const [lesson, setLesson] = useState<Lesson | null>(null), [navigation, setNavigation] = useState<LessonNavigation | null>(null), [groups, setGroups] = useState<StudentActivityGroups[]>([]), [error, setError] = useState("");
   const shareCode = code.toUpperCase();
-  useEffect(() => { api<{ lesson: Lesson; navigation?: LessonNavigation | null }>(`/share/${encodeURIComponent(shareCode)}`).then(result => { setLesson(result.lesson); setNavigation(result.navigation || null); }).catch(cause => setError(message(cause))); }, [shareCode]);
+  useEffect(() => { api<{ lesson: Lesson; navigation?: LessonNavigation | null; groups?: StudentActivityGroups[] }>(`/share/${encodeURIComponent(shareCode)}`).then(result => { setLesson(result.lesson); setNavigation(result.navigation || null); setGroups(result.groups || []); }).catch(cause => setError(message(cause))); }, [shareCode]);
   if (error) return <div className="player"><PlayerBar/><main id="main" className="player-main"><div className="player-card player-center"><Icon name="alert" size={28}/><h1>No encontramos esta lección</h1><p>{error === "Lección no disponible." ? "Revisa el código con tu educador. Puede que la lección ya no esté publicada." : error}</p><a className="button primary" href="/">Volver al inicio</a></div></main></div>;
   if (!lesson) return <div className="player"><PlayerBar/><main id="main" className="player-main"><p role="status" className="player-center">Abriendo lección…</p></main></div>;
-  return <LessonPlayer key={shareCode} lesson={lesson} navigation={navigation} fileUrl={id => `/api/share/${encodeURIComponent(shareCode)}/files/${id}`} complete={() => api<{ learner?: string | null }>(`/share/${encodeURIComponent(shareCode)}/complete`, "POST").then(result => result.learner || null)}/>;
+  return <LessonPlayer key={shareCode} lesson={lesson} navigation={navigation} groups={groups} fileUrl={id => `/api/share/${encodeURIComponent(shareCode)}/files/${id}`} complete={() => api<{ learner?: string | null }>(`/share/${encodeURIComponent(shareCode)}/complete`, "POST").then(result => result.learner || null)}/>;
 }
 
 function PlayerBar({ title, step, total }: { title?: string; step?: number; total?: number }) {
@@ -29,7 +29,7 @@ function PlayerBar({ title, step, total }: { title?: string; step?: number; tota
  * One activity at a time: intro (step 0), activities (1…n) and completion (n+1).
  * In preview mode nothing is recorded and resources come from the course library.
  */
-export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, onExit, navigation }: { lesson: Lesson; fileUrl: (fileId: string) => string; complete?: () => Promise<string | null>; preview?: boolean; resources?: (Material | Resource)[]; onExit?: () => void; navigation?: LessonNavigation | null }) {
+export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, onExit, navigation, groups = [] }: { lesson: Lesson; fileUrl: (fileId: string) => string; complete?: () => Promise<string | null>; preview?: boolean; resources?: (Material | Resource)[]; onExit?: () => void; navigation?: LessonNavigation | null; groups?: StudentActivityGroups[] }) {
   const [step, setStep] = useState(0), [answers, setAnswers] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [done, setDone] = useState(false), [learner, setLearner] = useState<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null), first = useRef(true);
@@ -72,6 +72,7 @@ export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, on
         <span className="player-chip">{structured ? `${template.phases[phaseIndex].label} · ` : ""}Actividad {step} de {total} · {activity.minutes} min</span>
         <h1 id="activity-title" ref={heading} tabIndex={-1}>{activity.title}</h1>
         {tags.length > 0 && <p className="player-tags">{tags.map(tag => <span key={tag}>{tag}</span>)}</p>}
+        {activity && <ActivityGroups groups={groups.find(item => item.activityId === activity.id)?.groups}/>}
         {blocks.map(block => <PlayerBlock key={block.id} block={block} library={library} fileUrl={fileUrl} answer={answers[block.id]} onAnswer={choice => setAnswers({ ...answers, [block.id]: choice })}/>)}
       </article>}
       {step > total && <article className="player-card player-center">
@@ -92,6 +93,19 @@ export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, on
         : step < total ? <button type="button" className="button primary" onClick={() => setStep(step + 1)}>Siguiente<Icon name="arrowRight" size={18}/></button>
         : <button type="button" className="button primary" disabled={busy} onClick={() => void finish()}>{busy ? "Guardando…" : "Terminar lección"}<Icon name="check" size={18}/></button>}
     </nav>}
+  </div>;
+}
+
+/** Which of the section's groups do the activity (DEC-028), and who is in the student's own group. */
+function ActivityGroups({ groups }: { groups?: StudentActivityGroups["groups"] }) {
+  if (!groups?.length) return null;
+  const mine = groups.filter(group => group.mine);
+  return <div className="player-teams" role="note">
+    <Icon name="team" size={18}/>
+    <div>
+      {mine.map(group => <p key={group.name}><strong>Trabajas en {group.name}</strong>{group.members?.length ? `: ${group.members.join(", ")}` : ""}</p>)}
+      <p className={mine.length ? "muted small" : undefined}>{groups.length === 1 ? `La trabaja ${groups[0].name}.` : `La trabajan ${groups.map(group => group.name).join(", ")}.`}</p>
+    </div>
   </div>;
 }
 

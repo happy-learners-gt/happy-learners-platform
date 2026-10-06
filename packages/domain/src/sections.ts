@@ -43,3 +43,16 @@ export function pathIndicators(publishedLessonIds: string[], completedByLearner:
 }
 /** The first published lesson, in content order, that the student has not completed yet. */
 export const nextInPath = (lessonIds: string[], completed: Set<string>) => lessonIds.find(id => !completed.has(id)) ?? null;
+
+/** The default group of a section (DEC-028): every active student of its list. */
+export const wholeSection = "Toda la sección";
+export const maxWorkGroups = 30;
+/** A work group as written: a name of up to 60 characters and distinct students of the section. */
+export function workGroupInput(value: unknown): { name: string; learnerIds: string[] } | null {
+  const v = value && typeof value === "object" ? value as Record<string, unknown> : null;
+  const name = typeof v?.name === "string" ? v.name.trim() : "";
+  if (!name || name.length > 60 || /[<>\x00-\x1f]/.test(name) || name.toLocaleLowerCase("es") === wholeSection.toLocaleLowerCase("es")) return null;
+  const ids = v!.learnerIds;
+  if (!Array.isArray(ids) || ids.length > 200 || ids.some(id => typeof id !== "string") || new Set(ids).size !== ids.length) return null;
+  return { name, learnerIds: ids as string[] };
+}

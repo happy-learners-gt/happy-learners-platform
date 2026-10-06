@@ -15,7 +15,7 @@ export function Help() {
       </ul>
       <p>Cada educador ve únicamente los cursos en los que participa.</p>
       <h2>Configuración académica</h2>
-      <p>Cada curso se describe con clasificaciones de la UNESCO: tipo de educación y nivel (CINE 2011) y área de conocimiento (CINE-F 2013), además de formato, modalidad y ritmo. Esa configuración decide su comportamiento: si tiene grupos y asistencia, con qué secuencia empiezan las lecciones y qué se exige para publicar. En <strong>Configuración</strong> del curso cada ajuste muestra de dónde viene su valor; administración puede cambiarlo, salvo que el programa lo fije.</p>
+      <p>Cada curso se describe con clasificaciones de la UNESCO: tipo de educación y nivel (CINE 2011) y área de conocimiento (CINE-F 2013), además de formato, modalidad y ritmo. Esa configuración decide su comportamiento: si tiene secciones con asistencia y grupos de trabajo, con qué secuencia empiezan las lecciones y qué se exige para publicar. En <strong>Configuración</strong> del curso cada ajuste muestra de dónde viene su valor; administración puede cambiarlo, salvo que el programa lo fije.</p>
       <h2>Preparar y publicar una lección</h2>
       <ol>
         <li>En <Link href="/cursos">Cursos</Link>, abre uno de tus cursos.</li>
@@ -42,6 +42,9 @@ export function Help() {
       <h2>Cursos a tu ritmo</h2>
       <p>El <strong>ritmo</strong> se elige al crear el curso o su programa. <strong>Con calendario</strong>, cada sección avanza junta con su horario, su cronograma y sus clases. <strong>A tu ritmo</strong>, las secciones no tienen horario ni clases: cada estudiante entra con el código de la sección, elige su nombre de la lista y recorre las lecciones publicadas en orden, cuando quiere. La lección cuenta como terminada en su avance al llegar al final.</p>
       <p>En el <strong>Avance</strong> de la sección ves cuántas lecciones terminó cada estudiante, con qué lección sigue y su última actividad, y por lección cuántos la abrieron y la terminaron. Si un curso cambia de ritmo, las clases ya registradas se conservan y vuelven a verse si regresa a <strong>Con calendario</strong>.</p>
+      <h2>Grupos de trabajo</h2>
+      <p>Los estudiantes de una sección son el universo de sus grupos. <strong>Toda la sección</strong> es el grupo predeterminado; en <strong>Grupos</strong>, quienes imparten la sección y administración forman grupos más pequeños con estudiantes de la lista (un estudiante puede estar en varios). Las actividades que una lección organiza <strong>En parejas</strong> o <strong>En equipos</strong> aparecen ahí para asignarles uno o varios grupos; sin asignación, las trabaja toda la sección.</p>
+      <p>La clase muestra junto a cada actividad en grupo quién la trabaja, y al abrir la lección con el código de la sección los estudiantes ven qué grupos la trabajan; en un curso a tu ritmo, quien eligió su nombre ve además con quién está en su grupo. Se activan con <strong>Grupos de trabajo</strong> en la configuración del curso o de su programa y requieren secciones.</p>
       <h2>Datos y privacidad</h2>
       <p>La asistencia guarda solo el nombre de lista, la sección, la fecha y el estado. No pide correo, teléfono, fecha de nacimiento ni notas. La consultan administración y quienes imparten la sección.</p>
       <p>Las lecciones publicadas y el espacio de la sección se abren sin cuenta. Solo se cuenta cuántas veces se terminó una lección; no se guardan nombres ni respuestas. En un curso a tu ritmo, el avance de cada estudiante se guarda con el nombre que elige de la lista de su sección, nunca sus respuestas. La sesión del equipo dura hasta ocho horas.</p>

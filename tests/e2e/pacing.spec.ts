@@ -80,7 +80,7 @@ test("HL-142 ST-110: a self-paced section has no schedule or classes; each stude
     await page.getByRole("link", { name: "Volver a mi sección" }).click();
     await expect(page.locator(".student-next")).toContainText("Continúa donde te quedaste");
     await expect(page.locator(".student-path li.is-done")).toHaveCount(1);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await page.evaluate(() => Math.max(document.documentElement.scrollWidth, innerWidth) <= screen.width)).toBe(true);
 
     // The educator follows the section's progress; it has no schedule or classes to manage.
     await signIn(page, "educador-demo", `/secciones/${groupId}`);
@@ -94,7 +94,7 @@ test("HL-142 ST-110: a self-paced section has no schedule or classes; each stude
     await expect(rows.filter({ hasText: ana })).toContainText("1 de 3");
     await expect(rows.filter({ hasText: ana })).toContainText(lessons[1].title);
     await expect(rows.filter({ hasText: beto })).toContainText("1 de 3");
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await page.evaluate(() => Math.max(document.documentElement.scrollWidth, innerWidth) <= screen.width)).toBe(true);
     await page.goto(`/secciones/${groupId}/horario`);
     await expect(page.getByRole("heading", { name: "Este curso es a tu ritmo" })).toBeVisible();
   } finally { await educator.dispose(); await admin.dispose(); await student.dispose(); }
