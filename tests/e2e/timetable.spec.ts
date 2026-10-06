@@ -3,7 +3,8 @@ import { E2E_PREFIX, courseNav, openNavigation, sectionNav, sessionToken, signIn
 
 type Session = { id: string; groupId: string; lessons: { id: string; available: boolean; revision?: number | null }[]; sessionDate: string; startsAt: string | null; durationMinutes: number | null; status: string; origin: string; version: number; notes: string };
 const ids = (session: Session) => session.lessons.map(lesson => lesson.id);
-const day = (offset: number) => { const date = new Date(); date.setDate(date.getDate() + offset); return date.toLocaleDateString("en-CA"); };
+// Dates in the organization's time zone, as the app computes them, whatever the runner's clock.
+const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Guatemala" });
 
 test("ST-099 ST-097 ST-101 ST-029 ST-100: the section schedule generates its classes, planned with optional lessons in order, and completed classes feed coverage", async ({ page, playwright, baseURL }, info) => {
   const educator = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("educador-demo")}` } });
