@@ -173,7 +173,7 @@ test("ST-103 DEC-024: the co-teacher and the lead each see and teach only the se
     await expect(page.locator("form[aria-label^='Horario de']")).toHaveCount(0);
     await expect(page.locator(".timetable")).toContainText(kept.name);
     await signIn(page, "lucia.herrera", `/cursos/${slug}/secciones`);
-    await expect(page.getByRole("link", { name: removed.name, exact: true })).toBeVisible();
+    await expect(page.getByRole("main").getByRole("link", { name: removed.name, exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: kept.name, exact: true })).toHaveCount(0);
   } finally {
     expect((await educators(admin, removed.id, removed.educators.map(item => item.userId))).status()).toBe(200);
