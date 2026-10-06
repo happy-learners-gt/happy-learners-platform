@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.0-rc.1 — 2026-10-06
+
+Versión candidata de REL-006 (DEC-034): la organización se respalda y se restaura, la publicación se ensaya con reversión, la accesibilidad y la seguridad quedan validadas, y se retiran las rutas heredadas.
+
+- ST-044: **Organización → Respaldo → Descargar respaldo** y `GET /api/organization/backup` (solo administración) entregan una copia JSON de todas las tablas de la organización con un resumen SHA-256 por tabla. No incluye contraseñas, sesiones ni límites de inicio de sesión. `POST /api/organization/restore` reemplaza los datos en una transacción, rechaza copias alteradas (400) o de otra organización o esquema (409), conserva las contraseñas del espacio y verifica cada tabla; solo existe donde `RESTORE_ENABLED=true` (vista previa y pruebas), no en producción.
+- ST-095: el workflow `Release drill` publica en la vista previa el release anterior y la candidata, restaura un respaldo de la demostración tomado de producción, revierte con `wrangler rollback` y vuelve a la candidata, con flujos críticos en cada paso y evidencia en el artefacto `release-drill-<sha>`.
+- ST-077: páginas y API envían `Strict-Transport-Security`. La auditoría de accesibilidad cubre también una clase, Organización y Educadores; en móvil, las migas de la clase tienen 24 px de alto mínimo por enlace (WCAG 2.5.8). Hallazgos y decisiones en `docs/operations/validacion-1.0.md`.
+- ST-076: `/api/curriculum`, `/api/levels`, `/api/units` y la escritura de `/api/resources` responden 410; la biblioteca compartida es de solo lectura y los recursos se agregan en la biblioteca de cada curso. Las pruebas usan los módulos de curso. Rutas vigentes en `docs/api.md`.
+- ST-078: guía breve de uso en `docs/guia-de-uso.md`.
+- Sin migraciones de datos. Se mantiene la autorización de v0.8.1.
+
 ## 0.8.17 — 2026-10-06
 
 Parche de REL-004 (DEC-033): el menú en niveles se lee sin sangría y responde igual en cada clic, y la demostración trae tres rutas de programa.

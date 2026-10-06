@@ -64,33 +64,8 @@ export async function reviews(current: Member, db: Database) {
 export async function content(url: URL, method: string, input: unknown, current: Member, db: Database): Promise<Response> {
   const path = url.pathname; const id = path.split("/")[3]; const resourceRoute = path.startsWith("/api/resources");
   const draft = url.searchParams.has("draft") || url.searchParams.has("drafts");
-  if (resourceRoute) {
-    // The organization's general library: every educator adds to it and everyone reads it.
-    if (method !== "GET" && current.role !== "educator") return reply({ error: "Solo educadores pueden modificar la biblioteca." }, 403);
-    const list = await resources(db, current.organizationId);
-    if (method === "GET") { const one = list.find(r => r.id === id); return id ? one ? reply({ resource: one }) : reply({ error: "Recurso no disponible." }, 404) : reply({ resources: list }); }
-    if (method === "DELETE") return reply({ error: "Conserva los vínculos: archiva el recurso desde su formulario." }, 409);
-    const old = list.find(r => r.id === id);
-    if (id && !old) return reply({ error: "Recurso no disponible." }, 404);
-    if (!input || typeof input !== "object") return reply({ error: "Revisa el recurso." }, 400);
-    const v = input as Record<string, unknown>;
-    const required = ["title", "description", "level", "skill", "topic", "content"];
-    if (required.some(f => typeof v[f] !== "string" || !(v[f] as string).trim()) || String(v.title).length > 160 || String(v.content).length > 8000 || required.filter(f => f !== "content").some(f => String(v[f]).length > 1000) || !["lectura", "escritura", "escucha", "conversación"].includes(String(v.skill))) return reply({ error: "Completa los campos. Usa hasta 160 caracteres para el título y 8000 para el contenido." }, 400);
-    const kind = v.kind || (/^https?:\/\//.test(String(v.content)) ? "link" : "text");
-    if (!["text", "link"].includes(String(kind))) return reply({ error: "Elige texto o enlace." }, 400);
-    if (kind === "link") {
-      try { const u = new URL(String(v.content)); if (!["https:", "http:"].includes(u.protocol) || !u.hostname || u.username || u.password) throw new Error(); }
-      catch { return reply({ error: "Usa una dirección completa que comience con https:// o http://, sin credenciales." }, 400); }
-    }
-    if (!Array.isArray(v.tags) || v.tags.length > 12 || v.tags.some(t => typeof t !== "string" || t.length > 40)) return reply({ error: "Usa hasta 12 etiquetas de 40 caracteres." }, 400);
-    const status = String(v.status || "draft");
-    if (!["draft", "published", "archived"].includes(status)) return reply({ error: "Estado inválido." }, 400);
-    const rid = id || `resource-${crypto.randomUUID()}`; const now = new Date().toISOString();
-    const values = [String(v.title).trim(), String(v.description), String(v.level), String(v.skill), String(v.topic), JSON.stringify(v.tags), String(v.content), status === "archived" ? (old?.status === "published" ? "published" : "draft") : status, status === "archived" ? 1 : 0, String(kind), now];
-    if (id) await db.prepare("UPDATE resources SET title=?,description=?,level=?,skill=?,topic=?,tags=?,content=?,status=?,archived=?,kind=?,updated_at=? WHERE id=? AND organization_id=?").bind(...values, id, current.organizationId).run();
-    else await db.prepare("INSERT INTO resources(title,description,level,skill,topic,tags,content,status,archived,kind,updated_at,id,organization_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(...values, rid, current.organizationId).run();
-    return reply({ resource: (await resources(db, current.organizationId)).find(r => r.id === rid) }, id ? 200 : 201);
-  }
+  // The organization's general library, read-only since 1.0 (ST-076): resources are added and edited in each course.
+  if (resourceRoute) return reply({ resources: await resources(db, current.organizationId) });
   const courseFilter = url.searchParams.get("course");
   if (courseFilter && !await db.prepare("SELECT id FROM courses WHERE id=? AND organization_id=?").bind(courseFilter, current.organizationId).first()) return reply({ error: "Curso no disponible." }, 404);
   // Educators reach the lessons of their courses only; administration reads every course.

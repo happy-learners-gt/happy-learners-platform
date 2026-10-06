@@ -6,7 +6,7 @@ import type { Database } from "./storage";
 export { OrganizationStore } from "./storage";
 import { cookie, digest, newToken, sessionToken, verifyPassword } from "./auth";
 import { roles } from "./roles";
-import { curriculum } from "./curriculum";
+import { digests, type Backup } from "./backup";
 import { content, reviews, shared } from "./content";
 import { courses, programs, taxonomy } from "./courses";
 import { duplicateCourse } from "./duplicate";
@@ -24,6 +24,7 @@ const headers = {
   "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer",
   "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss: ws:; frame-src 'self' blob:; media-src 'self' blob:; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
 };
 function json(data: unknown, status = 200, extra: Record<string, string> = {}) {
   return Response.json(data, { status, headers: { ...headers, ...extra } });
@@ -32,7 +33,7 @@ async function body(request: Request): Promise<unknown> {
   if (!request.headers.get("content-type")?.startsWith("application/json")) throw new Error("INPUT");
   const pathname = new URL(request.url).pathname;
   // Lessons carry rich text for every block; other bodies stay small.
-  const limit = pathname === "/api/login" ? 2048 : /^\/api\/lessons(\/|$)/.test(pathname) ? 262144 : 65536;
+  const limit = pathname === "/api/login" ? 2048 : pathname === "/api/organization/restore" ? 33554432 : /^\/api\/lessons(\/|$)/.test(pathname) ? 262144 : 65536;
   const reader = request.body?.getReader();
   if (!reader) throw new Error("INPUT");
   let text = ""; const decoder = new TextDecoder(); let size = 0;
@@ -63,6 +64,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     return result;
   }
   let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|organization|calendar|members|levels|units|resources|lessons|courses|programs|vocabularies|terms|student)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files"))
+    || (method === "POST" && path === "/api/organization/restore" && env.RESTORE_ENABLED === "true")
     ? await body(request) : undefined;
   // Finishing or cancelling a class may say what was covered or what happens to its plan; without a body, the defaults apply.
   if (method === "POST" && /^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/(complete|cancel)$/.test(path) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
@@ -79,7 +81,12 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (path === "/api/health") await db.prepare("SELECT id FROM organizations LIMIT 1").first();
     return method === "HEAD" ? new Response(null, { headers }) : json(path === "/api/health" ? { status: "ok" } : { sha });
   }
-  const methods: Record<string, string[]> = { "/api/session": ["GET"], "/api/login": ["POST"], "/api/logout": ["POST"], "/api/organization": ["GET", "PUT"], "/api/resources": ["GET", "POST"], "/api/lessons": ["GET", "POST"] };
+  // Retired in 1.0 (ST-076): no screen uses them; their data stays readable through courses and the library.
+  if (/^\/api\/(curriculum|levels|units)(\/[a-z0-9-]+)?$/.test(path) || /^\/api\/resources\/[a-z0-9-]+$/.test(path) || (path === "/api/resources" && !["GET", "HEAD"].includes(method)))
+    return json({ error: "Esta ruta se retiró en la versión 1.0." }, 410);
+  const methods: Record<string, string[]> = { "/api/session": ["GET"], "/api/login": ["POST"], "/api/logout": ["POST"], "/api/organization": ["GET", "PUT"], "/api/organization/backup": ["GET"], "/api/resources": ["GET"], "/api/lessons": ["GET", "POST"] };
+  // Restoring replaces an organization's data, so only environments that rehearse it (preview, local tests) offer it.
+  if (env.RESTORE_ENABLED === "true") methods["/api/organization/restore"] = ["POST"];
   if (/^\/api\/courses$/.test(path)) methods[path] = ["GET", "POST"];
   if (/^\/api\/courses\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET", "PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/(units|materials)$/.test(path)) methods[path] = ["GET", "POST"];
@@ -119,7 +126,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/programs\/[a-z0-9-]+\/prerequisites$/.test(path)) methods[path] = ["GET", "PUT"];
   if (/^\/api\/(vocabularies|terms)$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/(vocabularies|terms)\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
-  const allowed = methods[path] || (path === "/api/curriculum" ? ["GET"] : /^\/api\/(levels|units)$/.test(path) ? ["POST"] : /^\/api\/(levels|units)\/[a-z0-9-]+$/.test(path) ? ["PUT"] : path === "/api/members" ? ["GET"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/(lessons|resources)\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/(publish|duplicate|review|review\/return)$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+\/files\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
+  const allowed = methods[path] || (path === "/api/members" ? ["GET"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/lessons\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/(publish|duplicate|review|review\/return)$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+\/files\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
   if (!allowed) return json({ error: "Not found" }, 404);
   if (!allowed.includes(method)) return json({ error: "Method not allowed" }, 405, { Allow: allowed.join(", ") });
   if (!["GET", "HEAD"].includes(method)) {
@@ -195,7 +202,19 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/people") return people(current, db);
   if (path === "/api/reviews") return reviews(current, db);
   if (path.startsWith("/api/members")) return roles(path, method, input, current, db);
-  if (/^\/api\/(curriculum|levels|units)(\/|$)/.test(path)) return curriculum(path, method, input, current, db);
+  if (path === "/api/organization/backup" || path === "/api/organization/restore") {
+    if (current.role !== "admin") return json({ error: "Solo administración respalda o restaura la organización." }, 403);
+    if (path.endsWith("/backup")) {
+      const data = await db.exportData();
+      return json({ ...data, digests: await digests(data) }, 200, { "Content-Disposition": `attachment; filename="${current.organizationId}-${data.createdAt.slice(0, 10)}.json"` });
+    }
+    const backup = input as Backup;
+    if (!backup || typeof backup !== "object" || !backup.tables || typeof backup.tables !== "object" || !backup.digests) return json({ error: "Envía una copia de respaldo completa." }, 400);
+    const expected = await digests(backup);
+    if (Object.keys(expected).length !== Object.keys(backup.digests).length || Object.entries(expected).some(([name, value]) => backup.digests[name] !== value)) return json({ error: "La copia está dañada: sus huellas no coinciden." }, 400);
+    const result = await db.importData(backup);
+    return "error" in result ? json({ error: result.error }, 409) : json({ restored: result.restored, digests: expected });
+  }
   if (path === "/api/organization") {
     if (method === "PUT") {
       if (current.role !== "admin") return json({ error: "Solo administración puede configurar la organización." }, 403);

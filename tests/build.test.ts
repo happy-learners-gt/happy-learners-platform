@@ -182,8 +182,8 @@ async function requestAs(cookie: string, path: string, method = "GET", data?: un
 it("HL-19 roles are enforced and changing a role revokes sessions", async () => {
   const admin = await login("admin-demo"); const educator = await login("educador-demo");
   expect((await requestAs(educator, "/members")).status).toBe(403);
-  expect((await requestAs(admin, "/levels", "POST", { name: "Blocked", description: "Forbidden" })).status).toBe(403);
-  expect((await requestAs("", "/curriculum")).status).toBe(401);
+  expect((await requestAs(educator, "/organization/backup")).status).toBe(403);
+  expect((await requestAs("", "/courses")).status).toBe(401);
   expect((await requestAs(admin, "/members/user-educator", "PUT", { role: "admin", active: true })).status).toBe(200);
   expect((await requestAs(educator, "/session")).status).toBe(401);
   expect((await (await requestAs(await login("educador-demo"), "/session")).json()).member.role).toBe("admin");
@@ -191,31 +191,36 @@ it("HL-19 roles are enforced and changing a role revokes sessions", async () => 
   expect((await requestAs(admin, "/members/user-0", "PUT", { role: "educator", active: false })).status).toBe(409);
 });
 
-it("HL-20 HL-22 HL-24 curriculum persists, rejects orphans and validates exact ordering", async () => {
+it("HL-20 HL-22 HL-24 course modules persist, reject orphans and validate exact ordering", async () => {
   const educator = await login("educador-demo");
-  const created = await requestAs(educator, "/levels", "POST", { name: "Elementary", description: "Next steps", status: "draft" });
-  expect(created.status).toBe(201); const level = (await created.json()).id;
-  expect((await requestAs(educator, `/levels/${level}`, "PUT", { name: "Elementary revised", description: "Next steps", status: "active" })).status).toBe(200);
-  const unit = await requestAs(educator, "/units", "POST", { levelId: level, name: "Colors", objective: "Name colors" }); expect(unit.status).toBe(201);
-  const uid = (await unit.json()).id;
-  expect((await requestAs(educator, "/units", "POST", { levelId: "not-real", name: "Orphan", objective: "Blocked" })).status).toBe(400);
-  expect((await requestAs(educator, "/levels/order", "PUT", { ids: [level, level] })).status).toBe(400);
-  const original = (await (await requestAs(educator, "/curriculum")).json()).levels.map((l: { id: string }) => l.id).reverse();
-  expect((await requestAs(educator, "/levels/order", "PUT", { ids: original })).status).toBe(200);
-  const after = await (await requestAs(await login("educador-demo"), "/curriculum")).json();
-  expect(after.levels.map((l: { id: string }) => l.id)).toEqual(original);
-  expect(after.levels.map((l: { position: number }) => l.position)).toEqual([0, 1]);
-  expect((await requestAs(educator, `/units/${uid}`, "PUT", { levelId: level, name: "Colors edited", objective: "Name colors", status: "archived" })).status).toBe(200);
-  expect((await requestAs(educator, `/levels/${level}`, "PUT", { name: "Elementary revised", description: "Archived", status: "archived" })).status).toBe(200);
+  const course = "/courses/course-exploradores";
+  // Every change to a course carries the version it was read at.
+  const version = async () => (await (await requestAs(educator, course)).json()).course.version as number;
+  const created = await requestAs(educator, `${course}/units`, "POST", { version: await version(), name: "Colors", objective: "Name colors", status: "active" });
+  expect(created.status).toBe(201); const unit = (await created.json()).id;
+  expect((await requestAs(educator, `${course}/units/${unit}`, "PUT", { version: await version(), name: "Colors revised", objective: "Name colors", status: "active" })).status).toBe(200);
+  expect((await requestAs(educator, `${course}/units`, "POST", { version: await version(), name: "Invalid", objective: "Blocked", status: "deleted" })).status).toBe(400);
+  expect((await requestAs(educator, "/lessons", "POST", { title: "Orphan", objective: "Blocked", instructions: "", courseId: "course-exploradores", courseUnitId: "not-real" })).status).toBe(400);
+  const ids = (await (await requestAs(educator, course)).json()).units.map((u: { id: string }) => u.id);
+  expect((await requestAs(educator, `${course}/units/order`, "PUT", { version: await version(), ids: [unit, unit] })).status).toBe(400);
+  const reversed = [...ids].reverse();
+  expect((await requestAs(educator, `${course}/units/order`, "PUT", { version: await version(), ids: reversed })).status).toBe(200);
+  const after = (await (await requestAs(await login("educador-demo"), course)).json()).units;
+  expect(after.map((u: { id: string }) => u.id)).toEqual(reversed);
+  expect(after.map((u: { position: number }) => u.position)).toEqual(reversed.map((_, i) => i));
+  expect((await requestAs(educator, `${course}/units/order`, "PUT", { version: await version(), ids })).status).toBe(200);
+  expect((await requestAs(educator, `${course}/units/${unit}`, "PUT", { version: await version(), name: "Colors revised", objective: "Name colors", status: "archived" })).status).toBe(200);
+  // ST-076: the curriculum of levels and units was replaced by course modules.
+  for (const [method, path] of [["GET", "/curriculum"], ["POST", "/levels"], ["PUT", "/levels/order"], ["POST", "/units"]])
+    expect((await requestAs(educator, path, method, method === "GET" ? undefined : {})).status, path).toBe(410);
 });
 
 it("HL-23–29 editing, republication, ordered activities, links, archive and aggregate completion", async () => {
   const educator = await login("educador-demo");
-  const value = { title: "Hello test", description: "Synthetic", level: "Beginner", skill: "lectura", topic: "Greetings", tags: ["demo"], content: "Hello, friend!", kind: "text", status: "draft" };
-  const made = await requestAs(educator, "/resources", "POST", value); expect(made.status).toBe(201); const resource: Resource = (await made.json()).resource;
-  expect((await requestAs(educator, `/resources/${resource.id}`, "PUT", { ...value, title: "Edited greeting" })).status).toBe(200);
-  expect((await requestAs(educator, "/resources", "POST", { ...value, kind: "link", content: "javascript:alert(1)" })).status).toBe(400);
-  expect((await requestAs(educator, "/resources", "POST", { ...value, kind: "link", content: "https://example.org/english" })).status).toBe(201);
+  const resource: Resource = (await (await requestAs(educator, "/resources")).json()).resources.find((r: Resource) => r.id === "resource-colors");
+  const material = { title: "Hello test", description: "Synthetic", content: "Hello, friend!", kind: "text", status: "published", termIds: [] };
+  expect((await requestAs(educator, "/courses/course-exploradores/materials", "POST", { ...material, kind: "link", content: "javascript:alert(1)" })).status).toBe(400);
+  expect((await requestAs(educator, "/courses/course-exploradores/materials", "POST", { ...material, kind: "link", content: "https://example.org/english" })).status).toBe(201);
   const data = { title: "Acceptance lesson", objective: "Greet", instructions: "Say hello", unitId: "unit-org-demo", activities: [
     { id: "a", type: "text", position: 0, title: "Listen", instructions: "Say hello", minutes: 5 },
     { id: "b", type: "resource", position: 1, title: "Read", instructions: "Read the greeting", minutes: 5, resourceId: resource.id },
@@ -224,7 +229,7 @@ it("HL-23–29 editing, republication, ordered activities, links, archive and ag
   const draft = await requestAs(educator, "/lessons", "POST", data); expect(draft.status).toBe(201); let lesson: Lesson = (await draft.json()).lesson;
   expect(lesson.status).toBe("draft"); expect((await requestAs("", `/share/${lesson.shareCode}`)).status).toBe(404);
   expect((await requestAs(educator, `/lessons/${lesson.id}/publish`, "POST")).status).toBe(200);
-  const publicBefore = await (await requestAs("", `/share/${lesson.shareCode}`)).json(); expect(publicBefore.lesson.resources[0].title).toBe("Edited greeting");
+  const publicBefore = await (await requestAs("", `/share/${lesson.shareCode}`)).json(); expect(publicBefore.lesson.resources[0].title).toBe(resource.title);
   const reordered = [data.activities[2], data.activities[0], data.activities[1]].map((a, i) => ({ ...a, position: i }));
   const edited = await requestAs(educator, `/lessons/${lesson.id}`, "PUT", { ...data, title: "New revision", activities: reordered, draftVersion: lesson.draftVersion });
   expect(edited.status).toBe(200); lesson = (await edited.json()).lesson;
@@ -237,9 +242,10 @@ it("HL-23–29 editing, republication, ordered activities, links, archive and ag
   const shortened = reordered.slice(1).map((a, i) => ({ ...a, position: i, title: a.id === "a" ? "Edited instruction" : a.title }));
   expect((await requestAs(educator, `/lessons/${lesson.id}`, "PUT", { ...data, activities: shortened, draftVersion: lesson.draftVersion })).status).toBe(200);
   expect((await (await requestAs("", `/share/${lesson.shareCode}`)).json()).lesson.activities).toHaveLength(3);
-  expect((await requestAs(educator, `/resources/${resource.id}`, "DELETE")).status).toBe(409);
-  expect((await requestAs(educator, `/resources/${resource.id}`, "PUT", { ...value, status: "archived" })).status).toBe(200);
-  expect((await (await requestAs("", `/share/${lesson.shareCode}`)).json()).lesson.resources[0].title).toBe("Edited greeting");
+  // ST-076: the shared library is read-only; its resources are no longer edited or deleted one by one.
+  for (const method of ["PUT", "DELETE"]) expect((await requestAs(educator, `/resources/${resource.id}`, method, method === "PUT" ? {} : undefined)).status).toBe(410);
+  expect((await requestAs(educator, "/resources", "POST", {})).status).toBe(410);
+  expect((await (await requestAs("", `/share/${lesson.shareCode}`)).json()).lesson.resources[0].title).toBe(resource.title);
   const completion = await requestAs("", `/share/${lesson.shareCode}/complete`, "POST"); expect(completion.status).toBe(200);
   const cookie = completion.headers.get("set-cookie")!.split(";")[0];
   await requestAs(cookie, `/share/${lesson.shareCode}/complete`, "POST");
@@ -248,6 +254,6 @@ it("HL-23–29 editing, republication, ordered activities, links, archive and ag
   expect(persisted.activities[0].title).toBe("Edited instruction");
   const outsider = await login("externo-demo");
   expect((await requestAs(outsider, `/lessons/${lesson.id}?draft=1`)).status).toBe(404);
-  expect((await requestAs(outsider, `/resources/${resource.id}`, "PUT", value)).status).toBe(404);
+  expect((await (await requestAs(outsider, "/resources")).json()).resources).toEqual([]);
   const crossed = await requestAs(outsider, "/lessons", "POST", { ...data, unitId: "unit-org-other" }); expect(crossed.status).toBe(400);
 });
