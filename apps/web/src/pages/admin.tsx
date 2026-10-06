@@ -47,6 +47,11 @@ function OrganizationForm() {
       </fieldset>
     </form>
     <div className="reading"><DaysOff writable/></div>
+    <div className="reading">
+      <Section title="Respaldo" action={<a className="button secondary small" href="/api/organization/backup" download><Icon name="download" size={16}/>Descargar respaldo</a>}>
+        <p className="muted">Una copia en JSON de los cursos, las lecciones, las secciones, el calendario y los registros de la organización. No incluye contraseñas, sesiones ni el contenido de los documentos subidos. Guárdala en un lugar privado: contiene los nombres de los estudiantes.</p>
+      </Section>
+    </div>
   </>;
 }
 
