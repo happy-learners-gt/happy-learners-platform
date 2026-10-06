@@ -1064,6 +1064,15 @@ ul.cell-list li svg { display: inline-block; vertical-align: -2px; margin-right:
 .student-resources li { padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
 .student-resources li p { margin: var(--space-1) 0 0; color: var(--color-ink-soft); font-size: var(--text-sm); }
 .student-text { white-space: pre-line; margin-top: var(--space-2) !important; color: var(--color-ink) !important; }
+.program-stages { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); }
+.program-stages > li > h3 { margin: 0 0 var(--space-2); color: var(--color-ink-soft); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-caps); }
+.program-stages > li > ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.program-course { display: grid; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+.program-course-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.program-course-head p { margin: 2px 0 0; }
+.course-path { display: grid; gap: var(--space-3); margin: 0; }
+.course-path dt { color: var(--color-ink-soft); font-size: var(--text-xs); font-weight: var(--weight-bold); text-transform: uppercase; letter-spacing: var(--tracking-caps); }
+.course-path dd { margin: var(--space-1) 0 0; }
 .chip-note { margin-left: 4px; font-weight: var(--weight-regular); color: var(--color-muted); font-size: var(--text-xs); }
 .group-activities th[scope="row"] span { display: block; font-weight: var(--weight-regular); }
 .activity-teams { display: inline-flex; align-items: center; gap: 4px; margin-left: var(--space-2); color: var(--teal-ink); font-size: var(--text-xs); vertical-align: middle; }

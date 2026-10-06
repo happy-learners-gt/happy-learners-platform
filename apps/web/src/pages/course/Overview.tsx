@@ -15,7 +15,7 @@ import { sectionPath } from "../sections/context";
 import { SectionCards } from "../sections/SectionCard";
 
 export function Overview() {
-  const { course, units, lessons, curriculum, access, writable, publisher, configurable, reload, noun, settings, program, pacing } = useCourse();
+  const { course, units, lessons, curriculum, access, writable, publisher, configurable, reload, noun, settings, program, pacing, requirements } = useCourse();
   const teamEditable = configurable;
   // Sections are instances of the course: administration sees all of them, each educator only their own (DEC-024).
   const [groups, setGroups] = useState<SectionSummary[] | null>(null), [today, setToday] = useState("");
@@ -91,6 +91,12 @@ export function Overview() {
           {pending.length ? <ul className="link-list">{pending.slice(0, 5).map(lesson => <li key={lesson.id}><Link href={`${base}/lecciones/${lesson.id}`}>{lesson.title}</Link><LessonBadge lesson={lesson}/></li>)}</ul>
             : <EmptyState compact icon="check" title="Todo está publicado">{stats.lessons ? "Los estudiantes ven la última versión de cada lección." : "Cuando crees lecciones, las que falten por publicar aparecerán aquí."}</EmptyState>}
         </Section>
+        {program && <Section title="Ruta en el programa" className="order-6" action={access.configure && <Link href={`/configuracion-academica?ruta=${program.id}`} className="section-link">{requirements.requires.length || requirements.unlocks.length ? "Editar requisitos" : "Definir requisitos"}</Link>}>
+          {requirements.requires.length || requirements.unlocks.length ? <dl className="course-path">
+            {requirements.requires.length > 0 && <div><dt>Requiere</dt><dd><ul className="link-list">{requirements.requires.map(item => <li key={item.id}><Link href={`/cursos/${item.id}`}>{item.title}</Link>{item.status === "archived" && <StatusBadge>Archivado</StatusBadge>}</li>)}</ul></dd></div>}
+            {requirements.unlocks.length > 0 && <div><dt>Le siguen</dt><dd><ul className="link-list">{requirements.unlocks.map(item => <li key={item.id}><Link href={`/cursos/${item.id}`}>{item.title}</Link>{item.status === "archived" && <StatusBadge>Archivado</StatusBadge>}</li>)}</ul></dd></div>}
+          </dl> : <p className="muted small">No requiere otros cursos de «{program.name}» y ningún curso lo requiere.</p>}
+        </Section>}
         <Section title="Equipo docente" className="order-6" action={teamEditable && <Link href={`${base}/configuracion#equipo`} className="section-link">Gestionar equipo</Link>}>
           {course.team?.length ? <ul className="team-list">{course.team.map(person => <li key={person.userId}><Avatar name={person.name} size={32}/><div><strong>{person.name}</strong><span className="muted small">@{person.username}</span></div><StatusBadge tone={person.role === "lead" ? "info" : "neutral"}>{roleLabel[person.role]}</StatusBadge></li>)}</ul>
             : <EmptyState compact icon="users" title="Sin equipo asignado" action={teamEditable && <Link className="button secondary small" href={`${base}/configuracion#equipo`}>Asignar responsable</Link>}>{teamEditable ? "Asigna quién es responsable del curso y quién colabora." : "Administración asigna quién es responsable del curso y quién colabora."}</EmptyState>}

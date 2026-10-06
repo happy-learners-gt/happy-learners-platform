@@ -1,5 +1,7 @@
 export const timezones = ["America/Guatemala", "America/Mexico_City", "America/Bogota"] as const;
 export { courseAccess, seesSection, teachesSection, maxSectionEducators } from "./access";
+export { createsCycle, dependents, maxPrerequisites, prerequisiteInput, prerequisiteStages } from "./prerequisites";
+export type { Requirement } from "./prerequisites";
 export { maxWorkGroups, nextInPath, pathIndicators, sectionIndicators, wholeSection, workGroupInput } from "./sections";
 export type { SectionClass } from "./sections";
 export { moduleNavigation } from "./navigation";
