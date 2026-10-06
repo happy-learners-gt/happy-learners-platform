@@ -55,9 +55,31 @@ export function writeStructure(doc: Y.Doc, draft: LessonDraft) {
       if (!fields) { fields = new Y.Map(); shared.set(activity.id!, fields); }
       for (const [key, value] of Object.entries(fieldsOf(activity))) if (fields.get(key) !== value) fields.set(key, value);
     }
-    const list = order(doc);
-    if (list.toArray().join("\n") !== ids.join("\n")) { list.delete(0, list.length); list.insert(0, ids); }
+    setOrder(order(doc), ids);
   }, localStructure);
+}
+/**
+ * Moves only what changed place: what keeps its relative order stays, the rest is removed and inserted where it
+ * goes. A move and an activity added by someone else at the same time both survive.
+ */
+function setOrder(list: Y.Array<string>, ids: string[]) {
+  const current = list.toArray();
+  if (current.join("\n") === ids.join("\n")) return;
+  const n = current.length, m = ids.length;
+  const common = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) common[i][j] = current[i] === ids[j] ? common[i + 1][j + 1] + 1 : Math.max(common[i + 1][j], common[i][j + 1]);
+  const keep = new Set<number>();
+  for (let i = 0, j = 0; i < n && j < m;) {
+    if (current[i] === ids[j]) { keep.add(i); i++; j++; }
+    else if (common[i + 1][j] >= common[i][j + 1]) i++;
+    else j++;
+  }
+  for (let i = n - 1; i >= 0; i--) if (!keep.has(i)) list.delete(i, 1);
+  let position = 0;
+  for (const id of ids) {
+    if (position >= list.length || list.get(position) !== id) list.insert(position, [id]);
+    position++;
+  }
 }
 
 /** A stable Yjs client for a seed: the same key always writes the same items. */
@@ -89,7 +111,7 @@ export function readStructure(doc: Y.Doc, current: LessonDraft): LessonDraft {
   const ids = unique(order(doc).toArray().filter(id => shared.has(id)));
   for (const id of shared.keys()) if (!ids.includes(id)) ids.push(id);
   const sequence = String(map.get("sequence") || current.sequence) as SequenceTemplate;
-  const list = ids.map((id, position): Activity => {
+  const list = ids.map((id): Activity => {
     const fields = shared.get(id)!, before = known.get(id);
     const blocks = (JSON.parse(String(fields.get("blocks") || "[]")) as ActivityBlock[]).map(block => {
       const old = before?.blocks?.find(item => item.id === block.id);
@@ -97,7 +119,7 @@ export function readStructure(doc: Y.Doc, current: LessonDraft): LessonDraft {
     });
     const outcomeIds = JSON.parse(String(fields.get("outcomeIds") || "[]")) as string[];
     return {
-      id, position, title: String(fields.get("title") ?? ""), minutes: Number(fields.get("minutes")) || 1, instructions: "", blocks,
+      id, position: 0, title: String(fields.get("title") ?? ""), minutes: Number(fields.get("minutes")) || 1, instructions: "", blocks,
       ...(fields.get("phase") ? { phase: String(fields.get("phase")) } : {}), ...(fields.get("purpose") ? { purpose: fields.get("purpose") as Activity["purpose"] } : {}),
       ...(fields.get("grouping") ? { grouping: fields.get("grouping") as Activity["grouping"] } : {}), ...(outcomeIds.length ? { outcomeIds } : {}),
     };
@@ -105,7 +127,7 @@ export function readStructure(doc: Y.Doc, current: LessonDraft): LessonDraft {
   return {
     title: text(doc, "title").toString(), objective: text(doc, "objective").toString(),
     duration: Number(map.get("duration")) || current.duration, unitId: String(map.get("unitId") ?? current.unitId), archived: map.get("archived") === true,
-    sequence, outcomeIds: JSON.parse(String(map.get("outcomeIds") || "[]")) as string[], activities: orderByPhase(list, sequence),
+    sequence, outcomeIds: JSON.parse(String(map.get("outcomeIds") || "[]")) as string[], activities: orderByPhase(list, sequence).map((activity, position) => ({ ...activity, position })),
   };
 }
 

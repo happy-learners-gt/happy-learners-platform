@@ -59,6 +59,22 @@ describe("lesson structure in the collaboration room", () => {
     expect(left.activities.map(a => a.position)).toEqual([0, 1, 2, 3]);
   });
 
+  it("a move and an activity added at the same time both survive, whoever wins the tie", () => {
+    const free: LessonDraft = { ...draft, sequence: "free", activities: draft.activities.map(a => ({ ...a, phase: "main" })) };
+    const extra = { id: "d", position: 3, title: "Cierre", minutes: 5, instructions: "", phase: "main", blocks: [block("d1")] };
+    for (let run = 0; run < 25; run++) {
+      const { one, two, exchange } = apart(free);
+      const [a, b, c] = free.activities;
+      writeStructure(one, { ...free, activities: [c, a, b] });
+      writeStructure(two, { ...free, activities: [a, b, c, extra] });
+      exchange();
+      const ids = readStructure(one, free).activities.map(item => item.id);
+      expect(readStructure(two, free).activities.map(item => item.id)).toEqual(ids);
+      expect(ids.filter(id => id !== "d")).toEqual(["c", "a", "b"]);
+      expect(ids).toContain("d");
+    }
+  });
+
   it("keeps both people's typing in the same title", () => {
     const { one, two, exchange } = apart(draft);
     writeStructure(one, { ...draft, title: "Fracciones propias" });
