@@ -12,7 +12,7 @@ import { Home } from "./pages/Home";
 import { CourseList, CreateCourse } from "./pages/Courses";
 import { CourseRoute } from "./pages/course/CourseRoute";
 import { SectionRoute } from "./pages/sections/SectionRoute";
-import { SectionList } from "./pages/sections/SectionList";
+import { Agenda } from "./pages/sections/SectionList";
 import { Library } from "./pages/Library";
 import { Search } from "./pages/Search";
 import { Help, NotFound } from "./pages/Help";
@@ -106,16 +106,18 @@ function AuthenticatedApp() {
 function Routes() {
   const { url } = useNavigation();
   const [, first = "inicio", second, third, fourth] = url.pathname.replace(/\/+$/, "").split("/");
-  if (first === "cursos" && second && second !== "nuevo") return <CourseRoute key={second} id={second} area={third || ""} item={fourth}/>;
-  if (first === "secciones" && second) return <SectionRoute key={second} id={second} area={third || ""} item={fourth}/>;
-  return <GlobalShell>{page(first || "inicio", second)}</GlobalShell>;
+  // The shell stays mounted from page to page: only the content changes, and the menu keeps what is open.
+  return <AppShell>{first === "cursos" && second && second !== "nuevo" ? <CourseRoute key={second} id={second} area={third || ""} item={fourth}/>
+    : first === "secciones" && second ? <SectionRoute key={second} id={second} area={third || ""} item={fourth}/>
+    : page(first || "inicio", second)}</AppShell>;
 }
 
 function page(first: string, second?: string) {
   switch (first) {
     case "inicio": return <Home/>;
     case "cursos": return second === "nuevo" ? <CreateCourse/> : <CourseList/>;
-    case "secciones": return <SectionList/>;
+    case "agenda": return <Agenda/>;
+    case "secciones": return <Redirect to="/agenda"/>;
     case "biblioteca": return <Library/>;
     case "buscar": return <Search/>;
     case "ayuda": return <Help/>;
@@ -127,10 +129,6 @@ function page(first: string, second?: string) {
     case "contenido": return null;
     default: return <NotFound/>;
   }
-}
-
-function GlobalShell({ children }: { children: ReactNode }) {
-  return <AppShell>{children}</AppShell>;
 }
 
 /** Former locations keep working: replace the address without adding a history entry. */

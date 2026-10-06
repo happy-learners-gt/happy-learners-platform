@@ -1,3 +1,5 @@
+import { tokenPattern } from "@happy-learners/domain";
+
 const encoder = new TextEncoder();
 export async function digest(value: string): Promise<string> {
   return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(value))), b => b.toString(16).padStart(2, "0")).join("");
@@ -11,7 +13,8 @@ export async function verifyPassword(password: string, salt: string, expected: s
   return difference === 0;
 }
 export function sessionToken(request: Request): string | null {
-  return /(?:^|;\s*)hl_session=([do]_[a-f0-9]{64})(?:;|$)/.exec(request.headers.get("Cookie") || "")?.[1] || null;
+  const token = /(?:^|;\s*)hl_session=([a-z]_[a-f0-9]{64})(?:;|$)/.exec(request.headers.get("Cookie") || "")?.[1];
+  return token && tokenPattern.test(token) ? token : null;
 }
 export function newToken(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, "0")).join("");

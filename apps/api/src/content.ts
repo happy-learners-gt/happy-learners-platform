@@ -1,5 +1,5 @@
 import type { Activity, Lesson, LessonReview, Member, Resource, ReviewItem } from "@happy-learners/contracts";
-import { assesses, moduleNavigation, lessonOutcomes, outcomeCodes, resourceIdsOf, sequenceTemplates, studentActivities, validActivities, validOutcomeIds } from "@happy-learners/domain";
+import { assesses, moduleNavigation, sharePrefix, lessonOutcomes, outcomeCodes, resourceIdsOf, sequenceTemplates, studentActivities, validActivities, validOutcomeIds } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { configurationOf, curriculumFor, materialsFor } from "./courses";
 import { event, recordEvent } from "./team";
@@ -161,7 +161,7 @@ export async function content(url: URL, method: string, input: unknown, current:
     const source = JSON.parse(row.content) as Lesson;
     const lid = `lesson-${crypto.randomUUID()}`, now = new Date().toISOString();
     const suffix = " (copia)", title = source.title.slice(0, 160 - suffix.length) + suffix;
-    const copy: Lesson = { ...source, id: lid, title, publishedAt: "", shareCode: (current.organizationId === "org-other" ? "O-" : "D-") + crypto.randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase() };
+    const copy: Lesson = { ...source, id: lid, title, publishedAt: "", shareCode: sharePrefix(current.organizationId) + crypto.randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase() };
     const program = await db.prepare("SELECT program_id AS id FROM lessons WHERE id=?").bind(row.id).first<{ id: string }>();
     await db.batch([
       ...rows.filter(r => r.course_unit_id === row.course_unit_id && r.position > row.position).map(r => db.prepare("UPDATE lessons SET position=position+1 WHERE id=?").bind(r.id)),
@@ -183,7 +183,7 @@ export async function content(url: URL, method: string, input: unknown, current:
   if (typeof v.title !== "string" || !v.title.trim() || v.title.length > 160 || typeof v.objective !== "string" || !v.objective.trim() || v.objective.length > 1000 || typeof v.instructions !== "string" || v.instructions.length > 8000) return reply({ error: "Completa título, objetivo e instrucciones dentro del límite." }, 400);
   const old = row ? JSON.parse(row.content) as Lesson : null;
   const lid = id || `lesson-${crypto.randomUUID()}`;
-  const lesson: Lesson = { id: lid, title: v.title.trim(), objective: v.objective.trim(), program: unit.name, ...(generic ? { courseId: unit.courseId, courseUnitId: unit.id } : { unitId: unit.id }), duration: typeof v.duration === "number" && v.duration > 0 && v.duration <= 300 ? v.duration : 20, materials: old?.materials || [], reflection: old?.reflection || "¿Qué aprendiste y cómo lo aplicarías?", activities: [{ title: "Instrucciones", minutes: 20, instructions: v.instructions }], publishedAt: old?.publishedAt || "", shareCode: old?.shareCode || (current.organizationId === "org-other" ? "O-" : "D-") + crypto.randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase() };
+  const lesson: Lesson = { id: lid, title: v.title.trim(), objective: v.objective.trim(), program: unit.name, ...(generic ? { courseId: unit.courseId, courseUnitId: unit.id } : { unitId: unit.id }), duration: typeof v.duration === "number" && v.duration > 0 && v.duration <= 300 ? v.duration : 20, materials: old?.materials || [], reflection: old?.reflection || "¿Qué aprendiste y cómo lo aplicarías?", activities: [{ title: "Instrucciones", minutes: 20, instructions: v.instructions }], publishedAt: old?.publishedAt || "", shareCode: old?.shareCode || sharePrefix(current.organizationId) + crypto.randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase() };
   // The didactic sequence is a known template or, when not sent, the one the lesson already had.
   const sequence = sequenceTemplates.some(template => template.value === v.sequence) ? v.sequence as Lesson["sequence"] : old?.sequence;
   if (sequence) lesson.sequence = sequence;

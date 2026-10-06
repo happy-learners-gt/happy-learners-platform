@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.16 — 2026-10-06
+
+Parche de REL-004 (DEC-032): el menú es un árbol de cursos y secciones, Docencia pasa a ser **Agenda**, y cada organización tiene su propia administración.
+
+- ST-115: las secciones están dentro de su curso: **Cursos → curso → Secciones → sección**, cada nivel con sus páginas. Elegir un curso o una sección abre su Resumen y despliega sus páginas; elegirlo de nuevo en esa página lo pliega; el chevron pliega o despliega sin navegar. Cursos y Secciones abren su lista completa y también se despliegan en el menú. Solo un curso y una sección abiertos a la vez.
+- ST-115: el menú se monta una sola vez y no se vuelve a dibujar al navegar; cada nivel se despliega con una transición de altura y respeta la reducción de movimiento. El nombre, el **+** y el chevron se alinean en columnas fijas en todos los niveles. **+** junto a Cursos abre Crear curso; **+** junto a las Secciones de un curso crea una sección de ese curso.
+- ST-115: **Agenda** (`/agenda`, antes Docencia en `/secciones`) reúne las próximas clases, la semana y las secciones, con filtros. `/secciones` lleva a la Agenda. Las migas de una sección empiezan en su curso: **curso › Secciones › sección**.
+- ST-115: nueva organización **Happy Learners**, sin datos ficticios, con una cuenta de administración y dos de docentes; la organización externa ficticia recibe `admin-externo`. El inicio de sesión busca la organización de cada cuenta; las sesiones, los códigos de lección (`H-`) y de sección (`HG-`) de Happy Learners se dirigen a su organización.
+- Datos: `0027_organization_accounts.sql` crea las cuentas; cada organización nueva recibe su fila al iniciarse. Sin cambios de API. Se mantiene la autorización de v0.8.1.
+
 ## 0.8.15 — 2026-10-06
 
 Parche de REL-004 (DEC-031): un solo menú en niveles, y Horario y Estudiantes que se entienden de un vistazo.

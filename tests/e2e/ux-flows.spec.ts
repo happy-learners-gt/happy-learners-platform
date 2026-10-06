@@ -9,7 +9,7 @@ test("1 · login → course → content, with one navigation system and working 
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Inicio");
   await openNavigation(page);
   const global = page.getByRole("navigation", { name: "Navegación principal" });
-  for (const label of ["Inicio", "Docencia", "Cursos", "Biblioteca", "Ayuda"]) await expect(global.getByRole("link", { name: label, exact: true })).toBeAttached();
+  for (const label of ["Inicio", "Agenda", "Cursos", "Biblioteca", "Ayuda"]) await expect(global.getByRole("link", { name: label, exact: true })).toBeAttached();
   await openCourse(page);
   // Entering a course opens it in the same menu, with its pages beneath it; there is no second, horizontal navigation.
   await openNavigation(page);
@@ -158,8 +158,8 @@ test("5 · administration assigns a student and an educator to a section; the ed
   await page.getByRole("form", { name: `Agregar estudiantes a ${group}` }).getByRole("button", { name: "Agregar estudiante", exact: true }).click();
   await expect(page.locator(".roster").getByText(learner, { exact: true })).toBeVisible();
   // The educator finds the section among their own and works in it.
-  await signIn(page, "educador-demo", "/secciones");
-  await page.getByRole("link", { name: group, exact: true }).click();
+  await signIn(page, "educador-demo", "/agenda");
+  await page.getByRole("main").getByRole("link", { name: group, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${section}$`));
   await openNavigation(page);
   await sectionNav(page).getByRole("link", { name: "Cronograma", exact: true }).click();
@@ -253,15 +253,23 @@ test("8 · HL-150 ST-114: one menu in levels opens sections and courses in place
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await expect(menu.getByRole("link", { name: "Matemáticas 3.º primaria", exact: true })).toBeHidden();
   await toggle.click();
-  // + next to Docencia creates a section of the chosen course and opens it, with its pages beneath it in the same menu.
-  await menu.getByRole("button", { name: "Agregar una sección" }).click();
+  // Courses open as an accordion: opening one closes the other.
+  const maths = menu.getByRole("button", { name: "Mostrar las páginas de Matemáticas 3.º primaria" }), explorers = menu.getByRole("button", { name: "Mostrar las páginas de Exploradores" });
+  await maths.click();
+  await expect(maths).toHaveAttribute("aria-expanded", "true");
+  await explorers.click();
+  await expect(explorers).toHaveAttribute("aria-expanded", "true");
+  await expect(maths).toHaveAttribute("aria-expanded", "false");
+  // Secciones opens inside its course; its + creates a section of that course and opens it, with its pages beneath it.
+  await menu.getByRole("button", { name: "Mostrar las secciones de Exploradores" }).click();
+  await menu.getByRole("button", { name: "Agregar una sección a Exploradores" }).click();
   const dialog = page.getByRole("dialog", { name: "Nueva sección" });
-  await dialog.getByLabel("Curso").selectOption({ label: "Exploradores" });
+  await expect(dialog.getByLabel("Curso")).toHaveValue("course-exploradores");
   await dialog.getByLabel("Nombre de la sección").fill(group);
   await dialog.getByRole("button", { name: "Crear sección" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(group);
   await openNavigation(page);
-  const current = menu.getByRole("link", { name: `${group}, Exploradores`, exact: true });
+  const current = menu.getByRole("link", { name: group, exact: true });
   await expect(current).toHaveAttribute("aria-current", "true");
   await sectionNav(page).getByRole("link", { name: "Horario", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Horario");
@@ -270,10 +278,15 @@ test("8 · HL-150 ST-114: one menu in levels opens sections and courses in place
   await editor.getByLabel("Lunes").check();
   await expect(editor.getByRole("status")).toContainText(/\d+ clases?: lunes de 08:00 a 08:45/);
   await openNavigation(page);
-  await expect(menu.getByRole("link", { name: `${group}, Exploradores`, exact: true })).toHaveAttribute("aria-current", "true");
+  await expect(current).toHaveAttribute("aria-current", "true");
   await menu.getByRole("link", { name: "Exploradores", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Exploradores");
   await openNavigation(page);
   await expect(courseNav(page).getByRole("link", { name: "Contenido", exact: true })).toBeVisible();
   await expect(sectionNav(page)).toHaveCount(0);
+  // Choosing the open course again, on its own page, folds it without leaving the page.
+  await menu.getByRole("link", { name: "Exploradores", exact: true }).click();
+  await expect(explorers).toHaveAttribute("aria-expanded", "false");
+  await expect(page).toHaveURL(/\/cursos\/course-exploradores$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Exploradores");
 });

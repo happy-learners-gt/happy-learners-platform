@@ -5,7 +5,7 @@ import { api, message } from "../../api";
 import { Link } from "../../navigation";
 import { timeAgo } from "../../model";
 import { EmptyState, ErrorState, Loading, PageHeader, Section, StatTiles } from "../../ui/primitives";
-import { useSection } from "./context";
+import { sectionCrumbs, useSection } from "./context";
 
 /**
  * Avance of a self-paced section (DEC-027): how far each student got in the course's published lessons, where each
@@ -16,7 +16,7 @@ export function SectionProgressPage() {
   const [data, setData] = useState<SectionProgress | null>(null), [error, setError] = useState("");
   const load = () => api<SectionProgress>(`/sections/${section.id}/progress`).then(setData).catch(cause => setError(message(cause)));
   useEffect(() => { void load(); }, [section.id]);
-  const crumbs = [{ label: "Docencia", href: "/secciones" }, { label: section.name, href: base }, { label: "Avance" }];
+  const crumbs = sectionCrumbs(section, { label: "Avance" });
   const header = <PageHeader crumbs={crumbs} title="Avance" description="Cada estudiante recorre a su ritmo las lecciones publicadas del curso, en orden. Entra con el código de la sección y elige su nombre de la lista."/>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
   if (!data) return <>{header}<Loading label="Cargando el avance…" lines={5}/></>;

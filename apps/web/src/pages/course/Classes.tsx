@@ -15,7 +15,7 @@ import type { Tone } from "../../ui/primitives";
 import { ResourcePreview } from "../resources";
 import { useCourse } from "./context";
 import type { SectionView } from "./Sections";
-import { useSection } from "../sections/context";
+import { sectionCrumbs, useSection } from "../sections/context";
 
 type Mark = "unmarked" | "present" | "late" | "absent" | "excused";
 type Row = { learnerId: string; displayName: string; status: Mark };
@@ -67,7 +67,7 @@ function Schedule() {
   const changed = async () => { await load(); await reload(); };
   function filter(key: string, value: string) { const next = new URL(url); if (value) next.searchParams.set(key, value); else next.searchParams.delete(key); next.searchParams.delete("nueva"); navigate(next.pathname + next.search, true); }
   const writable = group.status === "active" && teaches(group.id);
-  const header = <PageHeader crumbs={[{ label: "Docencia", href: "/secciones" }, { label: group.name, href: sectionBase }, { label: "Cronograma" }]} title="Cronograma"
+  const header = <PageHeader crumbs={sectionCrumbs(group, { label: "Cronograma" })} title="Cronograma"
     description={writable ? "Las clases de la sección se generan con su horario. Planifica en ellas las lecciones y comentarios; el día de la clase ábrela para pasar lista y finalizarla." : "Las clases de la sección, con lo planificado y lo impartido en cada una. Las planifica y registra quien imparte la sección."}
     actions={writable && <Button icon="plus" onClick={() => setAdding(true)}>Agregar clase</Button>}
     primary={writable && !!sessions?.length && <PrimaryAction icon="list" onClick={() => setFilling(true)}>Asignar lecciones en orden</PrimaryAction>}/>;
@@ -317,7 +317,7 @@ function ClassDetail({ id }: { id: string }) {
       setTeams(new Map(data.activities.map(item => [`${item.lessonId}:${item.activityId}`, item.workGroupIds.map(wid => names.get(wid) || "").filter(Boolean)])));
     }).catch(() => setTeams(new Map()));
   }, [section.id, section.workGroups]);
-  const crumbs = [{ label: "Docencia", href: "/secciones" }, { label: section.name, href: sectionBase }, { label: "Cronograma", href: page }];
+  const crumbs = sectionCrumbs(section, { label: "Cronograma", href: page });
   if (error) return <><PageHeader crumbs={crumbs} title="Clase"/>{/404/.test(error) || error.includes("no está disponible") ? <EmptyState icon="calendar" title="No encontramos esa clase" action={<Link className="button secondary" href={page}>Ver el cronograma</Link>}/> : <ErrorState error={error} retry={() => void load()}/>}</>;
   if (!detail) return <><PageHeader crumbs={crumbs} title={<span className="skeleton-title">Clase</span>}/><Loading label="Abriendo clase…" lines={6}/></>;
   const { session, lessons, resources } = detail;
