@@ -9,6 +9,7 @@ import * as Y from "yjs";
 import { api, ApiError, message, sessionExpired, sessionRestored } from "../api";
 import { CollaborationProvider } from "../collaboration";
 import { seedMissingFields } from "../collab-seed";
+import { hasStructure, observeStructure, readStructure, recordSaved, savedVersion, seedStructure, writeStructure } from "../lesson-structure";
 import type { CollaborationStatus } from "../collaboration";
 import { Link, useNavigation, useUnsavedChanges } from "../navigation";
 import { useSession } from "../session";
@@ -46,8 +47,9 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
   const [, tick] = useState(0);
   const version = useRef<number | undefined>(undefined), changes = useRef(0), savedChanges = useRef(0), dirtyKeys = useRef(new Set<keyof LessonDraft>()), conflicts = useRef(0);
   const inFlight = useRef<Promise<boolean> | null>(null), draftRef = useRef<LessonDraft | null>(null);
+  const providerRef = useRef<CollaborationProvider | null>(null), lessonRef = useRef<Lesson | null>(null), shared = useRef(false), [structureLive, setStructureLive] = useState(false);
   const saveRef = useRef(save);
-  draftRef.current = draft; saveRef.current = save;
+  draftRef.current = draft; saveRef.current = save; lessonRef.current = lesson;
   const preview = url.searchParams.get("vista") === "previa";
   const base = `/cursos/${course.id}`;
 
@@ -61,19 +63,41 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
   }, [lessonId, course.id]);
   useEffect(() => { void open(); }, [open]);
 
-  // Live co-editing of rich text; structure and metadata are saved with version control.
+  // Live co-editing of the rich text and of the structure: details, order and activities merge as people work.
   useEffect(() => {
     if (!lesson?.id || !writable || preview) return;
-    const provider = new CollaborationProvider(new Y.Doc(), course.id, lesson.id, member.username);
-    setCollaboration(provider);
+    const provider = new CollaborationProvider(new Y.Doc(), course.id, lesson.id, member.username), doc = provider.doc;
+    setCollaboration(provider); providerRef.current = provider;
+    const adoptVersion = () => { const room = savedVersion(doc); if (room !== null && room > (version.current ?? 0)) version.current = room; };
     const offStatus = provider.subscribe(status => {
-      if (status === "live" && draftRef.current) seedMissingFields(provider.doc, draftRef.current.activities);
+      const local = draftRef.current;
+      if (status === "live" && local) {
+        seedMissingFields(doc, local.activities);
+        if (!shared.current && lessonRef.current) {
+          const saved = draftOf(lessonRef.current), at = version.current ?? 0, room = savedVersion(doc);
+          // A room without structure takes the saved lesson; so does one older than it (changed while nobody was editing).
+          if (!hasStructure(doc)) seedStructure(doc, saved, lessonRef.current.id, at);
+          else if (room === null || room < at) { writeStructure(doc, saved); recordSaved(doc, at); }
+          // Then the room's state, with what was changed here before connecting.
+          const merged = readStructure(doc, local) as Record<string, unknown>;
+          for (const key of dirtyKeys.current) merged[key] = local[key];
+          writeStructure(doc, merged as LessonDraft); setDraft(merged as LessonDraft); adoptVersion();
+          shared.current = true; setStructureLive(true);
+        }
+      }
       setCollabStatus(status);
+    });
+    const offStructure = observeStructure(doc, () => {
+      if (!shared.current) return;
+      adoptVersion();
+      setDraft(current => current && readStructure(doc, current));
     });
     // Other open editors, including other sessions of the same shared demo account.
     const offPresence = provider.subscribePresence(() => setEditors([...provider.awareness.getStates().entries()].flatMap(([client, state]) => client !== provider.awareness.clientID && typeof state.user?.name === "string" ? [state.user.name as string] : [])));
-    return () => { offStatus(); offPresence(); provider.destroy(); setCollaboration(null); setCollabStatus("closed"); };
+    return () => { offStatus(); offStructure(); offPresence(); provider.destroy(); providerRef.current = null; shared.current = false; setStructureLive(false); setCollaboration(null); setCollabStatus("closed"); };
   }, [lesson?.id, writable, preview, course.id, member.username]);
+  // Each change made here reaches the room, also while reconnecting: it merges when the connection returns.
+  useEffect(() => { if (structureLive && collaboration && draft) writeStructure(collaboration.doc, draft); }, [draft, structureLive, collaboration]);
   useEffect(() => { const timer = setInterval(() => tick(value => value + 1), 30000); return () => clearInterval(timer); }, []);
 
   const problem = draft ? draftProblem(draft) : null;
@@ -87,19 +111,25 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     try {
       const { lesson: saved } = await api<{ lesson: Lesson }>(`/lessons/${lessonId}`, "PUT", lessonBody(course.id, snapshot, version.current));
       version.current = saved.draftVersion; conflicts.current = 0; savedChanges.current = count;
+      if (providerRef.current && shared.current && saved.draftVersion !== undefined) recordSaved(providerRef.current.doc, saved.draftVersion);
       setLesson(saved);
       if (changes.current === count) { dirtyKeys.current.clear(); setSave({ state: "saved", at: saved.updatedAt || new Date().toISOString() }); }
       else setSave({ state: "pending" });
       return true;
     } catch (error) {
-      if (error instanceof ApiError && error.status === 409 && conflicts.current < 2) {
-        // Someone else saved first: take their version and reapply only the fields changed here.
+      if (error instanceof ApiError && error.status === 409 && conflicts.current < (shared.current ? 5 : 2)) {
         conflicts.current++;
         try {
           const { lesson: latest } = await api<{ lesson: Lesson }>(`/lessons/${lessonId}?draft=1`);
-          const local = draftRef.current!, rebased = draftOf(latest) as Record<string, unknown>;
-          for (const key of dirtyKeys.current) rebased[key] = local[key];
-          version.current = latest.draftVersion; setLesson(latest); setDraft(rebased as LessonDraft); setSave({ state: "pending" });
+          version.current = latest.draftVersion; setLesson(latest);
+          // With the structure in the room, this draft already holds what the others saved: send it again.
+          // Otherwise take their version and reapply only the fields changed here.
+          if (!shared.current) {
+            const local = draftRef.current!, rebased = draftOf(latest) as Record<string, unknown>;
+            for (const key of dirtyKeys.current) rebased[key] = local[key];
+            setDraft(rebased as LessonDraft);
+          }
+          setSave({ state: "pending" });
         } catch (cause) { setSave({ state: "error", error: message(cause) }); }
         return false;
       }

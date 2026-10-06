@@ -25,6 +25,53 @@ test("two open editors exchange rich text live and autosave the shared draft", a
   await expect(activity(page, "Say hello").locator(".richtext-content")).toContainText(reply);
 });
 
+test("HL-97 ST-113: title, objective, order and activities merge live between open editors", async ({ page, context }, info) => {
+  const title = e2eName(info, "Estructura en vivo");
+  await signIn(page, "educador-demo", "/cursos/course-exploradores/contenido");
+  await createLesson(page, "Greetings", title, "Saludar con cortesía.");
+  await activity(page, "Instrucciones").locator(".richtext-content").first().fill("Nos saludamos.");
+  for (const name of ["Uno", "Dos"]) {
+    const card = await addActivity(page, "Contenido", "Desarrollo");
+    await card.getByLabel(/^Título de la actividad/).fill(name);
+    await card.locator(".richtext-content").first().fill(`Actividad ${name}.`);
+  }
+  await expect(saveStatus(page)).toContainText("Borrador guardado", { timeout: 15_000 });
+  const other = await context.newPage();
+  await other.goto(page.url());
+  await expect(page.locator(".presence")).toContainText("También editando");
+  await expect(activity(other, "Dos")).toBeVisible();
+
+  // Each person changes a different part at the same time; both see both changes without reloading.
+  await page.getByLabel("Título de la lección").fill(`${title} editada`);
+  await other.getByLabel("Objetivo").fill("Saludar y presentarse con cortesía.");
+  await expect(other.getByLabel("Título de la lección")).toHaveValue(`${title} editada`);
+  await expect(page.getByLabel("Objetivo")).toHaveValue("Saludar y presentarse con cortesía.");
+  const two = activity(other, "Dos");
+  await two.getByLabel(/^Título de la actividad/).fill("Dos en parejas");
+  await two.getByLabel(/^Organización de la actividad/).selectOption({ label: "En parejas" });
+  await expect(activity(page, "Dos en parejas").getByLabel(/^Organización de la actividad/)).toHaveValue("pairs");
+
+  // A new order and a new activity reach the other editor, with the text of the new activity.
+  const handle = page.getByRole("navigation", { name: "Estructura de la lección" }).getByRole("button", { name: /^Reordenar actividad \d: Dos en parejas$/ });
+  await handle.focus();
+  await page.keyboard.press("ArrowUp");
+  await expect(activity(other, "Dos en parejas").locator(".card-kind")).toHaveText("Desarrollo · Actividad 2 de 3");
+  const closing = await addActivity(other, "Contenido", "Cierre");
+  await closing.getByLabel(/^Título de la actividad/).fill("Despedida");
+  await closing.locator(".richtext-content").first().fill("Nos despedimos.");
+  await expect(activity(page, "Despedida").locator(".richtext-content")).toContainText("Nos despedimos.");
+
+  await expect(saveStatus(page)).toContainText("Borrador guardado", { timeout: 15_000 });
+  await expect(saveStatus(other)).toContainText("Borrador guardado", { timeout: 15_000 });
+  await other.close();
+  await page.reload();
+  await expect(page.getByLabel("Título de la lección")).toHaveValue(`${title} editada`);
+  await expect(page.getByLabel("Objetivo")).toHaveValue("Saludar y presentarse con cortesía.");
+  await expect(activity(page, "Dos en parejas").locator(".card-kind")).toHaveText("Desarrollo · Actividad 2 de 4");
+  await expect(activity(page, "Uno").locator(".card-kind")).toHaveText("Desarrollo · Actividad 3 de 4");
+  await expect(activity(page, "Despedida").locator(".richtext-content")).toContainText("Nos despedimos.");
+});
+
 test("a legacy lesson without activity IDs opens with its text and saves", async ({ page }) => {
   await signIn(page, "educador-demo", "/cursos/course-exploradores/contenido");
   await page.getByRole("link", { name: "Un mundo de colores", exact: true }).click();
