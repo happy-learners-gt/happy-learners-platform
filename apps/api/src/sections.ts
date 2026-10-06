@@ -36,11 +36,7 @@ export async function sections(path: string, current: Member, db: Database) {
     db.prepare(`SELECT e.group_id AS groupId,e.user_id AS userId,COALESCE(u.display_name,u.username) AS name,u.username FROM section_educators e JOIN users u ON u.id=e.user_id WHERE e.group_id ${inScope} ORDER BY name`).bind(...bound),
     db.prepare(`SELECT group_id AS groupId,learner_id AS learnerId,lesson_id AS lessonId,completed_at IS NOT NULL AS completed FROM learner_progress WHERE group_id ${inScope}`).bind(...bound),
   ]) as unknown as [Row[], { groupId: string; id: string }[], ClassRow[], { sessionId: string; lessonId: string; outcome: string | null }[], { courseId: string; id: string }[], { groupId: string; total: number }[], (SectionEducator & { groupId: string })[], { groupId: string; learnerId: string; lessonId: string; completed: number }[]];
-  if (id && !groups.length) {
-    // The section exists but is not assigned to the person: say so instead of pretending it is not there.
-    const exists = await db.prepare("SELECT id FROM course_groups WHERE id=? AND organization_id=?").bind(id, current.organizationId).first();
-    return exists ? reply({ error: "Esta sección no está asignada a tu cuenta. Administración asigna quién imparte cada sección." }, 403) : reply({ error: "La sección no está disponible." }, 404);
-  }
+  if (id && !groups.length) return unassigned(db, id, current);
   const today = await todayFor(db, current.organizationId);
   const lessonsOf = new Map<string, string[]>(), completedOf = new Map<string, string[]>();
   for (const row of planned) {
@@ -71,13 +67,19 @@ export async function sections(path: string, current: Member, db: Database) {
   return reply({ section: { ...list[0], workGroups: !!(settings?.attendance && settings.workGroups) }, today });
 }
 
+/** The section exists but is not assigned to the person: say so instead of pretending it is not there. */
+async function unassigned(db: Database, id: string, current: Member) {
+  const exists = await db.prepare("SELECT id FROM course_groups WHERE id=? AND organization_id=?").bind(id, current.organizationId).first();
+  return exists ? reply({ error: "Esta sección no está asignada a tu cuenta. Administración asigna quién imparte cada sección." }, 403) : reply({ error: "La sección no está disponible." }, 404);
+}
+
 /**
  * GET /api/sections/:id/progress — A tu ritmo (DEC-027): each student of the section and the published lessons they
  * opened and completed, in the course's content order. Same access as the section.
  */
 async function progress(id: string, current: Member, db: Database) {
   const group = await db.prepare(`SELECT g.id,g.course_id AS courseId FROM course_groups g WHERE ${visible} AND g.id=?`).bind(current.organizationId, current.role === "admin" ? 1 : 0, current.id, id).first<{ id: string; courseId: string }>();
-  if (!group) return reply({ error: "La sección no está disponible." }, 404);
+  if (!group) return unassigned(db, id, current);
   const [lessons, learners, rows] = await db.batch([
     db.prepare("SELECT l.id,COALESCE(json_extract(l.published_content,'$.title'),'Lección') AS title,u.name AS unitName FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id WHERE u.course_id=? AND u.status='active' AND l.archived=0 AND l.revision>0 ORDER BY u.position,l.position,l.id").bind(group.courseId),
     db.prepare("SELECT id,display_name AS name FROM group_learners WHERE group_id=? AND status='active' ORDER BY display_name,id").bind(group.id),

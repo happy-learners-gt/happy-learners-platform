@@ -140,6 +140,8 @@ test("ST-103 DEC-024: the co-teacher and the lead each see and teach only the se
     expect(await ids(admin)).toEqual(expect.arrayContaining([kept.id, removed.id]));
     expect((await coTeacher.get(`/api/sections/${removed.id}`)).status()).toBe(403);
     expect((await lead.get(`/api/sections/${kept.id}`)).status()).toBe(403);
+    expect((await coTeacher.get(`/api/sections/${removed.id}/progress`)).status()).toBe(403);
+    expect((await lead.get(`/api/sections/${kept.id}/progress`)).status()).toBe(403);
     expect((await (await coTeacher.get(`/api/sections/${kept.id}`)).json()).section).toMatchObject({ id: kept.id, teaches: true, indicators: { learners: expect.any(Number) } });
     expect(((await (await coTeacher.get(`${course}/groups`)).json()).groups as Group[]).map(item => item.id)).not.toContain(removed.id);
     expect(((await (await coTeacher.get(`${course}/sessions`)).json()).sessions as typeof sessions).some(item => item.groupId === removed.id)).toBe(false);

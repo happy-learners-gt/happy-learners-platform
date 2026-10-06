@@ -98,6 +98,43 @@ describe("lesson structure in the collaboration room", () => {
     stop();
   });
 
+  it("an editor that has not read the latest change writes only its own edit and keeps the others'", () => {
+    const [one, two] = room();
+    writeStructure(one, draft);
+    const seen = readStructure(two, draft);
+    // One sets how an activity is organized; two, still showing the earlier state, renames the lesson.
+    const organized = { ...seen, activities: seen.activities.map(a => a.id === "c" ? { ...a, grouping: "teams" as const } : a) };
+    writeStructure(one, organized, seen);
+    writeStructure(two, { ...seen, title: "Fracciones equivalentes" }, seen);
+    for (const doc of [one, two]) {
+      const merged = readStructure(doc, draft);
+      expect(merged.title).toBe("Fracciones equivalentes");
+      expect(merged.activities.find(a => a.id === "c")!.grouping).toBe("teams");
+    }
+  });
+
+  it("an edit to an outdated text lands where it was made", () => {
+    const [one, two] = room();
+    writeStructure(one, draft);
+    const seen = readStructure(two, draft);
+    writeStructure(one, { ...seen, title: "Fracciones propias" }, seen);
+    writeStructure(two, { ...seen, title: "Las Fracciones" }, seen);
+    expect(readStructure(one, draft).title).toBe("Las Fracciones propias");
+    expect(readStructure(two, draft).title).toBe("Las Fracciones propias");
+  });
+
+  it("a deletion and an edit made without seeing each other: the deletion stands and the edit elsewhere is kept", () => {
+    const [one, two] = room();
+    writeStructure(one, draft);
+    const seen = readStructure(two, draft);
+    writeStructure(one, { ...seen, activities: seen.activities.filter(a => a.id !== "c") }, seen);
+    writeStructure(two, { ...seen, activities: seen.activities.map(a => a.id === "a" ? { ...a, minutes: 8 } : a.id === "c" ? { ...a, title: "Ejercicios guiados" } : a) }, seen);
+    const merged = readStructure(one, draft);
+    expect(merged.activities.map(a => a.id)).toEqual(["a", "b"]);
+    expect(merged.activities[0].minutes).toBe(8);
+    expect(readStructure(two, draft)).toEqual(merged);
+  });
+
   it("two people seeding an empty room at once keep one copy of the lesson", () => {
     const one = new Y.Doc(), two = new Y.Doc();
     seedStructure(one, draft, "lesson-1", 3);
