@@ -3,6 +3,7 @@ import { cleanText, competencyInput, competencyLimit, completeOrder, courseInput
 import type { Database } from "./storage";
 import { filesFor } from "./files";
 import { event, recordEvent, teamsFor, updateTeam } from "./team";
+import { courseRequirements, leaveProgram, programPrerequisites } from "./prerequisites";
 import { accessTo, forbidden, outsider, reachableCourses } from "./access";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
@@ -114,7 +115,7 @@ export async function courses(path: string, method: string, input: unknown, curr
     }
     if (area === "materials") return reply({ materials: [...await materialsFor(db, current.organizationId, id), ...await filesFor(db, current.organizationId, id)] });
     const { legacyProgramId: _, ...view } = course!;
-    return reply({ course: { ...view, team: teams.get(view.id) || [], access }, units: await unitsFor(db, id), curriculum: await curriculumFor(db, id) });
+    return reply({ course: { ...view, team: teams.get(view.id) || [], access }, units: await unitsFor(db, id), curriculum: await curriculumFor(db, id), requirements: await courseRequirements(db, current.organizationId, view.id, view.programId) });
   }
   // The team decides who reaches the course's sections, classes and attendance, so only administration changes it.
   if (area === "team") {
@@ -150,6 +151,7 @@ export async function courses(path: string, method: string, input: unknown, curr
     if (course) {
       const updated = await db.prepare("UPDATE courses SET title=?,objective=?,profile=?,program_id=?,education_type=?,level=?,format=?,modality=?,pacing=?,area=?,settings=?,status=?,updated_at=?,version=version+1 WHERE id=? AND organization_id=? AND version=? RETURNING id").bind(...values, cid, current.organizationId, Number.isInteger(v.version) ? Number(v.version) : -1).first();
       if (!updated) return conflict();
+      if ((course.programId || null) !== data.programId) await leaveProgram(db, cid).run();
     } else {
       await db.batch([
         db.prepare("INSERT INTO programs(id,organization_id,title) VALUES (?,?,?)").bind(cid, current.organizationId, data.title),
@@ -255,10 +257,11 @@ export async function courses(path: string, method: string, input: unknown, curr
 
 /** Study programs: shared configuration for a set of courses. Everyone reads them; administration manages them. */
 export async function programs(path: string, method: string, input: unknown, current: Member, db: Database) {
-  const id = path.split("/")[3];
+  const [, , , id, area] = path.split("/");
   const list = await programsFor(db, current.organizationId);
   const old = list.find(item => item.id === id);
   if (id && !old) return missing();
+  if (area === "prerequisites") return programPrerequisites(method, input, current, db, old!);
   if (method === "GET") return reply(id ? { program: old } : { programs: list });
   if (current.role !== "admin") return reply({ error: "Solo administración puede configurar programas." }, 403);
   const v = record(input);

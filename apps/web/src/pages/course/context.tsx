@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import type { Course, CourseAccess, CourseSettings, Curriculum, LearningUnit, Lesson, Material, Pacing, Resource, StudyProgram } from "@happy-learners/contracts";
+import type { Course, CourseAccess, CourseRequirements, CourseSettings, Curriculum, LearningUnit, Lesson, Material, Pacing, Resource, StudyProgram } from "@happy-learners/contracts";
 import { effectiveProfile, moduleNoun, resolveSettings, teachesSection } from "@happy-learners/domain";
 import type { ModuleNoun, SettingSource } from "@happy-learners/domain";
 import { api, message } from "../../api";
@@ -8,6 +8,8 @@ import { api, message } from "../../api";
 export type CourseData = {
   course: Course; units: LearningUnit[]; curriculum: Curriculum; lessons: Lesson[]; materials: Material[]; legacyResources: Resource[];
   program: StudyProgram | null;
+  /** What the course requires in its program and what requires it (DEC-029). */
+  requirements: CourseRequirements;
   /** What the person can do in this course, as the server decided it (DEC-023). */
   access: CourseAccess;
   /** The team edits lessons and resources of an active course. */
@@ -33,7 +35,7 @@ export function useCourse() {
   return value;
 }
 
-type Loaded = Pick<CourseData, "course" | "units" | "curriculum" | "lessons" | "materials" | "legacyResources" | "program">;
+type Loaded = Pick<CourseData, "course" | "units" | "curriculum" | "lessons" | "materials" | "legacyResources" | "program" | "requirements">;
 type State = { status: "loading" } | { status: "error"; error: string; code: number } | { status: "ready"; data: Loaded };
 
 /** Loads a course once for all of its pages; pages call reload() after a change. */
@@ -42,13 +44,13 @@ export function useCourseLoader(id: string) {
   const load = useCallback(async () => {
     try {
       const [detail, lessons, materials, legacy, programs] = await Promise.all([
-        api<{ course: Course; units: LearningUnit[]; curriculum: Curriculum }>(`/courses/${id}`),
+        api<{ course: Course; units: LearningUnit[]; curriculum: Curriculum; requirements?: CourseRequirements }>(`/courses/${id}`),
         api<{ lessons: Lesson[] }>(`/lessons?drafts=1&course=${id}`),
         api<{ materials: Material[] }>(`/courses/${id}/materials`),
         api<{ resources: Resource[] }>("/resources"),
         api<{ programs: StudyProgram[] }>("/programs"),
       ]);
-      setState({ status: "ready", data: { course: detail.course, units: detail.units, curriculum: detail.curriculum, lessons: lessons.lessons, materials: materials.materials, legacyResources: legacy.resources, program: programs.programs.find(item => item.id === detail.course.programId) || null } });
+      setState({ status: "ready", data: { course: detail.course, units: detail.units, curriculum: detail.curriculum, requirements: detail.requirements || { requires: [], unlocks: [] }, lessons: lessons.lessons, materials: materials.materials, legacyResources: legacy.resources, program: programs.programs.find(item => item.id === detail.course.programId) || null } });
     } catch (error) {
       setState({ status: "error", error: message(error), code: (error as { status?: number }).status || 0 });
     }
