@@ -3,8 +3,8 @@ import type { SectionProgress } from "@happy-learners/contracts";
 import { nextInPath } from "@happy-learners/domain";
 import { api, message } from "../../api";
 import { Link } from "../../navigation";
-import { plural, timeAgo } from "../../model";
-import { EmptyState, ErrorState, Loading, PageHeader, Progress, Section, StatTiles } from "../../ui/primitives";
+import { timeAgo } from "../../model";
+import { EmptyState, ErrorState, Loading, PageHeader, Section, StatTiles } from "../../ui/primitives";
 import { useSection } from "./context";
 
 /**
@@ -40,7 +40,7 @@ export function SectionProgressPage() {
               const done = new Set(learner.completed), next = nextInPath(ids, done);
               return <tr key={learner.id}>
                 <th scope="row">{learner.name}</th>
-                <td><Progress value={learner.completed.length} max={total} label={`Avance de ${learner.name}`}/></td>
+                <td><div className="row-progress"><div className="progress-track" role="progressbar" aria-label={`Lecciones terminadas por ${learner.name}`} aria-valuemin={0} aria-valuemax={total} aria-valuenow={learner.completed.length}><span style={{ width: `${Math.round(100 * learner.completed.length / total)}%` }}/></div><span className="small">{learner.completed.length} de {total}</span></div></td>
                 <td>{next ? title.get(next) : <span className="muted">Terminó el curso</span>}</td>
                 <td>{learner.lastActivity ? timeAgo(learner.lastActivity) : <span className="muted">Aún no empieza</span>}</td>
               </tr>;
@@ -52,12 +52,12 @@ export function SectionProgressPage() {
       <p className="muted small">Cuántos estudiantes abrieron y terminaron cada lección. Una lección que muchos abren y pocos terminan puede necesitar apoyo.</p>
       <div className="coverage-scroll" role="region" aria-label="Avance por lección" tabIndex={0}>
         <table className="coverage-table progress-table">
-          <thead><tr><th scope="col">Lección</th><th scope="col">Módulo</th><th scope="col">Abrieron</th><th scope="col">Terminaron</th></tr></thead>
+          <thead><tr><th scope="col">Lección</th><th scope="col">Módulo</th><th scope="col">Estudiantes que la abrieron</th><th scope="col">Estudiantes que la terminaron</th></tr></thead>
           <tbody>{data.lessons.map(lesson => <tr key={lesson.id}>
             <th scope="row">{lesson.title}</th>
             <td>{lesson.unitName}</td>
             <td>{data.learners.filter(learner => learner.opened.includes(lesson.id)).length}</td>
-            <td>{plural(data.learners.filter(learner => learner.completed.includes(lesson.id)).length, "estudiante", "estudiantes")}</td>
+            <td>{data.learners.filter(learner => learner.completed.includes(lesson.id)).length}</td>
           </tr>)}</tbody>
         </table>
       </div>
