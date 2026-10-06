@@ -158,7 +158,7 @@ function Branch({ href, title, detail, current, children }: { href: string; titl
   const ref = useRef<HTMLLIElement>(null);
   useEffect(() => { if (current) ref.current?.scrollIntoView?.({ block: "nearest" }); }, [current]);
   return <li ref={ref} className={`nav-branch${current ? " is-current" : ""}`}>
-    <Link href={href} aria-current={current ? "true" : undefined} title={detail ? `${title} · ${detail}` : title}><span className="nav-branch-text"><span>{title}</span>{detail && <small><span className="sr-only">, </span>{detail}</small>}</span></Link>
+    <Link href={href} aria-current={current ? "true" : undefined} aria-label={detail ? `${title}, ${detail}` : undefined} title={detail ? `${title} · ${detail}` : title}><span className="nav-branch-text"><span>{title}</span>{detail && <small>{detail}</small>}</span></Link>
     {children}
   </li>;
 }
