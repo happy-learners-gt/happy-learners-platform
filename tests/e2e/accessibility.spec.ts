@@ -20,13 +20,14 @@ test("main routes have no WCAG 2.2 A/AA violations detectable by axe", async ({ 
   await page.goto("/inicio");
   await audit(page, "login");
   await signIn(page, "educador-demo", "/inicio");
-  const section = await page.evaluate(async () => ((await (await fetch("/api/sections")).json()).sections as { id: string; status: string }[]).find(item => item.status === "active")?.id);
-  expect(section).toBeTruthy();
+  const active = await page.evaluate(async () => ((await (await fetch("/api/sections")).json()).sections as { id: string; status: string; next?: { id: string } }[]).find(item => item.status === "active" && item.next));
+  expect(active).toBeTruthy();
+  const section = active!.id;
   for (const [label, path] of [
     ["inicio", "/inicio"], ["agenda", "/agenda"], ["sección", `/secciones/${section}`], ["estudiantes", `/secciones/${section}/estudiantes`], ["cursos", "/cursos"], ["nuevo curso", "/cursos/nuevo"], ["resumen", "/cursos/course-exploradores"], ["plan curricular", "/cursos/course-exploradores/plan"],
     ["contenido", "/cursos/course-exploradores/contenido"], ["editor", "/cursos/course-exploradores/lecciones/greetings-and-introductions"],
     ["vista previa", "/cursos/course-exploradores/lecciones/greetings-and-introductions?vista=previa"], ["biblioteca del curso", "/cursos/course-exploradores/biblioteca"],
-    ["secciones del curso", "/cursos/course-exploradores/secciones"], ["horario", `/secciones/${section}/horario`], ["cronograma", `/secciones/${section}/clases`], ["configuración", "/cursos/course-exploradores/configuracion"],
+    ["secciones del curso", "/cursos/course-exploradores/secciones"], ["horario", `/secciones/${section}/horario`], ["cronograma", `/secciones/${section}/clases`], ["clase", `/secciones/${section}/clases/${active!.next!.id}`], ["configuración", "/cursos/course-exploradores/configuracion"],
     ["biblioteca", "/biblioteca"], ["buscar", "/buscar?q=greet"], ["ayuda", "/ayuda"], ["guía de estilo", "/guia-de-estilo"],
   ]) {
     await page.goto(path);
@@ -47,7 +48,13 @@ test("main routes have no WCAG 2.2 A/AA violations detectable by axe", async ({ 
   await page.getByRole("button", { name: "Siguiente" }).click();
   await page.getByRole("button", { name: "Siguiente" }).click();
   await audit(page, "estudiante pregunta");
-  await signIn(page, "admin-demo", "/configuracion-academica");
+  await signIn(page, "admin-demo", "/inicio");
+  for (const [label, path] of [["organización", "/organizacion"], ["educadores", "/educadores"]]) {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { level: 1 }).first()).toBeAttached();
+    await audit(page, label);
+  }
+  await page.goto("/configuracion-academica");
   for (const summary of ["Niveles educativos · CINE 2011", "Áreas de conocimiento · CINE-F 2013"]) await page.getByText(summary).click();
   await audit(page, "configuración académica");
   await page.getByRole("button", { name: "Crear programa", exact: true }).click();
