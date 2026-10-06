@@ -25,6 +25,7 @@ export function Help() {
         <li>Usa <strong>Vista previa</strong> para verla como estudiante. Cuando esté lista, la persona responsable elige <strong>Publicar</strong>; quien colabora elige <strong>Enviar a revisión</strong> y puede dejar una nota.</li>
         <li>La persona responsable ve los envíos en <strong>Por revisar</strong>, en Inicio. Abre la lección y elige <strong>Aprobar y publicar</strong>, o <strong>Devolver</strong> con comentarios. Quien la envió ve el resultado en <strong>Mis envíos a revisión</strong>.</li>
       </ol>
+      <p>Varias personas del equipo pueden editar la misma lección a la vez: el editor muestra quién más la tiene abierta y cada cambio aparece en vivo para todos, desde el título, el objetivo y la secuencia hasta el orden, los campos y el texto de las actividades. Si dos personas cambian el mismo campo, queda el último cambio; en el título, el objetivo y el texto se conservan las dos escrituras.</p>
       <p>Después de publicar, se puede seguir editando: los estudiantes ven la versión publicada hasta que se publican los cambios. Los recursos de la biblioteca no pasan por revisión.</p>
       <p>Para adaptar una lección sin tocar la original, usa <strong>Duplicar</strong> en el menú de la lección: la copia queda como borrador justo después, con las mismas actividades y recursos, y se publica por separado.</p>
       <h2>Secciones, horario y clases</h2>
