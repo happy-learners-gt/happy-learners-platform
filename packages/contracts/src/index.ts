@@ -96,6 +96,10 @@ export interface StudyProgram extends AcademicProfile {
   id: string; name: string; description: string; format: CourseFormat; area?: string;
   settings: CourseSettings; locked: (keyof CourseSettings)[]; status: "active" | "archived"; version: number; updatedAt: string; courseCount?: number;
 }
+/** A program read as a path (DEC-029): its courses, which ones each requires, and the stages they form. */
+export interface ProgramPath { courses: { id: string; title: string; status: "active" | "archived" }[]; requirements: { courseId: string; requiredId: string }[]; stages: string[][] }
+/** What a course of a program requires and what requires it. */
+export interface CourseRequirements { requires: { id: string; title: string; status: "active" | "archived" }[]; unlocks: { id: string; title: string; status: "active" | "archived" }[] }
 export interface Course extends AcademicProfile {
   id: string; title: string; objective: string; programId?: string; format: CourseFormat;
   /** ISCED-F 2013 field: a broad field (2 digits) or a narrow field (3 digits). */
