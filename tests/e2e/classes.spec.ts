@@ -82,6 +82,10 @@ test("HL-61 ST-035 ST-097 ST-098 ST-101 ST-102: administration prepares a sectio
   await page.getByRole("button", { name: "Guardar asistencia" }).click();
   await expect(toast(page)).toContainText("1 presente, 1 ausente");
   await page.getByRole("button", { name: "Finalizar clase" }).click();
+  // ST-109: finishing asks how far each lesson got; every lesson starts as completed.
+  const finish = page.getByRole("dialog", { name: "Finalizar clase" });
+  await expect(finish.getByRole("radiogroup", { name: "Greetings and Introductions" }).getByLabel("Completada")).toBeChecked();
+  await finish.getByRole("button", { name: "Finalizar clase" }).click();
   await expect(page.locator(".page-meta .badge")).toHaveText("Impartida");
   await page.reload();
   await expect(page.getByRole("heading", { name: "Asistencia registrada" })).toBeVisible();
