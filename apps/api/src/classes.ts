@@ -1,4 +1,4 @@
-import type { CalendarBreak, ClassLesson, ClassLessonPlan, ClassResource, ClassSession, ClassStatus, CourseAccess, Lesson, Material, Member, Resource, SectionSchedule, StudentClass, StudentSpace } from "@happy-learners/contracts";
+import type { CalendarBreak, ClassLesson, ClassLessonPlan, ClassResource, ClassSession, ClassStatus, CourseAccess, Lesson, Material, Member, Pacing, Resource, SectionSchedule, StudentClass, StudentPathModule, StudentSpace } from "@happy-learners/contracts";
 import { acceptsAttendance, breakInput, cancelPlanInput, carryOver, classActions, classPlanInput, classStatusLabels, completionInput, groupCodePattern, lessonsInOrder, maxClassLessons, localDay, nextClassStatus, normalizeGroupCode, resourceIdsOf, scheduleDates, scheduleInput, scheduleSummary, seesSection, teachesSection, upcomingClasses } from "@happy-learners/domain";
 import type { ClassAction } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
@@ -267,9 +267,9 @@ async function attendanceRows(db: Database, sessionId: string, groupId: string) 
 /** GET /api/classes — the next classes of the sections the person teaches, for the home page. */
 export async function myClasses(current: Member, db: Database) {
   const today = await todayFor(db, current.organizationId);
-  const rows = (await db.prepare(`SELECT ${sessionColumns},c.title AS courseTitle ${sessionJoins} JOIN courses c ON c.id=s.course_id AND c.status='active'
+  const rows = (await db.prepare(`SELECT ${sessionColumns},c.title AS courseTitle ${sessionJoins} JOIN courses c ON c.id=s.course_id AND c.status='active' LEFT JOIN study_programs sp ON sp.id=c.program_id
     JOIN section_educators se ON se.group_id=s.group_id AND se.organization_id=s.organization_id AND se.user_id=?
-    WHERE s.organization_id=? AND g.status='active' AND ((s.session_date>=? AND s.status='planned') OR s.status='in_progress') ORDER BY s.session_date,s.starts_at LIMIT 40`).bind(current.id, current.organizationId, today).all<StoredSession>()).results.map(withLessons);
+    WHERE s.organization_id=? AND g.status='active' AND COALESCE(sp.pacing,c.pacing)='scheduled' AND ((s.session_date>=? AND s.status='planned') OR s.status='in_progress') ORDER BY s.session_date,s.starts_at LIMIT 40`).bind(current.id, current.organizationId, today).all<StoredSession>()).results.map(withLessons);
   // A class left open on an earlier day still needs to be finished, so it stays first.
   const open = rows.filter(row => row.status === "in_progress" && row.sessionDate < today);
   return reply({ today, classes: [...open, ...upcomingClasses(rows.filter(row => !open.includes(row)), today)].slice(0, 8) });
@@ -361,7 +361,8 @@ export async function calendar(path: string, method: string, input: unknown, url
   const span = item.from === item.until ? `el ${item.from}` : `del ${item.from} al ${item.until}`;
   const reason = method === "POST" ? `Sin clase ${span} (${item.title})` : `Volvió a haber clase ${span} (${item.title})`;
   // Only sections with a schedule whose period touches the days change.
-  const touched = (await db.prepare(`SELECT id,name,course_id AS courseId,${scheduleColumns} FROM course_groups WHERE organization_id=? AND status='active' AND schedule_weekdays IS NOT NULL AND schedule_from<=? AND schedule_until>=?${item.groupId ? " AND id=?" : ""}`)
+  const touched = (await db.prepare(`SELECT g.id,g.name,g.course_id AS courseId,${scheduleColumns.replace(/schedule_/g, "g.schedule_")} FROM course_groups g JOIN courses c ON c.id=g.course_id LEFT JOIN study_programs p ON p.id=c.program_id
+    WHERE g.organization_id=? AND g.status='active' AND COALESCE(p.pacing,c.pacing)='scheduled' AND g.schedule_weekdays IS NOT NULL AND g.schedule_from<=? AND g.schedule_until>=?${item.groupId ? " AND g.id=?" : ""}`)
     .bind(current.organizationId, item.until, item.from, ...(item.groupId ? [item.groupId] : [])).all<Group & StoredSchedule & { courseId: string }>()).results;
   let sections = 0, removed = 0, added = 0;
   for (const row of touched) {
@@ -428,17 +429,53 @@ export async function student(path: string, method: string, input: unknown, requ
     return reply({ ok: true }, 200, { "Set-Cookie": studentCookie("", request, true) });
   }
   // The code stops working as soon as it is changed or the section is closed: the session follows the section's current code.
-  const access = token ? await db.prepare("SELECT a.group_id AS groupId,a.organization_id AS organizationId,g.name AS groupName,c.id AS courseId,c.title AS courseTitle,o.name AS organizationName,o.timezone FROM group_access_sessions a JOIN course_groups g ON g.id=a.group_id AND g.status='active' AND g.access_code IS NOT NULL JOIN courses c ON c.id=g.course_id AND c.status='active' JOIN organizations o ON o.id=a.organization_id WHERE a.token_hash=? AND a.expires_at>?").bind(await digest(token), Date.now()).first<{ groupId: string; organizationId: string; groupName: string; courseId: string; courseTitle: string; organizationName: string; timezone: string | null }>() : null;
+  const tokenHash = token ? await digest(token) : "";
+  const access = token ? await studentAccess(db, tokenHash) : null;
   if (!access) return reply({ error: "Escribe el código de tu sección para continuar." }, 401, token ? { "Set-Cookie": studentCookie("", request, true) } : {});
+  const selfPaced = access.pacing === "self-paced";
+  if (path === "/api/student/identity" && method === "POST") {
+    // A tu ritmo: the student picks their name from the section's list so the section can follow their progress.
+    const learnerId = (input as Record<string, unknown> | null)?.learnerId ?? null;
+    if (learnerId !== null && (typeof learnerId !== "string" || !await db.prepare("SELECT id FROM group_learners WHERE id=? AND group_id=? AND status='active'").bind(learnerId, access.groupId).first())) return reply({ error: "Elige tu nombre de la lista de la sección." }, 400);
+    await db.prepare("UPDATE group_access_sessions SET learner_id=? WHERE token_hash=?").bind(learnerId, tokenHash).run();
+    return reply({ ok: true });
+  }
+  if (path === "/api/student/progress" && method === "POST") {
+    // Opening a lesson of the path; finishing it is recorded when the student completes it in the lesson player.
+    if (!selfPaced || !access.learnerId) return reply({ error: "El avance se registra en las secciones a tu ritmo, después de elegir tu nombre." }, 409);
+    const lesson = await pathLesson(db, access.courseId, (input as Record<string, unknown> | null)?.shareCode);
+    if (!lesson) return reply({ error: "Esa lección no forma parte del curso de tu sección." }, 404);
+    await db.prepare("INSERT INTO learner_progress(organization_id,group_id,learner_id,lesson_id,opened_at) VALUES (?,?,?,?,?) ON CONFLICT DO NOTHING").bind(access.organizationId, access.groupId, access.learnerId, lesson.id, new Date().toISOString()).run();
+    return reply({ ok: true });
+  }
   const fileMatch = path.match(/^\/api\/student\/files\/([a-z0-9-]+)$/);
   if (fileMatch) {
-    // Only files published in a lesson of one of the section's classes.
-    const linked = await db.prepare("SELECT 1 AS ok FROM class_sessions s JOIN class_session_lessons p ON p.session_id=s.id JOIN lessons l ON l.id=p.lesson_id AND l.archived=0 AND l.revision>0, json_each(l.published_content,'$.resources') r WHERE s.group_id=? AND s.status<>'cancelled' AND json_extract(r.value,'$.id')=? AND json_extract(r.value,'$.status')='published' LIMIT 1").bind(access.groupId, fileMatch[1]).first();
+    // Only files published in a lesson of one of the section's classes or, at their own pace, of the course's path.
+    const linked = selfPaced
+      ? await db.prepare("SELECT 1 AS ok FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id AND u.status='active', json_each(l.published_content,'$.resources') r WHERE u.course_id=? AND l.archived=0 AND l.revision>0 AND json_extract(r.value,'$.id')=? AND json_extract(r.value,'$.status')='published' LIMIT 1").bind(access.courseId, fileMatch[1]).first()
+      : await db.prepare("SELECT 1 AS ok FROM class_sessions s JOIN class_session_lessons p ON p.session_id=s.id JOIN lessons l ON l.id=p.lesson_id AND l.archived=0 AND l.revision>0, json_each(l.published_content,'$.resources') r WHERE s.group_id=? AND s.status<>'cancelled' AND json_extract(r.value,'$.id')=? AND json_extract(r.value,'$.status')='published' LIMIT 1").bind(access.groupId, fileMatch[1]).first();
     if (!linked) return reply({ error: "Este archivo no forma parte de las clases de tu sección." }, 404);
     return deliverFile(fileMatch[1], access.organizationId, db, bucket);
   }
   if (path !== "/api/student/space" || method !== "GET") return reply({ error: "Ruta no disponible." }, 404);
   const today = localDay(access.timezone || "America/Guatemala");
+  const base = { group: { name: access.groupName }, course: { title: access.courseTitle }, organization: access.organizationName, today, pacing: access.pacing, learner: access.learnerId ? { id: access.learnerId, name: access.learnerName! } : null };
+  if (selfPaced) {
+    const [lessons, done, roster] = await db.batch([
+      db.prepare(`${pathLessons} ORDER BY u.position,l.position,l.id`).bind(access.courseId),
+      db.prepare("SELECT lesson_id AS lessonId,completed_at IS NOT NULL AS completed FROM learner_progress WHERE group_id=? AND learner_id=?").bind(access.groupId, access.learnerId || ""),
+      db.prepare("SELECT id,display_name AS name FROM group_learners WHERE group_id=? AND status='active' ORDER BY display_name,id").bind(access.groupId),
+    ]) as unknown as [{ id: string; title: string | null; shareCode: string; unitId: string; unitName: string }[], { lessonId: string; completed: number }[], { id: string; name: string }[]];
+    const path: StudentPathModule[] = [];
+    for (const lesson of lessons) {
+      const mark = done.find(row => row.lessonId === lesson.id);
+      let unit = path.find(item => item.id === lesson.unitId);
+      if (!unit) path.push(unit = { id: lesson.unitId, name: lesson.unitName, lessons: [] });
+      unit.lessons.push({ title: lesson.title || "Lección", shareCode: lesson.shareCode, opened: !!mark, completed: !!mark?.completed });
+    }
+    const space: StudentSpace = { ...base, next: null, upcoming: [], recent: [], lessons: [], roster: access.learnerId ? [] : roster, path };
+    return reply(space);
+  }
   const rows = (await db.prepare("SELECT s.id,s.session_date AS sessionDate,s.starts_at AS startsAt,s.duration_minutes AS durationMinutes,s.status FROM class_sessions s WHERE s.group_id=? AND s.status<>'cancelled' ORDER BY s.session_date,s.starts_at").bind(access.groupId).all<{ id: string; sessionDate: string; startsAt: string | null; durationMinutes: number | null; status: ClassStatus }>()).results;
   // Students see a lesson only once it is published, under its published title.
   // A finished class lists only the lessons it worked on: one it did not reach waits for the class that takes it.
@@ -453,6 +490,21 @@ export async function student(path: string, method: string, input: unknown, requ
   };
   // The lessons of the section's classes, once each, in the order the classes give them.
   const lessons = published.filter((row, index, list) => list.findIndex(other => other.shareCode === row.shareCode) === index).map(row => ({ title: row.title || "Lección", shareCode: row.shareCode! }));
-  const space: StudentSpace = { group: { name: access.groupName }, course: { title: access.courseTitle }, organization: access.organizationName, today, next: upcoming[0] ? view(upcoming[0]) : null, upcoming: upcoming.slice(1).map(view), recent: recent.map(view), lessons };
+  const space: StudentSpace = { ...base, next: upcoming[0] ? view(upcoming[0]) : null, upcoming: upcoming.slice(1).map(view), recent: recent.map(view), lessons, roster: [], path: [] };
   return reply(space);
+}
+
+/** The student's session with the section code: its section and course, the course's pacing and who chose to study. */
+export async function studentAccess(db: Database, tokenHash: string) {
+  return db.prepare(`SELECT a.group_id AS groupId,a.organization_id AS organizationId,g.name AS groupName,c.id AS courseId,c.title AS courseTitle,o.name AS organizationName,o.timezone,
+      COALESCE(sp.pacing,c.pacing) AS pacing,gl.id AS learnerId,gl.display_name AS learnerName
+    FROM group_access_sessions a JOIN course_groups g ON g.id=a.group_id AND g.status='active' AND g.access_code IS NOT NULL JOIN courses c ON c.id=g.course_id AND c.status='active'
+    LEFT JOIN study_programs sp ON sp.id=c.program_id JOIN organizations o ON o.id=a.organization_id LEFT JOIN group_learners gl ON gl.id=a.learner_id AND gl.group_id=a.group_id AND gl.status='active'
+    WHERE a.token_hash=? AND a.expires_at>?`).bind(tokenHash, Date.now()).first<{ groupId: string; organizationId: string; groupName: string; courseId: string; courseTitle: string; organizationName: string; timezone: string | null; pacing: Pacing; learnerId: string | null; learnerName: string | null }>();
+}
+/** The course's path: its published lessons in active modules, in content order. */
+const pathLessons = "SELECT l.id,json_extract(l.published_content,'$.title') AS title,json_extract(l.published_content,'$.shareCode') AS shareCode,u.id AS unitId,u.name AS unitName FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id AND u.status='active' WHERE u.course_id=? AND l.archived=0 AND l.revision>0 AND json_extract(l.published_content,'$.shareCode') IS NOT NULL";
+export async function pathLesson(db: Database, courseId: string, shareCode: unknown) {
+  if (typeof shareCode !== "string" || shareCode.length > 64) return null;
+  return db.prepare(`${pathLessons} AND json_extract(l.published_content,'$.shareCode')=?`).bind(courseId, shareCode).first<{ id: string }>();
 }

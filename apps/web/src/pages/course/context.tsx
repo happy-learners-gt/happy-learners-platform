@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import type { Course, CourseAccess, CourseSettings, Curriculum, LearningUnit, Lesson, Material, Resource, StudyProgram } from "@happy-learners/contracts";
-import { moduleNoun, resolveSettings, teachesSection } from "@happy-learners/domain";
+import type { Course, CourseAccess, CourseSettings, Curriculum, LearningUnit, Lesson, Material, Pacing, Resource, StudyProgram } from "@happy-learners/contracts";
+import { effectiveProfile, moduleNoun, resolveSettings, teachesSection } from "@happy-learners/domain";
 import type { ModuleNoun, SettingSource } from "@happy-learners/domain";
 import { api, message } from "../../api";
 
@@ -23,6 +23,8 @@ export type CourseData = {
   settings: Required<CourseSettings>; sources: Record<keyof CourseSettings, SettingSource>;
   /** How the course's modules are called, in every grammatical form. */
   noun: ModuleNoun;
+  /** With a calendar, sections follow a schedule of classes; at their own pace, each student works through the published lessons (DEC-027). */
+  pacing: Pacing;
 };
 const Context = createContext<CourseData | null>(null);
 export function useCourse() {
@@ -57,7 +59,7 @@ export function useCourseLoader(id: string) {
 
 export function courseConfiguration(course: Course, program: StudyProgram | null) {
   const { values, source } = resolveSettings(course, program);
-  return { settings: values, sources: source, noun: moduleNoun(values.moduleLabel) };
+  return { settings: values, sources: source, noun: moduleNoun(values.moduleLabel), pacing: effectiveProfile(course, program).pacing };
 }
 /** The capabilities of an active course; an archived course is read-only for everyone but administration's restore. */
 export function capabilities(course: Course) {

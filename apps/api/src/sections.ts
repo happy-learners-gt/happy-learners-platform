@@ -1,5 +1,5 @@
-import type { ClassStatus, Member, SectionEducator, SectionSummary } from "@happy-learners/contracts";
-import { sectionIndicators } from "@happy-learners/domain";
+import type { ClassStatus, Member, Pacing, SectionEducator, SectionProgress, SectionSummary } from "@happy-learners/contracts";
+import { pathIndicators, sectionIndicators } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { scheduleOf, todayFor } from "./classes";
 
@@ -8,7 +8,7 @@ const reply = (data: unknown, status = 200) => Response.json(data, { status });
 /** Sections a person sees: every section for administration, otherwise those they teach (DEC-024). */
 const visible = "g.organization_id=? AND (?=1 OR EXISTS(SELECT 1 FROM section_educators e WHERE e.group_id=g.id AND e.user_id=?))";
 
-type Row = { id: string; courseId: string; name: string; status: "active" | "archived"; accessCode: string | null; weekdays: string | null; startsAt: string | null; durationMinutes: number | null; from: string | null; until: string | null; courseTitle: string; courseStatus: "active" | "archived"; teaches: number };
+type Row = { id: string; courseId: string; name: string; status: "active" | "archived"; accessCode: string | null; weekdays: string | null; startsAt: string | null; durationMinutes: number | null; from: string | null; until: string | null; courseTitle: string; courseStatus: "active" | "archived"; pacing: Pacing; teaches: number };
 type ClassRow = { id: string; groupId: string; status: ClassStatus; sessionDate: string; startsAt: string | null; marked: number; attended: number };
 
 /**
@@ -16,15 +16,16 @@ type ClassRow = { id: string; groupId: string; status: ClassStatus; sessionDate:
  * its next class and its progress, computed from the section's records only.
  */
 export async function sections(path: string, current: Member, db: Database) {
-  const id = path.split("/")[3];
+  const [id, sub] = [path.split("/")[3], path.split("/")[4]];
+  if (sub === "progress") return progress(id, current, db);
   const scope = [current.organizationId, current.role === "admin" ? 1 : 0, current.id];
   const inScope = `IN (SELECT g.id FROM course_groups g WHERE ${visible}${id ? " AND g.id=?" : ""})`;
   const bound = id ? [...scope, id] : scope;
-  const [groups, learners, classes, planned, published, openings, educators] = await db.batch([
+  const [groups, learners, classes, planned, published, openings, educators, progressRows] = await db.batch([
     db.prepare(`SELECT g.id,g.course_id AS courseId,g.name,g.status,g.access_code AS accessCode,g.schedule_weekdays AS weekdays,g.schedule_starts_at AS startsAt,g.schedule_duration AS durationMinutes,g.schedule_from AS "from",g.schedule_until AS until,
-      c.title AS courseTitle,c.status AS courseStatus,EXISTS(SELECT 1 FROM section_educators e WHERE e.group_id=g.id AND e.user_id=?) AS teaches
-      FROM course_groups g JOIN courses c ON c.id=g.course_id AND c.organization_id=g.organization_id WHERE ${visible}${id ? " AND g.id=?" : ""} ORDER BY c.title,g.status,g.name,g.created_at`).bind(current.id, ...bound),
-    db.prepare(`SELECT group_id AS groupId,count(*) AS total FROM group_learners WHERE status='active' AND group_id ${inScope} GROUP BY group_id`).bind(...bound),
+      c.title AS courseTitle,c.status AS courseStatus,COALESCE(sp.pacing,c.pacing) AS pacing,EXISTS(SELECT 1 FROM section_educators e WHERE e.group_id=g.id AND e.user_id=?) AS teaches
+      FROM course_groups g JOIN courses c ON c.id=g.course_id AND c.organization_id=g.organization_id LEFT JOIN study_programs sp ON sp.id=c.program_id WHERE ${visible}${id ? " AND g.id=?" : ""} ORDER BY c.title,g.status,g.name,g.created_at`).bind(current.id, ...bound),
+    db.prepare(`SELECT group_id AS groupId,id FROM group_learners WHERE status='active' AND group_id ${inScope}`).bind(...bound),
     db.prepare(`SELECT s.id,s.group_id AS groupId,s.status,s.session_date AS sessionDate,s.starts_at AS startsAt,
       (SELECT count(*) FROM attendance_marks m WHERE m.session_id=s.id) AS marked,(SELECT count(*) FROM attendance_marks m WHERE m.session_id=s.id AND m.status IN ('present','late')) AS attended
       FROM class_sessions s WHERE s.group_id ${inScope} ORDER BY s.session_date,s.starts_at`).bind(...bound),
@@ -32,7 +33,8 @@ export async function sections(path: string, current: Member, db: Database) {
     db.prepare(`SELECT u.course_id AS courseId,l.id FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id WHERE u.status='active' AND l.archived=0 AND l.revision>0 AND u.course_id IN (SELECT g.course_id FROM course_groups g WHERE ${visible}${id ? " AND g.id=?" : ""})`).bind(...bound),
     db.prepare(`SELECT group_id AS groupId,count(*) AS total FROM lesson_completions WHERE group_id ${inScope} GROUP BY group_id`).bind(...bound),
     db.prepare(`SELECT e.group_id AS groupId,e.user_id AS userId,COALESCE(u.display_name,u.username) AS name,u.username FROM section_educators e JOIN users u ON u.id=e.user_id WHERE e.group_id ${inScope} ORDER BY name`).bind(...bound),
-  ]) as unknown as [Row[], { groupId: string; total: number }[], ClassRow[], { sessionId: string; lessonId: string; outcome: string | null }[], { courseId: string; id: string }[], { groupId: string; total: number }[], (SectionEducator & { groupId: string })[]];
+    db.prepare(`SELECT group_id AS groupId,learner_id AS learnerId,lesson_id AS lessonId,completed_at IS NOT NULL AS completed FROM learner_progress WHERE group_id ${inScope}`).bind(...bound),
+  ]) as unknown as [Row[], { groupId: string; id: string }[], ClassRow[], { sessionId: string; lessonId: string; outcome: string | null }[], { courseId: string; id: string }[], { groupId: string; total: number }[], (SectionEducator & { groupId: string })[], { groupId: string; learnerId: string; lessonId: string; completed: number }[]];
   if (id && !groups.length) {
     // The section exists but is not assigned to the person: say so instead of pretending it is not there.
     const exists = await db.prepare("SELECT id FROM course_groups WHERE id=? AND organization_id=?").bind(id, current.organizationId).first();
@@ -44,19 +46,48 @@ export async function sections(path: string, current: Member, db: Database) {
     lessonsOf.set(row.sessionId, [...lessonsOf.get(row.sessionId) || [], row.lessonId]);
     if (row.outcome !== "partial" && row.outcome !== "not_reached") completedOf.set(row.sessionId, [...completedOf.get(row.sessionId) || [], row.lessonId]);
   }
-  const list: SectionSummary[] = groups.map(({ weekdays, startsAt, durationMinutes, from, until, courseTitle, courseStatus, teaches, ...group }) => {
-    const own = classes.filter(row => row.groupId === group.id);
+  const list: SectionSummary[] = groups.map(({ weekdays, startsAt, durationMinutes, from, until, courseTitle, courseStatus, teaches, pacing, ...group }) => {
+    // A tu ritmo: the section has no classes to follow, only how far each student got.
+    const own = pacing === "scheduled" ? classes.filter(row => row.groupId === group.id) : [];
     const next = own.find(row => row.status === "in_progress") || own.find(row => row.status === "planned" && row.sessionDate >= today) || null;
+    const lessonIds = published.filter(row => row.courseId === group.courseId).map(row => row.id), learnerIds = learners.filter(row => row.groupId === group.id).map(row => row.id);
     const indicators = sectionIndicators(own.map(row => ({ status: row.status, sessionDate: row.sessionDate, lessonIds: lessonsOf.get(row.id) || [], completedIds: completedOf.get(row.id) || [], marked: Number(row.marked), attended: Number(row.attended) })),
-      published.filter(row => row.courseId === group.courseId).map(row => row.id), Number(learners.find(row => row.groupId === group.id)?.total || 0), today);
+      lessonIds, learnerIds.length, today);
+    const mine = progressRows.filter(row => row.groupId === group.id), completed = new Map<string, Set<string>>();
+    for (const row of mine) if (row.completed) completed.set(row.learnerId, new Set([...completed.get(row.learnerId) || [], row.lessonId]));
+    const path = pathIndicators(lessonIds, completed, new Set(mine.map(row => row.learnerId)), learnerIds);
     return {
-      ...group, learnerCount: indicators.learners, schedule: scheduleOf({ weekdays, startsAt, durationMinutes, from, until }),
+      ...group, pacing, learnerCount: indicators.learners, schedule: pacing === "scheduled" ? scheduleOf({ weekdays, startsAt, durationMinutes, from, until }) : null,
       educators: educators.filter(row => row.groupId === group.id).map(({ groupId: _, ...person }) => person),
       course: { id: group.courseId, title: courseTitle, status: courseStatus },
-      indicators: { ...indicators, openings: Number(openings.find(row => row.groupId === group.id)?.total || 0) },
+      indicators: { ...indicators, ...path, openings: Number(openings.find(row => row.groupId === group.id)?.total || 0) },
       next: next && { id: next.id, sessionDate: next.sessionDate, startsAt: next.startsAt, status: next.status },
       teaches: !!teaches,
     };
   });
   return id ? reply({ section: list[0], today }) : reply({ sections: list, today });
+}
+
+/**
+ * GET /api/sections/:id/progress — A tu ritmo (DEC-027): each student of the section and the published lessons they
+ * opened and completed, in the course's content order. Same access as the section.
+ */
+async function progress(id: string, current: Member, db: Database) {
+  const group = await db.prepare(`SELECT g.id,g.course_id AS courseId FROM course_groups g WHERE ${visible} AND g.id=?`).bind(current.organizationId, current.role === "admin" ? 1 : 0, current.id, id).first<{ id: string; courseId: string }>();
+  if (!group) return reply({ error: "La sección no está disponible." }, 404);
+  const [lessons, learners, rows] = await db.batch([
+    db.prepare("SELECT l.id,COALESCE(json_extract(l.published_content,'$.title'),'Lección') AS title,u.name AS unitName FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id WHERE u.course_id=? AND u.status='active' AND l.archived=0 AND l.revision>0 ORDER BY u.position,l.position,l.id").bind(group.courseId),
+    db.prepare("SELECT id,display_name AS name FROM group_learners WHERE group_id=? AND status='active' ORDER BY display_name,id").bind(group.id),
+    db.prepare("SELECT learner_id AS learnerId,lesson_id AS lessonId,opened_at AS openedAt,completed_at AS completedAt FROM learner_progress WHERE group_id=?").bind(group.id),
+  ]) as unknown as [SectionProgress["lessons"], { id: string; name: string }[], { learnerId: string; lessonId: string; openedAt: string; completedAt: string | null }[]];
+  const published = new Set(lessons.map(lesson => lesson.id));
+  const result: SectionProgress = {
+    lessons,
+    learners: learners.map(learner => {
+      const own = rows.filter(row => row.learnerId === learner.id && published.has(row.lessonId));
+      const last = own.flatMap(row => [row.openedAt, row.completedAt || ""]).sort().pop() || null;
+      return { ...learner, opened: own.map(row => row.lessonId), completed: own.filter(row => row.completedAt).map(row => row.lessonId), lastActivity: last };
+    }),
+  };
+  return reply(result);
 }

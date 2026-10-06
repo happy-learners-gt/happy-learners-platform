@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import type { SectionSummary } from "@happy-learners/contracts";
 import { scheduleSummary } from "@happy-learners/domain";
 import { api, message } from "../../api";
@@ -18,8 +19,9 @@ import { Classes } from "../course/Classes";
 import { SectionEducators, SectionStudents } from "../course/Sections";
 import { Timetable } from "../course/Timetable";
 import { SectionProvider, sectionPath, useSection } from "./context";
+import { SectionProgressPage } from "./Progress";
 
-const areas = ["", "clases", "estudiantes", "horario"];
+const areas = ["", "clases", "estudiantes", "horario", "avance"];
 type State = { status: "loading" } | { status: "error"; error: string; code: number } | { status: "ready"; section: SectionSummary; today: string };
 
 /**
@@ -43,7 +45,13 @@ export function SectionRoute({ id, area, item }: { id: string; area: string; ite
     subtitle: section ? section.course.title : "Sección",
     title: section?.name || "Cargando sección…",
     hue: hueFor(section?.courseId || id),
-    items: [
+    // A tu ritmo (DEC-027): no schedule and no classes; the section follows each student's progress instead.
+    items: section?.pacing === "self-paced" ? [
+      { href: base, label: "Resumen", icon: "overview", hue: "violet", active: area === "" },
+      { href: `${base}/avance`, label: "Avance", icon: "check", hue: "green", active: area === "avance" },
+      { href: `${base}/estudiantes`, label: "Estudiantes", icon: "users", hue: "pink", active: area === "estudiantes" },
+      { href: `/cursos/${section.courseId}`, label: "Curso: plan y contenido", icon: "courses", hue: "sky", active: false },
+    ] : [
       { href: base, label: "Resumen", icon: "overview", hue: "violet", active: area === "" },
       { href: `${base}/clases`, label: "Cronograma", icon: "calendar", hue: "coral", active: area === "clases" },
       { href: `${base}/estudiantes`, label: "Estudiantes", icon: "users", hue: "pink", active: area === "estudiantes" },
@@ -68,22 +76,26 @@ function SectionWithCourse({ section, today, base, reload, area, item }: { secti
   if (state.status === "loading") return <><PageHeader title={<span className="skeleton-title">{section.name}</span>}/><Loading label="Abriendo sección…" lines={6}/></>;
   if (state.status === "error") return <><PageHeader title="No se pudo abrir la sección"/><ErrorState error={state.error} retry={() => void load()}/></>;
   const data = { ...state.data, ...courseConfiguration(state.data.course, state.data.program), ...capabilities(state.data.course), reload: load };
+  const selfPaced = section.pacing === "self-paced";
+  const elsewhere = selfPaced ? ["clases", "horario"].includes(area) : area === "avance";
   return <CourseProvider data={data}><SectionProvider value={{ section, today, base, reload }}>
-    {!data.settings.attendance && <p className="notice"><Icon name="info" size={18}/>La asistencia está desactivada en la configuración del curso: la sección se consulta, pero no recibe clases ni marcas nuevas.</p>}
-    {area === "" && <SectionOverview/>}
-    {area === "clases" && <Classes sessionId={item}/>}
-    {area === "estudiantes" && <SectionStudents/>}
-    {area === "horario" && <Timetable/>}
+    {!data.settings.attendance && <p className="notice"><Icon name="info" size={18}/>{selfPaced ? "Las secciones están desactivadas en la configuración del curso: la sección se consulta, pero no recibe estudiantes nuevos." : "La asistencia está desactivada en la configuración del curso: la sección se consulta, pero no recibe clases ni marcas nuevas."}</p>}
+    {elsewhere ? <EmptyState level={1} icon="info" title={selfPaced ? "Este curso es a tu ritmo" : "Este curso es con calendario"} action={<Link href={selfPaced ? `${base}/avance` : `${base}/clases`} className="button primary">{selfPaced ? "Ver el avance" : "Ver el cronograma"}</Link>}>{selfPaced ? "Sus secciones no tienen horario ni clases: cada estudiante avanza por las lecciones publicadas y la sección sigue su avance." : "Sus secciones avanzan juntas con un horario y clases; el avance se sigue en el cronograma."}</EmptyState> : <>
+      {area === "" && (selfPaced ? <SelfPacedOverview/> : <SectionOverview/>)}
+      {area === "clases" && <Classes sessionId={item}/>}
+      {area === "estudiantes" && <SectionStudents/>}
+      {area === "horario" && <Timetable/>}
+      {area === "avance" && <SectionProgressPage/>}
+    </>}
   </SectionProvider></CourseProvider>;
 }
 
-/** Resumen of a section: its own indicators, its next class, who teaches it and what happened in it. */
-function SectionOverview() {
-  const { course, configurable, teaches } = useCourse();
-  const { section, today, base, reload } = useSection();
+/** The section's header: its name, course, pacing or schedule, status, and administration's rename and close actions. */
+function SectionHeader({ primary }: { primary?: ReactNode }) {
+  const { course, configurable } = useCourse();
+  const { section, reload } = useSection();
   const { toast, confirm } = useFeedback();
   const [renaming, setRenaming] = useState(false);
-  const stats = section.indicators, next = section.next;
   const path = `/courses/${course.id}/groups/${section.id}`;
   const editable = configurable && course.status === "active";
   async function update(body: Record<string, string>, done: string) {
@@ -91,20 +103,70 @@ function SectionOverview() {
     catch (cause) { toast({ tone: "error", message: message(cause) }); return false; }
   }
   async function setStatus(status: "active" | "archived") {
-    if (status === "archived" && !await confirm({ title: `¿Cerrar «${section.name}»?`, body: <p>La sección conserva su lista, sus clases y su asistencia, pero no recibe clases nuevas. Su código de acceso deja de funcionar. Puedes reactivarla después.</p>, confirm: "Cerrar sección", danger: true })) return;
+    if (status === "archived" && !await confirm({ title: `¿Cerrar «${section.name}»?`, body: <p>{section.pacing === "self-paced" ? "La sección conserva su lista y el avance de sus estudiantes, pero no recibe estudiantes nuevos." : "La sección conserva su lista, sus clases y su asistencia, pero no recibe clases nuevas."} Su código de acceso deja de funcionar. Puedes reactivarla después.</p>, confirm: "Cerrar sección", danger: true })) return;
     await update({ status }, status === "archived" ? `«${section.name}» se cerró.` : `«${section.name}» está activa de nuevo.`);
   }
-  const primary = next && teaches(section.id) ? <PrimaryAction href={`${base}/clases/${next.id}`} icon={next.status === "in_progress" ? "play" : "calendar"}>{next.status === "in_progress" ? "Continuar la clase en curso" : next.sessionDate === today ? "Abrir la clase de hoy" : "Ver la próxima clase"}</PrimaryAction>
-    : editable && !section.schedule && section.status === "active" ? <PrimaryAction href={`${base}/horario`} icon="clock">Configurar horario</PrimaryAction> : undefined;
   return <>
     <PageHeader crumbs={[{ label: "Secciones", href: "/secciones" }, { label: section.name }]} title={section.name}
-      description={<>Sección de <Link href={`/cursos/${course.id}`}>{course.title}</Link> · {section.schedule ? scheduleSummary(section.schedule) : "sin horario"}</>}
+      description={<>Sección de <Link href={`/cursos/${course.id}`}>{course.title}</Link> · {section.pacing === "self-paced" ? "a tu ritmo" : section.schedule ? scheduleSummary(section.schedule) : "sin horario"}</>}
       meta={section.status === "archived" ? <StatusBadge>Cerrada</StatusBadge> : <StatusBadge tone="success">Activa</StatusBadge>}
       actions={editable && <Menu label={`Acciones de la sección ${section.name}`} items={section.status === "active"
         ? [{ label: "Renombrar", icon: "edit", onSelect: () => setRenaming(true) }, "separator", { label: "Cerrar sección", icon: "archive", danger: true, onSelect: () => void setStatus("archived") }]
         : [{ label: "Reactivar sección", icon: "undo", onSelect: () => void setStatus("active") }]}/>}
       primary={primary}/>
     {renaming && <div className="inline-form"><InlineName value={section.name} label="Nombre de la sección" onSave={name => update({ name }, "Sección renombrada.")} onDone={() => setRenaming(false)}/></div>}
+  </>;
+}
+
+/** Resumen of a self-paced section (DEC-027): how far its students got, how they enter, who teaches it and what happened. */
+function SelfPacedOverview() {
+  const { section, base } = useSection();
+  const stats = section.indicators;
+  return <>
+    <SectionHeader primary={<PrimaryAction href={`${base}/avance`} icon="check">Ver el avance</PrimaryAction>}/>
+    <StatTiles className="overview-kpis" items={[
+      { label: "Estudiantes", value: stats.learners, icon: "users", hue: "pink" },
+      { label: "Empezaron", value: stats.started, icon: "play", hue: "violet" },
+      { label: "Terminaron el curso", value: stats.finished, icon: "check", hue: "green" },
+      { label: "Avance promedio", value: stats.pathAverage === null ? "—" : `${stats.pathAverage} %`, icon: "overview", hue: "coral" },
+    ]}/>
+    <div className="dashboard">
+      <div className="dashboard-main">
+        <Section title="Avance del curso en la sección" className="order-2" action={<Link href={`${base}/avance`} className="section-link">Ver por estudiante</Link>}>
+          <Progress value={stats.started} max={stats.learners} label="Estudiantes que empezaron"/>
+          <Progress value={stats.finished} max={stats.learners} label="Estudiantes que terminaron todas las lecciones"/>
+          <p className="muted small">Sobre {plural(stats.lessonsPublished, "lección publicada", "lecciones publicadas")} del curso. Cada estudiante registra su avance al terminar una lección con el código de la sección.</p>
+        </Section>
+        <Section title="Actividad de la sección" className="order-3">
+          <ActivityFeed section={section.id} limit={6} empty="Lo que se registre en esta sección aparecerá aquí."/>
+        </Section>
+      </div>
+      <div className="dashboard-side">
+        <Section title="Cómo estudian" className="order-1">
+          <p>Entran con el código de la sección, eligen su nombre de la lista y siguen las lecciones publicadas en orden, cuando quieran.</p>
+          <p className="muted small">{section.accessCode ? <>Código para estudiantes: <code>{section.accessCode}</code></> : "La sección aún no tiene código para estudiantes."}</p>
+        </Section>
+        <Section title="Imparten la sección" className="order-4">
+          <SectionEducators/>
+        </Section>
+        <Section title="Estudiantes" className="order-5" action={<Link href={`${base}/estudiantes`} className="section-link">Ver la lista</Link>}>
+          <p>{plural(stats.learners, "estudiante asignado", "estudiantes asignados")}.</p>
+        </Section>
+      </div>
+    </div>
+  </>;
+}
+
+/** Resumen of a section: its own indicators, its next class, who teaches it and what happened in it. */
+function SectionOverview() {
+  const { course, configurable, teaches } = useCourse();
+  const { section, today, base } = useSection();
+  const stats = section.indicators, next = section.next;
+  const editable = configurable && course.status === "active";
+  const primary = next && teaches(section.id) ? <PrimaryAction href={`${base}/clases/${next.id}`} icon={next.status === "in_progress" ? "play" : "calendar"}>{next.status === "in_progress" ? "Continuar la clase en curso" : next.sessionDate === today ? "Abrir la clase de hoy" : "Ver la próxima clase"}</PrimaryAction>
+    : editable && !section.schedule && section.status === "active" ? <PrimaryAction href={`${base}/horario`} icon="clock">Configurar horario</PrimaryAction> : undefined;
+  return <>
+    <SectionHeader primary={primary}/>
     <StatTiles className="overview-kpis" items={[
       { label: "Estudiantes", value: stats.learners, icon: "users", hue: "pink" },
       { label: "Clases impartidas", value: `${stats.taught} de ${stats.classes}`, icon: "check", hue: "green" },

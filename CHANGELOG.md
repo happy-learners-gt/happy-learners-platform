@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.10 — 2026-10-05
+
+Parche de REL-004 (DEC-027): el ritmo del curso define cómo se imparte. **Con calendario**, cada sección avanza junta con su horario y su cronograma de clases; **A tu ritmo**, la sección no tiene horario ni clases y cada estudiante recorre las lecciones publicadas en orden.
+
+- ST-110: en un curso **a tu ritmo**, el espacio de estudiantes pregunta «¿Quién eres?» con la lista de la sección y luego muestra la ruta del curso por módulo (terminada, en curso o pendiente), la lección con la que sigue y cuántas lleva. Abrir y terminar una lección guarda el avance de esa persona; quien no aparece en la lista puede ver las lecciones sin guardar avance, y **No soy yo** cambia de persona. Las respuestas de las actividades siguen quedando solo en el dispositivo.
+- ST-110: cada sección a tu ritmo muestra **Resumen** (estudiantes, quienes empezaron y terminaron, avance promedio y cómo entran sus estudiantes) y **Avance**, con el progreso, la siguiente lección y la última actividad de cada estudiante y cuántos abrieron y terminaron cada lección. Su menú omite Cronograma y Horario; las tarjetas de sección muestran el avance de la ruta. En un curso con calendario no cambia nada.
+- ST-110: la Configuración explica cada ritmo y el ritmo de un programa sigue mandando sobre el de sus cursos.
+- Datos: `0024_self_paced.sql` agrega `learner_progress` (lección abierta y terminada por estudiante) y `group_access_sessions.learner_id`. Los cursos y programas que ya tenían clases quedan con calendario para conservar su cronograma.
+- API: `POST /api/student/identity` y `POST /api/student/progress` (solo en cursos a tu ritmo, 409 en los demás); `GET /api/sections/:id/progress`; las clases, el horario y la planificación de una sección a tu ritmo responden 409. Se mantiene la autorización de v0.8.1.
+
 ## 0.8.9 — 2026-10-05
 
 Parche de REL-004 (DEC-026): un calendario con días sin clase, clases canceladas que recorren u omiten lo planificado y clases finalizadas que registran hasta dónde llegó cada lección.
