@@ -41,7 +41,8 @@ export function Plan() {
   const base = `/cursos/${course.id}`;
   const delivery = useDelivery(course.id, settings.attendance && course.status === "active");
   const [section, setSection] = useState("");
-  const delivered = (delivery?.sessions || []).filter(session => !section || session.groupId === section).flatMap(session => session.lessons.map(lesson => lesson.id));
+  // Taught means completed in a finished class; a partial lesson or one not reached does not count yet (DEC-026).
+  const delivered = (delivery?.sessions || []).filter(session => !section || session.groupId === section).flatMap(session => session.lessons.filter(lesson => !lesson.outcome || lesson.outcome === "completed").map(lesson => lesson.id));
   const map = coverage(curriculum, units, lessons, delivered);
   const codeOf = new Map(map.outcomes.map(item => [item.outcome.id, item.code]));
   const coverageOf = new Map(map.outcomes.map(item => [item.outcome.id, item]));

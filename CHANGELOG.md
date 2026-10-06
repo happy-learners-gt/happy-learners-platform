@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.9 — 2026-10-05
+
+Parche de REL-004 (DEC-026): un calendario con días sin clase, clases canceladas que recorren u omiten lo planificado y clases finalizadas que registran hasta dónde llegó cada lección.
+
+- ST-108: **Días sin clase**. Administración registra feriados, asuetos y semanas completas para toda la organización en **Organización** o para una sección en su **Horario**. Los horarios no generan clases esos días: las clases pendientes que caían en ellos desaparecen y lo planificado pasa, en orden, a las siguientes. Al quitar un periodo vuelven sus clases. El cronograma muestra cada periodo entre las clases, con su motivo y su alcance.
+- ST-108: **Cancelar clase** pregunta qué pasa con lo planificado cuando la clase tiene lecciones o comentarios: **Recorrer** lo pasa a la siguiente clase y cada clase pendiente avanza un lugar; **Omitir** lo salta y las demás clases no cambian.
+- ST-109: **Finalizar clase** pide hasta dónde llegó cada lección: Completada, Parcial o No se alcanzó. Lo no completado abre la siguiente clase de la sección, salvo que se desactive. El cronograma muestra lo parcial y lo no alcanzado; el mapa de cobertura y los indicadores de la sección cuentan como impartido solo lo completado, y **Corregir lo trabajado** ajusta una clase ya finalizada. El espacio de estudiantes omite las lecciones que una clase no alcanzó.
+- Datos: `0023_class_calendar.sql` agrega `calendar_breaks` (periodos sin clase de la organización o de una sección) y `class_session_lessons.outcome`; las clases finalizadas antes de esta versión cuentan todas sus lecciones como completadas.
+- API: `GET`/`POST /api/calendar` y `DELETE /api/calendar/:id` (cambios solo para administración, 403 para el resto); `POST …/sessions/:sid/complete` acepta `{ lessons: [{ id, outcome }], carryOver }`; `POST …/sessions/:sid/cancel` acepta `{ plan: "shift" | "skip" }`; `PUT …/sessions/:sid/outcomes` corrige una clase finalizada. Se mantiene la autorización de v0.8.1.
+
 ## 0.8.8 — 2026-10-05
 
 Parche de REL-004 (DEC-025): ordenar arrastrando, un resumen del curso que se lee en orden y documentación depurada.
@@ -7,6 +17,7 @@ Parche de REL-004 (DEC-025): ordenar arrastrando, un resumen del curso que se le
 - ST-107: las lecciones de una clase, las actividades y los bloques de una lección, los módulos y las lecciones del contenido se ordenan arrastrando su asa (Fluent «reordenar») o con el teclado: con el asa enfocada, flecha arriba o abajo mueve un lugar e Inicio o Fin lleva al principio o al final. Los menús dicen «Mover arriba» y «Mover abajo». En pantallas táctiles el asa crece a 44 px.
 - ST-107: el **Resumen** del curso empieza con sus indicadores en una franja (lecciones publicadas, módulos, borradores, cambios sin publicar, resultados trabajados y secciones) y sigue en dos columnas: a la izquierda Contenido, con el avance de cada módulo, Plan curricular y Secciones; a la derecha Accesos rápidos en lista, Publicación pendiente, Equipo docente y Actividad reciente. El Resumen de cada sección usa la misma distribución.
 - ST-107: el distintivo «Archivado» va bajo el nombre del curso y ya no lo parte en una columna; la pestaña Archivados cuenta los cursos archivados. Los íconos dentro de un texto (el reloj del horario, por ejemplo) se alinean con su línea. Cada evento de la actividad reciente indica qué registro cambió (Clase, Lección, Sección…).
+- Correcciones: «Agregar clase» propone la fecha de hoy según la zona horaria de la organización, no la del navegador. El formulario de nuevo módulo enfoca su nombre al abrirse sin un temporizador que pudiera mover el foco mientras se escribe.
 - Documentación: se retiran `docs/redesign/` y `docs/sprint-2/`, registros de incrementos anteriores que siguen disponibles en el historial (tag v0.8.7). La documentación canónica vive en `happy-learners-ops`; aquí quedan la guía visual Fluent, la organización de demostración y los README de cada capa.
 
 ## 0.8.7 — 2026-10-05

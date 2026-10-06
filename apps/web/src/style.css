@@ -503,6 +503,21 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: dialog-in
 .mark.absent input:checked + span { background: var(--coral-soft); border-color: var(--coral-ink); color: var(--coral-ink); font-weight: var(--weight-bold); }
 .mark.excused input:checked + span { background: var(--sky-soft); border-color: var(--sky-ink); color: var(--sky-ink); font-weight: var(--weight-bold); }
 .mark input:disabled + span { opacity: .7; }
+/* Finishing a class: how far each lesson got (DEC-026). */
+.outcome-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.outcome-list li { display: grid; grid-template-columns: 28px minmax(140px, 1fr) auto; align-items: center; gap: var(--space-3); padding: 8px var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.outcome-lesson { display: grid; gap: 2px; min-width: 0; }
+.mark.outcome-completed input:checked + span { background: var(--green-soft); border-color: var(--green-ink); color: var(--green-ink); font-weight: var(--weight-bold); }
+.mark.outcome-partial input:checked + span { background: var(--amber-soft); border-color: var(--amber-ink); color: var(--amber-ink); font-weight: var(--weight-bold); }
+.mark.outcome-not_reached input:checked + span { background: var(--color-surface-muted); border-color: var(--color-ink-soft); color: var(--color-ink); font-weight: var(--weight-bold); }
+.class-lesson > .badge { justify-self: start; }
+.schedule-table tr.is-break th, .schedule-table tr.is-break td { background: var(--color-surface-muted); color: var(--color-muted); }
+.cell-outcome { color: var(--color-muted); font-size: var(--text-xs); }
+.days-off { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.days-off li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-3); padding: 8px var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-ink-soft); }
+.days-off li div { display: grid; gap: 2px; min-width: 0; }
+.days-off li strong { color: var(--color-ink); }
+.days-off-form { margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--color-border); }
 .sheet-footer { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; position: sticky; bottom: 0; padding: var(--space-3) 0 0; background: var(--color-surface); border-top: 1px solid var(--color-border); }
 
 /* Settings, admin, library previews */
@@ -1074,7 +1089,8 @@ ul.cell-list li svg { display: inline-block; vertical-align: -2px; margin-right:
   .overview-grid { grid-template-columns: minmax(0, 1fr); }
   .overview-grid .span-2 { grid-column: auto; }
   .quick-wide .quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .attendance-list li { grid-template-columns: 24px minmax(0, 1fr); }
+  .attendance-list li, .outcome-list li { grid-template-columns: 24px minmax(0, 1fr); }
+  .outcome-list .mark-group { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .mark-group { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .mark span { justify-content: center; width: 100%; padding: 0 4px; font-size: var(--text-xs); }
   .richtext-chrome { top: calc(var(--topbar-h) + 4px); }
