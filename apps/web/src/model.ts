@@ -51,7 +51,6 @@ export function sessionDay(value: string, style: "long" | "short" = "long") {
   const text = new Date(year, month - 1, day).toLocaleDateString("es-GT", style === "long" ? { weekday: "long", day: "numeric", month: "long" } : { day: "numeric", month: "short" });
   return text.charAt(0).toLocaleUpperCase("es") + text.slice(1);
 }
-export function today() { return new Date().toLocaleDateString("en-CA"); }
 
 export const normalize = (value: string) => value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLocaleLowerCase("es").trim();
 export const matches = (query: string, ...values: (string | undefined)[]) => !query.trim() || normalize(values.filter(Boolean).join(" ")).includes(normalize(query));
