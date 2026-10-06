@@ -7,6 +7,13 @@ async function call(path, method = "GET", body) {
 async function check(name, work) { await work(); checks.push({ name, passed: true }); }
 function assert(value) { if (!value) throw new Error("Critical flow assertion failed"); }
 let success = false;
+// A new version takes a few seconds to reach every edge location; wait for it before checking.
+if (process.env.EXPECTED_SHA) {
+  for (const deadline = Date.now() + 90000; Date.now() < deadline; await new Promise(resolve => setTimeout(resolve, 3000))) {
+    const sha = await call("/api/version").then(response => response.json()).then(body => body.sha, () => null);
+    if (sha === process.env.EXPECTED_SHA) break;
+  }
+}
 try {
   await check("home", async () => assert((await call("/")).ok));
   await check("health", async () => assert((await (await call("/api/health")).json()).status === "ok"));
