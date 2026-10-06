@@ -367,3 +367,18 @@ class UpgradeTests(unittest.TestCase):
                 db.execute("UPDATE organizations SET name='Colegio Real' WHERE id='org-demo'")
             db.executescript(path.read_text())
         self.assertEqual(db.execute("SELECT name FROM organizations WHERE id='org-demo'").fetchone()[0], "Colegio Real")
+
+    def test_finished_classes_covered_their_lessons_and_breaks_belong_to_the_organization(self):
+        """0023: classes finished before DEC-026 completed every lesson; days without class need a valid range."""
+        demo = self.scoped("org-demo")
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+        self.assertGreater(demo.execute("SELECT count(*) FROM class_session_lessons p JOIN class_sessions s ON s.id=p.session_id WHERE s.status='completed'").fetchone()[0], 0)
+        self.assertEqual(demo.execute("SELECT count(*) FROM class_session_lessons p JOIN class_sessions s ON s.id=p.session_id WHERE s.status='completed' AND p.outcome IS NOT 'completed'").fetchone()[0], 0)
+        self.assertEqual(demo.execute("SELECT count(*) FROM class_session_lessons p JOIN class_sessions s ON s.id=p.session_id WHERE s.status<>'completed' AND p.outcome IS NOT NULL").fetchone()[0], 0)
+        insert = "INSERT INTO calendar_breaks(id,organization_id,group_id,title,starts_on,ends_on,created_at) VALUES (?,?,?,?,?,?,?)"
+        demo.execute(insert, ("break-1", "org-demo", None, "Vacaciones", "2026-10-26", "2026-10-30", "2026-10-05T00:00:00Z"))
+        for values in [("break-2", "org-demo", None, "Al revés", "2026-10-30", "2026-10-26", "x"), ("break-3", "org-demo", None, "", "2026-10-26", "2026-10-26", "x"), ("break-4", "org-demo", "missing-group", "Asueto", "2026-10-26", "2026-10-26", "x")]:
+            with self.assertRaises(sqlite3.IntegrityError):
+                demo.execute(insert, values)
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("UPDATE class_session_lessons SET outcome='skipped' WHERE rowid=(SELECT min(rowid) FROM class_session_lessons)")

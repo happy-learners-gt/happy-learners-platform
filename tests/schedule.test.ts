@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { classPlanInput, classSequence, lessonsInOrder, periodWeek, scheduleDates, scheduleInput, scheduleSummary } from "../packages/domain/src/index";
+import { breakInput, cancelPlanInput, carryOver, classPlanInput, classSequence, completionInput, lessonsInOrder, periodWeek, scheduleDates, scheduleInput, scheduleSummary, sectionIndicators } from "../packages/domain/src/index";
 
 const valid = { weekdays: [3, 1], startsAt: "08:00", durationMinutes: 45, from: "2026-10-05", until: "2026-10-16" };
 
@@ -57,4 +57,45 @@ it("ST-101 places each class in the schedule: week of the period and number amon
   ];
   expect([...classSequence(classes, "2026-10-01")]).toEqual([["a", { week: 2, number: 1 }], ["b", { week: 2, number: null }], ["x", { week: 3, number: 2 }], ["c", { week: 3, number: 3 }]]);
   expect(classSequence(classes).get("a")).toEqual({ week: 1, number: 1 });
+});
+
+it("ST-108 days without class are one day or a range, with a reason", () => {
+  expect(breakInput({ title: "  Día de la  Revolución ", from: "2026-10-20" })).toEqual({ title: "Día de la Revolución", from: "2026-10-20", until: "2026-10-20" });
+  expect(breakInput({ title: "Vacaciones", from: "2026-10-26", until: "2026-10-30" })).toEqual({ title: "Vacaciones", from: "2026-10-26", until: "2026-10-30" });
+  expect(breakInput({ title: "", from: "2026-10-20" })).toHaveProperty("error");
+  expect(breakInput({ title: "Asueto", from: "2026-10-21", until: "2026-10-20" })).toHaveProperty("error", "La fecha final debe ser igual o posterior a la inicial.");
+  expect(breakInput({ title: "Asueto", from: "2026-02-30" })).toHaveProperty("error");
+});
+
+it("ST-108 the schedule skips holidays and whole weeks without class", () => {
+  const breaks = [{ title: "Feriado", from: "2026-10-07", until: "2026-10-07" }, { title: "Semana sin clases", from: "2026-10-12", until: "2026-10-16" }];
+  expect(scheduleDates({ weekdays: [1, 3], from: "2026-10-05", until: "2026-10-21" }, "2026-10-01", breaks)).toEqual(["2026-10-05", "2026-10-19", "2026-10-21"]);
+});
+
+it("ST-108 cancelling a class skips its plan unless it is asked to move it", () => {
+  expect(cancelPlanInput(undefined)).toBe("skip");
+  expect(cancelPlanInput({ plan: "shift" })).toBe("shift");
+  expect(cancelPlanInput({ plan: "other" })).toBe("skip");
+});
+
+it("ST-109 finishing a class confirms each lesson; what is left out counts as completed", () => {
+  const done = completionInput({ lessons: [{ id: "l2", outcome: "partial" }] }, ["l1", "l2"]);
+  expect("outcomes" in done && [...done.outcomes]).toEqual([["l1", "completed"], ["l2", "partial"]]);
+  expect("outcomes" in done && done.carryOver).toBe(true);
+  expect(completionInput({ lessons: [{ id: "l9", outcome: "completed" }] }, ["l1"])).toHaveProperty("error");
+  expect(completionInput({ lessons: [{ id: "l1", outcome: "done" }] }, ["l1"])).toHaveProperty("error");
+  expect(completionInput({ lessons: [{ id: "l1", outcome: "toString" }] }, ["l1"])).toHaveProperty("error");
+  expect(completionInput({ carryOver: false }, ["l1"])).toMatchObject({ carryOver: false });
+});
+
+it("ST-109 what was not completed opens the next class, without repeating lessons planned later", () => {
+  expect(carryOver(["l3"], ["l2"], [], 6)).toEqual({ lessons: ["l2", "l3"], left: [] });
+  expect(carryOver(["l3"], ["l2", "l4"], ["l4"], 6)).toEqual({ lessons: ["l2", "l3"], left: [] });
+  expect(carryOver(["l3", "l2"], ["l2"], [], 6)).toEqual({ lessons: ["l3", "l2"], left: [] });
+  expect(carryOver(["a", "b"], ["c"], [], 2)).toEqual({ lessons: ["c", "a"], left: ["b"] });
+});
+
+it("ST-109 a section counts as taught only the lessons its finished classes completed", () => {
+  const classes = [{ status: "completed" as const, sessionDate: "2026-10-05", lessonIds: ["l1", "l2"], completedIds: ["l1"], marked: 0, attended: 0 }];
+  expect(sectionIndicators(classes, ["l1", "l2"], 10, "2026-10-06")).toMatchObject({ lessonsTaught: 1, lessonsPlanned: 2 });
 });

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { ClassLesson, ClassLessonPlan, ClassResource, ClassSession, ClassStatus } from "@happy-learners/contracts";
-import { classSequence, classStatusLabels, maxClassLessons } from "@happy-learners/domain";
+import type { CalendarBreak, ClassLesson, ClassLessonPlan, ClassResource, ClassSession, ClassStatus, LessonOutcome } from "@happy-learners/contracts";
+import { classSequence, classStatusLabels, lessonOutcomeLabels, maxClassLessons } from "@happy-learners/domain";
 import { api, message } from "../../api";
 import { Link, useNavigation, useUnsavedChanges } from "../../navigation";
 import { plural, sessionDay } from "../../model";
@@ -24,6 +24,8 @@ type Detail = { session: ClassSession & { notes: string }; lessons: DetailLesson
 const markLabels: [Exclude<Mark, "unmarked">, string][] = [["present", "Presente"], ["late", "Tarde"], ["absent", "Ausente"], ["excused", "Justificada"]];
 const statusTone: Record<ClassStatus, Tone> = { planned: "info", in_progress: "warning", completed: "success", cancelled: "neutral" };
 const kindIcon = { text: "text", link: "link", file: "file" } as const;
+const outcomeTone: Record<LessonOutcome, Tone> = { completed: "success", partial: "warning", not_reached: "neutral" };
+const outcomeHint: Record<LessonOutcome, string> = { completed: "Cuenta como impartida en el plan curricular.", partial: "Se trabajó una parte: falta terminarla.", not_reached: "No se trabajó en esta clase." };
 
 export const classTime = (session: Pick<ClassSession, "startsAt" | "durationMinutes">) => [session.startsAt, session.durationMinutes ? `${session.durationMinutes} min` : ""].filter(Boolean).join(" · ");
 /** A planned class whose day has passed was not recorded: it shows as pending, not as planned. */
@@ -49,14 +51,16 @@ function Schedule() {
   const { section: group, base: sectionBase, reload } = useSection();
   const { url, navigate } = useNavigation();
   const [sessions, setSessions] = useState<ClassSession[] | null>(null), [plans, setPlans] = useState<Record<string, ClassLessonPlan>>({}), [today, setToday] = useState(""), [error, setError] = useState("");
+  const [breaks, setBreaks] = useState<CalendarBreak[]>([]);
   const [adding, setAdding] = useState(url.searchParams.get("nueva") === "1"), [filling, setFilling] = useState(false), [planning, setPlanning] = useState<ClassSession | null>(null);
   const view = url.searchParams.get("vista") === "historial" ? "history" : url.searchParams.get("vista") === "proximas" ? "upcoming" : "all";
   const page = `${sectionBase}/clases`;
   async function load() {
     setError("");
     try {
-      const s = await api<{ sessions: ClassSession[]; lessonPlans: Record<string, ClassLessonPlan>; today: string }>(`/courses/${course.id}/sessions`);
+      const s = await api<{ sessions: ClassSession[]; lessonPlans: Record<string, ClassLessonPlan>; today: string; breaks?: CalendarBreak[] }>(`/courses/${course.id}/sessions`);
       setSessions(s.sessions.filter(session => session.groupId === group.id)); setPlans(s.lessonPlans); setToday(s.today);
+      setBreaks((s.breaks || []).filter(item => !item.groupId || item.groupId === group.id));
     } catch (cause) { setError(message(cause)); }
   }
   useEffect(() => { if (course.status === "active") void load(); }, [course.id, group.id]);
@@ -79,6 +83,11 @@ function Schedule() {
   const held = ofGroup.filter(session => session.status !== "cancelled"), taught = held.filter(session => session.status === "completed");
   const marked = taught.reduce((sum, session) => sum + Number(session.marked || 0), 0), attended = taught.reduce((sum, session) => sum + Number(session.attended || 0), 0);
   const rows = view === "upcoming" ? upcoming : view === "history" ? history : ofGroup;
+  // The whole period also shows its days without class, where they fall among the classes.
+  const first = group.schedule?.from || ofGroup[0]?.sessionDate || "", last = group.schedule?.until || ofGroup[ofGroup.length - 1]?.sessionDate || "";
+  const offDays = view === "all" ? breaks.filter(item => item.until >= first && item.from <= last) : [];
+  const entries: ({ kind: "class"; session: ClassSession } | { kind: "break"; item: CalendarBreak })[] = [...rows.map(session => ({ kind: "class" as const, session })), ...offDays.map(item => ({ kind: "break" as const, item }))]
+    .sort((a, b) => (a.kind === "class" ? a.session.sessionDate : a.item.from).localeCompare(b.kind === "class" ? b.session.sessionDate : b.item.from) || (a.kind === "break" ? -1 : 1));
   const editable = writable;
   return <>
     {header}
@@ -100,7 +109,7 @@ function Schedule() {
       <table className="schedule-table">
         <caption className="sr-only">Cronograma de clases de {group.name}: planificación y seguimiento</caption>
         <thead><tr><th scope="col">Fecha</th><th scope="col">{noun.One}</th><th scope="col">Lecciones</th><th scope="col">Actividades</th><th scope="col">Comentarios</th><th scope="col">Recursos</th><th scope="col">Seguimiento</th></tr></thead>
-        <tbody>{rows.map(session => <ScheduleRow key={session.id} session={session} place={sequence.get(session.id)} extra={session.origin === "manual" && !!group.schedule && session.sessionDate >= group.schedule.from && session.sessionDate <= group.schedule.until} plans={plans} today={today} page={page} editable={editable} onPlan={() => setPlanning(session)}/>)}</tbody>
+        <tbody>{entries.map(entry => entry.kind === "break" ? <BreakRow key={entry.item.id} item={entry.item}/> : <ScheduleRow key={entry.session.id} session={entry.session} place={sequence.get(entry.session.id)} extra={entry.session.origin === "manual" && !!group.schedule && entry.session.sessionDate >= group.schedule.from && entry.session.sessionDate <= group.schedule.until} plans={plans} today={today} page={page} editable={editable} onPlan={() => setPlanning(entry.session)}/>)}</tbody>
       </table>
     </div>
       : !ofGroup.length ? <EmptyState icon="calendar" title="Esta sección aún no tiene clases" action={configurable ? <Link className="button primary" href={`${sectionBase}/horario`}>Configurar horario</Link> : writable && <Button icon="plus" onClick={() => setAdding(true)}>Agregar clase</Button>}>
@@ -113,6 +122,15 @@ function Schedule() {
     {planning && <PlanDialog session={planning} onClose={() => setPlanning(null)} onSaved={async () => { setPlanning(null); await changed(); }}/>}
     {addDialog}
   </>;
+}
+
+/** Days without class inside the period: a holiday or a break, of the organization or of the section. */
+function BreakRow({ item }: { item: CalendarBreak }) {
+  const span = item.from === item.until ? sessionDay(item.from, "short") : `${sessionDay(item.from, "short")} al ${sessionDay(item.until, "short")}`;
+  return <tr className="is-break">
+    <th scope="row" data-label="Fecha"><div className="cell-date"><span className="class-row-title">{span}</span><span className="muted small">Sin clase</span></div></th>
+    <td colSpan={6} data-label="Motivo"><Icon name="calendar" size={14}/> {item.title}{item.groupId ? " · solo esta sección" : " · toda la organización"}</td>
+  </tr>;
 }
 
 /** One class of the schedule: when, what is planned for it and how it went. */
@@ -129,7 +147,7 @@ function ScheduleRow({ session, place, extra, plans, today, page, editable, onPl
       <span className="muted small">{place?.number ? `Clase ${place.number} · ` : ""}Semana {place?.week ?? 1}{extra ? " · adicional" : ""}</span>
     </div></th>
     <td data-label={noun.One}>{modules.length ? modules.join(" · ") : none}</td>
-    <td data-label="Lecciones">{session.lessons.length ? <ol className="cell-list">{session.lessons.map(lesson => <li key={lesson.id}>{lesson.title}{!lesson.available && <> <LessonWarning id={lesson.id}/></>}</li>)}</ol> : <span className="muted">Sin lección</span>}</td>
+    <td data-label="Lecciones">{session.lessons.length ? <ol className="cell-list">{session.lessons.map(lesson => <li key={lesson.id}>{lesson.title}{session.status === "completed" && lesson.outcome && lesson.outcome !== "completed" && <span className="cell-outcome"> · {lessonOutcomeLabels[lesson.outcome].toLowerCase()}</span>}{!lesson.available && <> <LessonWarning id={lesson.id}/></>}</li>)}</ol> : <span className="muted">Sin lección</span>}</td>
     <td data-label="Actividades">{activities.length ? <ul className="cell-list">{activities.slice(0, 4).map((activity, index) => <li key={index}>{activity.title}{activity.minutes ? <span className="muted nowrap"> · {activity.minutes} min</span> : null}</li>)}{activities.length > 4 && <li className="muted">y {activities.length - 4} más</li>}</ul> : none}</td>
     <td data-label="Comentarios">{session.notes ? <p className="cell-notes">{session.notes}</p> : none}</td>
     <td data-label="Recursos">{resources.length ? <ul className="cell-list">{resources.slice(0, 4).map(resource => <li key={resource.id}><Icon name={kindIcon[resource.kind]} size={14}/>{resource.title}</li>)}{resources.length > 4 && <li className="muted">y {resources.length - 4} más</li>}</ul> : none}</td>
@@ -278,7 +296,7 @@ function ClassDetail({ id }: { id: string }) {
   const { section, today, base: sectionBase, reload } = useSection();
   const { toast, confirm } = useFeedback();
   const [detail, setDetail] = useState<Detail | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false), [editing, setEditing] = useState(false);
-  const [preview, setPreview] = useState<ClassResource | null>(null);
+  const [preview, setPreview] = useState<ClassResource | null>(null), [finishing, setFinishing] = useState(false), [cancelling, setCancelling] = useState(false), [correcting, setCorrecting] = useState(false);
   const path = `/courses/${course.id}/sessions/${id}`, page = `${sectionBase}/clases`;
   async function load() {
     setError("");
@@ -295,21 +313,27 @@ function ClassDetail({ id }: { id: string }) {
   if (!detail) return <><PageHeader crumbs={crumbs} title={<span className="skeleton-title">Clase</span>}/><Loading label="Abriendo clase…" lines={6}/></>;
   const { session, lessons, resources } = detail;
   const editable = teaches(session.groupId) && detail.groupActive;
-  async function act(action: "start" | "complete" | "cancel" | "restore") {
-    if (action === "cancel" && !await confirm({ title: "¿Cancelar esta clase?", body: <p>Queda en el cronograma como cancelada y deja de aparecer en las próximas clases de la sección y de sus estudiantes. Puedes reprogramarla después.</p>, confirm: "Cancelar clase", cancel: "Volver", danger: true })) return;
+  const planned = lessons.length > 0 || !!session.notes;
+  async function act(action: "start" | "complete" | "cancel" | "restore", data?: unknown) {
+    if (action === "cancel" && !data && !await confirm({ title: "¿Cancelar esta clase?", body: <p>Queda en el cronograma como cancelada y deja de aparecer en las próximas clases de la sección y de sus estudiantes. Puedes reprogramarla después.</p>, confirm: "Cancelar clase", cancel: "Volver", danger: true })) return;
     setBusy(true);
     try {
-      await api(`${path}/${action}`, "POST");
-      toast({ message: { start: "Clase en curso. Pasa lista cuando estés listo.", complete: "Clase finalizada. Queda registrada en el cronograma.", cancel: "Clase cancelada.", restore: "Clase reprogramada." }[action] });
+      const result = await api<{ carried?: number; carriedTo?: string; left?: number; shifted?: number }>(`${path}/${action}`, "POST", data);
+      const left = result.left ? ` ${plural(result.left, "lección quedó", "lecciones quedaron")} sin clase: agrega una clase o amplía el horario.` : "";
+      toast({ message: action === "complete" ? `Clase finalizada.${result.carried ? ` ${plural(result.carried, "lección pasa", "lecciones pasan")} a la clase del ${sessionDay(result.carriedTo!, "short")}.` : ""}${left}`
+        : action === "cancel" ? `Clase cancelada.${result.shifted ? ` Su planificación pasó a la clase siguiente y ${result.shifted === 1 ? "esa clase se recorrió" : `las ${result.shifted} clases siguientes se recorrieron`} un lugar.` : ""}${left}`
+        : { start: "Clase en curso. Pasa lista cuando estés listo.", restore: "Clase reprogramada." }[action] });
+      setFinishing(false); setCancelling(false);
       await Promise.all([load(), reload()]);
     } catch (cause) { toast({ tone: "error", message: message(cause) }); }
     finally { setBusy(false); }
   }
   const primary = !editable ? undefined
     : session.status === "planned" ? <PrimaryAction icon="play" busy={busy} onClick={() => void act("start")}>Comenzar clase</PrimaryAction>
-    : session.status === "in_progress" ? <PrimaryAction icon="check" busy={busy} onClick={() => void act("complete")}>Finalizar clase</PrimaryAction>
+    : session.status === "in_progress" ? <PrimaryAction icon="check" busy={busy} onClick={() => lessons.length ? setFinishing(true) : void act("complete")}>Finalizar clase</PrimaryAction>
     : session.status === "cancelled" ? <PrimaryAction icon="calendar" busy={busy} onClick={() => void act("restore")}>Reprogramar</PrimaryAction> : undefined;
-  const menu: MenuItem[] = editable && session.status === "planned" ? [{ label: "Cancelar clase", icon: "close", danger: true, onSelect: () => void act("cancel") }] : [];
+  const menu: MenuItem[] = editable && session.status === "planned" ? [{ label: "Cancelar clase", icon: "close", danger: true, onSelect: () => planned ? setCancelling(true) : void act("cancel") }]
+    : editable && session.status === "completed" && lessons.length ? [{ label: "Corregir lo trabajado", icon: "edit", onSelect: () => setCorrecting(true) }] : [];
   const modules = [...new Set(lessons.map(lesson => lesson.unitTitle).filter(Boolean))];
   return <>
     <PageHeader crumbs={[...crumbs, { label: sessionDay(session.sessionDate) }]} title={`${sessionDay(session.sessionDate)}${session.startsAt ? `, ${session.startsAt}` : ""}`}
@@ -327,6 +351,7 @@ function ClassDetail({ id }: { id: string }) {
         <Section title={lessons.length > 1 ? `Lecciones de la clase (${lessons.length})` : "Lección"}>
           {lessons.length ? <ol className="class-lessons">{lessons.map(lesson => <li key={lesson.id} className="class-lesson">
             <strong>{lesson.title}</strong>
+            {session.status === "completed" && lesson.outcome && <StatusBadge tone={outcomeTone[lesson.outcome]}>{lessonOutcomeLabels[lesson.outcome]}</StatusBadge>}
             <span className="muted small">{lesson.archived ? "Archivada: requiere sustitución" : lesson.currentRevision ? `Publicación ${lesson.currentRevision}` : "Borrador: los estudiantes aún no la ven"}{lesson.revision && lesson.revision !== lesson.currentRevision ? ` · en clase se usó la publicación ${lesson.revision}` : ""}</span>
             {lesson.activities.length > 0 && <ul className="cell-list">{lesson.activities.map((activity, index) => <li key={index}>{activity.title}{activity.minutes ? <span className="muted"> · {activity.minutes} min</span> : null}</li>)}</ul>}
             <div className="button-row">
@@ -346,8 +371,63 @@ function ClassDetail({ id }: { id: string }) {
       </div>
     </div>
     {editing && <PlanDialog session={session} onClose={() => setEditing(false)} onSaved={async () => { setEditing(false); await load(); }}/>}
+    {finishing && <FinishDialog lessons={lessons} busy={busy} onClose={() => setFinishing(false)} onFinish={data => act("complete", data)}/>}
+    {correcting && <FinishDialog lessons={lessons} busy={busy} correcting onClose={() => setCorrecting(false)} onFinish={async data => {
+      setBusy(true);
+      try { await api(`${path}/outcomes`, "PUT", data); toast({ message: "Lo trabajado en la clase quedó corregido." }); setCorrecting(false); await Promise.all([load(), reload()]); }
+      catch (cause) { toast({ tone: "error", message: message(cause) }); }
+      finally { setBusy(false); }
+    }}/>}
+    {cancelling && <CancelDialog session={session} lessons={lessons.length} busy={busy} onClose={() => setCancelling(false)} onCancel={plan => act("cancel", { plan })}/>}
     {preview && <ResourcePreview item={{ ...preview, courseId: preview.courseId || course.id, content: preview.content || "", status: preview.available ? "published" : "draft", version: 1, updatedAt: "", termIds: [], usedIn: 0, fileId: preview.kind === "file" ? preview.id : undefined }} lessons={[]} onClose={() => setPreview(null)}/>}
   </>;
+}
+
+/**
+ * Finishing a class confirms how far each planned lesson got (DEC-026). Only completed lessons count as taught; what
+ * was not completed can open the section's next class. Correcting a finished class changes only the record.
+ */
+function FinishDialog({ lessons, busy, correcting, onClose, onFinish }: { lessons: DetailLesson[]; busy: boolean; correcting?: boolean; onClose: () => void; onFinish: (data: { lessons: { id: string; outcome: LessonOutcome }[]; carryOver: boolean }) => Promise<void> }) {
+  const [outcomes, setOutcomes] = useState<Record<string, LessonOutcome>>(() => Object.fromEntries(lessons.map(lesson => [lesson.id, lesson.outcome || "completed"])));
+  const [carry, setCarry] = useState(true);
+  const unfinished = lessons.filter(lesson => outcomes[lesson.id] !== "completed").length;
+  function submit(event: FormEvent) { event.preventDefault(); void onFinish({ lessons: lessons.map(lesson => ({ id: lesson.id, outcome: outcomes[lesson.id] })), carryOver: !correcting && carry }); }
+  return <Modal title={correcting ? "Corregir lo trabajado en la clase" : "Finalizar clase"} onClose={onClose} wide>
+    <form className="stack" onSubmit={submit}>
+      <fieldset disabled={busy} className="stack">
+        <p className="muted">{correcting ? "Cambia lo que se registró de cada lección. Las demás clases no cambian." : "Indica hasta dónde llegó la clase con cada lección. Solo las lecciones completadas cuentan como impartidas en el plan curricular."}</p>
+        <ol className="outcome-list">{lessons.map((lesson, index) => <li key={lesson.id}>
+          <span className="roster-number" aria-hidden="true">{index + 1}</span>
+          <div className="outcome-lesson"><strong id={`outcome-${lesson.id}`}>{lesson.title}</strong><span className="muted small">{outcomeHint[outcomes[lesson.id]]}</span></div>
+          <div className="mark-group" role="radiogroup" aria-labelledby={`outcome-${lesson.id}`}>
+            {(Object.keys(lessonOutcomeLabels) as LessonOutcome[]).map(value => <label key={value} className={`mark outcome-${value}`}><input type="radio" name={`outcome-${lesson.id}`} value={value} checked={outcomes[lesson.id] === value} onChange={() => setOutcomes({ ...outcomes, [lesson.id]: value })}/><span>{lessonOutcomeLabels[value]}</span></label>)}
+          </div>
+        </li>)}</ol>
+        {!correcting && unfinished > 0 && <label className="switch"><input type="checkbox" checked={carry} onChange={event => setCarry(event.target.checked)}/><span>{unfinished === 1 ? "La lección sin completar abre la siguiente clase de la sección" : `Las ${unfinished} lecciones sin completar abren la siguiente clase de la sección`}</span></label>}
+        <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Volver</button><button className="button primary">{busy ? "Guardando…" : correcting ? "Guardar corrección" : "Finalizar clase"}</button></div>
+      </fieldset>
+    </form>
+  </Modal>;
+}
+
+/** Cancelling a class with a plan asks what happens to it: it moves to the next class (Recorrer) or it is skipped (Omitir). */
+function CancelDialog({ session, lessons, busy, onClose, onCancel }: { session: ClassSession; lessons: number; busy: boolean; onClose: () => void; onCancel: (plan: "shift" | "skip") => Promise<void> }) {
+  const [plan, setPlan] = useState<"shift" | "skip">("shift");
+  const what = lessons ? plural(lessons, "lección", "lecciones") + (session.notes ? " y sus comentarios" : "") : "sus comentarios";
+  return <Modal title="¿Cancelar esta clase?" onClose={onClose}>
+    <form className="stack" onSubmit={event => { event.preventDefault(); void onCancel(plan); }}>
+      <fieldset disabled={busy} className="stack">
+        <p className="muted">La clase queda en el cronograma como cancelada y deja de aparecer en las próximas clases de la sección y de sus estudiantes. Tiene planificadas {what}.</p>
+        <fieldset className="preset-picker"><legend>¿Qué pasa con lo planificado?</legend>
+          <div className="preset-grid">
+            <label className={`preset${plan === "shift" ? " is-selected" : ""}`}><input type="radio" name="cancel-plan" checked={plan === "shift"} onChange={() => setPlan("shift")}/><strong>Recorrer</strong><small>Pasa a la siguiente clase y cada clase pendiente avanza un lugar. La última planificación puede quedar sin clase.</small></label>
+            <label className={`preset${plan === "skip" ? " is-selected" : ""}`}><input type="radio" name="cancel-plan" checked={plan === "skip"} onChange={() => setPlan("skip")}/><strong>Omitir</strong><small>Se omite y las demás clases no cambian. Sus lecciones quedan disponibles para asignarlas en orden.</small></label>
+          </div>
+        </fieldset>
+        <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Volver</button><button className="button danger">{busy ? "Cancelando…" : plan === "shift" ? "Cancelar y recorrer" : "Cancelar y omitir"}</button></div>
+      </fieldset>
+    </form>
+  </Modal>;
 }
 
 function Notes({ detail, editable, onSaved }: { detail: Detail; editable: boolean; onSaved: () => Promise<void> }) {

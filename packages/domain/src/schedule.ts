@@ -29,14 +29,41 @@ export function scheduleInput(input: unknown): SectionSchedule | { error: string
 
 const daysBetween = (from: string, until: string) => Math.round((Date.parse(`${until}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000);
 
-/** The class days of a schedule from `today` on: past days are history and are never generated again. */
-export function scheduleDates(schedule: Pick<SectionSchedule, "weekdays" | "from" | "until">, today: string) {
+export type DaysOff = { title: string; from: string; until: string };
+/** The break a day falls in, if any. */
+export const breakOn = <T extends DaysOff>(day: string, breaks: T[]) => breaks.find(item => item.from <= day && day <= item.until);
+
+/** Validates days without class: a title and one day or a range of up to a year. */
+export function breakInput(input: unknown): DaysOff | { error: string } {
+  const value = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  const title = typeof value.title === "string" ? value.title.trim().replace(/\s+/g, " ") : "";
+  if (!title || title.length > 120) return { error: "Escribe el motivo, por ejemplo «Día de la Independencia» o «Vacaciones de medio año»." };
+  const until = value.until === undefined || value.until === null || value.until === "" ? value.from : value.until;
+  if (!isCalendarDay(value.from) || !isCalendarDay(until)) return { error: "Indica la fecha o el rango de fechas sin clase." };
+  if (until < value.from) return { error: "La fecha final debe ser igual o posterior a la inicial." };
+  if (daysBetween(value.from, until) >= maxScheduleDays) return { error: "Un periodo sin clase puede durar hasta un año." };
+  return { title, from: value.from, until };
+}
+
+/** The class days of a schedule from `today` on, skipping days without class: past days are history and are never generated again. */
+export function scheduleDates(schedule: Pick<SectionSchedule, "weekdays" | "from" | "until">, today: string, breaks: DaysOff[] = []) {
   const dates: string[] = [];
   const day = new Date(`${schedule.from > today ? schedule.from : today}T00:00:00Z`);
   for (; day.toISOString().slice(0, 10) <= schedule.until && dates.length < maxScheduledClasses; day.setUTCDate(day.getUTCDate() + 1)) {
-    if (schedule.weekdays.includes(day.getUTCDay())) dates.push(day.toISOString().slice(0, 10));
+    const value = day.toISOString().slice(0, 10);
+    if (schedule.weekdays.includes(day.getUTCDay()) && !breakOn(value, breaks)) dates.push(value);
   }
   return dates;
+}
+
+/**
+ * What the next class works on once a class leaves lessons unfinished: those lessons first, then its own, without
+ * repeating a lesson already planned later. Lessons beyond the limit of a class are returned apart.
+ */
+export function carryOver(next: string[], unfinished: string[], later: string[], limit: number) {
+  const moving = unfinished.filter(id => !next.includes(id) && !later.includes(id));
+  const lessons = [...moving, ...next];
+  return { lessons: lessons.slice(0, limit), left: lessons.slice(limit) };
 }
 
 /** "lun y mié, 08:00 · 45 min" */
