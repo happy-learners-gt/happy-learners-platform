@@ -440,3 +440,14 @@ class UpgradeTests(unittest.TestCase):
         self.assertIn(("admin-externo", "admin"), other.execute("SELECT u.username,m.role FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.organization_id='org-other'").fetchall())
         demo = self.scoped("org-demo")
         self.assertEqual(demo.execute("SELECT count(*) FROM users WHERE username IN ('admin-hl','docente1-hl','docente2-hl','admin-externo')").fetchone()[0], 0)
+
+    def test_demo_programs_read_as_paths(self):
+        """0028 (DEC-033): three demo programs whose courses each require the previous one; other organizations get none."""
+        demo = self.scoped("org-demo")
+        paths = demo.execute("SELECT c.program_id, count(*), count(p.course_id) FROM courses c LEFT JOIN course_prerequisites p ON p.course_id=c.id WHERE c.program_id IN ('seed-program-lectura','seed-program-programacion','seed-program-musica') GROUP BY c.program_id ORDER BY c.program_id").fetchall()
+        self.assertEqual(paths, [("seed-program-lectura", 4, 3), ("seed-program-musica", 3, 2), ("seed-program-programacion", 4, 3)])
+        self.assertEqual(demo.execute("SELECT count(*) FROM course_prerequisites p JOIN courses a ON a.id=p.course_id JOIN courses b ON b.id=p.required_course_id WHERE a.program_id IS NOT b.program_id").fetchone()[0], 0)
+        self.assertEqual(demo.execute("SELECT count(*) FROM lessons WHERE program_id LIKE 'seed-course-%-_' AND status<>'published'").fetchone()[0], 0)
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+        for scope in ["org-other", "org-hl"]:
+            self.assertEqual(self.scoped(scope).execute("SELECT count(*) FROM study_programs WHERE id LIKE 'seed-program-%'").fetchone()[0], 0)
