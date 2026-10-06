@@ -22,13 +22,17 @@ export function SectionCard({ section, today, showCourse = true }: { section: Se
       </div>
       {closed ? <StatusBadge>{section.status === "archived" ? "Cerrada" : "Curso archivado"}</StatusBadge> : stats.unrecorded > 0 && <StatusBadge tone="danger">{plural(stats.unrecorded, "clase sin registrar", "clases sin registrar")}</StatusBadge>}
     </div>
-    <div className="progress-bars">
+    {section.pacing === "self-paced" ? <div className="progress-bars">
+      <Bar label="Avance promedio" value={stats.pathAverage || 0} max={100} text={stats.pathAverage === null ? "Sin lecciones" : `${stats.pathAverage} %`}/>
+      <Bar label="Empezaron" value={stats.started} max={stats.learners} text={stats.learners ? `${stats.started} de ${stats.learners}` : "Sin estudiantes"}/>
+      <Bar label="Terminaron el curso" value={stats.finished} max={stats.learners} text={stats.learners ? `${stats.finished} de ${stats.learners}` : "Sin estudiantes"}/>
+    </div> : <div className="progress-bars">
       <Bar label="Lecciones impartidas" value={stats.lessonsTaught} max={stats.lessonsPublished} text={stats.lessonsPublished ? `${stats.lessonsTaught} de ${stats.lessonsPublished}` : "Sin lecciones publicadas"}/>
       <Bar label="Clases impartidas" value={stats.taught} max={stats.classes} text={stats.classes ? `${stats.taught} de ${stats.classes}` : "Sin clases"}/>
       <Bar label="Asistencia" value={stats.attendanceRate || 0} max={100} text={stats.attendanceRate === null ? "Sin registrar" : `${stats.attendanceRate} %`}/>
-    </div>
+    </div>}
     <p className="muted small">
-      {plural(stats.learners, "estudiante", "estudiantes")} · {section.schedule ? scheduleSummary(section.schedule) : "sin horario"}
+      {plural(stats.learners, "estudiante", "estudiantes")} · {section.pacing === "self-paced" ? "a tu ritmo" : section.schedule ? scheduleSummary(section.schedule) : "sin horario"}
       {next && !closed ? <> · {next.status === "in_progress" ? "clase en curso" : next.sessionDate === today ? "clase hoy" : "próxima clase"}: <Link href={`${sectionPath(section.id)}/clases/${next.id}`}>{sessionDay(next.sessionDate, "short")}{next.startsAt ? `, ${next.startsAt}` : ""}</Link></> : null}
     </p>
   </li>;

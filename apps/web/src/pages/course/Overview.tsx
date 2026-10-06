@@ -15,7 +15,7 @@ import { sectionPath } from "../sections/context";
 import { SectionCards } from "../sections/SectionCard";
 
 export function Overview() {
-  const { course, units, lessons, curriculum, access, writable, publisher, configurable, reload, noun, settings, program } = useCourse();
+  const { course, units, lessons, curriculum, access, writable, publisher, configurable, reload, noun, settings, program, pacing } = useCourse();
   const teamEditable = configurable;
   // Sections are instances of the course: administration sees all of them, each educator only their own (DEC-024).
   const [groups, setGroups] = useState<SectionSummary[] | null>(null), [today, setToday] = useState("");
@@ -32,7 +32,7 @@ export function Overview() {
   const firstTaught = groups?.find(group => access.assigned.includes(group.id));
   const quick: { href: string; label: string; icon: IconName; hue: string }[] = [
     ...(writable ? [{ href: `${base}/contenido`, label: "Nueva lección", icon: "plus" as const, hue: "violet" }, { href: `${base}/biblioteca`, label: "Agregar recurso", icon: "upload" as const, hue: "teal" }] : []),
-    ...(settings.attendance && firstTaught ? [{ href: `${sectionPath(firstTaught.id)}/clases`, label: `Planificar clases de ${firstTaught.name}`, icon: "calendar" as const, hue: "coral" }] : []),
+    ...(settings.attendance && firstTaught ? [pacing === "self-paced" ? { href: `${sectionPath(firstTaught.id)}/avance`, label: `Ver el avance de ${firstTaught.name}`, icon: "check" as const, hue: "green" } : { href: `${sectionPath(firstTaught.id)}/clases`, label: `Planificar clases de ${firstTaught.name}`, icon: "calendar" as const, hue: "coral" }] : []),
     ...(configurable && settings.attendance ? [{ href: `${base}/secciones`, label: "Secciones del curso", icon: "users" as const, hue: "coral" }] : []),
     ...(configurable ? [{ href: `${base}/configuracion`, label: "Configuración", icon: "settings" as const, hue: "amber" }] : []),
   ];

@@ -13,7 +13,7 @@ export function StudentLesson({ code }: { code: string }) {
   useEffect(() => { api<{ lesson: Lesson; navigation?: LessonNavigation | null }>(`/share/${encodeURIComponent(shareCode)}`).then(result => { setLesson(result.lesson); setNavigation(result.navigation || null); }).catch(cause => setError(message(cause))); }, [shareCode]);
   if (error) return <div className="player"><PlayerBar/><main id="main" className="player-main"><div className="player-card player-center"><Icon name="alert" size={28}/><h1>No encontramos esta lección</h1><p>{error === "Lección no disponible." ? "Revisa el código con tu educador. Puede que la lección ya no esté publicada." : error}</p><a className="button primary" href="/">Volver al inicio</a></div></main></div>;
   if (!lesson) return <div className="player"><PlayerBar/><main id="main" className="player-main"><p role="status" className="player-center">Abriendo lección…</p></main></div>;
-  return <LessonPlayer key={shareCode} lesson={lesson} navigation={navigation} fileUrl={id => `/api/share/${encodeURIComponent(shareCode)}/files/${id}`} complete={() => api(`/share/${encodeURIComponent(shareCode)}/complete`, "POST").then(() => undefined)}/>;
+  return <LessonPlayer key={shareCode} lesson={lesson} navigation={navigation} fileUrl={id => `/api/share/${encodeURIComponent(shareCode)}/files/${id}`} complete={() => api<{ learner?: string | null }>(`/share/${encodeURIComponent(shareCode)}/complete`, "POST").then(result => result.learner || null)}/>;
 }
 
 function PlayerBar({ title, step, total }: { title?: string; step?: number; total?: number }) {
@@ -29,9 +29,9 @@ function PlayerBar({ title, step, total }: { title?: string; step?: number; tota
  * One activity at a time: intro (step 0), activities (1…n) and completion (n+1).
  * In preview mode nothing is recorded and resources come from the course library.
  */
-export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, onExit, navigation }: { lesson: Lesson; fileUrl: (fileId: string) => string; complete?: () => Promise<void>; preview?: boolean; resources?: (Material | Resource)[]; onExit?: () => void; navigation?: LessonNavigation | null }) {
+export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, onExit, navigation }: { lesson: Lesson; fileUrl: (fileId: string) => string; complete?: () => Promise<string | null>; preview?: boolean; resources?: (Material | Resource)[]; onExit?: () => void; navigation?: LessonNavigation | null }) {
   const [step, setStep] = useState(0), [answers, setAnswers] = useState<Record<string, number>>({});
-  const [busy, setBusy] = useState(false), [error, setError] = useState(""), [done, setDone] = useState(false);
+  const [busy, setBusy] = useState(false), [error, setError] = useState(""), [done, setDone] = useState(false), [learner, setLearner] = useState<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null), first = useRef(true);
   const total = lesson.activities.length;
   useEffect(() => { if (first.current) { first.current = false; return; } heading.current?.focus(); window.scrollTo(0, 0); }, [step]);
@@ -39,7 +39,7 @@ export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, on
   async function finish() {
     if (preview || !complete) { setDone(true); setStep(total + 1); return; }
     setBusy(true); setError("");
-    try { await complete(); setDone(true); setStep(total + 1); }
+    try { setLearner(await complete()); setDone(true); setStep(total + 1); }
     catch (cause) { setError(`${message(cause)} Tu avance sigue en pantalla; vuelve a intentar.`); }
     finally { setBusy(false); }
   }
@@ -77,8 +77,9 @@ export function LessonPlayer({ lesson, fileUrl, complete, preview, resources, on
       {step > total && <article className="player-card player-center">
         <span className="done-icon" aria-hidden="true"><Icon name="check" size={32}/></span>
         <h1 ref={heading} tabIndex={-1}>¡Terminaste la lección!</h1>
-        <p role="status">{done && !preview ? "¡Gracias por participar! Contamos la lección como terminada, sin guardar tu nombre ni tus respuestas." : "En la versión publicada, aquí se cuenta la lección como terminada."}</p>
+        <p role="status">{done && !preview ? learner ? `¡Bien hecho, ${learner}! La lección quedó terminada en tu avance; tus respuestas se quedan en este dispositivo.` : "¡Gracias por participar! Contamos la lección como terminada, sin guardar tu nombre ni tus respuestas." : "En la versión publicada, aquí se cuenta la lección como terminada."}</p>
         {navigation?.next && <a className="button primary" href={`/aprender/${encodeURIComponent(navigation.next.shareCode)}`}>Siguiente lección: {navigation.next.title}<Icon name="arrowRight" size={18}/></a>}
+        {learner && <a className="button secondary" href="/estudiante"><Icon name="back" size={18}/>Volver a mi sección</a>}
         <button type="button" className="button secondary" onClick={() => { setAnswers({}); setStep(0); }}>Repasar desde el inicio</button>
         {navigation && !navigation.next && <p className="muted">Es la última lección publicada de {navigation.moduleName}.</p>}
       </article>}

@@ -22,7 +22,7 @@ export type SectionView = { id: string; name: string; status: "active" | "archiv
  * sees all of them; each educator sees only the sections they teach.
  */
 export function CourseSections() {
-  const { course, configurable, access } = useCourse();
+  const { course, configurable, access, pacing } = useCourse();
   const { navigate } = useNavigation();
   const { toast } = useFeedback();
   const [sections, setSections] = useState<SectionSummary[] | null>(null), [today, setToday] = useState(""), [error, setError] = useState("");
@@ -39,13 +39,15 @@ export function CourseSections() {
     setBusy(true);
     try {
       const { id } = await api<{ id: string }>(`/courses/${course.id}/groups`, "POST", { name });
-      toast({ message: `Sección «${name}» creada. Asígnale sus educadores, sus estudiantes y su horario.` });
+      toast({ message: `Sección «${name}» creada. Asígnale sus educadores, sus estudiantes${pacing === "self-paced" ? " y su código" : " y su horario"}.` });
       navigate(sectionPath(id));
     } catch (cause) { toast({ tone: "error", message: message(cause) }); setBusy(false); }
   }
   const mine = access.sections !== "all";
   const header = <PageHeader crumbs={[{ label: "Cursos", href: "/cursos" }, { label: course.title, href: `/cursos/${course.id}` }, { label: "Secciones" }]} title={mine ? "Mis secciones del curso" : "Secciones"}
-    description={mine ? "Las secciones de este curso que impartes. Cada una tiene sus estudiantes, su horario, su cronograma y su propio avance." : "Cada sección es una impartición del curso: sigue su plan y su contenido, con sus propios educadores, estudiantes, horario, clases y avance."}
+    description={pacing === "self-paced"
+      ? mine ? "Las secciones de este curso que impartes. Sus estudiantes avanzan a su ritmo por las lecciones publicadas y cada sección sigue su avance." : "Cada sección es una impartición del curso a tu ritmo: sus estudiantes entran con su código y avanzan por las lecciones publicadas; la sección sigue el avance de cada uno."
+      : mine ? "Las secciones de este curso que impartes. Cada una tiene sus estudiantes, su horario, su cronograma y su propio avance." : "Cada sección es una impartición del curso: sigue su plan y su contenido, con sus propios educadores, estudiantes, horario, clases y avance."}
     primary={configurable && course.status === "active" && sections !== null && <PrimaryAction icon="plus" onClick={() => setCreating(true)}>Nueva sección</PrimaryAction>}/>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
   if (!sections) return <>{header}<Loading label="Cargando secciones…" lines={4}/></>;
