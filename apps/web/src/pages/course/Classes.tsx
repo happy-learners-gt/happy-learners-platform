@@ -235,8 +235,9 @@ function PlanDialog({ session, onClose, onSaved }: { session: ClassSession; onCl
 /** Adds a class outside the timetable, such as a make-up or a review: it takes the section's time unless another is given. */
 function AddDialog({ groups, initialGroup, onClose, onSaved }: { groups: Pick<SectionView, "id" | "name" | "learnerCount" | "schedule">[]; initialGroup: string; onClose: () => void; onSaved: (groupId: string) => Promise<void> }) {
   const { course } = useCourse();
+  const { today } = useSection();
   const { toast } = useFeedback();
-  const [values, setValues] = useState({ groupId: groups.some(group => group.id === initialGroup) ? initialGroup : groups[0]?.id || "", sessionDate: new Date().toLocaleDateString("en-CA"), startsAt: "", durationMinutes: "", lessonIds: [] as string[], notes: "" });
+  const [values, setValues] = useState({ groupId: groups.some(group => group.id === initialGroup) ? initialGroup : groups[0]?.id || "", sessionDate: today, startsAt: "", durationMinutes: "", lessonIds: [] as string[], notes: "" });
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const set = (patch: Partial<typeof values>) => setValues(current => ({ ...current, ...patch }));
   const schedule = groups.find(group => group.id === values.groupId)?.schedule;
@@ -274,7 +275,7 @@ function AddDialog({ groups, initialGroup, onClose, onSaved }: { groups: Pick<Se
 /** A class on the day it is taught: its lessons and resources at hand, the roll, and finishing it. */
 function ClassDetail({ id }: { id: string }) {
   const { course, teaches, lessons: courseLessons, noun } = useCourse();
-  const { section, base: sectionBase, reload } = useSection();
+  const { section, today, base: sectionBase, reload } = useSection();
   const { toast, confirm } = useFeedback();
   const [detail, setDetail] = useState<Detail | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false), [editing, setEditing] = useState(false);
   const [preview, setPreview] = useState<ClassResource | null>(null);
@@ -313,7 +314,7 @@ function ClassDetail({ id }: { id: string }) {
   return <>
     <PageHeader crumbs={[...crumbs, { label: sessionDay(session.sessionDate) }]} title={`${sessionDay(session.sessionDate)}${session.startsAt ? `, ${session.startsAt}` : ""}`}
       description={<>{session.groupName}{session.durationMinutes ? ` · ${session.durationMinutes} min` : ""}{modules.length ? ` · ${noun.One}: ${modules.join(", ")}` : ""}{session.taughtByName ? ` · impartió ${session.taughtByName}` : ""}</>}
-      meta={classBadge(session, new Date().toLocaleDateString("en-CA"))}
+      meta={classBadge(session, today)}
       actions={<>{editable && session.status !== "cancelled" && <Button icon="edit" onClick={() => setEditing(true)}>{session.status === "completed" ? "Editar comentarios" : "Planificar"}</Button>}{menu.length > 0 && <Menu label="Más acciones de la clase" items={menu}/>}</>}
       primary={primary}/>
     {!detail.groupActive && <p className="notice"><Icon name="info" size={18}/>La sección está cerrada: la clase se consulta, pero no se modifica.</p>}
