@@ -98,7 +98,8 @@ function useTree(trail: string[]) {
   useEffect(() => { setOpen(value => trail.every(key => value.has(key)) ? value : reveal(value, trail)); }, [path]);
   useEffect(() => { try { sessionStorage.setItem(openKey, JSON.stringify([...open])); } catch { /* Private mode: the menu opens where you are. */ } }, [open]);
   const toggle = (key: string) => setOpen(value => { if (!value.has(key)) return reveal(value, [key]); const next = new Set(value); next.delete(key); return next; });
-  return [open, toggle] as const;
+  const expand = (key: string) => setOpen(value => value.has(key) ? value : reveal(value, [key]));
+  return [open, toggle, expand] as const;
 }
 
 const byName = (a: string, b: string) => a.localeCompare(b, "es", { numeric: true });
@@ -114,11 +115,11 @@ function Sidebar() {
   const current = sectionRoute ? sections?.find(item => item.id === sectionRoute) : undefined;
   const currentCourse = courseRoute || current?.courseId;
   const trail = ["courses", ...currentCourse ? [`course:${currentCourse}`] : [], ...current || courseRoute && third === "secciones" ? [`sections:${currentCourse}`] : [], ...current ? [`section:${current.id}`] : []];
-  const [open, toggle] = useTree(trail);
+  const [open, toggle, expand] = useTree(trail);
   const [creating, setCreating] = useState<string | null>(null);
   const page = (item: Page, size = 20) => <li key={item.href}><Link href={item.href} className={`tree-link tone-${item.hue}`} aria-current={item.active ? "page" : undefined}><span className="nav-icon"><Icon name={item.icon} size={size} filled={item.active}/></span><span className="tree-label">{item.label}</span></Link></li>;
-  // Choosing what is already open, on its own page, closes it; anything else opens it and goes there.
-  const select = (key: string, href: string) => (event: MouseEvent<HTMLAnchorElement>) => { if (open.has(key) && path === href) { event.preventDefault(); toggle(key); } };
+  // On its own page, choosing a level shows or hides it, every time; from anywhere else it opens it and goes there.
+  const select = (key: string, href: string) => (event: MouseEvent<HTMLAnchorElement>) => { if (path === href) { event.preventDefault(); toggle(key); } else expand(key); };
   const listedCourses = (courses || []).filter(item => item.status === "active" || item.id === currentCourse).sort((a, b) => byName(a.title, b.title));
   const sectionsOf = (courseId: string) => (sections || []).filter(item => item.courseId === courseId && (item.status === "active" || item.id === current?.id)).sort((a, b) => byName(a.name, b.name));
   const settingsOf = (course: Course | undefined) => course && programs ? courseConfiguration(course, programs.find(item => item.id === course.programId) || null).settings : null;
