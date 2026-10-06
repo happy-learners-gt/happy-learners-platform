@@ -1,4 +1,4 @@
-import type { ClassStatus } from "@happy-learners/contracts";
+import type { CancelPlan, ClassStatus, LessonOutcome } from "@happy-learners/contracts";
 import { isCalendarDay } from "./schedule";
 
 export const classStatusLabels: Record<ClassStatus, string> = { planned: "Planificada", in_progress: "En curso", completed: "Impartida", cancelled: "Cancelada" };
@@ -63,3 +63,22 @@ export function upcomingClasses<T extends { sessionDate: string; startsAt?: stri
   return classes.filter(item => item.sessionDate >= today && (item.status === "planned" || item.status === "in_progress"))
     .sort((a, b) => a.sessionDate.localeCompare(b.sessionDate) || (a.startsAt || "99:99").localeCompare(b.startsAt || "99:99"));
 }
+
+export const lessonOutcomeLabels: Record<LessonOutcome, string> = { completed: "Completada", partial: "Parcial", not_reached: "No se alcanzó" };
+/**
+ * What an educator confirms when finishing a class (DEC-026): how far each planned lesson got and whether what was not
+ * completed moves to the next class. A lesson left out counts as completed, as classes finished before v0.8.9 did.
+ */
+export function completionInput(input: unknown, lessonIds: string[]): { outcomes: Map<string, LessonOutcome>; carryOver: boolean } | { error: string } {
+  const value = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  const list = value.lessons === undefined || value.lessons === null ? [] : value.lessons;
+  if (!Array.isArray(list) || list.length > maxClassLessons) return { error: "Revisa lo trabajado en cada lección." };
+  const outcomes = new Map<string, LessonOutcome>(lessonIds.map(id => [id, "completed"]));
+  for (const item of list as Record<string, unknown>[]) {
+    if (!item || typeof item.id !== "string" || !outcomes.has(item.id) || !Object.hasOwn(lessonOutcomeLabels, String(item.outcome))) return { error: "Revisa lo trabajado en cada lección: alguna ya no está en la clase." };
+    outcomes.set(item.id, item.outcome as LessonOutcome);
+  }
+  return { outcomes, carryOver: value.carryOver !== false };
+}
+/** A cancelled class with something planned either passes it on to the next class or skips it; skipping is the default. */
+export const cancelPlanInput = (input: unknown): CancelPlan => (input && typeof input === "object" && (input as Record<string, unknown>).plan === "shift") ? "shift" : "skip";

@@ -12,6 +12,7 @@ import { Modal, useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import { Menu } from "../ui/Menu";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section, StatusBadge } from "../ui/primitives";
+import { DaysOff } from "./calendar";
 
 function AdminOnly({ title, children }: { title: string; children: ReactNode }) {
   const { member } = useSession();
@@ -35,7 +36,7 @@ function OrganizationForm() {
     finally { setBusy(false); }
   }
   return <>
-    <PageHeader title="Organización" description="Nombre y zona horaria del espacio compartido."/>
+    <PageHeader title="Organización" description="Nombre, zona horaria y calendario de días sin clase del espacio compartido."/>
     <form className="form-card reading" onSubmit={save} onChange={() => setDirty(true)}>
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
       <fieldset disabled={busy} className="stack">
@@ -44,6 +45,7 @@ function OrganizationForm() {
         <div className="form-actions"><button className="button primary">{busy ? "Guardando…" : "Guardar organización"}</button></div>
       </fieldset>
     </form>
+    <div className="reading"><DaysOff writable/></div>
   </>;
 }
 

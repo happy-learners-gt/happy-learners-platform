@@ -1,6 +1,7 @@
 import type { ClassStatus, SectionIndicators } from "@happy-learners/contracts";
 
-export type SectionClass = { status: ClassStatus; sessionDate: string; lessonIds: string[]; marked: number; attended: number };
+/** `completedIds` are the lessons a finished class confirmed as completed (DEC-026); without it, every lesson of the class counts. */
+export type SectionClass = { status: ClassStatus; sessionDate: string; lessonIds: string[]; completedIds?: string[]; marked: number; attended: number };
 
 /**
  * How far a section has come with its course (DEC-024), from the section's own records only: its students, its
@@ -13,7 +14,7 @@ export function sectionIndicators(classes: SectionClass[], publishedLessonIds: s
   const recorded = held.filter(item => item.status === "completed" || item.status === "in_progress");
   const marked = recorded.reduce((sum, item) => sum + item.marked, 0), attended = recorded.reduce((sum, item) => sum + item.attended, 0);
   const published = new Set(publishedLessonIds);
-  const reached = (list: SectionClass[]) => new Set(list.flatMap(item => item.lessonIds).filter(id => published.has(id))).size;
+  const reached = (list: SectionClass[], done = false) => new Set(list.flatMap(item => done ? item.completedIds ?? item.lessonIds : item.lessonIds).filter(id => published.has(id))).size;
   return {
     learners,
     classes: held.length,
@@ -22,7 +23,7 @@ export function sectionIndicators(classes: SectionClass[], publishedLessonIds: s
     unrecorded: held.filter(item => item.status === "planned" && item.sessionDate < today).length,
     attendanceRate: marked ? Math.round(100 * attended / marked) : null,
     lessonsPublished: published.size,
-    lessonsTaught: reached(taught),
+    lessonsTaught: reached(taught, true),
     lessonsPlanned: reached(held),
   };
 }

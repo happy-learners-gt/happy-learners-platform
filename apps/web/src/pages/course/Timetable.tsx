@@ -12,6 +12,7 @@ import { EmptyState, ErrorState, Field, Loading, PageHeader } from "../../ui/pri
 import { useCourse } from "./context";
 import type { SectionView } from "./Sections";
 import { useSection } from "../sections/context";
+import { DaysOff } from "../calendar";
 
 const addDays = (day: string, days: number) => { const date = new Date(`${day}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
 type Values = { weekdays: number[]; startsAt: string; durationMinutes: string; from: string; until: string };
@@ -37,8 +38,9 @@ export function Timetable() {
   return <>
     {header}
     {section.status !== "active" ? <EmptyState icon="archive" title="Sección cerrada">Conserva su historial de clases. Administración puede reactivarla para volver a programar clases.</EmptyState>
-      : <>{section.schedule && <WeekGrid title="Semana de la sección" sections={[{ ...section, href: `${base}/clases` }]}/>}<div className="group-grid"><ScheduleCard group={section} today={today} sessions={sessions} onSaved={async () => { await Promise.all([load(), reload()]); }}/></div></>}
-    <p className="privacy-note"><Icon name="info" size={16}/>Cambiar un horario rehace solo las clases generadas que aún no comienzan. Las clases impartidas, en curso, canceladas o agregadas a mano se conservan, y las lecciones ya planificadas siguen en el mismo orden.</p>
+      : <>{section.schedule && <WeekGrid title="Semana de la sección" sections={[{ ...section, href: `${base}/clases` }]}/>}<div className="group-grid"><ScheduleCard group={section} today={today} sessions={sessions} onSaved={async () => { await Promise.all([load(), reload()]); }}/></div>
+        <DaysOff section={section} writable={configurable} onChanged={async () => { await Promise.all([load(), reload()]); }}/></>}
+    <p className="privacy-note"><Icon name="info" size={16}/>Cambiar un horario rehace solo las clases generadas que aún no comienzan. Las clases impartidas, en curso, canceladas o agregadas a mano se conservan, y las lecciones ya planificadas siguen en el mismo orden. Los días sin clase no generan clases: lo planificado pasa a la siguiente.</p>
   </>;
 }
 
