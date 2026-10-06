@@ -28,6 +28,7 @@ import prerequisitesMigration from "../../../database/migrations/0026_course_pre
 import organizationsMigration from "../../../database/migrations/0027_organization_accounts.sql";
 import routesMigration from "../../../database/migrations/0028_program_routes.sql";
 import { organizationIds } from "@happy-learners/domain";
+import { exportStore, importStore, RestoreError, type Backup } from "./backup";
 
 type Statement = { sql: string; values: (string | number | null)[] };
 /**
@@ -46,6 +47,15 @@ function runScript(sql: SqlStorage, script: string) {
 }
 // One SQLite object per organization; only the Worker holds this binding.
 export class OrganizationStore extends DurableObject<Env> {
+  async exportData(scope: string) {
+    await this.query(scope, []);
+    return exportStore(this.ctx.storage.sql, scope);
+  }
+  async importData(scope: string, backup: Backup) {
+    await this.query(scope, []);
+    try { return { restored: this.ctx.storage.transactionSync(() => importStore(this.ctx.storage.sql, scope, backup)) }; }
+    catch (error) { if (error instanceof RestoreError) return { error: error.message }; throw error; }
+  }
   async authorizeCollaborator(organizationId: string, courseId: string, lessonId: string, userId: string, tokenHash: string): Promise<boolean> {
     if (!/^[a-z0-9-]{1,80}$/.test(organizationId) || !/^[a-z0-9-]{1,100}$/.test(courseId) || !/^[a-z0-9-]{1,100}$/.test(lessonId) || !/^[a-z0-9-]{1,100}$/.test(userId) || !/^[a-f0-9]{64}$/.test(tokenHash)) return false;
     const result = await this.query(organizationId, [{ sql: `SELECT s.user_id FROM sessions s
@@ -121,6 +131,8 @@ export class Database {
   prepare(sql: string) { return new Prepared(this, sql); }
   execute(statements: Prepared[]) { return this.stub.query(this.scope, statements.map(({ sql, values }) => ({ sql, values }))); }
   batch(statements: Prepared[]) { return this.execute(statements); }
+  exportData() { return this.stub.exportData(this.scope); }
+  importData(backup: Backup) { return this.stub.importData(this.scope, backup); }
   async guardedBatch(guard: Prepared, statements: Prepared[]) {
     const results = await this.stub.query(this.scope, statements.map(({ sql, values }) => ({ sql, values })), { sql: guard.sql, values: guard.values });
     return results.length > 0;

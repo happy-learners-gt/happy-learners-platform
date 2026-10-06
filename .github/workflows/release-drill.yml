@@ -1,0 +1,97 @@
+name: Release drill
+
+# Rehearses a release on the isolated preview (ST-044, ST-095): deploys the previous release, deploys the
+# candidate, restores a backup of the demo organization taken from production, rolls back to the previous
+# release and forward again, checking the critical flows at every step. Production is only read.
+on:
+  workflow_dispatch:
+    inputs:
+      previous:
+        description: Release tag to roll back to
+        required: true
+        default: v0.8.17
+
+permissions:
+  contents: read
+
+env:
+  WRANGLER_SEND_METRICS: 'false'
+
+jobs:
+  drill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    concurrency:
+      group: demo-preview
+      cancel-in-progress: false
+    env:
+      BASE_URL: https://happy-learners-demo-preview.lfmendoza-alvarez.workers.dev
+      PREVIEW: happy-learners-demo-preview
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.previous }}
+          path: previous
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: npm
+      - name: Build the previous release and the candidate
+        run: |
+          npm ci
+          ./scripts/verify
+          node scripts/preview-config.mjs
+          (cd previous && npm ci && env -u GITHUB_SHA npm run build && node scripts/preview-config.mjs)
+          echo "PREVIOUS_SHA=$(git -C previous rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Deploy the previous release
+        run: |
+          (cd previous && npx --no-install wrangler deploy --config build/wrangler.json) | tee .previous-deploy.log
+          echo "PREVIOUS_VERSION=$(grep -oP 'Current Version ID: \K[0-9a-f-]+' .previous-deploy.log)" >> "$GITHUB_ENV"
+      - name: Previous release passes the critical flows
+        run: EXPECTED_SHA="$PREVIOUS_SHA" node scripts/critical-flows.mjs && cp .release-evidence/critical-flows.json .release-evidence/1-previous.json
+      - name: Deploy the candidate
+        run: |
+          npx --no-install wrangler deploy --config build/wrangler.json | tee .candidate-deploy.log
+          echo "CANDIDATE_VERSION=$(grep -oP 'Current Version ID: \K[0-9a-f-]+' .candidate-deploy.log)" >> "$GITHUB_ENV"
+      - name: Candidate passes the critical flows
+        run: EXPECTED_SHA="$GITHUB_SHA" node scripts/critical-flows.mjs && cp .release-evidence/critical-flows.json .release-evidence/2-candidate.json
+      - name: Restore the production backup into the preview
+        run: node scripts/restore-drill.mjs
+      - name: Restored candidate passes the critical flows
+        run: EXPECTED_SHA="$GITHUB_SHA" node scripts/critical-flows.mjs && cp .release-evidence/critical-flows.json .release-evidence/3-restored.json
+      - name: Roll back to the previous release
+        run: |
+          npx --no-install wrangler rollback "$PREVIOUS_VERSION" --name "$PREVIEW" --message "Ensayo de reversión a ${{ inputs.previous }}" --yes
+          EXPECTED_SHA="$PREVIOUS_SHA" node scripts/critical-flows.mjs && cp .release-evidence/critical-flows.json .release-evidence/4-rolled-back.json
+      - name: Roll forward to the candidate
+        run: |
+          npx --no-install wrangler rollback "$CANDIDATE_VERSION" --name "$PREVIEW" --message "Vuelta a la candidata" --yes
+          EXPECTED_SHA="$GITHUB_SHA" node scripts/critical-flows.mjs && cp .release-evidence/critical-flows.json .release-evidence/5-rolled-forward.json
+      - name: Summary
+        if: always()
+        run: |
+          node -e '
+            const fs = require("fs"), read = name => { try { return JSON.parse(fs.readFileSync(".release-evidence/" + name)); } catch { return null; } };
+            const steps = ["1-previous", "2-candidate", "3-restored", "4-rolled-back", "5-rolled-forward"].map(name => ({ step: name, ...(read(name + ".json") || { success: false }) }));
+            const restore = read("restore-drill.json");
+            const summary = { previous: { tag: process.env.INPUT_PREVIOUS, sha: process.env.PREVIOUS_SHA, version: process.env.PREVIOUS_VERSION }, candidate: { sha: process.env.GITHUB_SHA, version: process.env.CANDIDATE_VERSION },
+              steps: steps.map(({ step, sha, success, observed_at }) => ({ step, sha, success, observed_at })), restore, success: steps.every(item => item.success) && !!restore?.success };
+            fs.writeFileSync(".release-evidence/release-drill.json", JSON.stringify(summary, null, 2) + "\n");
+            console.log(JSON.stringify(summary));
+            if (!summary.success) process.exitCode = 1;'
+        env:
+          INPUT_PREVIOUS: ${{ inputs.previous }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-drill-${{ github.sha }}
+          path: .release-evidence/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 90

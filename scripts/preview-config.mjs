@@ -10,6 +10,8 @@ const path = "build/wrangler.json";
 const config = JSON.parse(readFileSync(path, "utf8"));
 if (config.name !== "happy-learners-demo") throw new Error("Unexpected Worker name in the artifact");
 config.name = previewName;
+// The preview rehearses restoring a backup (ST-044); production never offers the restore route.
+config.vars = { ...config.vars, RESTORE_ENABLED: "true" };
 config.r2_buckets = config.r2_buckets.map(bucket => bucket.binding === "COURSE_FILES" ? { ...bucket, bucket_name: previewBucket } : bucket);
 writeFileSync(path, JSON.stringify(config, null, 2) + "\n");
 console.log(JSON.stringify({ worker: config.name, bucket: previewBucket }));
