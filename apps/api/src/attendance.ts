@@ -20,7 +20,10 @@ export async function classroom(path: string, method: string, input: unknown, cu
   const access = await accessTo(db, current, courseId);
   if (!access) return forbidden("Solo administración y el equipo docente del curso consultan sus secciones, clases y asistencia.");
   // Records stay readable when attendance is turned off; new sections, students, classes and marks are not accepted.
-  if (method !== "GET" && !(await configurationOf(db, current.organizationId, courseId))!.settings.attendance) return reply({ error: "La asistencia está desactivada en la configuración de este curso." }, 409);
+  const configuration = method === "GET" ? null : (await configurationOf(db, current.organizationId, courseId))!;
+  if (configuration && !configuration.settings.attendance) return reply({ error: "La asistencia está desactivada en la configuración de este curso." }, 409);
+  // A tu ritmo (DEC-027): sections have no schedule and no classes; each student works through the published course.
+  if (configuration?.pacing === "self-paced" && (parts[4] === "sessions" || ["schedule", "lessons"].includes(parts[6]))) return reply({ error: "En un curso a tu ritmo las secciones no tienen horario ni clases: cada estudiante avanza por las lecciones publicadas. Cambia el ritmo del curso a «Con calendario» para programar clases." }, 409);
   if (parts[4] === "sessions") return sessions(parts, method, input, current, db, courseId, access);
   const now = new Date().toISOString();
   const value = input as Record<string, unknown> | null;

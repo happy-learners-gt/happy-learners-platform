@@ -1,5 +1,5 @@
 import type { Competency, Course, CourseFormat, CourseSettings, Curriculum, EducationLevel, LearningOutcome, LearningUnit, Material, Member, StudyProgram, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
-import { cleanText, competencyInput, competencyLimit, completeOrder, courseInput, materialInput, outcomeInput, outcomeLimit, programInput, record, resolveSettings, validOutcomeIds } from "@happy-learners/domain";
+import { cleanText, competencyInput, competencyLimit, completeOrder, courseInput, effectiveProfile, materialInput, outcomeInput, outcomeLimit, programInput, record, resolveSettings, validOutcomeIds } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { filesFor } from "./files";
 import { event, recordEvent, teamsFor, updateTeam } from "./team";
@@ -28,7 +28,7 @@ export async function configurationOf(db: Database, organization: string, course
   const course = (await coursesFor(db, organization)).find(item => item.id === courseId);
   if (!course) return null;
   const program = course.programId ? (await programsFor(db, organization)).find(item => item.id === course.programId) || null : null;
-  return { course, program, settings: resolveSettings(course, program).values };
+  return { course, program, settings: resolveSettings(course, program).values, pacing: effectiveProfile(course, program).pacing };
 }
 /** The former profile column is still NOT NULL; keep it coherent for anything that reads history. */
 function legacyProfile(format: CourseFormat, level: EducationLevel) {
