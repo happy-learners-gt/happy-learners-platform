@@ -23,7 +23,7 @@ test("main routes have no WCAG 2.2 A/AA violations detectable by axe", async ({ 
   const section = await page.evaluate(async () => ((await (await fetch("/api/sections")).json()).sections as { id: string; status: string }[]).find(item => item.status === "active")?.id);
   expect(section).toBeTruthy();
   for (const [label, path] of [
-    ["inicio", "/inicio"], ["mis secciones", "/secciones"], ["sección", `/secciones/${section}`], ["estudiantes", `/secciones/${section}/estudiantes`], ["cursos", "/cursos"], ["nuevo curso", "/cursos/nuevo"], ["resumen", "/cursos/course-exploradores"], ["plan curricular", "/cursos/course-exploradores/plan"],
+    ["inicio", "/inicio"], ["docencia", "/secciones"], ["sección", `/secciones/${section}`], ["estudiantes", `/secciones/${section}/estudiantes`], ["cursos", "/cursos"], ["nuevo curso", "/cursos/nuevo"], ["resumen", "/cursos/course-exploradores"], ["plan curricular", "/cursos/course-exploradores/plan"],
     ["contenido", "/cursos/course-exploradores/contenido"], ["editor", "/cursos/course-exploradores/lecciones/greetings-and-introductions"],
     ["vista previa", "/cursos/course-exploradores/lecciones/greetings-and-introductions?vista=previa"], ["biblioteca del curso", "/cursos/course-exploradores/biblioteca"],
     ["secciones del curso", "/cursos/course-exploradores/secciones"], ["horario", `/secciones/${section}/horario`], ["cronograma", `/secciones/${section}/clases`], ["configuración", "/cursos/course-exploradores/configuracion"],

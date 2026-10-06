@@ -5,7 +5,9 @@ import { Link, useNavigation } from "../../navigation";
 import { useSession } from "../../session";
 import { matches, plural } from "../../model";
 import { Icon } from "../../ui/icons";
-import { EmptyState, ErrorState, Loading, PageHeader } from "../../ui/primitives";
+import { EmptyState, ErrorState, Loading, PageHeader, PrimaryAction } from "../../ui/primitives";
+import { NewSection } from "../../ui/Shell";
+import { useWorkspace } from "../../workspace";
 import { WeekGrid } from "../course/Timetable";
 import { SectionCards } from "./SectionCard";
 import { sectionPath } from "./context";
@@ -19,6 +21,9 @@ export function SectionList() {
   const admin = member.role === "admin";
   const { url, navigate } = useNavigation();
   const [sections, setSections] = useState<SectionSummary[] | null>(null), [today, setToday] = useState(""), [error, setError] = useState("");
+  const [creating, setCreating] = useState(false);
+  const { courses: allCourses } = useWorkspace(member.id);
+  const dialog = creating && <NewSection courses={allCourses || []} onClose={() => setCreating(false)}/>;
   const query = url.searchParams.get("q") || "", course = url.searchParams.get("curso") || "";
   async function load() {
     setError("");
@@ -31,15 +36,16 @@ export function SectionList() {
   const courses = [...new Map(live.map(item => [item.courseId, item.course.title])).entries()].sort((a, b) => a[1].localeCompare(b[1], "es"));
   const visible = live.filter(item => (!course || item.courseId === course) && matches(query, item.name, item.course.title));
   const closed = (sections || []).filter(item => !live.includes(item) && (!course || item.courseId === course));
-  const header = <PageHeader title={admin ? "Secciones" : "Mis secciones"}
-    description={sections ? admin ? `${plural(live.length, "sección activa", "secciones activas")} en ${plural(courses.length, "curso", "cursos")}` : `${plural(live.length, "sección asignada", "secciones asignadas")} a tu cuenta. Cada una con sus estudiantes, su cronograma y su propio avance.` : undefined}/>;
-  if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
-  if (!sections) return <>{header}<Loading label="Cargando secciones…" lines={6}/></>;
-  if (!sections.length) return <>{header}{admin
-    ? <EmptyState icon="users" title="Aún no hay secciones" action={<Link className="button primary" href="/cursos">Ir a Cursos</Link>}>Las secciones se crean desde cada curso: abre un curso y elige Secciones.</EmptyState>
+  const header = <PageHeader title="Docencia"
+    description={sections ? admin ? `Las secciones en las que se imparte cada curso: ${plural(live.length, "sección activa", "secciones activas")} en ${plural(courses.length, "curso", "cursos")}.` : `Las secciones que impartes: ${plural(live.length, "sección asignada", "secciones asignadas")}, cada una con sus estudiantes, su cronograma y su propio avance.` : undefined}
+    primary={admin && <PrimaryAction icon="plus" onClick={() => setCreating(true)}>Nueva sección</PrimaryAction>}/>;
+  if (error) return <>{header}{dialog}<ErrorState error={error} retry={() => void load()}/></>;
+  if (!sections) return <>{header}{dialog}<Loading label="Cargando secciones…" lines={6}/></>;
+  if (!sections.length) return <>{header}{dialog}{admin
+    ? <EmptyState icon="users" title="Aún no hay secciones">Crea la primera con «Nueva sección»: eliges el curso que imparte y le das un nombre.</EmptyState>
     : <EmptyState icon="users" title="Aún no tienes secciones asignadas">Administración asigna quién imparte cada sección. Cuando te asigne una, aparecerá aquí con su cronograma.</EmptyState>}</>;
   return <>
-    {header}
+    {header}{dialog}
     {(live.length > 4 || courses.length > 1) && <div className="toolbar" role="group" aria-label="Filtrar secciones">
       <div className="search-field"><Icon name="search" size={18}/><label htmlFor="section-search" className="sr-only">Buscar secciones</label><input id="section-search" type="search" value={query} onChange={event => filter("q", event.target.value)} placeholder="Buscar por sección o curso"/></div>
       {courses.length > 1 && <label className="select-inline"><span>Curso</span><select value={course} onChange={event => filter("curso", event.target.value)}><option value="">Todos</option>{courses.map(([id, title]) => <option key={id} value={id}>{title}</option>)}</select></label>}

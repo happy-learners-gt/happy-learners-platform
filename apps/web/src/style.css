@@ -119,8 +119,28 @@ li[data-drop=after]::before { bottom: -2px; }
 .sidebar nav a[aria-current="page"] { background: var(--acrylic-background-strong); color: var(--color-ink); font-weight: var(--weight-bold); box-shadow: var(--shadow-xs); }
 .sidebar nav a[aria-current="page"]::before { content: ""; position: absolute; left: 0; top: 50%; width: 3px; height: 16px; border-radius: var(--radius-pill); background: var(--colorCompoundBrandStroke); transform: translateY(-50%); animation: indicator-in var(--motion-base) var(--ease-enter); }
 @keyframes indicator-in { from { height: 0; } }
-.sidebar-back { display: flex; align-items: center; gap: var(--space-2); min-height: 36px; margin-bottom: var(--space-2); padding: 0 var(--space-3); color: var(--color-ink-soft); font-size: var(--text-sm); text-decoration: none; border-radius: var(--radius-md); }
-.sidebar-back:hover { background: var(--color-surface-hover); color: var(--color-ink); }
+/* Menu in levels (Fluent Nav with categories): area, then its sections or courses, then the pages of the current one. */
+.nav-area-row { display: flex; align-items: center; gap: 2px; }
+.nav-area-row > a { flex: 1; min-width: 0; }
+.nav-action { display: grid; place-items: center; flex: none; width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: var(--color-muted); cursor: pointer; text-decoration: none; }
+.nav-action:hover { background: var(--color-surface-hover); color: var(--color-ink); }
+.nav-action:active { background: var(--color-surface-pressed); }
+.nav-chevron .icon { transition: transform var(--motion-fast) var(--ease); }
+.nav-chevron[aria-expanded="false"] .icon { transform: rotate(-90deg); }
+.sidebar .nav-branches { position: relative; margin: 2px 0 var(--space-2); padding-left: 22px; }
+.sidebar .nav-branches::before { content: ""; position: absolute; left: 21px; top: 2px; bottom: 2px; width: 1px; background: var(--color-border); }
+.sidebar .nav-branches[hidden] { display: none; }
+.sidebar nav .nav-branch > a { min-height: 36px; padding: 5px var(--space-3); }
+.nav-branch-text { display: grid; min-width: 0; line-height: var(--leading-tight); }
+.nav-branch-text > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-branch-text small { color: var(--color-muted); font-size: var(--text-xs); font-weight: var(--weight-regular); }
+.sidebar nav .nav-branch.is-current > a { color: var(--color-ink); font-weight: var(--weight-bold); }
+.sidebar .nav-pages { margin: 2px 0 var(--space-2); padding-left: var(--space-3); }
+.sidebar nav .nav-pages a { min-height: 32px; gap: var(--space-2); }
+.nav-pages .nav-icon { width: 16px; height: 16px; }
+.nav-empty { padding: 6px var(--space-3); color: var(--color-muted); font-size: var(--text-xs); }
+.nav-placeholder { display: grid; gap: 8px; padding: 8px var(--space-3); }
+@media (pointer: coarse) { .nav-action { width: 40px; height: 40px; } .sidebar nav .nav-pages a, .sidebar nav .nav-branch > a { min-height: 44px; } }
 .sidebar-context { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--acrylic-stroke); border-radius: var(--radius-lg); background: var(--acrylic-background); box-shadow: var(--shadow-xs); }
 .sidebar-context > span:last-child { display: grid; gap: 1px; min-width: 0; }
 .sidebar-context strong { font-family: var(--font-display); font-size: var(--text-base); line-height: var(--leading-tight); color: var(--color-ink); overflow-wrap: anywhere; }
@@ -452,6 +472,36 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: dialog-in
 .timetable-day ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .timetable-day a { display: grid; gap: 2px; padding: var(--space-2); border-radius: var(--radius-sm); background: var(--color-surface-muted); color: inherit; text-decoration: none; overflow-wrap: anywhere; }
 .timetable-day a:hover { background: var(--color-primary-soft); }
+/* Horario: the week reads at a glance; the editor previews what it will generate. */
+.timetable-layout { grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); }
+.week-strip { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--space-2); }
+.week-strip li { display: grid; align-content: start; justify-items: center; gap: 4px; min-height: 76px; padding: var(--space-3) 4px; border: 1px dashed var(--color-border); border-radius: var(--radius-md); color: var(--color-muted); text-align: center; }
+.week-strip abbr { text-decoration: none; font-size: var(--text-sm); font-weight: var(--weight-bold); text-transform: capitalize; }
+.week-strip li.is-on { border: 1px solid var(--color-primary-line); background: var(--violet-soft); color: var(--violet-ink); }
+.week-strip li.is-on span { font-size: var(--text-xs); font-weight: var(--weight-bold); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.schedule-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-3) var(--space-4); margin: 0; }
+.schedule-facts div { display: grid; gap: 2px; }
+.schedule-facts dt { color: var(--color-muted); font-size: var(--text-xs); font-weight: var(--weight-bold); }
+.schedule-facts dd { margin: 0; font-size: var(--text-sm); }
+.day-toggles { display: grid; grid-template-columns: repeat(7, minmax(0, 52px)); gap: var(--space-2); margin: 0; padding: 0; border: 0; min-width: 0; }
+.day-toggles legend { width: 100%; margin-bottom: var(--space-2); font-weight: var(--weight-medium); }
+.day-toggles label { position: relative; display: flex; min-width: 0; }
+.day-toggles input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.day-toggles span { display: grid; place-items: center; width: 100%; height: 40px; border: 1px solid var(--color-border-control); border-radius: var(--radius-md); background: var(--color-surface); font-size: var(--text-sm); font-weight: var(--weight-medium); text-transform: capitalize; transition: background var(--motion-fast) var(--ease), border-color var(--motion-fast) var(--ease); }
+.day-toggles label:hover span { background: var(--color-surface-hover); }
+.day-toggles input:checked + span { border-color: var(--color-primary); background: var(--color-primary); color: var(--color-on-primary); font-weight: var(--weight-bold); }
+.day-toggles input:focus-visible + span { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.period-shortcuts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: calc(var(--space-2) * -1); }
+.period-shortcuts .chip-button { min-height: 28px; cursor: pointer; }
+.period-shortcuts .chip-button[aria-pressed="true"] { border-color: var(--color-primary); background: var(--violet-soft); color: var(--violet-ink); font-weight: var(--weight-bold); }
+.schedule-preview { display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--color-surface-muted); }
+.schedule-preview > .icon { flex: none; margin-top: 1px; color: var(--violet-ink); }
+.schedule-preview div { display: grid; gap: var(--space-1); }
+.schedule-preview p { margin: 0; }
+.button.danger-text { color: var(--color-danger); }
+.push-end { margin-left: auto; }
+@media (max-width: 1023px) { .timetable-layout { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 479px) { .week-strip { gap: 4px; } .week-strip li { min-height: 64px; padding: var(--space-2) 2px; } .day-toggles { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; } }
 .weekday-picker { margin: 0; }
 .weekday-picker legend { font-weight: var(--weight-medium); margin-bottom: var(--space-2); }
 @media (max-width: 760px) { .timetable-grid { grid-template-columns: minmax(0, 1fr); } }
@@ -460,8 +510,18 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: dialog-in
 .group-card:nth-child(3n+2) { border-top-color: var(--sky-vivid); }
 .group-card:nth-child(3n) { border-top-color: var(--teal-vivid); }
 .group-card header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-3); flex-wrap: wrap; }
-.roster { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 280px; overflow-y: auto; }
+.roster { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
 .roster li { display: flex; gap: var(--space-3); padding: 7px 0; border-bottom: 1px solid var(--color-border); font-size: var(--text-sm); }
+.roster li:last-child { border-bottom: 0; }
+.roster li:hover { background: var(--color-surface-hover); }
+.roster-panel .roster li { padding-left: var(--space-2); padding-right: var(--space-1); border-radius: var(--radius-sm); }
+.search-field.compact { flex: 0 1 220px; }
+.search-field.compact .icon { left: 10px; }
+.search-field.compact input { min-height: 32px !important; padding-left: 32px !important; }
+.students-layout { grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); }
+.add-learners textarea { min-height: 88px; resize: vertical; }
+.access-panel .group-code code { font-size: var(--text-lg); }
+@media (max-width: 1023px) { .students-layout { grid-template-columns: minmax(0, 1fr); } }
 .roster-number { color: var(--color-muted); font-variant-numeric: tabular-nums; font-size: var(--text-xs); padding-top: 2px; }
 .add-row { display: flex; gap: var(--space-2); }
 .add-row input { flex: 1; }
@@ -517,7 +577,9 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: dialog-in
 .days-off li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-3); padding: 8px var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-ink-soft); }
 .days-off li div { display: grid; gap: 2px; min-width: 0; }
 .days-off li strong { color: var(--color-ink); }
-.days-off-form { margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--color-border); }
+.days-off-form { padding-top: var(--space-3); border-top: 1px solid var(--color-border); }
+.days-off li.is-past { opacity: .7; }
+.days-off-panel .link-button { justify-self: start; font-size: var(--text-sm); }
 .sheet-footer { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; position: sticky; bottom: 0; padding: var(--space-3) 0 0; background: var(--color-surface); border-top: 1px solid var(--color-border); }
 
 /* Settings, admin, library previews */

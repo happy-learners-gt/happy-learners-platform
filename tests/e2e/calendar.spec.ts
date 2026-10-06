@@ -79,6 +79,7 @@ test("HL-143 ST-108 ST-109: days without class reschedule the section, cancellin
 
     // Administration manages the section's days without class from its schedule page.
     await signIn(page, "admin-demo", `/secciones/${groupId}/horario`);
+    await page.getByRole("region", { name: "Días sin clase" }).getByRole("button", { name: "Agregar", exact: true }).click();
     const form = page.getByRole("form", { name: `Agregar días sin clase a ${E2E_PREFIX} Sección C` });
     await form.getByLabel("Motivo").fill("Vacaciones");
     await form.getByLabel("Desde").fill(day(6));

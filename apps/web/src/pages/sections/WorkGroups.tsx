@@ -35,7 +35,7 @@ export function SectionWorkGroupsPage() {
     } catch (cause) { setError(message(cause)); }
   }
   useEffect(() => { void load(); }, [section.id]);
-  const header = <PageHeader crumbs={[{ label: "Secciones", href: "/secciones" }, { label: section.name, href: base }, { label: "Grupos" }]} title="Grupos de trabajo"
+  const header = <PageHeader crumbs={[{ label: "Docencia", href: "/secciones" }, { label: section.name, href: base }, { label: "Grupos" }]} title="Grupos de trabajo"
     description={`Los estudiantes de la sección forman grupos para las actividades en parejas o en equipos. ${wholeSection} es el grupo predeterminado: trabaja cada actividad que no tiene otro grupo asignado.`}
     primary={writable && data ? <PrimaryAction icon="plus" onClick={() => setEditing("new")}>Nuevo grupo</PrimaryAction> : undefined}/>;
   if (!enabled) return <>{header}<EmptyState icon="team" title="Los grupos de trabajo están desactivados" action={configurable && <Link className="button secondary" href={`/cursos/${course.id}/configuracion`}>Abrir la configuración</Link>}>Actívalos en la configuración del curso (o de su programa) para formar grupos en cada sección y asignarlos a las actividades.</EmptyState></>;

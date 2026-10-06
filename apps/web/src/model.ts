@@ -55,6 +55,19 @@ export function sessionDay(value: string, style: "long" | "short" = "long") {
 export const normalize = (value: string) => value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLocaleLowerCase("es").trim();
 export const matches = (query: string, ...values: (string | undefined)[]) => !query.trim() || normalize(values.filter(Boolean).join(" ")).includes(normalize(query));
 export function plural(count: number, one: string, many: string) { return `${count} ${count === 1 ? one : many}`; }
+/**
+ * Names pasted for a roster, one per line: list numbers and bullets are dropped, blank lines and repeats are
+ * skipped, and names already on the roster are set apart.
+ */
+export function rosterNames(text: string, roster: string[]) {
+  const taken = new Set(roster.map(normalize)), seen = new Map<string, string>();
+  for (const line of text.split(/\r?\n/)) {
+    const name = line.replace(/^\s*(?:\d+[.)-]?|[-*•])\s+/, "").replace(/\s+/g, " ").trim();
+    if (name && !seen.has(normalize(name))) seen.set(normalize(name), name);
+  }
+  const names = [...seen.entries()];
+  return { fresh: names.filter(([key]) => !taken.has(key)).map(([, name]) => name), repeated: names.filter(([key]) => taken.has(key)).map(([, name]) => name) };
+}
 
 export function richTextLength(node?: RichTextDocument | RichTextNode): number {
   if (!node) return 0;
