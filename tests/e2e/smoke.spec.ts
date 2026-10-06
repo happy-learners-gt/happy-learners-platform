@@ -31,8 +31,8 @@ test("production smoke: read content without changing the demo", async ({ page, 
     // Read-only: the records an early E2E run left in the demo must stay gone (removed by migration 0010).
     const names = await page.evaluate(async () => {
       const get = async (path: string) => (await fetch(`/api${path}`)).json();
-      const [course, lessons, resources, curriculum] = await Promise.all([get("/courses/course-exploradores"), get("/lessons?drafts=1"), get("/resources"), get("/curriculum")]);
-      return [...course.units.map((u: { name: string }) => u.name), ...lessons.lessons.map((l: { title: string }) => l.title), ...resources.resources.map((r: { title: string }) => r.title), ...curriculum.levels.map((l: { name: string }) => l.name), ...curriculum.units.map((u: { name: string }) => u.name)];
+      const [course, lessons, resources, materials] = await Promise.all([get("/courses/course-exploradores"), get("/lessons?drafts=1"), get("/resources"), get("/courses/course-exploradores/materials")]);
+      return [...course.units.map((u: { name: string }) => u.name), ...lessons.lessons.map((l: { title: string }) => l.title), ...resources.resources.map((r: { title: string }) => r.title), ...materials.materials.map((m: { title: string }) => m.title)];
     });
     expect(names.filter(name => /\b(?:desktop|mobile)-\d{13}$/.test(name))).toEqual([]);
     const menu = page.getByRole("button", { name: "Menú", exact: true });
