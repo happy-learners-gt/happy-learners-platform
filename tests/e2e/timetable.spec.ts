@@ -121,6 +121,13 @@ test("ST-099 ST-097 ST-101 ST-029 ST-100: the section schedule generates its cla
     await expect(page.getByRole("form", { name: `Horario de ${E2E_PREFIX} Sección A` })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await signIn(page, "admin-demo", `/secciones/${groupId}/horario`);
-    await expect(page.getByRole("form", { name: `Horario de ${E2E_PREFIX} Sección A` }).getByLabel("Hora")).toHaveValue("09:30");
+    await expect(page.locator(".timetable")).toContainText("09:30");
+    await page.getByRole("button", { name: "Editar horario" }).click();
+    const editor = page.getByRole("form", { name: `Horario de ${E2E_PREFIX} Sección A` });
+    await expect(editor.getByLabel("Hora")).toHaveValue("09:30");
+    // Before saving, the editor says how many classes the schedule generates.
+    await expect(editor.getByRole("status")).toContainText(/\d+ clases?/);
+    await editor.getByRole("button", { name: "Cancelar" }).click();
+    await expect(page.getByRole("form", { name: `Horario de ${E2E_PREFIX} Sección A` })).toHaveCount(0);
   } finally { await educator.dispose(); await admin.dispose(); }
 });

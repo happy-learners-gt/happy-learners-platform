@@ -3,6 +3,8 @@ export class ApiError extends Error { constructor(message: string, public status
 /** Fired when an authenticated request returns 401 so the shell can ask to sign in again without losing the page. */
 export const sessionExpired = "hl:session-expired";
 export const sessionRestored = "hl:session-restored";
+/** Fired after a write succeeds, with its path, so views that list what it touched can refresh. */
+export const changed = "hl:changed";
 const quiet = new Set(["/session", "/login", "/logout"]);
 
 async function parse<T>(response: Response, path: string): Promise<T> {
@@ -17,7 +19,9 @@ export async function api<T>(path: string, method = "GET", data?: unknown): Prom
   let response: Response;
   try { response = await fetch(`/api${path}`, { method, credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(15000), ...(data ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) } : {}) }); }
   catch { throw new ApiError("No pudimos conectar. Comprueba tu conexión y vuelve a intentar.", 0); }
-  return parse<T>(response, path);
+  const result = await parse<T>(response, path);
+  if (method !== "GET") dispatchEvent(new CustomEvent(changed, { detail: path }));
+  return result;
 }
 
 /** Formats a course can store, with the size limit the Worker enforces for each. */

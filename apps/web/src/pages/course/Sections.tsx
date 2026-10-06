@@ -9,7 +9,8 @@ import { Icon } from "../../ui/icons";
 import { Avatar } from "../../ui/progress";
 import { Menu } from "../../ui/Menu";
 import { InlineName } from "../../ui/LessonOutline";
-import { EmptyState, ErrorState, Loading, PageHeader, PrimaryAction } from "../../ui/primitives";
+import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section } from "../../ui/primitives";
+import { matches, plural, rosterNames } from "../../model";
 import { useCourse } from "./context";
 import { SectionCards } from "../sections/SectionCard";
 import { sectionPath, useSection } from "../sections/context";
@@ -44,7 +45,7 @@ export function CourseSections() {
     } catch (cause) { toast({ tone: "error", message: message(cause) }); setBusy(false); }
   }
   const mine = access.sections !== "all";
-  const header = <PageHeader crumbs={[{ label: "Cursos", href: "/cursos" }, { label: course.title, href: `/cursos/${course.id}` }, { label: "Secciones" }]} title={mine ? "Mis secciones del curso" : "Secciones"}
+  const header = <PageHeader crumbs={[{ label: "Cursos", href: "/cursos" }, { label: course.title, href: `/cursos/${course.id}` }, { label: "Secciones" }]} title="Secciones"
     description={pacing === "self-paced"
       ? mine ? "Las secciones de este curso que impartes. Sus estudiantes avanzan a su ritmo por las lecciones publicadas y cada sección sigue su avance." : "Cada sección es una impartición del curso a tu ritmo: sus estudiantes entran con su código y avanzan por las lecciones publicadas; la sección sigue el avance de cada uno."
       : mine ? "Las secciones de este curso que impartes. Cada una tiene sus estudiantes, su horario, su cronograma y su propio avance." : "Cada sección es una impartición del curso: sigue su plan y su contenido, con sus propios educadores, estudiantes, horario, clases y avance."}
@@ -67,13 +68,16 @@ export function CourseSections() {
   </>;
 }
 
-/** Estudiantes of a section: its roster and the code its students use. Administration manages both; its educators consult them. */
+/**
+ * Estudiantes of a section: the whole roster at a glance, with search on long lists, and the code students enter
+ * with. Administration adds students one by one or by pasting a list, renames and withdraws them; educators consult.
+ */
 export function SectionStudents() {
   const { course, configurable } = useCourse();
   const { section, base, reload } = useSection();
   const { toast, confirm } = useFeedback();
   const [learners, setLearners] = useState<GroupLearner[] | null>(null), [code, setCode] = useState<string | null>(section.accessCode ?? null), [error, setError] = useState("");
-  const [busy, setBusy] = useState(false), [renaming, setRenaming] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false), [renaming, setRenaming] = useState<string | null>(null), [adding, setAdding] = useState(false), [query, setQuery] = useState("");
   const path = `/courses/${course.id}/groups/${section.id}`;
   const writable = configurable && section.status === "active";
   async function load() {
@@ -88,52 +92,98 @@ export function SectionStudents() {
     catch (cause) { toast({ tone: "error", message: message(cause) }); return false; }
     finally { setBusy(false); }
   }
-  async function add(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget, displayName = String(new FormData(form).get("displayName") || "").trim();
-    if (await run(() => api(`${path}/learners`, "POST", { displayName }), `${displayName} quedó asignado a ${section.name}.`)) { form.reset(); form.querySelector<HTMLInputElement>("input")?.focus(); }
-  }
   async function withdraw(learner: GroupLearner) {
-    if (!await confirm({ title: `¿Retirar a ${learner.displayName}?`, body: <p>Deja de estar asignado a la sección y sale de la lista de las próximas clases. Su asistencia ya registrada se conserva.</p>, confirm: "Retirar", danger: true })) return;
+    if (!await confirm({ title: `¿Retirar a ${learner.displayName}?`, body: <p>Deja de estar en la lista de la sección y de sus próximas clases. Su asistencia ya registrada se conserva.</p>, confirm: "Retirar", danger: true })) return;
     await run(() => api(`${path}/learners/${learner.id}`, "PUT", { status: "archived" }), `${learner.displayName} se retiró de ${section.name}.`);
   }
   async function changeCode(remove = false) {
     if (code && !await confirm({ title: remove ? "¿Desactivar el código?" : "¿Cambiar el código?", body: <p>Quienes entraron con el código actual pierden el acceso a la sección{remove ? "" : " y deben usar el nuevo"}.</p>, confirm: remove ? "Desactivar" : "Cambiar código", danger: remove })) return;
     await run(() => api(`${path}/code`, remove ? "DELETE" : "POST"), remove ? "Código desactivado." : "Código listo. Compártelo con la sección.");
   }
-  const header = <PageHeader crumbs={[{ label: "Secciones", href: "/secciones" }, { label: section.name, href: base }, { label: "Estudiantes" }]} title="Estudiantes"
-    description={writable ? "La lista de la sección y el código con el que sus estudiantes ven sus clases. Solo estos estudiantes aparecen al pasar lista." : "La lista de la sección y el código con el que sus estudiantes ven sus clases. Administración la gestiona."}/>;
+  const header = <PageHeader crumbs={[{ label: "Docencia", href: "/secciones" }, { label: section.name, href: base }, { label: "Estudiantes" }]} title="Estudiantes"
+    description={learners ? `${plural(learners.length, "estudiante", "estudiantes")} en la lista. Solo ellos aparecen al pasar lista${section.workGroups ? " y al formar grupos de trabajo" : ""}.` : "La lista de la sección y el código con el que entran sus estudiantes."}
+    primary={writable && learners && !adding && learners.length > 0 && <PrimaryAction icon="plus" onClick={() => setAdding(true)}>Agregar estudiantes</PrimaryAction>}/>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
   if (!learners) return <>{header}<Loading label="Cargando estudiantes…" lines={6}/></>;
+  const visible = learners.filter(learner => matches(query, learner.displayName));
   return <>
     {header}
-    <div className="group-grid">
-      <article className="group-card" aria-labelledby="roster-title">
-        <header><div><h2 id="roster-title">Lista de la sección</h2><p className="muted">{learners.length === 1 ? "1 estudiante asignado" : `${learners.length} estudiantes asignados`}</p></div></header>
-        {learners.length ? <ol className="roster">{learners.map((learner, index) => <li key={learner.id}>
-          <span className="roster-number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
-          {renaming === learner.id
-            ? <InlineName value={learner.displayName} label={`Nombre de lista de ${learner.displayName}`} onSave={displayName => run(() => api(`${path}/learners/${learner.id}`, "PUT", { displayName }), "Nombre actualizado.")} onDone={() => setRenaming(null)}/>
-            : <span>{learner.displayName}</span>}
-          {writable && <Menu label={`Acciones de ${learner.displayName}`} items={[{ label: "Editar nombre", icon: "edit", onSelect: () => setRenaming(learner.id) }, { label: "Retirar de la sección", icon: "archive", danger: true, onSelect: () => void withdraw(learner) }]}/>}
-        </li>)}</ol> : <p className="muted">{writable ? "Asigna a los estudiantes de la sección para poder pasar lista." : "Administración aún no asigna estudiantes a esta sección."}</p>}
-        {writable && <form className="add-row" aria-label={`Asignar estudiante a ${section.name}`} onSubmit={add}>
-          <label htmlFor="learner-name" className="sr-only">Nombre o código de lista para {section.name}</label>
-          <input id="learner-name" name="displayName" required maxLength={80} placeholder="Nombre o código" disabled={busy}/>
-          <button className="button secondary" disabled={busy}><Icon name="plus" size={16}/>Asignar</button>
-        </form>}
-      </article>
-      <article className="group-card" aria-labelledby="code-title">
-        <header><div><h2 id="code-title">Código para estudiantes</h2></div></header>
-        {code ? <div className="group-code"><code aria-label={`Código de la sección ${section.name}`}>{code}</code>
-          <button type="button" className="button ghost small" onClick={() => void navigator.clipboard?.writeText(code).then(() => toast({ message: "Código copiado." }))}><Icon name="copy" size={16}/>Copiar</button>
-          {writable && <Menu label={`Opciones del código de ${section.name}`} items={[{ label: "Cambiar código", icon: "undo", onSelect: () => void changeCode() }, { label: "Desactivar código", icon: "close", danger: true, onSelect: () => void changeCode(true) }]}/>}
-        </div> : <p className="muted small">Sin código. {writable && <button type="button" className="link-button" disabled={busy} onClick={() => void changeCode()}>Generar código</button>}</p>}
-        <p className="muted small">Con el código, los estudiantes de la sección ven sus próximas clases, lecciones y recursos. No necesitan cuenta ni datos personales.</p>
-      </article>
+    <div className="dashboard students-layout">
+      <div className="dashboard-main">
+        {writable && (adding || !learners.length) && <AddLearners learners={learners} path={path} onCancel={learners.length ? () => setAdding(false) : undefined}
+          onAdded={async count => { setAdding(false); await Promise.all([load(), reload()]); toast({ message: `${plural(count, "estudiante agregado", "estudiantes agregados")} a ${section.name}.` }); }}/>}
+        <Section title="Lista de la sección" className="roster-panel" action={learners.length > 8 && <div className="search-field compact"><Icon name="search" size={16}/><label htmlFor="roster-search" className="sr-only">Buscar en la lista</label><input id="roster-search" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar estudiante"/></div>}>
+          {!learners.length ? <p className="muted">{writable ? "La lista está vacía. Agrega a los estudiantes para poder pasar lista." : "Administración aún no agrega estudiantes a esta sección."}</p>
+            : !visible.length ? <p className="muted">Nadie en la lista coincide con «{query}». <button type="button" className="link-button" onClick={() => setQuery("")}>Ver toda la lista</button></p>
+            : <ol className="roster">{visible.map(learner => <li key={learner.id}>
+              <span className="roster-number" aria-hidden="true">{String(learners.indexOf(learner) + 1).padStart(2, "0")}</span>
+              {renaming === learner.id
+                ? <InlineName value={learner.displayName} label={`Nombre de lista de ${learner.displayName}`} onSave={displayName => run(() => api(`${path}/learners/${learner.id}`, "PUT", { displayName }), "Nombre actualizado.")} onDone={() => setRenaming(null)}/>
+                : <span>{learner.displayName}</span>}
+              {writable && renaming !== learner.id && <Menu label={`Acciones de ${learner.displayName}`} items={[{ label: "Editar nombre", icon: "edit", onSelect: () => setRenaming(learner.id) }, { label: "Retirar de la sección", icon: "archive", danger: true, onSelect: () => void withdraw(learner) }]}/>}
+            </li>)}</ol>}
+        </Section>
+      </div>
+      <div className="dashboard-side">
+        <Section title="Cómo entran" className="access-panel">
+          {code ? <>
+            <div className="group-code"><code aria-label={`Código de la sección ${section.name}`}>{code}</code>
+              {writable && <Menu label={`Opciones del código de ${section.name}`} items={[{ label: "Cambiar código", icon: "undo", onSelect: () => void changeCode() }, { label: "Desactivar código", icon: "close", danger: true, onSelect: () => void changeCode(true) }]}/>}
+            </div>
+            <p className="muted small">Entran en <strong>{location.host}</strong> y escriben este código. No necesitan cuenta ni datos personales.</p>
+            <div className="button-row">
+              <button type="button" className="button secondary small" onClick={() => void navigator.clipboard?.writeText(code).then(() => toast({ message: "Código copiado." }))}><Icon name="copy" size={16}/>Copiar código</button>
+              <button type="button" className="button ghost small" onClick={() => void navigator.clipboard?.writeText(`Para entrar a ${section.name} (${course.title}), abre ${location.origin} y escribe el código ${code}.`).then(() => toast({ message: "Invitación copiada. Pégala en el mensaje para tus estudiantes." }))}><Icon name="send" size={16}/>Copiar invitación</button>
+            </div>
+          </> : <>
+            <p className="muted small">La sección no tiene código: sus estudiantes aún no pueden entrar.</p>
+            {writable && <div><button type="button" className="button primary small" disabled={busy} onClick={() => void changeCode()}><Icon name="plus" size={16}/>Generar código</button></div>}
+          </>}
+        </Section>
+        {section.workGroups && <Section title="Grupos de trabajo"><p className="muted small">Con esta lista se forman los grupos para las actividades en parejas o en equipos.</p><div><Link href={`${base}/grupos`} className="button secondary small"><Icon name="team" size={16}/>Ver grupos</Link></div></Section>}
+        <p className="privacy-note"><Icon name="shield" size={16}/>Usa solo un nombre de lista o un código. Sin correos, teléfonos, fechas de nacimiento ni notas personales.</p>
+      </div>
     </div>
-    <p className="privacy-note"><Icon name="shield" size={16}/>Usa solo un nombre de lista o un código. No agregues correos, teléfonos, fechas de nacimiento ni notas personales.</p>
   </>;
+}
+
+/** Adds one student or a whole pasted list: one name per line, skipping blank lines and names already on the list. */
+function AddLearners({ learners, path, onAdded, onCancel }: { learners: GroupLearner[]; path: string; onAdded: (count: number) => Promise<void>; onCancel?: () => void }) {
+  const { section } = useSection();
+  const [text, setText] = useState(""), [progress, setProgress] = useState<number | null>(null), [error, setError] = useState("");
+  const { fresh, repeated } = rosterNames(text, learners.map(learner => learner.displayName));
+  const tooLong = fresh.filter(name => name.length > 80);
+  async function add(event: FormEvent) {
+    event.preventDefault();
+    if (!fresh.length || tooLong.length) return;
+    setError(""); setProgress(0);
+    for (const [index, displayName] of fresh.entries()) {
+      try { await api(`${path}/learners`, "POST", { displayName }); setProgress(index + 1); }
+      catch (cause) {
+        setText(fresh.slice(index).join("\n")); setProgress(null);
+        setError(`${index ? `Se agregaron ${index}. ` : ""}No se pudo agregar a ${displayName}: ${message(cause)}`);
+        if (index) await onAdded(index).catch(() => undefined);
+        return;
+      }
+    }
+    setText(""); setProgress(null);
+    await onAdded(fresh.length);
+  }
+  return <Section title="Agregar estudiantes" className="add-learners">
+    <form className="stack" onSubmit={add} aria-label={`Agregar estudiantes a ${section.name}`}>
+      {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
+      <fieldset disabled={progress !== null} className="stack">
+        <Field label="Nombres de lista" hint="Uno por línea. Puedes pegar la lista completa desde una hoja de cálculo o un documento.">
+          <textarea value={text} rows={Math.min(10, Math.max(3, text.split("\n").length + 1))} placeholder={"Ana L.\nBeto M.\nCarla R."} onChange={event => setText(event.target.value)} autoFocus/>
+        </Field>
+        {(repeated.length > 0 || tooLong.length > 0) && <p className="muted small">{repeated.length > 0 && <>Ya {repeated.length === 1 ? "está" : "están"} en la lista y no se repite{repeated.length === 1 ? "" : "n"}: {repeated.join(", ")}. </>}{tooLong.length > 0 && <>Acorta a 80 caracteres: {tooLong.join(", ")}.</>}</p>}
+        <div className="button-row">
+          <button className="button primary" disabled={!fresh.length || tooLong.length > 0}><Icon name="plus" size={16}/>{progress !== null ? `Agregando ${progress + 1} de ${fresh.length}…` : fresh.length > 1 ? `Agregar ${fresh.length} estudiantes` : "Agregar estudiante"}</button>
+          {onCancel && <button type="button" className="button ghost" onClick={onCancel}>Cancelar</button>}
+        </div>
+      </fieldset>
+    </form>
+  </Section>;
 }
 
 /** Who teaches the section, chosen from the course's team (DEC-024). Administration adds or removes them. */
