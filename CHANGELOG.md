@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.12 — 2026-10-05
+
+Parche de REL-004 (DEC-029): requisitos entre los cursos de un programa. El programa se lee como una ruta: cada curso indica qué cursos del programa conviene terminar antes.
+
+- ST-112: en **Configuración académica**, **Requisitos entre cursos** abre la ruta del programa. Administración elige, para cada curso, hasta 10 cursos del mismo programa que requiere; un curso no puede requerir a otro que ya depende de él, para que la ruta no forme ciclos. La ruta ordena los cursos en etapas: cada curso va una etapa después del último curso que requiere.
+- ST-112: el **Resumen** de cada curso de un programa muestra **Ruta en el programa**: qué cursos requiere y cuáles le siguen, con enlace a cada uno; administración edita los requisitos desde ahí. Los requisitos orientan la planificación y no impiden abrir un curso.
+- ST-112: un curso que sale de su programa pierde sus requisitos y deja de ser requisito de los demás. Guardar los mismos requisitos no registra actividad.
+- Datos: `0026_course_prerequisites.sql` agrega `course_prerequisites`; un curso no puede requerirse a sí mismo.
+- API: `GET`/`PUT /api/programs/:id/prerequisites {courseId, requiredIds}` (lectura para el personal de la organización; escritura solo administración, 403 para el resto; 400 con cursos de otro programa; 409 si se forma un ciclo); `GET /api/courses/:id` incluye `requirements`. Se mantiene la autorización de v0.8.1.
+
 ## 0.8.11 — 2026-10-05
 
 Parche de REL-004 (DEC-028): grupos de trabajo dentro de cada sección. Los estudiantes de la sección son el universo; **Toda la sección** es el grupo predeterminado y quienes la imparten forman grupos más pequeños para las actividades en parejas o en equipos.
