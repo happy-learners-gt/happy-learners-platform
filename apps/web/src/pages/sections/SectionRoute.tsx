@@ -105,33 +105,37 @@ function SectionOverview() {
         : [{ label: "Reactivar sección", icon: "undo", onSelect: () => void setStatus("active") }]}/>}
       primary={primary}/>
     {renaming && <div className="inline-form"><InlineName value={section.name} label="Nombre de la sección" onSave={name => update({ name }, "Sección renombrada.")} onDone={() => setRenaming(false)}/></div>}
-    <StatTiles items={[
+    <StatTiles className="overview-kpis" items={[
       { label: "Estudiantes", value: stats.learners, icon: "users", hue: "pink" },
       { label: "Clases impartidas", value: `${stats.taught} de ${stats.classes}`, icon: "check", hue: "green" },
       { label: "Asistencia promedio", value: stats.attendanceRate === null ? "—" : `${stats.attendanceRate} %`, icon: "users", hue: "violet" },
       { label: "Sin registrar", value: stats.unrecorded, icon: "alert", hue: "coral" },
     ]}/>
-    <div className="overview-grid">
-      <Section title="Avance del curso en la sección" className="span-2">
-        <Progress value={stats.lessonsTaught} max={stats.lessonsPublished} label="Lecciones impartidas"/>
-        <Progress value={stats.lessonsPlanned} max={stats.lessonsPublished} label="Lecciones planificadas en el cronograma"/>
-        <p className="muted small">Cuenta solo las clases de esta sección, sobre las lecciones publicadas del curso. {stats.openings ? `Sus estudiantes abrieron lecciones con el código de la sección ${plural(stats.openings, "vez", "veces")}.` : "Aún no hay lecciones abiertas con el código de la sección."}</p>
-      </Section>
-      <Section title="Próxima clase" action={<Link href={`${base}/clases`} className="section-link">Ver cronograma</Link>}>
-        {next ? <p><Link href={`${base}/clases/${next.id}`}>{sessionDay(next.sessionDate)}{next.startsAt ? `, ${next.startsAt}` : ""}</Link>{next.status === "in_progress" && <> <StatusBadge tone="warning">En curso</StatusBadge></>}</p>
-          : <EmptyState compact icon="calendar" title="Sin clases próximas" action={editable && <Link className="button secondary small" href={`${base}/horario`}>{section.schedule ? "Revisar el horario" : "Configurar horario"}</Link>}>{section.schedule ? "El periodo del horario terminó o todas sus clases están registradas." : "El cronograma se genera cuando administración configura el horario de la sección."}</EmptyState>}
-        {stats.upcoming > 1 && <p className="muted small">{plural(stats.upcoming, "clase pendiente", "clases pendientes")} en el periodo.</p>}
-      </Section>
-      <Section title="Imparten la sección">
-        <SectionEducators/>
-      </Section>
-      <Section title="Estudiantes" action={<Link href={`${base}/estudiantes`} className="section-link">Ver la lista</Link>}>
-        <p>{plural(stats.learners, "estudiante asignado", "estudiantes asignados")}.</p>
-        <p className="muted small">{section.accessCode ? <>Código para estudiantes: <code>{section.accessCode}</code></> : "La sección aún no tiene código para estudiantes."}</p>
-      </Section>
-      <Section title="Actividad de la sección" className="span-2">
-        <ActivityFeed section={section.id} limit={6} empty="Lo que se registre en esta sección y sus clases aparecerá aquí."/>
-      </Section>
+    <div className="dashboard">
+      <div className="dashboard-main">
+        <Section title="Avance del curso en la sección" className="order-2">
+          <Progress value={stats.lessonsTaught} max={stats.lessonsPublished} label="Lecciones impartidas"/>
+          <Progress value={stats.lessonsPlanned} max={stats.lessonsPublished} label="Lecciones planificadas en el cronograma"/>
+          <p className="muted small">Cuenta solo las clases de esta sección, sobre las lecciones publicadas del curso. {stats.openings ? `Sus estudiantes abrieron lecciones con el código de la sección ${plural(stats.openings, "vez", "veces")}.` : "Aún no hay lecciones abiertas con el código de la sección."}</p>
+        </Section>
+        <Section title="Actividad de la sección" className="order-3">
+          <ActivityFeed section={section.id} limit={6} empty="Lo que se registre en esta sección y sus clases aparecerá aquí."/>
+        </Section>
+      </div>
+      <div className="dashboard-side">
+        <Section title="Próxima clase" className="order-1" action={<Link href={`${base}/clases`} className="section-link">Ver cronograma</Link>}>
+          {next ? <p><Link href={`${base}/clases/${next.id}`}>{sessionDay(next.sessionDate)}{next.startsAt ? `, ${next.startsAt}` : ""}</Link>{next.status === "in_progress" && <> <StatusBadge tone="warning">En curso</StatusBadge></>}</p>
+            : <EmptyState compact icon="calendar" title="Sin clases próximas" action={editable && <Link className="button secondary small" href={`${base}/horario`}>{section.schedule ? "Revisar el horario" : "Configurar horario"}</Link>}>{section.schedule ? "El periodo del horario terminó o todas sus clases están registradas." : "El cronograma se genera cuando administración configura el horario de la sección."}</EmptyState>}
+          {stats.upcoming > 1 && <p className="muted small">{plural(stats.upcoming, "clase pendiente", "clases pendientes")} en el periodo.</p>}
+        </Section>
+        <Section title="Imparten la sección" className="order-4">
+          <SectionEducators/>
+        </Section>
+        <Section title="Estudiantes" className="order-5" action={<Link href={`${base}/estudiantes`} className="section-link">Ver la lista</Link>}>
+          <p>{plural(stats.learners, "estudiante asignado", "estudiantes asignados")}.</p>
+          <p className="muted small">{section.accessCode ? <>Código para estudiantes: <code>{section.accessCode}</code></> : "La sección aún no tiene código para estudiantes."}</p>
+        </Section>
+      </div>
     </div>
   </>;
 }

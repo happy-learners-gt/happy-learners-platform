@@ -66,7 +66,7 @@ export function CourseList() {
   const visible = newest(pool.filter(course => passes(course)));
   const filtered = facets.some(selected);
   return <>
-    <PageHeader title="Cursos" description={courses ? admin ? plural(active, "curso activo", "cursos activos") : `${plural(active, "curso asignado", "cursos asignados")} a tu cuenta` : undefined} primary={admin && (!courses || courses.length > 0) && <PrimaryAction href="/cursos/nuevo" icon="plus">Crear curso</PrimaryAction>}/>
+    <PageHeader title="Cursos" description={courses ? archived ? plural(courses.length - active, "curso archivado", "cursos archivados") : admin ? plural(active, "curso activo", "cursos activos") : `${plural(active, "curso asignado", "cursos asignados")} a tu cuenta` : undefined} primary={admin && (!courses || courses.length > 0) && <PrimaryAction href="/cursos/nuevo" icon="plus">Crear curso</PrimaryAction>}/>
     <div className="toolbar" role="group" aria-label="Filtrar cursos">
       <div className="search-field"><Icon name="search" size={18}/><label htmlFor="course-search" className="sr-only">Buscar cursos</label><input id="course-search" type="search" value={query} onChange={event => filter("q", event.target.value)} placeholder="Buscar por nombre u objetivo"/></div>
       <fieldset className="segmented"><legend className="sr-only">Estado</legend>

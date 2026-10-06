@@ -31,9 +31,12 @@ test("didactic sequence: moments, composite activities and private teacher notes
 
   // Up and down cross moment boundaries in the outline.
   const outline = page.getByRole("navigation", { name: "Estructura de la lección" });
-  await outline.getByRole("button", { name: "Subir actividad 2: Elige la presentación" }).click();
+  const handle = outline.getByRole("button", { name: /^Reordenar actividad \d: Elige la presentación$/ });
+  await handle.focus();
+  await page.keyboard.press("ArrowUp");
   await expect(toast(page)).toContainText("pasó a Presentación");
-  await outline.getByRole("button", { name: "Bajar actividad 2: Elige la presentación" }).click();
+  await expect(handle).toBeFocused();
+  await page.keyboard.press("ArrowDown");
   await expect(toast(page)).toContainText("pasó a Práctica");
   await expect(activity(page, "Elige la presentación").locator(".card-kind")).toHaveText("Práctica · Actividad 2 de 2");
   await expect(saveStatus(page)).toContainText("Borrador guardado", { timeout: 10_000 });

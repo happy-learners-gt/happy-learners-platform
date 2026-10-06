@@ -22,8 +22,8 @@ export function CourseCard({ course, program, stats, menu }: { course: Course; p
       <div className="course-card-title">
         <h3><Link href={href} className="card-link">{course.title}</Link></h3>
         <p className="course-card-meta">{stats ? `${plural(stats.units, noun.one, noun.many)} · ${plural(stats.lessons, "lección", "lecciones")}` : "Cargando contenido…"}</p>
+        {course.status === "archived" && <StatusBadge>Archivado</StatusBadge>}
       </div>
-      {course.status === "archived" && <StatusBadge>Archivado</StatusBadge>}
       {menu && <Menu label={`Acciones del curso ${course.title}`} items={menu}/>}
     </div>
     <ul className="course-facets" aria-label="Configuración académica">

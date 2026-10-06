@@ -7,6 +7,7 @@ import { hueAt, lessonState, lessonStateLabel, plural } from "../model";
 import type { LessonState } from "../model";
 import { Icon } from "./icons";
 import { Menu } from "./Menu";
+import { SortHandle } from "./Sortable";
 import { StatusBadge } from "./primitives";
 import type { Tone } from "./primitives";
 
@@ -40,11 +41,12 @@ export function InlineName({ value, label, onSave, onDone, className = "" }: { v
 export type OutlineActions = {
   renameUnit: (unit: LearningUnit, name: string) => Promise<boolean>;
   editUnit: (unit: LearningUnit) => void;
-  moveUnit: (unit: LearningUnit, delta: number) => void;
+  /** Moves the item to a position among all of its siblings, archived ones included. */
+  moveUnit: (unit: LearningUnit, to: number) => void;
   archiveUnit: (unit: LearningUnit) => void;
   createLesson: (unit: LearningUnit, title: string, objective: string) => Promise<boolean>;
   renameLesson: (lesson: Lesson, title: string) => Promise<boolean>;
-  moveLesson: (lesson: Lesson, delta: number) => void;
+  moveLesson: (lesson: Lesson, to: number) => void;
   archiveLesson: (lesson: Lesson) => void;
   duplicateLesson: (lesson: Lesson) => void;
   previewLesson: (lesson: Lesson) => void;
@@ -67,6 +69,7 @@ export function LessonOutline({ courseId, units, lessons, writable, organize, sh
     const published = visible.filter(lesson => ["published", "changes"].includes(lessonState(lesson))).length;
     return <li key={unit.id} className={`outline-unit tone-${hueAt(position)}${archived ? " is-archived" : ""}`} id={`unidad-${unit.id}`} data-focus={focusUnit === unit.id || undefined}>
       <div className="outline-unit-header">
+        {organize && <SortHandle id={`unit-${unit.id}`} label={`Reordenar ${noun.one} ${index + 1}: ${unit.name}`} index={index} count={visibleUnits.length} onMove={to => actions.moveUnit(unit, units.indexOf(visibleUnits[to]))}/>}
         <button type="button" className="icon-button disclosure" aria-expanded={open} aria-controls={`lecciones-${unit.id}`} aria-label={`${open ? "Contraer" : "Expandir"} ${unit.name}`} onClick={() => toggle(unit.id)}><Icon name={open ? "chevronDown" : "chevronRight"} size={18}/></button>
         <div className="outline-unit-title">
           <span className="outline-eyebrow"><span className="unit-dot" aria-hidden="true"/>{noun.One} {index + 1}</span>
@@ -78,8 +81,8 @@ export function LessonOutline({ courseId, units, lessons, writable, organize, sh
         {archived && <StatusBadge>Archivada</StatusBadge>}
         {organize && <Menu label={`Acciones ${noun.ofThe} ${unit.name}`} items={[
           ...(!archived ? [{ label: "Renombrar", icon: "edit" as const, onSelect: () => setRenaming(unit.id) }, { label: "Editar nombre y objetivo", icon: "text" as const, onSelect: () => actions.editUnit(unit) }, { label: "Nueva lección", icon: "plus" as const, onSelect: () => { setExpanded(new Set([...expanded, unit.id])); setCreating(unit.id); } }] : []),
-          { label: "Mover arriba", icon: "up", onSelect: () => actions.moveUnit(unit, -1), disabled: position === 0 },
-          { label: "Mover abajo", icon: "down", onSelect: () => actions.moveUnit(unit, 1), disabled: position === units.length - 1 },
+          { label: "Mover arriba", icon: "chevronUp", onSelect: () => actions.moveUnit(unit, position - 1), disabled: position === 0 },
+          { label: "Mover abajo", icon: "chevronDown", onSelect: () => actions.moveUnit(unit, position + 1), disabled: position === units.length - 1 },
           "separator",
           { label: archived ? `Restaurar ${noun.one}` : `Archivar ${noun.one}`, icon: "archive", onSelect: () => actions.archiveUnit(unit), danger: !archived },
         ]}/>}
@@ -89,6 +92,7 @@ export function LessonOutline({ courseId, units, lessons, writable, organize, sh
           const order = all.indexOf(lesson), lessonArchived = lesson.status === "archived";
           const href = `/cursos/${courseId}/lecciones/${lesson.id}`;
           return <li key={lesson.id} className="outline-lesson">
+            {organize && <SortHandle id={`lesson-${lesson.id}`} label={`Reordenar la lección ${order + 1}: ${lesson.title}`} index={visible.indexOf(lesson)} count={visible.length} onMove={to => actions.moveLesson(lesson, all.indexOf(visible[to]))}/>}
             <span className="outline-number" aria-hidden="true">{order + 1}</span>
             <div className="outline-lesson-title">
               {renaming === lesson.id ? <InlineName value={lesson.title} label="Título de la lección" onSave={title => actions.renameLesson(lesson, title)} onDone={() => setRenaming(null)}/>
@@ -101,8 +105,8 @@ export function LessonOutline({ courseId, units, lessons, writable, organize, sh
               { label: "Vista previa", icon: "eye", onSelect: () => actions.previewLesson(lesson) },
               ...(writable && !lessonArchived ? [{ label: "Renombrar", icon: "text" as const, onSelect: () => setRenaming(lesson.id) }, { label: "Duplicar", icon: "copy" as const, onSelect: () => actions.duplicateLesson(lesson) }] : []),
               ...(organize ? [
-                { label: "Mover arriba", icon: "up" as const, onSelect: () => actions.moveLesson(lesson, -1), disabled: order === 0 },
-                { label: "Mover abajo", icon: "down" as const, onSelect: () => actions.moveLesson(lesson, 1), disabled: order === all.length - 1 },
+                { label: "Mover arriba", icon: "chevronUp" as const, onSelect: () => actions.moveLesson(lesson, order - 1), disabled: order === 0 },
+                { label: "Mover abajo", icon: "chevronDown" as const, onSelect: () => actions.moveLesson(lesson, order + 1), disabled: order === all.length - 1 },
                 "separator" as const,
                 { label: lessonArchived ? "Restaurar lección" : "Archivar lección", icon: "archive" as const, onSelect: () => actions.archiveLesson(lesson), danger: !lessonArchived },
               ] : []),
