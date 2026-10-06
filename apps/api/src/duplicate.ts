@@ -1,4 +1,5 @@
 import type { Activity, Lesson, Member } from "@happy-learners/contracts";
+import { sharePrefix } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
 import { curriculumFor, materialsFor, unitsFor } from "./courses";
 import { event } from "./team";
@@ -73,7 +74,7 @@ export async function duplicateCourse(courseId: string, current: Member, db: Dat
         return copy;
       });
       const lesson: Lesson = { ...source, id: lid, courseId: cid, courseUnitId: ids.get(row.unitId)!, unitId: undefined, publishedAt: "", activities, outcomeIds: outcomes(source.outcomeIds),
-        shareCode: (current.organizationId === "org-other" ? "O-" : "D-") + crypto.randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase() };
+        shareCode: sharePrefix(current.organizationId) + crypto.randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase() };
       statements.push(db.prepare("INSERT INTO lessons(id,program_id,status,content,unit_id,course_unit_id,position,updated_at) VALUES (?,?,'draft',?,NULL,?,?,?)").bind(lid, cid, JSON.stringify(lesson), ids.get(row.unitId)!, row.position, now));
     }
     statements.push(event(db, current, { action: "created", targetType: "course", targetId: cid, courseId: cid, summary: `Duplicó «${course.title}» como «${title}»` }));

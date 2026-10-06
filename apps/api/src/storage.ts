@@ -25,6 +25,8 @@ import classCalendarMigration from "../../../database/migrations/0023_class_cale
 import selfPacedMigration from "../../../database/migrations/0024_self_paced.sql";
 import workGroupsMigration from "../../../database/migrations/0025_work_groups.sql";
 import prerequisitesMigration from "../../../database/migrations/0026_course_prerequisites.sql";
+import organizationsMigration from "../../../database/migrations/0027_organization_accounts.sql";
+import { organizationIds } from "@happy-learners/domain";
 
 type Statement = { sql: string; values: (string | number | null)[] };
 /**
@@ -55,7 +57,7 @@ export class OrganizationStore extends DurableObject<Env> {
   }
 
   async query(scope: string, statements: Statement[], guard?: Statement): Promise<Record<string, SqlStorageValue>[][]> {
-    if (!["org-demo", "org-other"].includes(scope)) throw new Error("Invalid organization");
+    if (!organizationIds.includes(scope)) throw new Error("Invalid organization");
     return this.ctx.storage.transactionSync(() => {
       this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, organization_id TEXT NOT NULL)");
       const applied = this.ctx.storage.sql.exec<{ version: number; organization_id: string }>("SELECT version, organization_id FROM schema_migrations ORDER BY version DESC LIMIT 1").toArray();
@@ -66,6 +68,8 @@ export class OrganizationStore extends DurableObject<Env> {
         this.ctx.storage.sql.exec("DELETE FROM memberships WHERE organization_id<>?", scope);
         this.ctx.storage.sql.exec("DELETE FROM users WHERE id NOT IN (SELECT user_id FROM memberships)");
         this.ctx.storage.sql.exec("DELETE FROM organizations WHERE id<>?", scope);
+        // Organizations added after the first migration start empty; later migrations name them and add their accounts.
+        this.ctx.storage.sql.exec("INSERT OR IGNORE INTO organizations(id,name,configured) VALUES (?,NULL,0)", scope);
         this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (1,?)", scope);
         this.ctx.storage.sql.exec(catalogMigration);
         this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (2,?)", scope);
@@ -95,6 +99,7 @@ export class OrganizationStore extends DurableObject<Env> {
       if (!applied.length || applied[0].version < 24) { this.ctx.storage.sql.exec(selfPacedMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (24,?)", scope); }
       if (!applied.length || applied[0].version < 25) { this.ctx.storage.sql.exec(workGroupsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (25,?)", scope); }
       if (!applied.length || applied[0].version < 26) { this.ctx.storage.sql.exec(prerequisitesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (26,?)", scope); }
+      if (!applied.length || applied[0].version < 27) { this.ctx.storage.sql.exec(organizationsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (27,?)", scope); }
       // Compare-and-write plus dependent writes belong to one SQLite transaction.
       if (guard && !this.ctx.storage.sql.exec(guard.sql, ...guard.values).toArray().length) return [];
       return statements.map(statement => this.ctx.storage.sql.exec(statement.sql, ...statement.values).toArray());

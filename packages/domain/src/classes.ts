@@ -1,5 +1,6 @@
 import type { CancelPlan, ClassStatus, LessonOutcome } from "@happy-learners/contracts";
 import { isCalendarDay } from "./schedule";
+import { organizations, sectionPrefix } from "./organizations";
 
 export const classStatusLabels: Record<ClassStatus, string> = { planned: "Planificada", in_progress: "En curso", completed: "Impartida", cancelled: "Cancelada" };
 export type ClassAction = "start" | "complete" | "cancel" | "restore";
@@ -44,12 +45,12 @@ export function classPlanInput(input: unknown): ClassPlan | { error: string } {
 }
 
 /** Group codes: a prefix for the organization's storage, then characters that cannot be confused when read aloud. */
-export const groupCodePattern = /^[DO]G-[A-Z0-9]{4}-?[A-Z0-9]{2,8}$/;
+export const groupCodePattern = new RegExp(`^[${organizations.map(item => item.letter.toUpperCase()).join("")}]G-[A-Z0-9]{4}-?[A-Z0-9]{2,8}$`);
 const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 export function newGroupCode(organizationId: string, random: (size: number) => Uint8Array) {
   const bytes = random(8);
   const body = Array.from(bytes, byte => alphabet[byte % alphabet.length]).join("");
-  return `${organizationId === "org-other" ? "OG" : "DG"}-${body.slice(0, 4)}-${body.slice(4)}`;
+  return `${sectionPrefix(organizationId)}-${body.slice(0, 4)}-${body.slice(4)}`;
 }
 export const normalizeGroupCode = (value: unknown) => typeof value === "string" ? value.trim().toUpperCase().replace(/\s+/g, "") : "";
 

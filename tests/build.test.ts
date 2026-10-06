@@ -157,6 +157,12 @@ it("HL-11 published lessons are read-only and isolated from other organizations"
   expect((await fetch(`${origin}/api/lessons/colores-en-equipo`, { headers: { Cookie: outsider } })).status).toBe(404);
   expect((await (await fetch(`${origin}/api/lessons`, { headers: { Cookie: outsider } })).json()).lessons).toEqual([]);
   expect((await (await fetch(`${origin}/api/organization`, { headers: { Cookie: outsider } })).json()).organization.id).toBe("org-other");
+  // DEC-032: each organization has its own administration; the sign-in finds which one a username belongs to.
+  const external = await login("admin-externo");
+  expect((await (await fetch(`${origin}/api/session`, { headers: { Cookie: external } })).json()).member).toMatchObject({ username: "admin-externo", role: "admin", organizationId: "org-other" });
+  expect((await (await fetch(`${origin}/api/lessons`, { headers: { Cookie: external } })).json()).lessons).toEqual([]);
+  const stranger = await fetch(`${origin}/api/login`, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin }, body: JSON.stringify({ username: "admin-hl", password: "Aprender-2026!" }) });
+  expect(stranger.status).toBe(401);
 });
 it("HL-14 responses expose no password data and reject oversized or malformed input", async () => {
   const Cookie = await login("instructor-demo");
