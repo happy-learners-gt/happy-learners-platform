@@ -2,7 +2,8 @@ import { test, expect } from "./local-test";
 import { E2E_PREFIX, e2eName, openNavigation, origin, sectionNav, sessionToken, signIn, toast } from "./helpers";
 
 const course = "course-exploradores";
-const day = (offset: number) => { const date = new Date(); date.setDate(date.getDate() + offset); return date.toLocaleDateString("en-CA"); };
+// Dates in the organization's time zone, as the app computes them, whatever the runner's clock.
+const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Guatemala" });
 
 test("HL-61 ST-035 ST-097 ST-098 ST-101 ST-102: administration prepares a section, its educator plans and teaches a class and the section follows it with its code", async ({ page }, info) => {
   const group = e2eName(info, "Clase"), first = `${E2E_PREFIX} Ana`, second = `${E2E_PREFIX} Beto`;

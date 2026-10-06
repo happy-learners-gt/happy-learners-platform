@@ -60,7 +60,8 @@ No se usa `@fluentui/react-components`. Los componentes propios ya cumplen WAI-A
 4. **CSS nuevo:** agrégalo a `style.css` en una sección con comentario y usa solo tokens semánticos. Si falta un token, créalo en `theme.css` apuntando a un token Fluent; si Fluent no lo tiene, derívalo de uno que sí exista (como los tintes `color-mix(… 10%, white)` de las paletas sin fondo claro) y explícalo en un comentario.
 5. **Elevación y movimiento:** elige la sombra por jerarquía y anima solo entradas, salidas y cambios de estado con las curvas indicadas.
 6. **Accesibilidad:** contraste de texto ≥ 4,5:1, foco visible, nombres accesibles en controles con solo icono, tamaño táctil ≥ 44 px en `pointer: coarse` y orden de tabulación lógico. Agrega la ruta a `tests/e2e/accessibility.spec.ts` para que axe la revise con WCAG 2.2 A/AA.
-7. **Revisa en la guía:** si el módulo introduce un patrón nuevo, agrégalo a `pages/StyleGuide.tsx`.
+7. **Ordenar:** una lista que se reordena usa `SortHandle` de `ui/Sortable.tsx`: el asa con el ícono Fluent «reordenar» se arrastra con puntero o dedo y, enfocada, responde a flecha arriba y abajo, Inicio y Fin. Su nombre accesible dice qué se mueve y en qué lugar está; los menús ofrecen «Mover arriba» y «Mover abajo».
+8. **Revisa en la guía:** si el módulo introduce un patrón nuevo, agrégalo a `pages/StyleGuide.tsx`.
 
 ## Ejemplos
 

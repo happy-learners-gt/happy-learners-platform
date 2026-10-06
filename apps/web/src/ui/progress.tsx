@@ -8,6 +8,7 @@ import type { IconName } from "./icons";
 import { EmptyState, ErrorState, Skeleton, StatusBadge } from "./primitives";
 
 const targetIcon: Record<ActivityEvent["targetType"], IconName> = { course: "courses", program: "grid", module: "content", lesson: "edit", resource: "library", competency: "spark", outcome: "spark", group: "users", session: "calendar", team: "users" };
+const targetLabel: Record<ActivityEvent["targetType"], string> = { course: "Curso", program: "Programa", module: "Módulo", lesson: "Lección", resource: "Recurso", competency: "Competencia", outcome: "Resultado de aprendizaje", group: "Sección", session: "Clase", team: "Equipo" };
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join("").toUpperCase();
 
 /** A person's initials on their colour; the name is always next to it or in the accessible label. */
@@ -36,7 +37,7 @@ export function ActivityFeed({ course, section, actor, mine, limit = 8, courseTi
   return <ol className="activity-feed people">{events.map(entry => <li key={entry.id}>
     <Avatar name={entry.actorName}/>
     <div><span><strong>{entry.actorName}</strong> <span className="feed-summary">{entry.summary.charAt(0).toLowerCase() + entry.summary.slice(1)}</span></span>
-      <span className="muted small"><Icon name={targetIcon[entry.targetType]} size={12}/>{entry.courseId && courseTitles?.[entry.courseId] && !course ? <>{" "}<Link href={`/cursos/${entry.courseId}`}>{courseTitles[entry.courseId]}</Link></> : null}</span></div>
+      <span className="muted small"><Icon name={targetIcon[entry.targetType]} size={12}/>{targetLabel[entry.targetType]}{entry.courseId && courseTitles?.[entry.courseId] && !course ? <>{" · "}<Link href={`/cursos/${entry.courseId}`}>{courseTitles[entry.courseId]}</Link></> : null}</span></div>
     <time className="muted small" dateTime={entry.occurredAt} title={new Date(entry.occurredAt).toLocaleString("es-GT")}>{timeAgo(entry.occurredAt)}</time>
   </li>)}</ol>;
 }

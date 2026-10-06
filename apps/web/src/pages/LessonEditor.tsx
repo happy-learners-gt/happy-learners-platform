@@ -19,6 +19,7 @@ import { Icon } from "../ui/icons";
 import type { IconName } from "../ui/icons";
 import { stateTone } from "../ui/LessonOutline";
 import { Menu } from "../ui/Menu";
+import { moveItem, SortHandle } from "../ui/Sortable";
 import { Breadcrumbs, Button, EmptyState, ErrorState, Field, Loading, PrimaryAction, StatusBadge } from "../ui/primitives";
 import { useCourse } from "./course/context";
 import { LessonPlayer } from "./StudentLesson";
@@ -193,8 +194,8 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     updateBlocks(activity.id!, blocks => [...blocks, newBlock(kind)]);
     focusCard(activity.id!, kind === "resource" ? "select" : "[contenteditable=true]");
   }
-  function moveBlock(activity: Activity, index: number, delta: number) {
-    updateBlocks(activity.id!, current => { const blocks = [...current]; [blocks[index], blocks[index + delta]] = [blocks[index + delta], blocks[index]]; return blocks; });
+  function moveBlock(activity: Activity, from: number, to: number) {
+    updateBlocks(activity.id!, current => moveItem(current, from, to));
   }
   async function removeBlock(activity: Activity, block: ActivityBlock) {
     const filled = block.kind === "resource" ? !!block.resourceId : !!block.richContent || !!block.instructions?.trim();
@@ -220,6 +221,16 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     list[index] = { ...current, phase: target.id };
     setActivities(list);
     toast({ tone: "info", message: `«${current.title}» pasó a ${target.label}.` });
+  }
+  /** Places an activity at a position among those of its own moment. */
+  function placeActivity(activity: Activity, to: number) {
+    const list = draft!.activities, phase = phaseOf(activity, draft!.sequence);
+    const siblings = list.filter(item => phaseOf(item, draft!.sequence) === phase);
+    const ordered = moveItem(siblings, siblings.indexOf(activity), to);
+    let next = 0;
+    const result = list.map(item => phaseOf(item, draft!.sequence) === phase ? ordered[next++] : item);
+    setActivities(result);
+    toast({ tone: "info", message: `«${activity.title}» ahora es la actividad ${result.indexOf(activity) + 1} de ${result.length}.` });
   }
   function moveToPhase(activity: Activity, phase: Phase) {
     setActivities([...draft!.activities.filter(item => item.id !== activity.id), { ...activity, phase: phase.id }]);
@@ -378,10 +389,8 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
               <span className="outline-number type-chip" aria-hidden="true">{index + 1}</span>
               <span><strong>{activity.title || "Sin título"}</strong><small><Icon name={kindIcon[first?.kind || "text"]} size={12}/>{purposes.find(item => item.value === activity.purpose)?.label || blockKindLabel[first?.kind || "text"]} · {activity.minutes} min</small></span>
             </button>
-            {writable && <span className="reorder">
-              <button type="button" className="icon-button small" aria-label={`Subir actividad ${index + 1}: ${activity.title}`} disabled={!canMove(index, -1)} onClick={() => moveActivity(index, -1)}><Icon name="up" size={16}/></button>
-              <button type="button" className="icon-button small" aria-label={`Bajar actividad ${index + 1}: ${activity.title}`} disabled={!canMove(index, 1)} onClick={() => moveActivity(index, 1)}><Icon name="down" size={16}/></button>
-            </span>}
+            {writable && <SortHandle id={`activity-${activity.id}`} className="reorder" label={`Reordenar actividad ${index + 1}: ${activity.title}`} index={activities.indexOf(activity)} count={activities.length}
+              onMove={to => placeActivity(activity, to)} onStep={delta => { if (!canMove(index, delta)) return false; moveActivity(index, delta); return true; }}/>}
           </li>; })}</ol> : <p className="muted small outline-empty">{structured ? "Sin actividades." : "Aún no hay actividades."}</p>}
         </div>)}
       </nav>
@@ -431,7 +440,7 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
             canMove={delta => canMove(index, delta)} onMove={delta => moveActivity(index, delta)} onMoveTo={target => moveToPhase(activity, target)}
             onChange={patch => updateActivity(activity.id!, patch)} onBlock={(blockId, patch) => updateBlock(activity, blockId, patch)}
             onRemote={(blockId, doc) => setDraft(value => value && { ...value, activities: value.activities.map(item => item.id === activity.id ? { ...item, blocks: item.blocks!.map(block => block.id === blockId ? { ...block, richContent: doc } : block) } : item) })}
-            onAddBlock={kind => addBlock(activity, kind)} onMoveBlock={(blockIndex, delta) => moveBlock(activity, blockIndex, delta)} onRemoveBlock={block => void removeBlock(activity, block)} onRemove={() => void removeActivity(activity)}/>; })}
+            onAddBlock={kind => addBlock(activity, kind)} onMoveBlock={(blockIndex, to) => moveBlock(activity, blockIndex, to)} onRemoveBlock={block => void removeBlock(activity, block)} onRemove={() => void removeActivity(activity)}/>; })}
           {writable ? <AddActivity label={structured ? `Agregar actividad a ${phase.label}` : "Agregar actividad"} empty={!activities.length} onAdd={kind => addActivity(kind, phase.id)}/>
             : !activities.length && <p className="muted small">Sin actividades en este momento.</p>}
         </section>)}
@@ -469,7 +478,7 @@ type CardProps = {
   collaboration: CollaborationProvider | null; username: string; onFocus: () => void; onEditorFocus: (editor: Editor) => void;
   canMove: (delta: number) => boolean; onMove: (delta: number) => void; onMoveTo: (phase: Phase) => void;
   onChange: (patch: Partial<Activity>) => void; onBlock: (blockId: string, patch: Partial<ActivityBlock>) => void; onRemote: (blockId: string, doc: RichTextDocument) => void;
-  onAddBlock: (kind: ActivityBlock["kind"]) => void; onMoveBlock: (index: number, delta: number) => void; onRemoveBlock: (block: ActivityBlock) => void; onRemove: () => void;
+  onAddBlock: (kind: ActivityBlock["kind"]) => void; onMoveBlock: (from: number, to: number) => void; onRemoveBlock: (block: ActivityBlock) => void; onRemove: () => void;
 };
 
 /**
@@ -487,8 +496,8 @@ function ActivityCard({ activity, index, total, phase, phases, writable, resourc
       <input id={`title-${activity.id}`} className="card-title" value={activity.title} maxLength={160} readOnly={!writable} placeholder="Título de la actividad" onChange={event => onChange({ title: event.target.value })}/>
       <label className="card-minutes"><input type="number" min={1} max={120} value={activity.minutes} readOnly={!writable} aria-label={`Minutos de la actividad ${number}`} onChange={event => onChange({ minutes: Math.max(1, Math.min(120, Number(event.target.value) || 1)) })}/><span aria-hidden="true">min</span></label>
       {writable && <Menu label={`Acciones de la actividad ${number}`} items={[
-        { label: "Mover arriba", icon: "up", disabled: !canMove(-1), onSelect: () => onMove(-1) },
-        { label: "Mover abajo", icon: "down", disabled: !canMove(1), onSelect: () => onMove(1) },
+        { label: "Mover arriba", icon: "chevronUp", disabled: !canMove(-1), onSelect: () => onMove(-1) },
+        { label: "Mover abajo", icon: "chevronDown", disabled: !canMove(1), onSelect: () => onMove(1) },
         ...(phases.length ? ["separator" as const, ...phases.filter(item => item.id !== phase?.id).map(item => ({ label: `Mover a ${item.label}`, icon: "arrowRight" as const, onSelect: () => onMoveTo(item) }))] : []),
         "separator",
         { label: "Eliminar actividad", icon: "close", danger: true, onSelect: onRemove },
@@ -507,7 +516,7 @@ function ActivityCard({ activity, index, total, phase, phases, writable, resourc
     <ol className="block-list">{blocks.map((block, blockIndex) => <li key={block.id}>
       <BlockEditor block={block} number={number} position={blockIndex} count={blocks.length} removable={blocks.length > 1 && (block.kind === "teacher-note" || learnerBlocks > 1)} writable={writable} resources={resources} suggested={suggested} courseId={courseId}
         collaboration={collaboration} username={username} onEditorFocus={onEditorFocus} onChange={patch => onBlock(block.id, patch)} onRemote={doc => onRemote(block.id, doc)}
-        onMove={delta => onMoveBlock(blockIndex, delta)} onRemove={() => onRemoveBlock(block)}/>
+        onMove={to => onMoveBlock(blockIndex, to)} onRemove={() => onRemoveBlock(block)}/>
     </li>)}</ol>
     {writable && blocks.length < 12 && <div className="add-block" role="group" aria-label={`Agregar a la actividad ${number}`}>
       <span className="insert-label">Agregar bloque</span>
@@ -524,7 +533,7 @@ const blockPlaceholder: Record<ActivityBlock["kind"], string> = {
 function BlockEditor({ block, number, position, count, removable, writable, resources, suggested, courseId, collaboration, username, onEditorFocus, onChange, onRemote, onMove, onRemove }: {
   block: ActivityBlock; number: number; position: number; count: number; removable: boolean; writable: boolean; resources: (Material | Resource)[]; suggested: string[]; courseId: string;
   collaboration: CollaborationProvider | null; username: string; onEditorFocus: (editor: Editor) => void;
-  onChange: (patch: Partial<ActivityBlock>) => void; onRemote: (doc: RichTextDocument) => void; onMove: (delta: number) => void; onRemove: () => void;
+  onChange: (patch: Partial<ActivityBlock>) => void; onRemote: (doc: RichTextDocument) => void; onMove: (to: number) => void; onRemove: () => void;
 }) {
   const [showFile, setShowFile] = useState(false);
   const options = block.options || [];
@@ -533,11 +542,10 @@ function BlockEditor({ block, number, position, count, removable, writable, reso
   const label = { text: `Contenido de la actividad ${number}`, resource: `Indicación del recurso de la actividad ${number}`, question: `Pregunta de la actividad ${number}`, "teacher-note": `Nota para el docente de la actividad ${number}` }[block.kind] + suffix;
   return <div className={`block block-${block.kind} tone-${blockHue[block.kind]}`}>
     <div className="block-head">
+      {writable && count > 1 && <SortHandle id={`block-${block.id}`} label={`Reordenar ${blockKindLabel[block.kind].toLowerCase()} de la actividad ${number}${suffix}`} index={position} count={count} onMove={onMove}/>}
       <Icon name={kindIcon[block.kind]} size={16}/><span className="block-kind">{blockKindLabel[block.kind]}</span>
       {block.kind === "teacher-note" && <span className="block-private"><Icon name="eye" size={14}/>Solo docentes: los estudiantes no la ven</span>}
       {writable && count > 1 && <span className="block-actions">
-        <button type="button" className="icon-button small" aria-label={`Subir ${blockKindLabel[block.kind].toLowerCase()} de la actividad ${number}${suffix}`} disabled={position === 0} onClick={() => onMove(-1)}><Icon name="up" size={16}/></button>
-        <button type="button" className="icon-button small" aria-label={`Bajar ${blockKindLabel[block.kind].toLowerCase()} de la actividad ${number}${suffix}`} disabled={position === count - 1} onClick={() => onMove(1)}><Icon name="down" size={16}/></button>
         <button type="button" className="icon-button small" aria-label={`Quitar ${blockKindLabel[block.kind].toLowerCase()} de la actividad ${number}${suffix}`} disabled={!removable} onClick={onRemove}><Icon name="close" size={16}/></button>
       </span>}
     </div>

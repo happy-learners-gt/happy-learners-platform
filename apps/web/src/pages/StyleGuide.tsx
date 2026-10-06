@@ -5,6 +5,7 @@ import { Modal, useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import type { IconName } from "../ui/icons";
 import { Menu } from "../ui/Menu";
+import { moveItem, SortHandle } from "../ui/Sortable";
 import { Button, EmptyState, Field, PageHeader, PrimaryAction, Progress, Section, StatTiles, StatusBadge } from "../ui/primitives";
 
 const demoCourse: Course = { id: "course-demo-guide", title: "Ciencias para curiosos", objective: "Observar, preguntar y comprobar con experimentos sencillos.", educationType: "formal", level: "primary", format: "laboratory", modality: "in-person", pacing: "scheduled", area: "05", settings: {}, status: "active", version: 1, updatedAt: new Date().toISOString() };
@@ -19,7 +20,7 @@ const motion = [["Entrar", "--ease-enter", "Desacelera: lo que aparece llega rá
  */
 export function StyleGuide() {
   const { toast } = useFeedback();
-  const [dialog, setDialog] = useState(false), [replay, setReplay] = useState(0), [segment, setSegment] = useState("a");
+  const [dialog, setDialog] = useState(false), [replay, setReplay] = useState(0), [segment, setSegment] = useState("a"), [order, setOrder] = useState(["Inicio", "Desarrollo", "Cierre"]);
   return <>
     <PageHeader crumbs={[{ label: "Ayuda", href: "/ayuda" }, { label: "Guía de estilo" }]} title="Guía de estilo Fluent"
       description="Los principios de Fluent Design —luz, profundidad, movimiento, material y escala— aplicados a los componentes de Happy Learners. Todo lo que ves aquí usa los mismos componentes y tokens que el resto de la plataforma."/>
@@ -77,6 +78,13 @@ export function StyleGuide() {
         </div>
           <Progress value={3} max={5} label="Progreso"/>
           <p className="notice"><Icon name="info" size={18}/>Aviso informativo.</p>
+        </div>
+        <div className="guide-block"><h3>Ordenar</h3>
+          <ol className="lesson-picker-list sortable-list">{order.map((item, index) => <li key={item}>
+            <SortHandle id={`guide-${item}`} label={`Reordenar «${item}», elemento ${index + 1} de ${order.length}`} index={index} count={order.length} onMove={to => setOrder(moveItem(order, index, to))}/>
+            <span className="lesson-picker-title">{item}</span>
+          </li>)}</ol>
+          <p className="muted small">Arrastra el asa o enfócala y usa las flechas, Inicio y Fin.</p>
         </div>
         <div className="guide-block"><h3>Menús, diálogos y toasts</h3><div className="guide-stack">
           <Menu label="Menú de ejemplo" text="Menú" icon="more" items={[{ label: "Editar", icon: "edit", onSelect: () => undefined }, { label: "Duplicar", icon: "copy", onSelect: () => undefined }, "separator", { label: "Archivar", icon: "archive", danger: true, onSelect: () => undefined }]}/>

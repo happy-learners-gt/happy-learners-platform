@@ -9,6 +9,7 @@ import { Icon } from "../../ui/icons";
 import { LessonOutline } from "../../ui/LessonOutline";
 import type { OutlineActions } from "../../ui/LessonOutline";
 import { Button, EmptyState, Field, PageHeader, PrimaryAction } from "../../ui/primitives";
+import { moveItem } from "../../ui/Sortable";
 import { useCourse } from "./context";
 
 /** Renames and archives change only lesson metadata, so activities are omitted and kept by the API. */
@@ -51,10 +52,9 @@ export function Content() {
   const actions: OutlineActions = {
     renameUnit: (unit, name) => run(() => api(`/courses/${course.id}/units/${unit.id}`, "PUT", unitBody(unit, { name })), `${noun.One} ${noun.renamed}.`),
     editUnit: unit => setEditing(unit),
-    moveUnit: (unit, delta) => {
-      const ids = units.map(item => item.id), index = ids.indexOf(unit.id);
-      [ids[index], ids[index + delta]] = [ids[index + delta], ids[index]];
-      void run(() => api(`/courses/${course.id}/units/order`, "PUT", { version: course.version, ids }), `«${unit.name}» ahora es ${noun.the} ${index + delta + 1} de ${ids.length}.`);
+    moveUnit: (unit, to) => {
+      const ids = moveItem(units.map(item => item.id), units.indexOf(unit), to);
+      void run(() => api(`/courses/${course.id}/units/order`, "PUT", { version: course.version, ids }), `«${unit.name}» ahora es ${noun.the} ${to + 1} de ${ids.length}.`);
     },
     archiveUnit: async unit => {
       const archiving = unit.status === "active";
@@ -71,10 +71,10 @@ export function Content() {
       } catch (error) { toast({ tone: "error", message: `${message(error)} Revisa el título y el objetivo.` }); return false; }
     },
     renameLesson: (lesson, title) => run(() => api(`/lessons/${lesson.id}`, "PUT", metadataBody(course.id, lesson, { title })), "Lección renombrada. Publica los cambios para que los vean los estudiantes."),
-    moveLesson: (lesson, delta) => {
-      const ids = lessons.filter(item => item.courseUnitId === lesson.courseUnitId).map(item => item.id), index = ids.indexOf(lesson.id);
-      [ids[index], ids[index + delta]] = [ids[index + delta], ids[index]];
-      void run(() => api("/lessons/order", "PUT", { courseUnitId: lesson.courseUnitId, ids }), `«${lesson.title}» ahora es la lección ${index + delta + 1} de ${ids.length}.`);
+    moveLesson: (lesson, to) => {
+      const siblings = lessons.filter(item => item.courseUnitId === lesson.courseUnitId).map(item => item.id);
+      const ids = moveItem(siblings, siblings.indexOf(lesson.id), to);
+      void run(() => api("/lessons/order", "PUT", { courseUnitId: lesson.courseUnitId, ids }), `«${lesson.title}» ahora es la lección ${to + 1} de ${ids.length}.`);
     },
     archiveLesson: async lesson => {
       const archiving = lesson.status !== "archived";
@@ -103,7 +103,7 @@ export function Content() {
     <PageHeader crumbs={[{ label: "Cursos", href: "/cursos" }, { label: course.title, href: base }, { label: "Contenido" }]} title="Contenido"
       description={`${plural(stats.units, noun.one, noun.many)} · ${plural(stats.lessons, "lección", "lecciones")} · ${stats.published} publicadas`}
       actions={units.length > 0 && <Button variant="ghost" onClick={() => setExpanded(expanded.size ? new Set() : new Set(units.map(unit => unit.id)))}>{expanded.size ? "Contraer todo" : "Expandir todo"}</Button>}
-      primary={publisher && units.length > 0 && <PrimaryAction icon="plus" onClick={() => { setCreating(true); setTimeout(() => document.getElementById("new-unit-name")?.focus(), 0); }}>{`Crear ${noun.one}`}</PrimaryAction>}/>
+      primary={publisher && units.length > 0 && <PrimaryAction icon="plus" onClick={() => creating ? document.getElementById("new-unit-name")?.focus() : setCreating(true)}>{`Crear ${noun.one}`}</PrimaryAction>}/>
     {!writable && <p className="notice"><Icon name="info" size={18}/>{course.status === "archived" ? "El curso está archivado. Administración puede restaurarlo desde Configuración." : "Consulta el contenido del curso. Su equipo docente lo prepara y su responsable lo publica."}</p>}
     {writable && !publisher && <p className="notice"><Icon name="info" size={18}/>Prepara y edita lecciones; cuando una esté lista, envíala a revisión. La persona responsable del curso la publica y organiza {noun.theMany}.</p>}
     {(archivedCount > 0 || showArchived) && <label className="switch"><input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)}/><span>Mostrar archivados ({archivedCount})</span></label>}
@@ -112,7 +112,7 @@ export function Content() {
     {publisher && creating && <form className="inline-form unit-form" onSubmit={createUnit} aria-label={noun.New} onKeyDown={event => { if (event.key === "Escape" && units.length) setCreating(false); }}>
       <h2>{noun.New}</h2>
       <fieldset disabled={busy}>
-        <div className="field"><label htmlFor="new-unit-name">{`Nombre ${noun.ofThe}`}</label><input id="new-unit-name" name="name" required maxLength={100} autoFocus={!units.length} placeholder="Ej. Greetings"/></div>
+        <div className="field"><label htmlFor="new-unit-name">{`Nombre ${noun.ofThe}`}</label><input id="new-unit-name" name="name" required maxLength={100} autoFocus placeholder="Ej. Greetings"/></div>
         <div className="field"><label htmlFor="new-unit-objective">Objetivo <span className="optional">(opcional)</span></label><input id="new-unit-objective" name="objective" maxLength={1000} placeholder={`¿Qué lograrán en ${noun.this}?`}/></div>
         <div className="inline-form-actions"><button className="button primary">{`Crear ${noun.one}`}</button>{units.length > 0 && <button type="button" className="button ghost" onClick={() => setCreating(false)}>Cancelar</button>}</div>
       </fieldset>
