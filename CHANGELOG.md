@@ -2,10 +2,11 @@
 
 ## 0.8.14 — 2026-10-06
 
-Parche de REL-004 (DEC-027): dos correcciones del avance a tu ritmo.
+Parche de REL-004 (DEC-027 y DEC-030): correcciones del avance a tu ritmo y de la coedición de la estructura de una lección.
 
 - ST-110: `GET /api/sections/:id/progress` responde 403 con «Esta sección no está asignada a tu cuenta» a un educador que no imparte la sección, igual que `GET /api/sections/:id`; antes respondía 404. Una sección de otra organización o inexistente sigue respondiendo 404.
 - ST-110: terminar una lección ya no puede fallar cuando su apertura quedó registrada con una hora posterior a la del cierre; la hora de finalización nunca es anterior a la de apertura.
+- ST-113: un editor que todavía no recibía el último cambio de otra persona podía devolver la sala a su estado anterior al guardar el suyo, por ejemplo deshacer la organización recién elegida de una actividad. Ahora cada editor envía solo lo que cambió él desde lo último que compartió: en el título y el objetivo, su edición se aplica donde la hizo; en los demás campos, solo los que modificó; el orden, solo si lo movió, y una actividad eliminada por otra persona no reaparece.
 - Sin cambios de datos ni de interfaz. Se mantiene la autorización de v0.8.1.
 
 ## 0.8.13 — 2026-10-05

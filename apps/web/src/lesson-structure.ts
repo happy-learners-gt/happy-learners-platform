@@ -36,26 +36,58 @@ function setText(target: Y.Text, value: string) {
   target.insert(start, value.slice(start, value.length - end));
 }
 
+/**
+ * Applies the edit that turned `from` into `to`. The room may hold more text by now (someone else kept typing), so
+ * the edit lands where it was made instead of replacing the whole text.
+ */
+function editText(target: Y.Text, from: string, to: string) {
+  const current = target.toString();
+  if (current === to || from === to) return;
+  if (current === from) return setText(target, to);
+  let start = 0;
+  while (start < from.length && start < to.length && from[start] === to[start]) start++;
+  let end = 0;
+  while (end < from.length - start && end < to.length - start && from[from.length - 1 - end] === to[to.length - 1 - end]) end++;
+  const at = Math.min(start, current.length);
+  target.delete(at, Math.min(from.length - start - end, current.length - at));
+  target.insert(at, to.slice(start, to.length - end));
+}
+
 export const hasStructure = (doc: Y.Doc) => details(doc).has("sequence");
 export const savedVersion = (doc: Y.Doc) => { const value = details(doc).get("savedVersion"); return typeof value === "number" ? value : null; };
 export const recordSaved = (doc: Y.Doc, version: number) => doc.transact(() => { if ((savedVersion(doc) ?? -1) < version) details(doc).set("savedVersion", version); }, localStructure);
 
-/** Brings the room to the draft, changing only what differs. */
-export function writeStructure(doc: Y.Doc, draft: LessonDraft) {
+const valuesOf = (draft: LessonDraft): Record<string, unknown> => ({ duration: draft.duration, unitId: draft.unitId, archived: draft.archived, sequence: draft.sequence, outcomeIds: JSON.stringify(draft.outcomeIds) });
+
+/**
+ * Brings the room to the draft. Without `base` the room takes the whole draft. With `base`, the structure this editor
+ * last shared with the room, only what changed here since then is written: whatever others changed meanwhile stays.
+ */
+export function writeStructure(doc: Y.Doc, draft: LessonDraft, base?: LessonDraft) {
   doc.transact(() => {
-    setText(text(doc, "title"), draft.title);
-    setText(text(doc, "objective"), draft.objective);
-    const map = details(doc);
-    const values: Record<string, unknown> = { duration: draft.duration, unitId: draft.unitId, archived: draft.archived, sequence: draft.sequence, outcomeIds: JSON.stringify(draft.outcomeIds) };
-    for (const [key, value] of Object.entries(values)) if (map.get(key) !== value) map.set(key, value);
-    const shared = activities(doc), ids = draft.activities.map(activity => activity.id!);
-    for (const id of [...shared.keys()]) if (!ids.includes(id)) shared.delete(id);
-    for (const activity of draft.activities) {
-      let fields = shared.get(activity.id!);
-      if (!fields) { fields = new Y.Map(); shared.set(activity.id!, fields); }
-      for (const [key, value] of Object.entries(fieldsOf(activity))) if (fields.get(key) !== value) fields.set(key, value);
+    for (const key of ["title", "objective"] as const) {
+      if (!base) setText(text(doc, key), draft[key]);
+      else editText(text(doc, key), base[key], draft[key]);
     }
-    setOrder(order(doc), ids);
+    const map = details(doc), values = valuesOf(draft), before = base && valuesOf(base);
+    for (const [key, value] of Object.entries(values)) if ((!before || before[key] !== value) && map.get(key) !== value) map.set(key, value);
+    const shared = activities(doc), ids = draft.activities.map(activity => activity.id!);
+    const previous = new Map((base?.activities || []).map(activity => [activity.id!, activity]));
+    const removed = base ? [...previous.keys()].filter(id => !ids.includes(id)) : [...shared.keys()].filter(id => !ids.includes(id));
+    for (const id of removed) if (shared.has(id)) shared.delete(id);
+    for (const activity of draft.activities) {
+      const old = previous.get(activity.id!);
+      let fields = shared.get(activity.id!);
+      // Someone else deleted it after it was shared here: their deletion stands.
+      if (!fields && old) continue;
+      if (!fields) { fields = new Y.Map(); shared.set(activity.id!, fields); }
+      const was = old && fieldsOf(old);
+      for (const [key, value] of Object.entries(fieldsOf(activity))) if ((!was || was[key] !== value) && fields.get(key) !== value) fields.set(key, value);
+    }
+    if (!base) return setOrder(order(doc), ids);
+    if (ids.join("\n") === base.activities.map(activity => activity.id).join("\n")) return;
+    const kept = ids.filter(id => shared.has(id)), added = order(doc).toArray().filter(id => shared.has(id) && !ids.includes(id));
+    setOrder(order(doc), [...kept, ...added]);
   }, localStructure);
 }
 /**

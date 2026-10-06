@@ -48,6 +48,8 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
   const version = useRef<number | undefined>(undefined), changes = useRef(0), savedChanges = useRef(0), dirtyKeys = useRef(new Set<keyof LessonDraft>()), conflicts = useRef(0);
   const inFlight = useRef<Promise<boolean> | null>(null), draftRef = useRef<LessonDraft | null>(null);
   const providerRef = useRef<CollaborationProvider | null>(null), lessonRef = useRef<Lesson | null>(null), shared = useRef(false), [structureLive, setStructureLive] = useState(false);
+  // What this editor last shared with the room, the drafts read from it, and whether the room changed during an edit here.
+  const synced = useRef<LessonDraft | null>(null), fromRoom = useRef(new WeakSet<LessonDraft>()), behind = useRef(false);
   const saveRef = useRef(save);
   draftRef.current = draft; saveRef.current = save; lessonRef.current = lesson;
   const preview = url.searchParams.get("vista") === "previa";
@@ -81,7 +83,7 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
           // Then the room's state, with what was changed here before connecting.
           const merged = readStructure(doc, local) as Record<string, unknown>;
           for (const key of dirtyKeys.current) merged[key] = local[key];
-          writeStructure(doc, merged as LessonDraft); setDraft(merged as LessonDraft); adoptVersion();
+          writeStructure(doc, merged as LessonDraft); synced.current = merged as LessonDraft; fromRoom.current.add(synced.current); setDraft(synced.current); adoptVersion();
           shared.current = true; setStructureLive(true);
         }
       }
@@ -90,14 +92,30 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     const offStructure = observeStructure(doc, () => {
       if (!shared.current) return;
       adoptVersion();
-      setDraft(current => current && readStructure(doc, current));
+      // An edit made here that has not reached the room yet goes first; the effect below then reads the room again.
+      setDraft(current => {
+        if (!current) return current;
+        if (current !== synced.current && !fromRoom.current.has(current)) { behind.current = true; return current; }
+        const next = readStructure(doc, current);
+        fromRoom.current.add(next);
+        return next;
+      });
     });
     // Other open editors, including other sessions of the same shared demo account.
     const offPresence = provider.subscribePresence(() => setEditors([...provider.awareness.getStates().entries()].flatMap(([client, state]) => client !== provider.awareness.clientID && typeof state.user?.name === "string" ? [state.user.name as string] : [])));
-    return () => { offStatus(); offStructure(); offPresence(); provider.destroy(); providerRef.current = null; shared.current = false; setStructureLive(false); setCollaboration(null); setCollabStatus("closed"); };
+    return () => { offStatus(); offStructure(); offPresence(); provider.destroy(); providerRef.current = null; shared.current = false; synced.current = null; behind.current = false; setStructureLive(false); setCollaboration(null); setCollabStatus("closed"); };
   }, [lesson?.id, writable, preview, course.id, member.username]);
   // Each change made here reaches the room, also while reconnecting: it merges when the connection returns.
-  useEffect(() => { if (structureLive && collaboration && draft) writeStructure(collaboration.doc, draft); }, [draft, structureLive, collaboration]);
+  useEffect(() => {
+    if (!structureLive || !collaboration || !draft) return;
+    if (fromRoom.current.has(draft)) { synced.current = draft; return; }
+    writeStructure(collaboration.doc, draft, synced.current || undefined);
+    synced.current = draft;
+    if (!behind.current) return;
+    behind.current = false;
+    const next = readStructure(collaboration.doc, draft);
+    fromRoom.current.add(next); setDraft(next);
+  }, [draft, structureLive, collaboration]);
   useEffect(() => { const timer = setInterval(() => tick(value => value + 1), 30000); return () => clearInterval(timer); }, []);
 
   const problem = draft ? draftProblem(draft) : null;
