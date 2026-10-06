@@ -202,7 +202,7 @@ test("HL-140 ST-102 ST-103: an educator sees only their own courses; administrat
   await page.goto("/cursos/seed-course-matematicas/secciones");
   await expect(page.getByRole("button", { name: "Nueva sección", exact: true })).toBeVisible();
   await page.goto("/secciones");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Secciones");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Docencia");
   // The team works in the sections it teaches.
   await signIn(page, "lucia.herrera", "/secciones");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Docencia");

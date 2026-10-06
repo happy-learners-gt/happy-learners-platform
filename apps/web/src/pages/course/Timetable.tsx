@@ -76,7 +76,7 @@ function ScheduleSummary({ schedule, sessions, today, base }: { schedule: Sectio
   const pending = sessions.filter(session => session.status === "planned" && session.sessionDate >= today);
   const taught = sessions.filter(session => session.status === "completed").length;
   const ended = schedule.until < today, next = section.next;
-  return <Section title="Semana de la sección" className="timetable" action={<Link href={`${base}/clases`} className="section-link">Ver cronograma</Link>}>
+  return <Section title={`Semana de ${section.name}`} className="timetable" action={<Link href={`${base}/clases`} className="section-link">Ver cronograma</Link>}>
     <Week days={schedule.weekdays} time={`${schedule.startsAt}–${endTime(schedule.startsAt, schedule.durationMinutes)}`}/>
     {ended && <p className="notice"><Icon name="info" size={18}/>El periodo terminó el {lower(sessionDay(schedule.until))}. Para seguir con clases, se programa un nuevo periodo.</p>}
     <dl className="schedule-facts">
