@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceptsAttendance, classPlanInput, groupCodePattern, localDay, newGroupCode, nextClassStatus, normalizeGroupCode, upcomingClasses } from "@happy-learners/domain";
+import { acceptsAttendance, classPlanInput, fictional, groupCodePattern, localDay, newGroupCode, nextClassStatus, normalizeGroupCode, scopeOfSection, scopeOfShare, scopeOfToken, tokenPattern, tokenPrefix, upcomingClasses } from "@happy-learners/domain";
 
 describe("class lifecycle (HL-61 ST-035, ST-097)", () => {
   it("moves planned → in progress → completed and allows cancelling only before starting", () => {
@@ -46,6 +46,8 @@ describe("group codes (ST-098)", () => {
     const code = newGroupCode("org-demo", size => new Uint8Array(size));
     expect(code).toMatch(/^DG-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
     expect(newGroupCode("org-other", random)).toMatch(/^OG-/);
+    expect(newGroupCode("org-hl", random)).toMatch(/^HG-/);
+    expect(groupCodePattern.test(newGroupCode("org-hl", random))).toBe(true);
     expect(groupCodePattern.test(code)).toBe(true);
     for (let index = 0; index < 50; index++) expect(newGroupCode("org-demo", random).slice(3)).not.toMatch(/[ILO01]/);
   });
@@ -53,6 +55,16 @@ describe("group codes (ST-098)", () => {
     expect(normalizeGroupCode(" dg-mate-3a ")).toBe("DG-MATE-3A");
     expect(groupCodePattern.test(normalizeGroupCode("dg-mate-3a"))).toBe(true);
     expect(groupCodePattern.test("GREETINGS")).toBe(false);
+    expect(groupCodePattern.test("XG-MATE-3A")).toBe(false);
+  });
+  it("routes tokens, share codes and section codes to the organization that issued them (DEC-032)", () => {
+    const token = `${tokenPrefix("org-hl")}${"a".repeat(64)}`;
+    expect(tokenPattern.test(token)).toBe(true);
+    expect(tokenPattern.test(`x_${"a".repeat(64)}`)).toBe(false);
+    expect([scopeOfToken(token), scopeOfToken(`o_${"a".repeat(64)}`), scopeOfToken(`x_${"a".repeat(64)}`), scopeOfToken(null)]).toEqual(["org-hl", "org-other", "org-demo", "org-demo"]);
+    expect([scopeOfShare("H-ABCD"), scopeOfShare("O-ABCD"), scopeOfShare("Z-ABCD"), scopeOfShare("colores")]).toEqual(["org-hl", "org-other", "org-demo", "org-demo"]);
+    expect([scopeOfSection("HG-MATE-3A"), scopeOfSection("OG-AB12-CD34"), scopeOfSection("DG-MATE-3A")]).toEqual(["org-hl", "org-other", "org-demo"]);
+    expect([fictional("org-demo"), fictional("org-other"), fictional("org-hl")]).toEqual([true, true, false]);
   });
 });
 

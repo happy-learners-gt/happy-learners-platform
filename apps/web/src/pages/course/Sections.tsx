@@ -13,7 +13,7 @@ import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Sect
 import { matches, plural, rosterNames } from "../../model";
 import { useCourse } from "./context";
 import { SectionCards } from "../sections/SectionCard";
-import { sectionPath, useSection } from "../sections/context";
+import { sectionCrumbs, sectionPath, useSection } from "../sections/context";
 
 /** A section of the course: its educators, assigned students, access code and schedule. */
 export type SectionView = { id: string; name: string; status: "active" | "archived"; learnerCount: number; learners?: GroupLearner[]; educators: SectionEducator[]; accessCode?: string | null; schedule?: SectionSchedule | null };
@@ -100,7 +100,7 @@ export function SectionStudents() {
     if (code && !await confirm({ title: remove ? "¿Desactivar el código?" : "¿Cambiar el código?", body: <p>Quienes entraron con el código actual pierden el acceso a la sección{remove ? "" : " y deben usar el nuevo"}.</p>, confirm: remove ? "Desactivar" : "Cambiar código", danger: remove })) return;
     await run(() => api(`${path}/code`, remove ? "DELETE" : "POST"), remove ? "Código desactivado." : "Código listo. Compártelo con la sección.");
   }
-  const header = <PageHeader crumbs={[{ label: "Docencia", href: "/secciones" }, { label: section.name, href: base }, { label: "Estudiantes" }]} title="Estudiantes"
+  const header = <PageHeader crumbs={sectionCrumbs(section, { label: "Estudiantes" })} title="Estudiantes"
     description={learners ? `${plural(learners.length, "estudiante", "estudiantes")} en la lista. Solo ellos aparecen al pasar lista${section.workGroups ? " y al formar grupos de trabajo" : ""}.` : "La lista de la sección y el código con el que entran sus estudiantes."}
     primary={writable && learners && !adding && learners.length > 0 && <PrimaryAction icon="plus" onClick={() => setAdding(true)}>Agregar estudiantes</PrimaryAction>}/>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;

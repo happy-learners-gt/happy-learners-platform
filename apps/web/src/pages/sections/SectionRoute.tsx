@@ -5,8 +5,6 @@ import { scheduleSummary } from "@happy-learners/domain";
 import { api, message } from "../../api";
 import { Link } from "../../navigation";
 import { plural, sessionDay } from "../../model";
-import { AppShell } from "../../ui/Shell";
-import type { NavContext, NavItem } from "../../ui/Shell";
 import { useFeedback } from "../../ui/feedback";
 import { Icon } from "../../ui/icons";
 import { Menu } from "../../ui/Menu";
@@ -17,7 +15,7 @@ import { CourseProvider, capabilities, courseConfiguration, useCourse, useCourse
 import { Classes } from "../course/Classes";
 import { SectionEducators, SectionStudents } from "../course/Sections";
 import { Timetable } from "../course/Timetable";
-import { SectionProvider, sectionPath, useSection } from "./context";
+import { SectionProvider, sectionCrumbs, sectionPath, useSection } from "./context";
 import { SectionProgressPage } from "./Progress";
 import { SectionWorkGroupsPage } from "./WorkGroups";
 
@@ -37,33 +35,15 @@ export function SectionRoute({ id, area, item }: { id: string; area: string; ite
   }, [id]);
   useEffect(() => { setState({ status: "loading" }); void load(); }, [load]);
   const base = sectionPath(id);
-  const section = state.status === "ready" ? state.section : null;
-  const groups: NavItem[] = section?.workGroups ? [{ href: `${base}/grupos`, label: "Grupos", icon: "team", hue: "teal", active: area === "grupos" }] : [];
-  const context: NavContext = {
-    kind: "section", id, title: section?.name, detail: section?.course.title,
-    // A tu ritmo (DEC-027): no schedule and no classes; the section follows each student's progress instead.
-    pages: state.status !== "ready" ? [] : section!.pacing === "self-paced" ? [
-      { href: base, label: "Resumen", icon: "overview", hue: "violet", active: area === "" },
-      { href: `${base}/avance`, label: "Avance", icon: "check", hue: "green", active: area === "avance" },
-      { href: `${base}/estudiantes`, label: "Estudiantes", icon: "users", hue: "pink", active: area === "estudiantes" },
-      ...groups,
-    ] : [
-      { href: base, label: "Resumen", icon: "overview", hue: "violet", active: area === "" },
-      { href: `${base}/clases`, label: "Cronograma", icon: "calendar", hue: "coral", active: area === "clases" },
-      { href: `${base}/horario`, label: "Horario", icon: "clock", hue: "violet", active: area === "horario" },
-      { href: `${base}/estudiantes`, label: "Estudiantes", icon: "users", hue: "pink", active: area === "estudiantes" },
-      ...groups,
-    ],
-  };
   let body;
   if (state.status === "loading") body = <><PageHeader title={<span className="skeleton-title">Cargando sección</span>}/><Loading label="Abriendo sección…" lines={6}/></>;
   else if (state.status === "error") body = state.code === 403
-    ? <EmptyState level={1} icon="shield" title="Esta sección no está asignada a tu cuenta" action={<Link href="/secciones" className="button primary">Ir a Docencia</Link>}>Administración asigna quién imparte cada sección. Si debes impartirla, pídele que te asigne.</EmptyState>
-    : state.code === 404 ? <EmptyState level={1} icon="users" title="Esta sección no está disponible" action={<Link href="/secciones" className="button primary">Ir a Docencia</Link>}>Puede que el enlace haya cambiado o que la sección pertenezca a otra organización.</EmptyState>
+    ? <EmptyState level={1} icon="shield" title="Esta sección no está asignada a tu cuenta" action={<Link href="/agenda" className="button primary">Ir a la agenda</Link>}>Administración asigna quién imparte cada sección. Si debes impartirla, pídele que te asigne.</EmptyState>
+    : state.code === 404 ? <EmptyState level={1} icon="users" title="Esta sección no está disponible" action={<Link href="/agenda" className="button primary">Ir a la agenda</Link>}>Puede que el enlace haya cambiado o que la sección pertenezca a otra organización.</EmptyState>
     : <><PageHeader title="No se pudo abrir la sección"/><ErrorState error={state.error} retry={() => void load()}/></>;
   else if (!areas.includes(area)) body = <EmptyState level={1} icon="info" title="Esta página no existe" action={<Link href={base} className="button primary">Ir al resumen de la sección</Link>}>Usa el menú de la sección para elegir otra página.</EmptyState>;
   else body = <SectionWithCourse key={state.section.courseId} section={state.section} today={state.today} base={base} reload={load} area={area} item={item}/>;
-  return <AppShell context={context}>{body}</AppShell>;
+  return body;
 }
 
 /** The section works with its course's lessons, units and settings: loaded once for all of the section's pages. */
@@ -104,7 +84,7 @@ function SectionHeader({ primary }: { primary?: ReactNode }) {
     await update({ status }, status === "archived" ? `«${section.name}» se cerró.` : `«${section.name}» está activa de nuevo.`);
   }
   return <>
-    <PageHeader crumbs={[{ label: "Docencia", href: "/secciones" }, { label: section.name }]} title={section.name}
+    <PageHeader crumbs={sectionCrumbs(section)} title={section.name}
       description={<>Sección de <Link href={`/cursos/${course.id}`}>{course.title}</Link> · {section.pacing === "self-paced" ? "a tu ritmo" : section.schedule ? scheduleSummary(section.schedule) : "sin horario"}</>}
       meta={section.status === "archived" ? <StatusBadge>Cerrada</StatusBadge> : <StatusBadge tone="success">Activa</StatusBadge>}
       actions={editable && <Menu label={`Acciones de la sección ${section.name}`} items={section.status === "active"

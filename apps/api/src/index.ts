@@ -1,5 +1,5 @@
 import type { Activity, Lesson, Member, Organization, Resource } from "@happy-learners/contracts";
-import { hasText, organizationInput, richTextFieldsOf } from "@happy-learners/domain";
+import { hasText, organizationIds, organizationInput, richTextFieldsOf, scopeOfSection, scopeOfShare, scopeOfToken, tokenPrefix } from "@happy-learners/domain";
 import { sha } from "./generated/version";
 import { database } from "./storage";
 import type { Database } from "./storage";
@@ -13,7 +13,7 @@ import { duplicateCourse } from "./duplicate";
 import { accessTo } from "./access";
 import { activity, people, progress } from "./team";
 import { classroom } from "./attendance";
-import { calendar, myClasses, student, studentScope, studentToken } from "./classes";
+import { calendar, myClasses, student, studentToken } from "./classes";
 import { sections } from "./sections";
 import { courseFiles, sharedFile } from "./files";
 import { LessonCollaborationRoom } from "./collaboration";
@@ -50,6 +50,11 @@ async function member(request: Request, db: Database): Promise<Member | null> {
   return db.prepare("SELECT u.id, u.username, COALESCE(u.display_name,u.username) AS displayName, CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END AS role, m.organization_id AS organizationId FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND m.active=1")
     .bind(await digest(token), Date.now()).first<Member>();
 }
+/** The organization a username belongs to: each store is asked once; an unknown name stays with the default one. */
+async function organizationOf(env: Env, username: string) {
+  const found = await Promise.all(organizationIds.map(id => database(env, id).prepare("SELECT 1 AS found FROM users u JOIN memberships m ON m.user_id=u.id WHERE u.username=? AND m.active=1").bind(username).first()));
+  return organizationIds[found.findIndex(Boolean)] || organizationIds[0];
+}
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url); const path = url.pathname; const method = request.method;
   if (!path.startsWith("/api/")) {
@@ -61,12 +66,12 @@ async function route(request: Request, env: Env): Promise<Response> {
     ? await body(request) : undefined;
   // Finishing or cancelling a class may say what was covered or what happens to its plan; without a body, the defaults apply.
   if (method === "POST" && /^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/(complete|cancel)$/.test(path) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
-  let scope = sessionToken(request)?.startsWith("o_") ? "org-other" : "org-demo";
-  if (path.startsWith("/api/share/")) scope = path.split("/")[3].startsWith("O-") ? "org-other" : "org-demo";
-  if (path.startsWith("/api/student/")) scope = path === "/api/student/login" ? studentScope(String((input as Record<string, unknown> | null)?.code || "").trim().toUpperCase()) : studentToken(request)?.startsWith("o_") ? "org-other" : "org-demo";
+  let scope: string = scopeOfToken(sessionToken(request));
+  if (path.startsWith("/api/share/")) scope = scopeOfShare(path.split("/")[3]);
+  if (path.startsWith("/api/student/")) scope = path === "/api/student/login" ? scopeOfSection(String((input as Record<string, unknown> | null)?.code || "").trim().toUpperCase()) : scopeOfToken(studentToken(request));
   if (path === "/api/login" && method === "POST") {
     const credentials = input as Record<string, unknown> | null;
-    scope = typeof credentials?.username === "string" && credentials.username.trim().toLowerCase() === "externo-demo" ? "org-other" : "org-demo";
+    if (typeof credentials?.username === "string" && credentials.username.length <= 64) scope = await organizationOf(env, credentials.username.trim().toLowerCase());
   }
   const db = database(env, scope);
   if (["/api/health", "/api/version"].includes(path)) {
@@ -132,7 +137,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     const user = await db.prepare("SELECT u.id, u.password_salt, u.password_hash FROM users u JOIN memberships m ON m.user_id=u.id WHERE u.username=? AND m.active=1").bind(value.username.trim().toLowerCase()).first<{ id: string; password_salt: string; password_hash: string }>();
     const valid = await verifyPassword(value.password, user?.password_salt || "synthetic-dummy-salt", user?.password_hash || "0".repeat(64));
     if (!user || !valid) return json({ error: "Usuario o contraseña incorrectos." }, 401);
-    const token = (scope === "org-other" ? "o_" : "d_") + newToken();
+    const token = tokenPrefix(scope) + newToken();
     await db.batch([
       db.prepare("DELETE FROM sessions WHERE expires_at<=?").bind(now),
       db.prepare("DELETE FROM login_limits WHERE expires_at<=?").bind(now),
