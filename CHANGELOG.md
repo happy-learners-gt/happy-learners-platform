@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.8 — 2026-10-05
+
+Parche de REL-004 (DEC-025): ordenar arrastrando, un resumen del curso que se lee en orden y documentación depurada.
+
+- ST-107: las lecciones de una clase, las actividades y los bloques de una lección, los módulos y las lecciones del contenido se ordenan arrastrando su asa (Fluent «reordenar») o con el teclado: con el asa enfocada, flecha arriba o abajo mueve un lugar e Inicio o Fin lleva al principio o al final. Los menús dicen «Mover arriba» y «Mover abajo». En pantallas táctiles el asa crece a 44 px.
+- ST-107: el **Resumen** del curso empieza con sus indicadores en una franja (lecciones publicadas, módulos, borradores, cambios sin publicar, resultados trabajados y secciones) y sigue en dos columnas: a la izquierda Contenido, con el avance de cada módulo, Plan curricular y Secciones; a la derecha Accesos rápidos en lista, Publicación pendiente, Equipo docente y Actividad reciente. El Resumen de cada sección usa la misma distribución.
+- ST-107: el distintivo «Archivado» va bajo el nombre del curso y ya no lo parte en una columna; la pestaña Archivados cuenta los cursos archivados. Los íconos dentro de un texto (el reloj del horario, por ejemplo) se alinean con su línea. Cada evento de la actividad reciente indica qué registro cambió (Clase, Lección, Sección…).
+- Documentación: se retiran `docs/redesign/` y `docs/sprint-2/`, registros de incrementos anteriores que siguen disponibles en el historial (tag v0.8.7). La documentación canónica vive en `happy-learners-ops`; aquí quedan la guía visual Fluent, la organización de demostración y los README de cada capa.
+
 ## 0.8.7 — 2026-10-05
 
 Parche de REL-004 (DEC-024): cada sección es una impartición propia del curso. El curso define qué se enseña (plan curricular, contenido, biblioteca y configuración); cada sección tiene sus educadores, estudiantes, horario, cronograma, asistencia, actividad e indicadores, y cada educador ve solo las secciones que imparte.
@@ -238,4 +247,4 @@ Cuentas públicas de demostración: `admin-demo`, `instructor-demo`; contraseña
 Evidencia histórica: EXE-1c48bd9d391baa5d45ec y MNF-53e11fe0b6a1a0dac88d. Alcance actualizado por la directiva P0 del 28 de septiembre de 2026.
 # v0.2.1
 
-Roles Administrador/Educador, currículo Nivel–Unidad–Lección, edición persistente, revisiones publicadas, actividades ordenables y recursos vinculados. Migración acumulativa con seed sintético. [Detalle](docs/sprint-2/release-notes-v0.2.1.md).
+Roles Administrador/Educador, currículo Nivel–Unidad–Lección, edición persistente, revisiones publicadas, actividades ordenables y recursos vinculados. Migración acumulativa con seed sintético. [Detalle](https://github.com/happy-learners-gt/happy-learners-platform/blob/v0.8.7/docs/sprint-2/release-notes-v0.2.1.md).
