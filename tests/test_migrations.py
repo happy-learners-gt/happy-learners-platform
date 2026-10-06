@@ -232,6 +232,7 @@ class UpgradeTests(unittest.TestCase):
         db.execute("DELETE FROM memberships WHERE organization_id<>?", (scope,))
         db.execute("DELETE FROM users WHERE id NOT IN (SELECT user_id FROM memberships)")
         db.execute("DELETE FROM organizations WHERE id<>?", (scope,))
+        db.execute("INSERT OR IGNORE INTO organizations(id,name,configured) VALUES (?,NULL,0)", (scope,))
         for path in migrations[1:]:
             db.executescript(path.read_text())
         return db
@@ -425,3 +426,17 @@ class UpgradeTests(unittest.TestCase):
             with self.assertRaises(sqlite3.IntegrityError):
                 demo.execute(insert, values)
         self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_each_organization_has_its_own_administration(self):
+        """0027 (DEC-032): Happy Learners starts with its administration and two educators; the external organization gets its administration."""
+        hl = self.scoped("org-hl")
+        self.assertEqual(hl.execute("SELECT name,timezone,configured FROM organizations").fetchall(), [("Happy Learners", "America/Guatemala", 1)])
+        self.assertEqual(hl.execute("SELECT u.username,m.role FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.organization_id='org-hl' ORDER BY u.username").fetchall(),
+                         [("admin-hl", "admin"), ("docente1-hl", "instructor"), ("docente2-hl", "instructor")])
+        self.assertEqual(hl.execute("SELECT count(*) FROM courses").fetchone()[0], 0)
+        self.assertEqual(hl.execute("SELECT count(*) FROM users WHERE id NOT LIKE 'hl-%'").fetchone()[0], 0)
+        self.assertEqual(hl.execute("PRAGMA foreign_key_check").fetchall(), [])
+        other = self.scoped("org-other")
+        self.assertIn(("admin-externo", "admin"), other.execute("SELECT u.username,m.role FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.organization_id='org-other'").fetchall())
+        demo = self.scoped("org-demo")
+        self.assertEqual(demo.execute("SELECT count(*) FROM users WHERE username IN ('admin-hl','docente1-hl','docente2-hl','admin-externo')").fetchone()[0], 0)

@@ -9,7 +9,7 @@ import { useFeedback } from "../../ui/feedback";
 import { Icon } from "../../ui/icons";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section } from "../../ui/primitives";
 import { useCourse } from "./context";
-import { useSection } from "../sections/context";
+import { sectionCrumbs, useSection } from "../sections/context";
 import { DaysOff, useBreaks } from "../calendar";
 
 const addDays = (day: string, days: number) => { const date = new Date(`${day}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
@@ -46,7 +46,7 @@ export function Timetable() {
   useEffect(() => { if (course.status === "active") void load(); }, [course.id, section.id]);
   const schedule = section.schedule, writable = configurable && section.status === "active";
   const refresh = async () => { await Promise.all([load(), reload(), breaks.load()]); };
-  const header = <PageHeader crumbs={[{ label: "Docencia", href: "/secciones" }, { label: section.name, href: base }, { label: "Horario" }]} title="Horario"
+  const header = <PageHeader crumbs={sectionCrumbs(section, { label: "Horario" })} title="Horario"
     description={schedule ? <>{dayList(schedule.weekdays)}, de {schedule.startsAt} a {endTime(schedule.startsAt, schedule.durationMinutes)}. {writable ? "Al cambiarlo, las clases pendientes se reprograman solas." : "Administración lo configura; tú planificas cada clase en el cronograma."}</>
       : writable ? "Elige los días, la hora y el periodo. Las clases de la sección se programan solas." : "Administración configura el horario de la sección; tú planificas cada clase en el cronograma."}
     primary={writable && schedule && !editing && sessions && <PrimaryAction icon="edit" onClick={() => setEditing(true)}>Editar horario</PrimaryAction>}/>;

@@ -11,3 +11,7 @@ export function useSection() {
   return value;
 }
 export const sectionPath = (id: string) => `/secciones/${id}`;
+/** Where a section sits: among its course's sections, then the page of the section being read. */
+export function sectionCrumbs(section: Pick<SectionSummary, "id" | "name" | "courseId" | "course">, ...pages: { label: string; href?: string }[]) {
+  return [{ label: section.course.title, href: `/cursos/${section.courseId}` }, { label: "Secciones", href: `/cursos/${section.courseId}/secciones` }, { label: section.name, ...pages.length ? { href: sectionPath(section.id) } : {} }, ...pages];
+}

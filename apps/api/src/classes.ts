@@ -1,5 +1,6 @@
 import type { CalendarBreak, ClassLesson, ClassLessonPlan, ClassResource, ClassSession, ClassStatus, CourseAccess, Lesson, Material, Member, Pacing, Resource, SectionSchedule, StudentClass, StudentPathModule, StudentSpace } from "@happy-learners/contracts";
 import { acceptsAttendance, breakInput, cancelPlanInput, carryOver, classActions, classPlanInput, classStatusLabels, completionInput, groupCodePattern, lessonsInOrder, maxClassLessons, localDay, nextClassStatus, normalizeGroupCode, resourceIdsOf, scheduleDates, scheduleInput, scheduleSummary, seesSection, teachesSection, upcomingClasses } from "@happy-learners/domain";
+import { tokenPattern, tokenPrefix } from "@happy-learners/domain";
 import type { ClassAction } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
 import { materialsFor } from "./courses";
@@ -401,8 +402,7 @@ export async function fillLessons(input: unknown, current: Member, db: Database,
 }
 
 const studentCookie = (token: string, request: Request, remove = false) => `hl_group=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${remove ? 0 : 28800}${new URL(request.url).protocol === "https:" ? "; Secure" : ""}`;
-export const studentToken = (request: Request) => /(?:^|;\s*)hl_group=([do]_[a-f0-9]{64})(?:;|$)/.exec(request.headers.get("Cookie") || "")?.[1] || null;
-export const studentScope = (code: string) => code.startsWith("OG-") ? "org-other" : "org-demo";
+export const studentToken = (request: Request) => { const token = /(?:^|;\s*)hl_group=([a-z]_[a-f0-9]{64})(?:;|$)/.exec(request.headers.get("Cookie") || "")?.[1]; return token && tokenPattern.test(token) ? token : null; };
 
 /** /api/student/* — a learner enters a section code and reads that section's classes, lessons and resources. Read-only. */
 export async function student(path: string, method: string, input: unknown, request: Request, scope: string, db: Database, bucket: R2Bucket) {
@@ -416,7 +416,7 @@ export async function student(path: string, method: string, input: unknown, requ
     if (!limit || limit.attempts > 30) return reply({ error: "Demasiados intentos. Espera 15 minutos y vuelve a intentar." }, 429, { "Retry-After": "900" });
     const group = await db.prepare("SELECT g.id,g.organization_id AS organizationId FROM course_groups g JOIN courses c ON c.id=g.course_id AND c.status='active' WHERE g.access_code=? AND g.status='active'").bind(code).first<{ id: string; organizationId: string }>();
     if (!group) return reply({ error: "Ese código no corresponde a una sección activa. Revísalo con tu educador." }, 404);
-    const token = (scope === "org-other" ? "o_" : "d_") + newToken();
+    const token = tokenPrefix(scope) + newToken();
     await db.batch([
       db.prepare("DELETE FROM group_access_sessions WHERE expires_at<=?").bind(now),
       db.prepare("INSERT INTO group_access_sessions(token_hash,group_id,organization_id,expires_at) VALUES (?,?,?,?)").bind(await digest(token), group.id, group.organizationId, now + 28800000),

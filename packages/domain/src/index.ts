@@ -5,6 +5,8 @@ export type { Requirement } from "./prerequisites";
 export { maxWorkGroups, nextInPath, pathIndicators, sectionIndicators, wholeSection, workGroupInput } from "./sections";
 export type { SectionClass } from "./sections";
 export { moduleNavigation } from "./navigation";
+export { organizations, organizationIds, fictional, tokenPrefix, sharePrefix, sectionPrefix, tokenPattern, scopeOfToken, scopeOfShare, scopeOfSection } from "./organizations";
+export type { OrganizationId } from "./organizations";
 export type { ModuleLesson } from "./navigation";
 export { isCalendarDay, weekdays, scheduleInput, scheduleDates, breakInput, breakOn, carryOver, scheduleSummary, lessonsInOrder, periodWeek, classSequence, maxScheduleDays, maxScheduledClasses } from "./schedule";
 export type { SectionSchedule } from "./schedule";

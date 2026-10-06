@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { FormEvent, ReactNode } from "react";
-import type { Course, StudyProgram } from "@happy-learners/contracts";
+import type { FormEvent, MouseEvent, ReactNode } from "react";
+import type { Course, SectionSummary, StudyProgram } from "@happy-learners/contracts";
+import { fictional } from "@happy-learners/domain";
 import { api, message } from "../api";
 import { Link, useNavigation } from "../navigation";
 import { roleLabel, useSession } from "../session";
@@ -13,16 +14,12 @@ import { Modal, useFeedback } from "./feedback";
 import { Field } from "./primitives";
 import { courseConfiguration } from "../pages/course/context";
 
-export type NavItem = { href: string; label: string; icon: IconName; active: boolean; hue: Hue };
-/** The section or course being worked on: its pages open under it in the menu. Title and detail name it while the lists load. */
-export type NavContext = { kind: "section" | "course"; id: string; title?: string; detail?: string; pages: NavItem[] };
-
 export function Brand() {
   return <Link href="/inicio" className="brand" aria-label="Happy Learners, ir a Inicio"><span className="brand-mark" aria-hidden="true">hl</span><span className="brand-name">Happy Learners</span></Link>;
 }
 
-/** One navigation system: a menu in levels (area, section or course, page) that opens where you are; below 1024 px it is a drawer. */
-export function AppShell({ context, children }: { context?: NavContext; children: ReactNode }) {
+/** One navigation system, mounted once for every page: a menu in levels that opens where you are; below 1024 px it is a drawer. */
+export function AppShell({ children }: { children: ReactNode }) {
   const { url } = useNavigation();
   const [open, setOpen] = useState(false);
   const panel = useRef<HTMLElement>(null), toggle = useRef<HTMLButtonElement>(null);
@@ -38,7 +35,7 @@ export function AppShell({ context, children }: { context?: NavContext; children
     <a className="skip-link" href="#main">Saltar al contenido</a>
     <TopBar menuButton={<button ref={toggle} type="button" className="icon-button menu-toggle" aria-label="Menú" aria-expanded={open} aria-controls="app-sidebar" onClick={() => setOpen(!open)}><Icon name={open ? "close" : "menu"}/></button>}/>
     <div className="app-body">
-      <aside id="app-sidebar" ref={panel} className="sidebar"><Sidebar context={context}/></aside>
+      <aside id="app-sidebar" ref={panel} className="sidebar"><Sidebar/></aside>
       {open && <div className="drawer-backdrop" aria-hidden="true" onClick={() => setOpen(false)}/>}
       <main id="main" tabIndex={-1} className="main">{children}</main>
     </div>
@@ -79,52 +76,105 @@ function TopBar({ menuButton }: { menuButton: ReactNode }) {
   </header>;
 }
 
-type Category = "sections" | "courses";
-const openKey = "hl-menu-open";
-/** Which areas of the menu are open, for this tab only; the area of the current section or course always opens. */
-function useOpenAreas(current?: Category) {
-  const [open, setOpen] = useState<Record<Category, boolean>>(() => {
-    try { return { sections: true, courses: true, ...JSON.parse(sessionStorage.getItem(openKey) || "{}") }; } catch { return { sections: true, courses: true }; }
+type Page = { href: string; label: string; icon: IconName; hue: Hue; active: boolean };
+const openKey = "hl-menu-tree";
+/** Opening a course or a section closes its siblings: one course and one section open at a time. */
+const accordion = (key: string) => key.startsWith("course:") ? "course:" : key.startsWith("section:") ? "section:" : null;
+function reveal(open: ReadonlySet<string>, keys: string[]) {
+  const next = new Set(open);
+  for (const key of keys) {
+    const group = accordion(key);
+    if (group) for (const other of next) if (other.startsWith(group) && other !== key) next.delete(other);
+    next.add(key);
+  }
+  return next;
+}
+/** What is open in the menu, for this tab only; the way to the current page always opens. */
+function useTree(trail: string[]) {
+  const [open, setOpen] = useState<ReadonlySet<string>>(() => {
+    try { return reveal(new Set(JSON.parse(sessionStorage.getItem(openKey) || '["courses"]') as string[]), trail); } catch { return reveal(new Set(["courses"]), trail); }
   });
-  useEffect(() => { if (current && !open[current]) setOpen(value => ({ ...value, [current]: true })); }, [current]);
-  useEffect(() => { try { sessionStorage.setItem(openKey, JSON.stringify(open)); } catch { /* Private mode: the menu just opens as it was by default. */ } }, [open]);
-  return [open, (area: Category) => setOpen(value => ({ ...value, [area]: !value[area] }))] as const;
+  const path = trail.join("|");
+  useEffect(() => { setOpen(value => trail.every(key => value.has(key)) ? value : reveal(value, trail)); }, [path]);
+  useEffect(() => { try { sessionStorage.setItem(openKey, JSON.stringify([...open])); } catch { /* Private mode: the menu opens where you are. */ } }, [open]);
+  const toggle = (key: string) => setOpen(value => { if (!value.has(key)) return reveal(value, [key]); const next = new Set(value); next.delete(key); return next; });
+  return [open, toggle] as const;
 }
 
-function Sidebar({ context }: { context?: NavContext }) {
+const byName = (a: string, b: string) => a.localeCompare(b, "es", { numeric: true });
+
+function Sidebar() {
   const { member, organization } = useSession();
   const { url } = useNavigation();
   const path = url.pathname.replace(/\/+$/, "") || "/inicio", admin = member.role === "admin";
-  const { sections, courses } = useWorkspace(member.id, context?.id);
-  const area: Category | undefined = context?.kind === "section" ? "sections" : context?.kind === "course" ? "courses" : undefined;
-  const [open, toggle] = useOpenAreas(area);
-  const [creating, setCreating] = useState(false);
-  const page = (item: NavItem) => <li key={item.href}><Link href={item.href} className={`tone-${item.hue}`} aria-current={item.active ? "page" : undefined}><span className="nav-icon"><Icon name={item.icon} size={20} filled={item.active}/></span><span>{item.label}</span></Link></li>;
-  const nested = (label: string, kind: NavContext["kind"], id: string) => context?.kind === kind && context.id === id
-    ? <nav aria-label={label}><ul className="nav-pages">{context.pages.map(item => <li key={item.href}><Link href={item.href} className={`tone-${item.hue}`} aria-current={item.active ? "page" : undefined}><span className="nav-icon"><Icon name={item.icon} size={16} filled={item.active}/></span><span>{item.label}</span></Link></li>)}</ul></nav>
-    : null;
-  const byName = (a: string, b: string) => a.localeCompare(b, "es", { numeric: true });
-  const listedSections = (sections || []).filter(item => item.status === "active" && item.course.status === "active" || context?.kind === "section" && context.id === item.id)
-    .sort((a, b) => byName(a.course.title, b.course.title) || byName(a.name, b.name));
-  const listedCourses = (courses || []).filter(item => item.status === "active" || context?.kind === "course" && context.id === item.id).sort((a, b) => byName(a.title, b.title));
-  const pending = (kind: NavContext["kind"], list: { id: string }[]) => context?.kind === kind && !list.some(item => item.id === context.id)
-    ? [{ id: context.id, title: context.title || "Cargando…", detail: context.detail }] : [];
+  const [, first, second, third] = path.split("/");
+  const courseRoute = first === "cursos" && second && second !== "nuevo" ? second : undefined;
+  const sectionRoute = first === "secciones" && second ? second : undefined;
+  const { sections, courses, programs } = useWorkspace(member.id, courseRoute || sectionRoute);
+  const current = sectionRoute ? sections?.find(item => item.id === sectionRoute) : undefined;
+  const currentCourse = courseRoute || current?.courseId;
+  const trail = ["courses", ...currentCourse ? [`course:${currentCourse}`] : [], ...current || courseRoute && third === "secciones" ? [`sections:${currentCourse}`] : [], ...current ? [`section:${current.id}`] : []];
+  const [open, toggle] = useTree(trail);
+  const [creating, setCreating] = useState<string | null>(null);
+  const page = (item: Page, size = 20) => <li key={item.href}><Link href={item.href} className={`tree-link tone-${item.hue}`} aria-current={item.active ? "page" : undefined}><span className="nav-icon"><Icon name={item.icon} size={size} filled={item.active}/></span><span className="tree-label">{item.label}</span></Link></li>;
+  // Choosing what is already open, on its own page, closes it; anything else opens it and goes there.
+  const select = (key: string, href: string) => (event: MouseEvent<HTMLAnchorElement>) => { if (open.has(key) && path === href) { event.preventDefault(); toggle(key); } };
+  const listedCourses = (courses || []).filter(item => item.status === "active" || item.id === currentCourse).sort((a, b) => byName(a.title, b.title));
+  const sectionsOf = (courseId: string) => (sections || []).filter(item => item.courseId === courseId && (item.status === "active" || item.id === current?.id)).sort((a, b) => byName(a.name, b.name));
+  const settingsOf = (course: Course | undefined) => course && programs ? courseConfiguration(course, programs.find(item => item.id === course.programId) || null).settings : null;
+  const coursePages = (course: Course) => {
+    const base = `/cursos/${course.id}`, area = course.id === courseRoute ? third === "lecciones" ? "contenido" : third || "" : undefined;
+    const attendance = !!settingsOf(course)?.attendance;
+    const listed = sectionsOf(course.id), key = `sections:${course.id}`, href = `${base}/secciones`;
+    return <>
+      {page({ href: base, label: "Resumen", icon: "overview", hue: "violet", active: area === "" }, 16)}
+      {page({ href: `${base}/contenido`, label: "Contenido", icon: "content", hue: "sky", active: area === "contenido" }, 16)}
+      {page({ href: `${base}/plan`, label: "Plan curricular", icon: "spark", hue: "green", active: area === "plan" }, 16)}
+      {page({ href: `${base}/biblioteca`, label: "Biblioteca del curso", icon: "library", hue: "teal", active: area === "biblioteca" }, 16)}
+      {(attendance || listed.length > 0) && <Node id={key} href={href} label="Secciones" icon="users" hue="pink" size={16} open={open.has(key)} active={path === href} current={course.id === current?.courseId}
+        toggleLabel={`Mostrar las secciones de ${course.title}`} onToggle={() => toggle(key)} onSelect={select(key, href)}
+        add={admin && attendance && course.status === "active" ? <button type="button" className="nav-action" aria-label={`Agregar una sección a ${course.title}`} title="Agregar una sección" onClick={() => setCreating(course.id)}><Icon name="plus" size={16}/></button> : undefined}>
+        {!sections ? <Placeholder/> : listed.length ? listed.map(sectionNode)
+          : <li className="nav-empty">{admin ? "Aún no tiene secciones." : "No impartes secciones de este curso."}</li>}
+      </Node>}
+      {page({ href: `${base}/configuracion`, label: "Configuración", icon: "settings", hue: "amber", active: area === "configuracion" }, 16)}
+    </>;
+  };
+  const sectionNode = (section: SectionSummary) => {
+    const base = `/secciones/${section.id}`, key = `section:${section.id}`, here = section.id === current?.id, area = here ? third || "" : undefined;
+    const pages: Page[] = section.pacing === "self-paced" ? [
+      { href: base, label: "Resumen", icon: "overview", hue: "violet", active: area === "" },
+      { href: `${base}/avance`, label: "Avance", icon: "check", hue: "green", active: area === "avance" },
+      { href: `${base}/estudiantes`, label: "Estudiantes", icon: "users", hue: "pink", active: area === "estudiantes" },
+    ] : [
+      { href: base, label: "Resumen", icon: "overview", hue: "violet", active: area === "" },
+      { href: `${base}/clases`, label: "Cronograma", icon: "calendar", hue: "coral", active: area === "clases" },
+      { href: `${base}/horario`, label: "Horario", icon: "clock", hue: "violet", active: area === "horario" },
+      { href: `${base}/estudiantes`, label: "Estudiantes", icon: "users", hue: "pink", active: area === "estudiantes" },
+    ];
+    const settings = settingsOf(courses?.find(item => item.id === section.courseId));
+    if (section.workGroups ?? (settings?.attendance && settings.workGroups)) pages.push({ href: `${base}/grupos`, label: "Grupos", icon: "team", hue: "teal", active: area === "grupos" });
+    return <Node key={section.id} id={key} href={base} label={section.name} detail={section.status === "archived" ? "Cerrada" : undefined} open={open.has(key)} current={here} region={here ? "Navegación de la sección" : undefined}
+      toggleLabel={`Mostrar las páginas de ${section.name}`} onToggle={() => toggle(key)} onSelect={select(key, base)}>
+      {pages.map(item => page(item, 16))}
+    </Node>;
+  };
   return <div className="sidebar-inner">
     {organization?.name && <div className="sidebar-context mobile-only"><span className="sidebar-eyebrow">Organización</span><strong>{organization.name}</strong></div>}
     <nav aria-label="Navegación principal"><ul className="nav-tree">
       {page({ href: "/inicio", label: "Inicio", icon: "home", hue: "violet", active: path === "/inicio" })}
-      <Area label="Docencia" toggleLabel="Mostrar las secciones" href="/secciones" icon="calendar" hue="coral" active={path === "/secciones"} open={open.sections} onToggle={() => toggle("sections")}
-        add={admin ? <button type="button" className="nav-action" aria-label="Agregar una sección" title="Agregar una sección" onClick={() => setCreating(true)}><Icon name="plus" size={16}/></button> : undefined}
-        empty={sections && !listedSections.length ? admin ? "Aún no hay secciones activas." : "Aún no tienes secciones asignadas." : undefined} loading={!sections}>
-        {[...listedSections.map(item => ({ id: item.id, title: item.name, detail: item.course.title })), ...pending("section", sections ? listedSections : [])].map(item =>
-          <Branch key={item.id} href={`/secciones/${item.id}`} title={item.title} detail={item.detail} current={context?.kind === "section" && context.id === item.id}>{nested("Navegación de la sección", "section", item.id)}</Branch>)}
-      </Area>
-      <Area label="Cursos" toggleLabel="Mostrar los cursos" href="/cursos" icon="courses" hue="sky" active={path === "/cursos" || path === "/cursos/nuevo"} open={open.courses} onToggle={() => toggle("courses")}
-        add={admin ? <Link href="/cursos/nuevo" className="nav-action" aria-label="Agregar un curso" title="Agregar un curso"><Icon name="plus" size={16}/></Link> : undefined}
-        empty={courses && !listedCourses.length ? admin ? "Aún no hay cursos activos." : "Aún no tienes cursos asignados." : undefined} loading={!courses}>
-        {[...listedCourses.map(item => ({ id: item.id, title: item.title, detail: undefined as string | undefined })), ...pending("course", courses ? listedCourses : [])].map(item =>
-          <Branch key={item.id} href={`/cursos/${item.id}`} title={item.title} detail={item.detail} current={context?.kind === "course" && context.id === item.id}>{nested("Navegación del curso", "course", item.id)}</Branch>)}
-      </Area>
+      {page({ href: "/agenda", label: "Agenda", icon: "calendar", hue: "coral", active: path === "/agenda" })}
+      <Node id="courses" href="/cursos" label="Cursos" icon="courses" hue="sky" open={open.has("courses")} active={path === "/cursos" || path === "/cursos/nuevo"}
+        toggleLabel="Mostrar los cursos" onToggle={() => toggle("courses")} onSelect={select("courses", "/cursos")}
+        add={admin ? <Link href="/cursos/nuevo" className="nav-action" aria-label="Agregar un curso" title="Agregar un curso"><Icon name="plus" size={16}/></Link> : undefined}>
+        {!courses ? <Placeholder/> : listedCourses.length ? listedCourses.map(course => {
+          const key = `course:${course.id}`, href = `/cursos/${course.id}`;
+          return <Node key={course.id} id={key} href={href} label={course.title} detail={course.status === "archived" ? "Archivado" : undefined} open={open.has(key)} current={course.id === currentCourse}
+            region={course.id === courseRoute ? "Navegación del curso" : undefined} toggleLabel={`Mostrar las páginas de ${course.title}`} onToggle={() => toggle(key)} onSelect={select(key, href)}>
+            {coursePages(course)}
+          </Node>;
+        }) : <li className="nav-empty">{admin ? "Aún no hay cursos activos." : "Aún no tienes cursos asignados."}</li>}
+      </Node>
       {page({ href: "/biblioteca", label: "Biblioteca", icon: "library", hue: "teal", active: path === "/biblioteca" })}
       {page({ href: "/ayuda", label: "Ayuda", icon: "help", hue: "amber", active: path === "/ayuda" })}
     </ul></nav>
@@ -133,33 +183,41 @@ function Sidebar({ context }: { context?: NavContext }) {
       {page({ href: "/educadores", label: "Educadores", icon: "users", hue: "pink", active: path === "/educadores" })}
       {page({ href: "/configuracion-academica", label: "Configuración académica", icon: "grid", hue: "green", active: path === "/configuracion-academica" })}
     </ul></nav>}
-    <p className="sidebar-note"><Icon name="shield" size={16}/><span>Demostración con datos ficticios</span></p>
-    {creating && <NewSection courses={courses || []} preferred={context?.kind === "course" ? context.id : sections?.find(item => item.id === context?.id)?.courseId} onClose={() => setCreating(false)}/>}
+    {fictional(member.organizationId) && <p className="sidebar-note"><Icon name="shield" size={16}/><span>Demostración con datos ficticios</span></p>}
+    {creating && <NewSection courses={courses || []} preferred={creating} onClose={() => setCreating(null)}/>}
   </div>;
 }
 
-/** An area of the menu that lists sections or courses: its name opens the full list, the chevron shows or hides them here. */
-function Area({ label, toggleLabel, href, icon, hue, active, open, onToggle, add, empty, loading, children }: { label: string; toggleLabel: string; href: string; icon: IconName; hue: Hue; active: boolean; open: boolean; onToggle: () => void; add?: ReactNode; empty?: string; loading: boolean; children: ReactNode }) {
-  const id = useId();
-  return <li className="nav-area">
-    <div className="nav-area-row">
-      <Link href={href} className={`tone-${hue}`} aria-current={active ? "page" : undefined}><span className="nav-icon"><Icon name={icon} size={20} filled={active}/></span><span>{label}</span></Link>
-      {add}
-      <button type="button" className="nav-action nav-chevron" aria-label={toggleLabel} title={open ? "Ocultar" : "Mostrar"} aria-expanded={open} aria-controls={id} onClick={onToggle}><Icon name="chevronDown" size={16}/></button>
-    </div>
-    <ul id={id} className="nav-branches" hidden={!open}>
-      {loading ? <li className="nav-placeholder" aria-hidden="true"><span className="skeleton-line"/><span className="skeleton-line"/></li> : empty ? <li className="nav-empty">{empty}</li> : children}
-    </ul>
-  </li>;
+function Placeholder() {
+  return <li className="nav-placeholder" aria-hidden="true"><span className="skeleton-line"/><span className="skeleton-line"/></li>;
 }
 
-/** A section or a course in the menu; the current one shows its pages beneath it. */
-function Branch({ href, title, detail, current, children }: { href: string; title: string; detail?: string; current: boolean; children?: ReactNode }) {
-  const ref = useRef<HTMLLIElement>(null);
-  useEffect(() => { if (current) ref.current?.scrollIntoView?.({ block: "nearest" }); }, [current]);
-  return <li ref={ref} className={`nav-branch${current ? " is-current" : ""}`}>
-    <Link href={href} aria-current={current ? "true" : undefined} aria-label={detail ? `${title}, ${detail}` : undefined} title={detail ? `${title} · ${detail}` : title}><span className="nav-branch-text"><span>{title}</span>{detail && <small>{detail}</small>}</span></Link>
-    {children}
+/**
+ * A level of the menu that opens like an accordion: its name goes to its page, the chevron shows or hides what is under it.
+ * Its contents stay mounted, so opening and closing only animates their height.
+ */
+function Node({ id, href, label, detail, icon, hue = "violet", size = 20, open, active = false, current = false, region, toggleLabel, onToggle, onSelect, add, children }: {
+  id: string; href: string; label: string; detail?: string; icon?: IconName; hue?: Hue; size?: number; open: boolean; active?: boolean; current?: boolean; region?: string;
+  toggleLabel: string; onToggle: () => void; onSelect: (event: MouseEvent<HTMLAnchorElement>) => void; add?: ReactNode; children: ReactNode;
+}) {
+  const group = `tree-${useId()}`, row = useRef<HTMLLIElement>(null);
+  // Only the sidebar scrolls: scrollIntoView would also shift the clipped groups sideways.
+  useEffect(() => {
+    const item = row.current, sidebar = item?.closest(".sidebar");
+    if (!region || !item || !sidebar) return;
+    const top = item.getBoundingClientRect().top - sidebar.getBoundingClientRect().top;
+    if (top < 0 || top > sidebar.clientHeight - 80) sidebar.scrollTop += top - 8;
+  }, [region]);
+  return <li ref={row} className={`tree-node${current ? " is-current" : ""}${open ? " is-open" : ""}`}>
+    <div className="tree-row">
+      <Link href={href} className={`tree-link tone-${hue}`} aria-current={active ? "page" : current ? "true" : undefined} aria-label={detail ? `${label}, ${detail}` : undefined} title={label} onClick={onSelect}>
+        {icon && <span className="nav-icon"><Icon name={icon} size={size} filled={active}/></span>}
+        <span className="tree-label">{label}{detail && <small>{detail}</small>}</span>
+      </Link>
+      {add}
+      <button type="button" className="nav-action nav-chevron" aria-label={toggleLabel} title={open ? "Ocultar" : "Mostrar"} aria-expanded={open} aria-controls={group} onClick={onToggle}><Icon name="chevronDown" size={16}/></button>
+    </div>
+    <div id={group} className="tree-group" role={region ? "navigation" : undefined} aria-label={region}><ul>{children}</ul></div>
   </li>;
 }
 

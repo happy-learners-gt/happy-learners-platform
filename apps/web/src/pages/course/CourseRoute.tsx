@@ -1,8 +1,6 @@
 import { lazy, Suspense, useEffect } from "react";
 import { useNavigation } from "../../navigation";
 import { api } from "../../api";
-import { AppShell } from "../../ui/Shell";
-import type { NavContext } from "../../ui/Shell";
 import { EmptyState, ErrorState, Loading, PageHeader } from "../../ui/primitives";
 import { Link } from "../../navigation";
 import { CourseProvider, capabilities, courseConfiguration, useCourseLoader } from "./context";
@@ -37,18 +35,6 @@ export function CourseRoute({ id, area, item }: { id: string; area: string; item
   const configuration = state.status === "ready" ? courseConfiguration(state.data.course, state.data.program) : null;
   // Sections appear when the course's configuration enables attendance; the server shows each person their own sections.
   const attendance = !!configuration?.settings.attendance;
-  const current = area === "lecciones" ? "contenido" : area;
-  const context: NavContext = {
-    kind: "course", id, title: course?.title, detail: course?.status === "archived" ? "Archivado" : undefined,
-    pages: !course ? [] : [
-      { href: base, label: "Resumen", icon: "overview" as const, hue: "violet" as const, active: current === "" },
-      { href: `${base}/contenido`, label: "Contenido", icon: "content" as const, hue: "sky" as const, active: current === "contenido" },
-      { href: `${base}/plan`, label: "Plan curricular", icon: "spark" as const, hue: "green" as const, active: current === "plan" },
-      { href: `${base}/biblioteca`, label: "Biblioteca del curso", icon: "library" as const, hue: "teal" as const, active: current === "biblioteca" },
-      ...(attendance ? [{ href: `${base}/secciones`, label: "Secciones", icon: "users" as const, hue: "pink" as const, active: current === "secciones" }] : []),
-      { href: `${base}/configuracion`, label: "Configuración", icon: "settings" as const, hue: "amber" as const, active: current === "configuracion" },
-    ],
-  };
   let body;
   if (state.status === "loading" || area === "materiales" || sectionAreas.includes(area) || (area === "lecciones" && !item)) body = <><PageHeader title={<span className="skeleton-title">Cargando curso</span>}/><Loading label="Abriendo curso…" lines={6}/></>;
   else if (state.status === "error") body = state.code === 404
@@ -68,7 +54,7 @@ export function CourseRoute({ id, area, item }: { id: string; area: string; item
       {area === "lecciones" && item && <Suspense fallback={<Loading label="Abriendo editor…" lines={8}/>}><LessonEditor key={item} lessonId={item}/></Suspense>}
     </CourseProvider>;
   }
-  return <AppShell context={context}>{body}</AppShell>;
+  return body;
 }
 
 /** Where a former course location lives now: the section it named, the section of the class it named, or the course's sections. */
