@@ -92,6 +92,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/schedule$/.test(path)) methods[path] = ["PUT", "DELETE"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/lessons$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/educators$/.test(path)) methods[path] = ["PUT"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/work-groups$/.test(path)) methods[path] = ["GET", "POST"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/work-groups\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT", "DELETE"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/activity-groups$/.test(path)) methods[path] = ["PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/learners$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/learners\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET", "PUT"];

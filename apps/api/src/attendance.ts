@@ -5,6 +5,7 @@ import { configurationOf } from "./courses";
 import { event } from "./team";
 import { accessTo, forbidden } from "./access";
 import { fillLessons, saveSchedule, scheduleOf, sessions } from "./classes";
+import { workGroups } from "./workgroups";
 
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
 const unavailable = () => reply({ error: "La sección no está disponible en este curso." }, 404);
@@ -40,6 +41,7 @@ export async function classroom(path: string, method: string, input: unknown, cu
   const group = await db.prepare("SELECT id,name,status,access_code AS accessCode FROM course_groups WHERE id=? AND course_id=? AND organization_id=?").bind(groupId, courseId, current.organizationId).first<{ id: string; name: string; status: "active" | "archived"; accessCode: string | null }>();
   if (!group || !seesSection(access, group.id)) return unavailable();
   if (!sub && method === "GET") return reply({ group: (await groupsOf(db, courseId, current.organizationId, access, group.id))[0] });
+  if (sub === "work-groups" || sub === "activity-groups") return workGroups(sub, learnerId, method, input, current, db, courseId, group, access, !!configuration?.settings.workGroups);
   // What the section's educators do: plan its classes in content order. Everything else configures the section.
   if (sub === "lessons" && method === "POST") {
     if (!teachesSection(access, group.id)) return forbidden("Solo quienes imparten la sección planifican sus clases.");

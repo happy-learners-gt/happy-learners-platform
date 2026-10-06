@@ -20,8 +20,9 @@ import { SectionEducators, SectionStudents } from "../course/Sections";
 import { Timetable } from "../course/Timetable";
 import { SectionProvider, sectionPath, useSection } from "./context";
 import { SectionProgressPage } from "./Progress";
+import { SectionWorkGroupsPage } from "./WorkGroups";
 
-const areas = ["", "clases", "estudiantes", "horario", "avance"];
+const areas = ["", "clases", "estudiantes", "grupos", "horario", "avance"];
 type State = { status: "loading" } | { status: "error"; error: string; code: number } | { status: "ready"; section: SectionSummary; today: string };
 
 /**
@@ -50,11 +51,13 @@ export function SectionRoute({ id, area, item }: { id: string; area: string; ite
       { href: base, label: "Resumen", icon: "overview", hue: "violet", active: area === "" },
       { href: `${base}/avance`, label: "Avance", icon: "check", hue: "green", active: area === "avance" },
       { href: `${base}/estudiantes`, label: "Estudiantes", icon: "users", hue: "pink", active: area === "estudiantes" },
+      ...(section.workGroups ? [{ href: `${base}/grupos`, label: "Grupos", icon: "team" as const, hue: "teal" as const, active: area === "grupos" }] : []),
       { href: `/cursos/${section.courseId}`, label: "Curso: plan y contenido", icon: "courses", hue: "sky", active: false },
     ] : [
       { href: base, label: "Resumen", icon: "overview", hue: "violet", active: area === "" },
       { href: `${base}/clases`, label: "Cronograma", icon: "calendar", hue: "coral", active: area === "clases" },
       { href: `${base}/estudiantes`, label: "Estudiantes", icon: "users", hue: "pink", active: area === "estudiantes" },
+      ...(section?.workGroups ? [{ href: `${base}/grupos`, label: "Grupos", icon: "team" as const, hue: "teal" as const, active: area === "grupos" }] : []),
       { href: `${base}/horario`, label: "Horario", icon: "clock", hue: "violet", active: area === "horario" },
       ...(section ? [{ href: `/cursos/${section.courseId}`, label: "Curso: plan y contenido", icon: "courses" as const, hue: "sky" as const, active: false }] : []),
     ],
@@ -84,6 +87,7 @@ function SectionWithCourse({ section, today, base, reload, area, item }: { secti
       {area === "" && (selfPaced ? <SelfPacedOverview/> : <SectionOverview/>)}
       {area === "clases" && <Classes sessionId={item}/>}
       {area === "estudiantes" && <SectionStudents/>}
+      {area === "grupos" && <SectionWorkGroupsPage/>}
       {area === "horario" && <Timetable/>}
       {area === "avance" && <SectionProgressPage/>}
     </>}
@@ -151,6 +155,7 @@ function SelfPacedOverview() {
         </Section>
         <Section title="Estudiantes" className="order-5" action={<Link href={`${base}/estudiantes`} className="section-link">Ver la lista</Link>}>
           <p>{plural(stats.learners, "estudiante asignado", "estudiantes asignados")}.</p>
+          {section.workGroups && <p className="muted small">Forman <Link href={`${base}/grupos`}>grupos de trabajo</Link> para las actividades en parejas o en equipos.</p>}
         </Section>
       </div>
     </div>
@@ -195,6 +200,7 @@ function SectionOverview() {
         </Section>
         <Section title="Estudiantes" className="order-5" action={<Link href={`${base}/estudiantes`} className="section-link">Ver la lista</Link>}>
           <p>{plural(stats.learners, "estudiante asignado", "estudiantes asignados")}.</p>
+          {section.workGroups && <p className="muted small">Forman <Link href={`${base}/grupos`}>grupos de trabajo</Link> para las actividades en parejas o en equipos.</p>}
           <p className="muted small">{section.accessCode ? <>Código para estudiantes: <code>{section.accessCode}</code></> : "La sección aún no tiene código para estudiantes."}</p>
         </Section>
       </div>
