@@ -398,3 +398,19 @@ class UpgradeTests(unittest.TestCase):
                 demo.execute(insert, values)
         with self.assertRaises(sqlite3.IntegrityError):
             demo.execute("UPDATE learner_progress SET completed_at='2026-10-04T00:00:00Z'")
+
+    def test_work_groups_belong_to_a_section_and_have_distinct_names(self):
+        """0025: a work group lives in a section, its members are students and activities point to existing groups."""
+        demo = self.scoped("org-demo")
+        group, course, learner = demo.execute("SELECT g.id,g.course_id,(SELECT id FROM group_learners WHERE group_id=g.id LIMIT 1) FROM course_groups g WHERE EXISTS(SELECT 1 FROM group_learners WHERE group_id=g.id) LIMIT 1").fetchone()
+        lesson = demo.execute("SELECT l.id FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id WHERE u.course_id=? LIMIT 1", (course,)).fetchone()[0]
+        insert = "INSERT INTO work_groups(id,organization_id,course_id,group_id,name,created_at) VALUES (?,?,?,?,?,?)"
+        demo.execute(insert, ("wg-1", "org-demo", course, group, "Equipo Azul", "2026-10-05T10:00:00Z"))
+        demo.execute("INSERT INTO work_group_members VALUES (?,?)", ("wg-1", learner))
+        demo.execute("INSERT INTO activity_work_groups VALUES (?,?,?,?,?)", ("org-demo", group, lesson, "activity-1", "wg-1"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute(insert, ("wg-2", "org-demo", course, group, "equipo azul", "2026-10-05T10:00:00Z"))
+        for statement, values in [("INSERT INTO work_group_members VALUES (?,?)", ("wg-1", "missing")), ("INSERT INTO activity_work_groups VALUES (?,?,?,?,?)", ("org-demo", group, lesson, "activity-1", "missing")), (insert, ("wg-3", "org-demo", course, "missing", "Equipo Rojo", "t"))]:
+            with self.assertRaises(sqlite3.IntegrityError):
+                demo.execute(statement, values)
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])

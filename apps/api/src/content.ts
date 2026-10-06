@@ -7,6 +7,7 @@ import { filesFor } from "./files";
 import { accessTo, forbidden, reachableCourses } from "./access";
 import { digest } from "./auth";
 import { pathLesson, studentAccess, studentToken } from "./classes";
+import { studentActivityGroups } from "./workgroups";
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
 type LessonRow = { id: string; content: string; published_content: string | null; unit_id: string | null; course_unit_id: string | null; course_id: string | null; position: number; status: "draft" | "published"; archived: number; revision: number; draft_version: number; published_version: number; updated_at: string; completions: number; review: string | null };
 /** The latest review of the lesson, with the names of who asked and who decided. */
@@ -271,11 +272,16 @@ export async function shared(path: string, method: string, request: Request, db:
   const code = path.split("/")[3];
   const row = await db.prepare("SELECT id,published_content,course_unit_id FROM lessons WHERE archived=0 AND published_content IS NOT NULL AND json_extract(published_content,'$.shareCode')=?").bind(code).first<{ id: string; published_content: string; course_unit_id: string | null }>();
   if (!row) return reply({ error: "Lección no disponible." }, 404);
-  if (method === "GET") return reply({ lesson: JSON.parse(row.published_content), navigation: await navigationOf(db, row.id, row.course_unit_id) });
-  const name = `hl_completed_${row.id.replaceAll("-", "_")}`;
   const token = studentToken(request), now = Date.now(), tokenHash = token ? await digest(token) : "";
-  // A tu ritmo (DEC-027): a lesson of the course's path counts for the section and for the student who chose their name.
   const access = token ? await studentAccess(db, tokenHash) : null;
+  if (method === "GET") {
+    // With the section code, each activity done in groups says which of the section's groups do it (DEC-028).
+    const settings = access && await pathLesson(db, access.courseId, code) ? (await configurationOf(db, access.organizationId, access.courseId))?.settings : null;
+    const ofSection = access && settings?.attendance && settings.workGroups;
+    return reply({ lesson: JSON.parse(row.published_content), navigation: await navigationOf(db, row.id, row.course_unit_id), groups: ofSection ? await studentActivityGroups(db, access.groupId, row.id, access.learnerId) : [] });
+  }
+  const name = `hl_completed_${row.id.replaceAll("-", "_")}`;
+  // A tu ritmo (DEC-027): a lesson of the course's path counts for the section and for the student who chose their name.
   const inPath = access?.pacing === "self-paced" && !!await pathLesson(db, access.courseId, code);
   if (inPath && access.learnerId) {
     const at = new Date(now).toISOString();

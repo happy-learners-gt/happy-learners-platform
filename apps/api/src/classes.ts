@@ -55,7 +55,7 @@ async function lessonPlans(db: Database, organizationId: string, lessonIds: stri
   if (!contents.size) return {};
   const items = await library(db, organizationId);
   return Object.fromEntries([...contents].map(([id, lesson]): [string, ClassLessonPlan] => [id, {
-    activities: (lesson.activities || []).map(activity => ({ title: activity.title, minutes: Number(activity.minutes) || 0 })),
+    activities: (lesson.activities || []).map(activity => ({ id: activity.id || "", title: activity.title, minutes: Number(activity.minutes) || 0, ...(activity.grouping ? { grouping: activity.grouping } : {}) })),
     resources: resourceIdsOf(lesson.activities || []).flatMap(resourceId => { const item = items.get(resourceId); return item ? [{ id: item.id, title: item.title, kind: item.kind === "file" ? "file" as const : item.kind === "link" ? "link" as const : "text" as const }] : []; }),
   }]));
 }
@@ -146,7 +146,7 @@ export async function sessions(parts: string[], method: string, input: unknown, 
         const row = details.results.find(item => item.id === lesson.id);
         const content = contents.get(lesson.id);
         return { ...lesson, currentRevision: row?.revision || null, archived: !!row?.archived, shareCode: row && row.revision > 0 && !row.archived ? row.shareCode : null,
-          activities: (content?.activities || []).map(activity => ({ title: activity.title, minutes: Number(activity.minutes) || 0 })),
+          activities: (content?.activities || []).map(activity => ({ id: activity.id || "", title: activity.title, minutes: Number(activity.minutes) || 0, ...(activity.grouping ? { grouping: activity.grouping } : {}) })),
           resources: resourceIdsOf(content?.activities || []).flatMap(id => { const item = items.get(id); return item ? [classResource(item, false)] : []; }) };
       });
       return reply({ session, lessons, resources: unique(lessons.flatMap(lesson => lesson.resources)), learners, groupActive: groupActive?.status === "active" });
