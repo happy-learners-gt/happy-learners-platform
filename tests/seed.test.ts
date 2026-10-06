@@ -3,14 +3,17 @@ import { describe, expect, it } from "vitest";
 import { assesses, publishChecklist, resolveSettings, studentActivities, validActivities } from "../packages/domain/src/index";
 import type { Curriculum, Lesson, StudyProgram } from "../packages/contracts/src/index";
 // @ts-expect-error — plain ESM scripts without type declarations
-import { activitiesOf, build, courses } from "../scripts/seed/build.mjs";
+import { activitiesOf, build, courses, routes } from "../scripts/seed/build.mjs";
 // @ts-expect-error — plain ESM scripts without type declarations
 import { people, programs } from "../scripts/seed/content-a.mjs";
+// @ts-expect-error — plain ESM scripts without type declarations
+import { routeCourses, routePrograms } from "../scripts/seed/content-routes.mjs";
 
 type Seed = { id: string; title: string; program: string | null; lead: string; coTeachers: string[]; educationType: string; level: string; modality: string; pacing: string; format: string; settings: object; archived?: boolean;
   competencies: { outcomes: { id: string }[] }[]; resources: { id: string }[]; groups: { id: string; by: string }[];
   modules: { id: string; plan: string[]; lessons: { id: string; title: string; duration: number; sequence: Lesson["sequence"]; outcomeIds: string[]; published?: string; by: string; activities: unknown[] }[] }[] };
 const all = courses as Seed[];
+const paths = routeCourses as (Seed & { requires: string[] })[];
 
 describe("demo organization seed", () => {
   it("is generated from its sources and checked in unchanged", () => {
@@ -34,8 +37,8 @@ describe("demo organization seed", () => {
     }
   });
   it("only writes lessons the editor and the server would accept, and publishes what each course requires", () => {
-    for (const course of all) {
-      const program = (programs as StudyProgram[]).find(item => item.id === course.program) || null;
+    for (const course of [...all, ...paths]) {
+      const program = ([...programs, ...routePrograms] as StudyProgram[]).find(item => item.id === course.program) || null;
       const { values } = resolveSettings(course as unknown as Parameters<typeof resolveSettings>[0], program);
       const outcomes = course.competencies.flatMap(item => item.outcomes.map(outcome => outcome.id));
       const resources = course.resources.map(item => item.id);
@@ -65,5 +68,19 @@ describe("demo organization seed", () => {
     const actors = new Set(events.map(entry => entry.actor));
     for (const person of people as { id: string }[]) expect(actors.has(person.id), person.id).toBe(true);
     expect(events.length).toBeGreaterThan(150);
+  });
+  it("adds three programs whose courses form a path, each requiring the previous one (DEC-033)", () => {
+    expect(readFileSync(new URL("../database/migrations/0028_program_routes.sql", import.meta.url), "utf8")).toBe(build(routes).sql);
+    expect(routePrograms).toHaveLength(3);
+    for (const program of routePrograms as { id: string }[]) {
+      const path = paths.filter(course => course.program === program.id);
+      expect(path.length, program.id).toBeGreaterThanOrEqual(3);
+      expect(path.length, program.id).toBeLessThanOrEqual(4);
+      path.forEach((course, index) => expect(course.requires, course.id).toEqual(index ? [path[index - 1].id] : []));
+      for (const course of path) {
+        expect([course.lead, ...course.coTeachers].every(id => (people as { id: string }[]).some(person => person.id === id)), course.id).toBe(true);
+        expect(course.modules.flatMap(module => module.lessons).every(lesson => lesson.published), course.id).toBe(true);
+      }
+    }
   });
 });

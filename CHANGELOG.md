@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.17 — 2026-10-06
+
+Parche de REL-004 (DEC-033): el menú en niveles se lee sin sangría y responde igual en cada clic, y la demostración trae tres rutas de programa.
+
+- ST-116: elegir de nuevo un curso, una sección o Secciones en su propia página lo pliega y lo despliega cada vez, no solo la primera; desde otra página lo abre y navega.
+- ST-116: los niveles ya no se desplazan a la derecha. Cada nivel abierto es una superficie redondeada con un tinte que se intensifica con la profundidad, así los nombres largos conservan el ancho del menú. En modo de alto contraste cada nivel lleva borde.
+- ST-116: el chevron y el **+** son botones sutiles de Fluent: el chevron apunta hacia abajo cerrado y hacia arriba abierto; el **+** aparece al pasar el puntero, con el foco o cuando el nivel está abierto, y siempre en pantallas táctiles. El **+** de Cursos queda centrado.
+- ST-116: `0028_program_routes.sql` agrega a la organización de demostración **Ruta de lectura y escritura** (4 cursos), **Programación creativa** (4 cursos, a tu ritmo) e **Iniciación musical** (3 cursos). Cada curso requiere el anterior y tiene plan curricular, módulos y lecciones publicadas. No se aplica si ya existe un programa con alguno de esos nombres.
+- Sin cambios de API. Se mantiene la autorización de v0.8.1.
+
 ## 0.8.16 — 2026-10-06
 
 Parche de REL-004 (DEC-032): el menú es un árbol de cursos y secciones, Docencia pasa a ser **Agenda**, y cada organización tiene su propia administración.
