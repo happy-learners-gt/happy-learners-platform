@@ -6,7 +6,7 @@ import { event, recordEvent } from "./team";
 import { filesFor } from "./files";
 import { accessTo, forbidden, reachableCourses } from "./access";
 import { digest } from "./auth";
-import { studentToken } from "./classes";
+import { pathLesson, studentAccess, studentToken } from "./classes";
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
 type LessonRow = { id: string; content: string; published_content: string | null; unit_id: string | null; course_unit_id: string | null; course_id: string | null; position: number; status: "draft" | "published"; archived: number; revision: number; draft_version: number; published_version: number; updated_at: string; completions: number; review: string | null };
 /** The latest review of the lesson, with the names of who asked and who decided. */
@@ -273,12 +273,20 @@ export async function shared(path: string, method: string, request: Request, db:
   if (!row) return reply({ error: "Lección no disponible." }, 404);
   if (method === "GET") return reply({ lesson: JSON.parse(row.published_content), navigation: await navigationOf(db, row.id, row.course_unit_id) });
   const name = `hl_completed_${row.id.replaceAll("-", "_")}`;
+  const token = studentToken(request), now = Date.now(), tokenHash = token ? await digest(token) : "";
+  // A tu ritmo (DEC-027): a lesson of the course's path counts for the section and for the student who chose their name.
+  const access = token ? await studentAccess(db, tokenHash) : null;
+  const inPath = access?.pacing === "self-paced" && !!await pathLesson(db, access.courseId, code);
+  if (inPath && access.learnerId) {
+    const at = new Date(now).toISOString();
+    await db.prepare("INSERT INTO learner_progress(organization_id,group_id,learner_id,lesson_id,opened_at,completed_at) VALUES (?,?,?,?,?,?) ON CONFLICT DO UPDATE SET completed_at=COALESCE(completed_at,excluded.completed_at)")
+      .bind(access.organizationId, access.groupId, access.learnerId, row.id, at, at).run();
+  }
   if (!(request.headers.get("Cookie") || "").split(";").some(c => c.trim() === `${name}=1`)) {
     // With the section code, the opening is the section's when the lesson is in one of its classes (DEC-024).
-    const token = studentToken(request), now = Date.now();
-    await db.prepare(`INSERT INTO lesson_completions(id,lesson_id,completed_at,group_id) VALUES (?,?,?,(SELECT a.group_id FROM group_access_sessions a JOIN course_groups g ON g.id=a.group_id AND g.status='active'
-      WHERE a.token_hash=? AND a.expires_at>? AND EXISTS(SELECT 1 FROM class_sessions s JOIN class_session_lessons p ON p.session_id=s.id WHERE s.group_id=a.group_id AND s.status<>'cancelled' AND p.lesson_id=?)))`)
-      .bind(crypto.randomUUID(), row.id, now, token ? await digest(token) : "", now, row.id).run();
+    await db.prepare(`INSERT INTO lesson_completions(id,lesson_id,completed_at,group_id) VALUES (?,?,?,COALESCE(?,(SELECT a.group_id FROM group_access_sessions a JOIN course_groups g ON g.id=a.group_id AND g.status='active'
+      WHERE a.token_hash=? AND a.expires_at>? AND EXISTS(SELECT 1 FROM class_sessions s JOIN class_session_lessons p ON p.session_id=s.id WHERE s.group_id=a.group_id AND s.status<>'cancelled' AND p.lesson_id=?))))`)
+      .bind(crypto.randomUUID(), row.id, now, inPath ? access.groupId : null, tokenHash, now, row.id).run();
   }
-  return Response.json({ ok: true }, { headers: { "Set-Cookie": `${name}=1; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000${new URL(request.url).protocol === "https:" ? "; Secure" : ""}` } });
+  return Response.json({ ok: true, learner: inPath && access.learnerName ? access.learnerName : null }, { headers: { "Set-Cookie": `${name}=1; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000${new URL(request.url).protocol === "https:" ? "; Secure" : ""}` } });
 }

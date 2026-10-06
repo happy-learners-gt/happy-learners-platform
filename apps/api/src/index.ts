@@ -95,7 +95,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/learners$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/learners\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET", "PUT"];
-  if (path === "/api/sections" || /^\/api\/sections\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET"];
+  if (path === "/api/sections" || /^\/api\/sections\/[a-z0-9-]+(\/progress)?$/.test(path)) methods[path] = ["GET"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/code$/.test(path)) methods[path] = ["POST", "DELETE"];
   if (/^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET", "PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/(start|complete|cancel|restore)$/.test(path)) methods[path] = ["POST"];
@@ -104,7 +104,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/calendar") methods[path] = ["GET", "POST"];
   if (/^\/api\/calendar\/[a-z0-9-]+$/.test(path)) methods[path] = ["DELETE"];
   if (path === "/api/classes" || path === "/api/student/space" || /^\/api\/student\/files\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET"];
-  if (path === "/api/student/login" || path === "/api/student/logout") methods[path] = ["POST"];
+  if (["/api/student/login", "/api/student/logout", "/api/student/identity", "/api/student/progress"].includes(path)) methods[path] = ["POST"];
   if (path === "/api/taxonomy") methods[path] = ["GET"];
   if (path === "/api/programs") methods[path] = ["GET", "POST"];
   if (/^\/api\/programs\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET", "PUT"];

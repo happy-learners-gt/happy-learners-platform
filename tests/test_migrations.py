@@ -382,3 +382,19 @@ class UpgradeTests(unittest.TestCase):
                 demo.execute(insert, values)
         with self.assertRaises(sqlite3.IntegrityError):
             demo.execute("UPDATE class_session_lessons SET outcome='skipped' WHERE rowid=(SELECT min(rowid) FROM class_session_lessons)")
+
+    def test_courses_with_classes_keep_their_calendar_and_progress_belongs_to_a_student(self):
+        """0024: a course or program that already holds classes is scheduled; progress needs a student and a lesson."""
+        for scope in ["org-demo", "org-other"]:
+            db = self.scoped(scope)
+            self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+            self.assertEqual(db.execute("SELECT count(*) FROM courses c LEFT JOIN study_programs p ON p.id=c.program_id WHERE COALESCE(p.pacing,c.pacing)='self-paced' AND EXISTS(SELECT 1 FROM class_sessions s WHERE s.course_id=c.id)").fetchone()[0], 0)
+        demo = self.scoped("org-demo")
+        learner, group, lesson = demo.execute("SELECT gl.id,gl.group_id,(SELECT l.id FROM lessons l LIMIT 1) FROM group_learners gl LIMIT 1").fetchone()
+        insert = "INSERT INTO learner_progress(organization_id,group_id,learner_id,lesson_id,opened_at,completed_at) VALUES (?,?,?,?,?,?)"
+        demo.execute(insert, ("org-demo", group, learner, lesson, "2026-10-05T10:00:00Z", "2026-10-05T10:20:00Z"))
+        for values in [("org-demo", group, learner, lesson, "2026-10-05T10:00:00Z", None), ("org-demo", group, "missing", lesson, "2026-10-05T10:00:00Z", None), ("org-demo", group, learner, "missing", "t", None)]:
+            with self.assertRaises(sqlite3.IntegrityError):
+                demo.execute(insert, values)
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("UPDATE learner_progress SET completed_at='2026-10-04T00:00:00Z'")

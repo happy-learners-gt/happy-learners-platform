@@ -132,10 +132,14 @@ export interface SectionIndicators {
   lessonsPublished: number; lessonsTaught: number; lessonsPlanned: number;
   /** Times the section's students opened one of its lessons with the section code. */
   openings: number;
+  /** A tu ritmo (DEC-027): students who began the course, those who completed every published lesson, and the average share completed. */
+  started: number; finished: number; pathAverage: number | null;
 }
 /** A section as an instance of its course: who teaches it, its students, its schedule and its own progress (DEC-024). */
 export interface SectionSummary extends ClassGroup {
   course: { id: string; title: string; status: "active" | "archived" };
+  /** The course's effective pacing: with a calendar, the section has a schedule and classes; at their own pace, it follows each student. */
+  pacing: Pacing;
   indicators: SectionIndicators;
   next: { id: string; sessionDate: string; startsAt?: string | null; status: ClassStatus } | null;
   /** Whether the signed-in person teaches it. */
@@ -183,6 +187,18 @@ export interface StudentSpace {
   group: { name: string }; course: { title: string }; organization: string; today: string;
   next: StudentClass | null; upcoming: StudentClass[]; recent: StudentClass[];
   lessons: { title: string; shareCode: string }[];
+  pacing: Pacing;
+  /** A tu ritmo: the student who chose their name from the section's list, the list to choose from, and the whole published course in order. */
+  learner: { id: string; name: string } | null;
+  roster: { id: string; name: string }[];
+  path: StudentPathModule[];
+}
+export interface StudentPathModule { id: string; name: string; lessons: StudentPathLesson[] }
+export interface StudentPathLesson { title: string; shareCode: string; opened: boolean; completed: boolean }
+/** How far each student of a self-paced section got in the course's published lessons, in content order. */
+export interface SectionProgress {
+  lessons: { id: string; title: string; unitName: string }[];
+  learners: { id: string; name: string; completed: string[]; opened: string[]; lastActivity: string | null }[];
 }
 export interface StudentClass {
   id: string; sessionDate: string; startsAt?: string | null; durationMinutes?: number | null; status: ClassStatus;

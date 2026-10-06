@@ -53,8 +53,8 @@ export const courseFormats: { value: CourseFormat; label: string; hint: string }
 ];
 export const modalities: { value: Modality; label: string }[] = [{ value: "in-person", label: "Presencial" }, { value: "online", label: "En línea" }, { value: "hybrid", label: "Híbrida" }];
 export const pacings: { value: Pacing; label: string; hint: string }[] = [
-  { value: "scheduled", label: "Con calendario", hint: "Un grupo avanza junto en fechas definidas." },
-  { value: "self-paced", label: "A tu ritmo", hint: "Cada estudiante avanza cuando quiere." },
+  { value: "scheduled", label: "Con calendario", hint: "Cada sección avanza junta: sigue un horario y sus clases se planifican y registran en un cronograma." },
+  { value: "self-paced", label: "A tu ritmo", hint: "Sin horario ni clases: cada estudiante recorre las lecciones publicadas en orden, cuando quiere, y su sección sigue su avance." },
 ];
 
 /** What the parts of a course are called on screen. "Módulo" is the canonical name; others are allowed. */
