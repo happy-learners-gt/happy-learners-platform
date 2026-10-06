@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.14 — 2026-10-06
+
+Parche de REL-004 (DEC-027): el avance de una sección a tu ritmo responde como la sección cuando no está asignada a quien lo consulta.
+
+- ST-110: `GET /api/sections/:id/progress` responde 403 con «Esta sección no está asignada a tu cuenta» a un educador que no imparte la sección, igual que `GET /api/sections/:id`; antes respondía 404. Una sección de otra organización o inexistente sigue respondiendo 404.
+- Sin cambios de datos ni de interfaz. Se mantiene la autorización de v0.8.1.
+
 ## 0.8.13 — 2026-10-05
 
 Parche de REL-004 (DEC-030): la estructura de la lección se coedita en vivo, igual que su texto. Ya no hace falta recargar cuando otra persona guardó primero.
