@@ -13,7 +13,7 @@ import { duplicateCourse } from "./duplicate";
 import { accessTo } from "./access";
 import { activity, people, progress } from "./team";
 import { classroom } from "./attendance";
-import { myClasses, student, studentScope, studentToken } from "./classes";
+import { calendar, myClasses, student, studentScope, studentToken } from "./classes";
 import { sections } from "./sections";
 import { courseFiles, sharedFile } from "./files";
 import { LessonCollaborationRoom } from "./collaboration";
@@ -57,8 +57,10 @@ async function route(request: Request, env: Env): Promise<Response> {
     for (const [name, value] of Object.entries(headers)) result.headers.set(name, value);
     return result;
   }
-  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|organization|members|levels|units|resources|lessons|courses|programs|vocabularies|terms|student)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files"))
+  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|organization|calendar|members|levels|units|resources|lessons|courses|programs|vocabularies|terms|student)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files"))
     ? await body(request) : undefined;
+  // Finishing or cancelling a class may say what was covered or what happens to its plan; without a body, the defaults apply.
+  if (method === "POST" && /^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/(complete|cancel)$/.test(path) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   let scope = sessionToken(request)?.startsWith("o_") ? "org-other" : "org-demo";
   if (path.startsWith("/api/share/")) scope = path.split("/")[3].startsWith("O-") ? "org-other" : "org-demo";
   if (path.startsWith("/api/student/")) scope = path === "/api/student/login" ? studentScope(String((input as Record<string, unknown> | null)?.code || "").trim().toUpperCase()) : studentToken(request)?.startsWith("o_") ? "org-other" : "org-demo";
@@ -98,6 +100,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET", "PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/(start|complete|cancel|restore)$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/attendance$/.test(path)) methods[path] = ["GET", "PUT"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/outcomes$/.test(path)) methods[path] = ["PUT"];
+  if (path === "/api/calendar") methods[path] = ["GET", "POST"];
+  if (/^\/api\/calendar\/[a-z0-9-]+$/.test(path)) methods[path] = ["DELETE"];
   if (path === "/api/classes" || path === "/api/student/space" || /^\/api\/student\/files\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET"];
   if (path === "/api/student/login" || path === "/api/student/logout") methods[path] = ["POST"];
   if (path === "/api/taxonomy") methods[path] = ["GET"];
@@ -175,6 +180,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/programs(\/|$)/.test(path)) return programs(path, method, input, current, db);
   if (path === "/api/activity") return activity(url, current, db);
   if (path === "/api/classes") return myClasses(current, db);
+  if (path.startsWith("/api/calendar")) return calendar(path, method, input, url, current, db);
   if (path.startsWith("/api/sections")) return sections(path, current, db);
   if (path === "/api/progress") return progress(current, db);
   if (path === "/api/people") return people(current, db);
