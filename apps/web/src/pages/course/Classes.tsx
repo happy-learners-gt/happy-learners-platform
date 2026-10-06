@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { CalendarBreak, ClassLesson, ClassLessonPlan, ClassResource, ClassSession, ClassStatus, LessonOutcome } from "@happy-learners/contracts";
-import { classSequence, classStatusLabels, lessonOutcomeLabels, maxClassLessons } from "@happy-learners/domain";
+import type { CalendarBreak, ClassLesson, ClassLessonPlan, ClassResource, ClassSession, ClassStatus, LessonOutcome, SectionWorkGroups } from "@happy-learners/contracts";
+import { classSequence, classStatusLabels, lessonOutcomeLabels, maxClassLessons, wholeSection } from "@happy-learners/domain";
 import { api, message } from "../../api";
 import { Link, useNavigation, useUnsavedChanges } from "../../navigation";
 import { plural, sessionDay } from "../../model";
@@ -308,6 +308,15 @@ function ClassDetail({ id }: { id: string }) {
     } catch (cause) { setError(message(cause)); }
   }
   useEffect(() => { void load(); }, [id]);
+  // Who does each activity in pairs or teams in this section (DEC-028); none assigned means the whole section.
+  const [teams, setTeams] = useState<Map<string, string[]>>(new Map());
+  useEffect(() => {
+    if (!section.workGroups) return;
+    api<SectionWorkGroups>(`/courses/${course.id}/groups/${section.id}/work-groups`).then(data => {
+      const names = new Map(data.workGroups.map(group => [group.id, group.name]));
+      setTeams(new Map(data.activities.map(item => [`${item.lessonId}:${item.activityId}`, item.workGroupIds.map(wid => names.get(wid) || "").filter(Boolean)])));
+    }).catch(() => setTeams(new Map()));
+  }, [section.id, section.workGroups]);
   const crumbs = [{ label: "Secciones", href: "/secciones" }, { label: section.name, href: sectionBase }, { label: "Cronograma", href: page }];
   if (error) return <><PageHeader crumbs={crumbs} title="Clase"/>{/404/.test(error) || error.includes("no está disponible") ? <EmptyState icon="calendar" title="No encontramos esa clase" action={<Link className="button secondary" href={page}>Ver el cronograma</Link>}/> : <ErrorState error={error} retry={() => void load()}/>}</>;
   if (!detail) return <><PageHeader crumbs={crumbs} title={<span className="skeleton-title">Clase</span>}/><Loading label="Abriendo clase…" lines={6}/></>;
@@ -353,7 +362,12 @@ function ClassDetail({ id }: { id: string }) {
             <strong>{lesson.title}</strong>
             {session.status === "completed" && lesson.outcome && <StatusBadge tone={outcomeTone[lesson.outcome]}>{lessonOutcomeLabels[lesson.outcome]}</StatusBadge>}
             <span className="muted small">{lesson.archived ? "Archivada: requiere sustitución" : lesson.currentRevision ? `Publicación ${lesson.currentRevision}` : "Borrador: los estudiantes aún no la ven"}{lesson.revision && lesson.revision !== lesson.currentRevision ? ` · en clase se usó la publicación ${lesson.revision}` : ""}</span>
-            {lesson.activities.length > 0 && <ul className="cell-list">{lesson.activities.map((activity, index) => <li key={index}>{activity.title}{activity.minutes ? <span className="muted"> · {activity.minutes} min</span> : null}</li>)}</ul>}
+            {lesson.activities.length > 0 && <ul className="cell-list">{lesson.activities.map((activity, index) => {
+              const grouped = section.workGroups && (activity.grouping === "pairs" || activity.grouping === "teams");
+              const who = grouped ? teams.get(`${lesson.id}:${activity.id}`) : undefined;
+              return <li key={index}>{activity.title}{activity.minutes ? <span className="muted"> · {activity.minutes} min</span> : null}
+                {grouped && <span className="activity-teams"><Icon name="team" size={14}/>{who?.length ? who.join(", ") : wholeSection}</span>}</li>;
+            })}</ul>}
             <div className="button-row">
               {courseLessons.some(item => item.id === lesson.id) && <Link className="button secondary small" href={`/cursos/${course.id}/lecciones/${lesson.id}`}><Icon name="edit" size={16}/>Abrir lección</Link>}
               {lesson.shareCode && <a className="button ghost small" href={`/aprender/${lesson.shareCode}`} target="_blank" rel="noopener"><Icon name="present" size={16}/>Presentar</a>}

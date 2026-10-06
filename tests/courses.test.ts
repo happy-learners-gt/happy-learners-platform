@@ -23,13 +23,13 @@ describe("generic learning content", () => {
     expect(validTermIds(Array.from({ length: 25 }, (_, i) => `t-${i}`))).toBe(false);
   });
   it("derives behaviour from the dimensions and resolves settings with their source", () => {
-    expect(derivedSettings({ educationType: "formal", level: "primary", modality: "online", pacing: "scheduled", format: "laboratory" })).toEqual({ moduleLabel: "modules", defaultSequence: "five-e", attendance: false, outcomesRequired: true, assessmentRequired: true });
+    expect(derivedSettings({ educationType: "formal", level: "primary", modality: "online", pacing: "scheduled", format: "laboratory" })).toEqual({ moduleLabel: "modules", defaultSequence: "five-e", attendance: false, workGroups: false, outcomesRequired: true, assessmentRequired: true });
     const program: StudyProgram = { id: "p", name: "Primaria", description: "", educationType: "formal", level: "primary", modality: "in-person", pacing: "scheduled", format: "subject", settings: { moduleLabel: "units", assessmentRequired: false }, locked: ["moduleLabel"], status: "active", version: 1, updatedAt: "t" };
     const inProgram = { educationType: "non-formal" as const, level: "unspecified" as const, modality: "online" as const, pacing: "self-paced" as const, format: "subject" as const, settings: { moduleLabel: "weeks" as const, assessmentRequired: true } };
     const { values, source } = resolveSettings(inProgram, program);
     // The program fixes the label, so the course's own value is ignored; its own assessment value wins.
-    expect(values).toEqual({ moduleLabel: "units", defaultSequence: "start-develop-close", attendance: true, outcomesRequired: true, assessmentRequired: true });
-    expect(source).toEqual({ moduleLabel: "program-locked", defaultSequence: "derived", attendance: "derived", outcomesRequired: "derived", assessmentRequired: "course" });
+    expect(values).toEqual({ moduleLabel: "units", defaultSequence: "start-develop-close", attendance: true, workGroups: true, outcomesRequired: true, assessmentRequired: true });
+    expect(source).toEqual({ moduleLabel: "program-locked", defaultSequence: "derived", attendance: "derived", workGroups: "derived", outcomesRequired: "derived", assessmentRequired: "course" });
     expect(resolveSettings({ ...inProgram, settings: {} }, program).source.assessmentRequired).toBe("program");
   });
   it("only lets a program fix settings it gives a value to", () => {

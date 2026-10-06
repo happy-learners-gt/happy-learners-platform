@@ -90,7 +90,7 @@ export type Pacing = "scheduled" | "self-paced";
 export type ModuleLabel = "modules" | "units" | "weeks" | "sessions" | "topics" | "blocks";
 export interface AcademicProfile { educationType: EducationType; level: EducationLevel; modality: Modality; pacing: Pacing }
 /** Behaviour a course's configuration controls. Missing values are inherited or derived. */
-export interface CourseSettings { moduleLabel?: ModuleLabel; defaultSequence?: SequenceTemplate; attendance?: boolean; outcomesRequired?: boolean; assessmentRequired?: boolean }
+export interface CourseSettings { moduleLabel?: ModuleLabel; defaultSequence?: SequenceTemplate; attendance?: boolean; workGroups?: boolean; outcomesRequired?: boolean; assessmentRequired?: boolean }
 /** A set of courses that share a configuration; it can fix settings for all of them. */
 export interface StudyProgram extends AcademicProfile {
   id: string; name: string; description: string; format: CourseFormat; area?: string;
@@ -144,6 +144,8 @@ export interface SectionSummary extends ClassGroup {
   next: { id: string; sessionDate: string; startsAt?: string | null; status: ClassStatus } | null;
   /** Whether the signed-in person teaches it. */
   teaches: boolean;
+  /** Whether the course's configuration enables work groups inside its sections (only when reading one section). */
+  workGroups?: boolean;
 }
 /** An educator who teaches a section's classes (DEC-023). */
 export interface SectionEducator { userId: string; name: string; username: string }
@@ -179,9 +181,16 @@ export interface ClassSession {
   learnerCount?: number; marked?: number; attended?: number;
 }
 /** What a planned lesson brings to the schedule of classes: its activities and the library resources they use. */
-export interface ClassLessonPlan { activities: { title: string; minutes: number }[]; resources: { id: string; title: string; kind: "text" | "link" | "file" }[] }
+export interface ClassLessonPlan { activities: { id: string; title: string; minutes: number; grouping?: ActivityGrouping }[]; resources: { id: string; title: string; kind: "text" | "link" | "file" }[] }
 /** A resource as a class shows it: enough to open it, without editorial fields. */
 export interface ClassResource { id: string; courseId?: string; title: string; description: string; kind: "text" | "link" | "file"; content?: string; fileName?: string; available: boolean }
+/** A group of students formed inside a section to work together (DEC-028). The whole section is the default group. */
+export interface WorkGroup { id: string; name: string; learnerIds: string[] }
+/** An activity of a published lesson done in pairs or teams, and the section's groups that do it; none means the whole section. */
+export interface GroupActivity { lessonId: string; lessonTitle: string; unitName: string; activityId: string; title: string; grouping: "pairs" | "teams"; workGroupIds: string[] }
+export interface SectionWorkGroups { workGroups: WorkGroup[]; activities: GroupActivity[] }
+/** Who does an activity, as the students of a section see it in the lesson: group names, and the members of their own group. */
+export interface StudentActivityGroups { activityId: string; groups: { name: string; mine: boolean; members?: string[] }[] }
 /** What a learner sees after entering a section code: the section's classes, their lessons and resources, and nothing else. */
 export interface StudentSpace {
   group: { name: string }; course: { title: string }; organization: string; today: string;

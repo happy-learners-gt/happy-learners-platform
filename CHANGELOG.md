@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.11 — 2026-10-05
+
+Parche de REL-004 (DEC-028): grupos de trabajo dentro de cada sección. Los estudiantes de la sección son el universo; **Toda la sección** es el grupo predeterminado y quienes la imparten forman grupos más pequeños para las actividades en parejas o en equipos.
+
+- ST-111: cada sección tiene **Grupos**, con **Toda la sección** y los grupos que forman administración y quienes la imparten con estudiantes de su lista (un estudiante puede estar en varios). La página lista las actividades **En parejas** y **En equipos** de las lecciones publicadas del curso y permite asignarles uno o varios grupos; sin asignación, las trabaja toda la sección. Eliminar un grupo conserva a sus estudiantes en la sección.
+- ST-111: la clase muestra junto a cada actividad en grupo quién la trabaja. Con el código de la sección, la lección indica a los estudiantes qué grupos trabajan cada actividad; en un curso a tu ritmo, quien eligió su nombre ve también con quién está en su grupo.
+- ST-111: la configuración del curso y del programa agrega **Grupos de trabajo** (activos por omisión fuera de la modalidad en línea; el programa puede fijarlos) y requiere secciones; el ajuste antes llamado «Grupos y asistencia» se llama **Secciones y asistencia**. Con los grupos desactivados, lo formado se consulta pero no cambia.
+- Correcciones: las tablas con desplazamiento horizontal (cobertura, avance y actividades en grupo) ya no ensanchan la página en pantallas pequeñas.
+- Datos: `0025_work_groups.sql` agrega `work_groups`, `work_group_members` y `activity_work_groups`.
+- API: `GET`/`POST /api/courses/:id/groups/:gid/work-groups`, `PUT`/`DELETE …/work-groups/:wid` y `PUT …/activity-groups {lessonId, activityId, workGroupIds}` (administración y quienes imparten la sección; 403 para el resto, 409 con los grupos desactivados o la sección cerrada); `GET /api/share/:code` incluye `groups` con el código de la sección. Se mantiene la autorización de v0.8.1.
+
 ## 0.8.10 — 2026-10-05
 
 Parche de REL-004 (DEC-027): el ritmo del curso define cómo se imparte. **Con calendario**, cada sección avanza junta con su horario y su cronograma de clases; **A tu ritmo**, la sección no tiene horario ni clases y cada estudiante recorre las lecciones publicadas en orden.

@@ -2,6 +2,7 @@ import type { ClassStatus, Member, Pacing, SectionEducator, SectionProgress, Sec
 import { pathIndicators, sectionIndicators } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { scheduleOf, todayFor } from "./classes";
+import { configurationOf } from "./courses";
 
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
 
@@ -65,7 +66,9 @@ export async function sections(path: string, current: Member, db: Database) {
       teaches: !!teaches,
     };
   });
-  return id ? reply({ section: list[0], today }) : reply({ sections: list, today });
+  if (!id) return reply({ sections: list, today });
+  const settings = (await configurationOf(db, current.organizationId, list[0].courseId))?.settings;
+  return reply({ section: { ...list[0], workGroups: !!(settings?.attendance && settings.workGroups) }, today });
 }
 
 /**
