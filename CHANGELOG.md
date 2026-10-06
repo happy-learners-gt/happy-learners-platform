@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.13 — 2026-10-05
+
+Parche de REL-004 (DEC-030): la estructura de la lección se coedita en vivo, igual que su texto. Ya no hace falta recargar cuando otra persona guardó primero.
+
+- ST-113: con la lección abierta por varias personas, el título, el objetivo, la secuencia didáctica, el módulo, la duración y los resultados de aprendizaje cambian en vivo para todos. También el orden de las actividades y, en cada una, su título, duración, momento, propósito, organización, resultados y bloques; una actividad nueva llega con su texto.
+- ST-113: los cambios simultáneos se combinan: en el título y el objetivo se conservan las dos escrituras, el orden toma el último movimiento sin perder actividades, y en los demás campos queda el último cambio. El guardado automático envía la versión combinada y, si otra persona guardó antes, vuelve a guardarla sin pedir recargar.
+- ST-113: la sala de edición toma la lección guardada al abrirse por primera vez, una sola vez aunque dos personas la abran a la vez, y la actualiza si la lección cambió mientras nadie la editaba. Ayuda explica la edición simultánea.
+- Sin cambios de datos ni de API. Se mantiene la autorización de v0.8.1.
+
 ## 0.8.12 — 2026-10-05
 
 Parche de REL-004 (DEC-029): requisitos entre los cursos de un programa. El programa se lee como una ruta: cada curso indica qué cursos del programa conviene terminar antes.
