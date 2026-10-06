@@ -36,6 +36,18 @@ La organización **Happy Learners** es la del equipo y no tiene datos ficticios:
 | Exploradores | — | Curso libre · Idiomas | Contenido original; hueco curricular a propósito (un resultado sin módulo ni lecciones). |
 | Club de lectura 2025 | — | Seminario | **Archivado**: se consulta, no se edita; su lección publicada sigue disponible. |
 
+### Rutas de programa
+
+`0028_program_routes.sql` agrega tres programas cuyos cursos se toman en orden: cada curso requiere el anterior. Cada curso tiene una competencia con dos resultados, dos módulos con una lección publicada cada uno y un recurso; no tienen secciones, así que cualquier sección que se cree sobre ellos empieza con contenido listo.
+
+| Programa | Cursos, en orden | Configuración | Responsable |
+|---|---|---|---|
+| Ruta de lectura y escritura | Lectura 1: primeras palabras → Lectura 2: comprensión lectora → Escritura 1: textos breves → Escritura 2: club de autores | No formal, presencial, con calendario · Curso libre | Ana López |
+| Programación creativa | Programación 1: pensamiento computacional → Programación 2: Scratch, primeros proyectos → Programación 3: Scratch, juegos → Programación 4: Python inicial | No formal, en línea, a tu ritmo · Taller | Diego Ramírez |
+| Iniciación musical | Música 1: pulso y ritmo → Música 2: lectura musical → Música 3: ensamble | No formal, presencial, con calendario · Taller | Sofía Castillo |
+
+Si al aplicarse la migración ya existe en la organización un programa con alguno de esos nombres, la migración no agrega nada.
+
 Cada curso activo tiene competencias, resultados, planificación por módulo, recursos etiquetados (enlaces reales a Khan Academy, PhET, NASA, British Council, Scratch, Code.org y Google Arts & Culture), lecciones con momentos, propósito, organización, bloques y notas para el docente, secciones con 12 a 20 estudiantes ficticios asignados y clases de septiembre con asistencia. La migración `0018_class_planning.sql` agrega hora, duración y estado a cada clase, programa las clases de cada sección hasta el 27 de noviembre de 2026 y asigna a cada sección activa un código para estudiantes. `0019_section_schedule.sql` guarda ese horario en cada sección y da a sus clases pendientes las lecciones publicadas del curso en el orden de Contenido; las clases posteriores a la última lección quedan sin lección. `0020_class_lessons.sql` conserva esa lección como la primera de cada clase; desde ahí cada clase del cronograma puede planificar varias lecciones:
 
 | Sección | Curso | Horario | Código |
@@ -60,10 +72,11 @@ Las clases de septiembre con asistencia quedan como **Impartidas**; las de octub
 6. **Cambios sin publicar:** en Ciencias, «El ciclo del agua» tiene cambios en borrador. Los estudiantes ven la versión publicada hasta **Publicar cambios**.
    **Revisión:** como `carlos.mejia`, edita una lección de Matemáticas y elige **Enviar a revisión**. Como `lucia.herrera`, aparece en **Inicio → Por revisar**: **Aprobar y publicar** o **Devolver con comentarios**.
 7. **Agenda:** entra como `lucia.herrera`. **Agenda** muestra sus próximas clases, su semana y sus secciones. En el menú, cada sección está dentro de su curso: **Cursos → Matemáticas 3.º primaria → Secciones → 3.º A**; al elegirla se abre su Resumen y sus páginas se despliegan debajo. **Horario** dice en una frase cuándo hay clase y muestra la semana con los días sin clase al lado; **Estudiantes** muestra la lista completa y cómo entran sus estudiantes. En **Cronograma**, cada clase pendiente muestra su lección y se cambia desde la misma fila; **Asignar lecciones en orden** completa las que no tienen. En **Inicio → Próximas clases** abre la siguiente clase de 3.º A: muestra la lección, los recursos de la lección y la lista. Elige **Comenzar clase**, pasa lista, guarda y **Finalizar clase**. En **Cronograma → Historial** aparece como impartida, con el porcentaje de asistencia, y en **Plan curricular** sus resultados cuentan como impartidos.
-8. **Coordinación:** entra como `marta.ruiz`. En **Educadores** verás cada persona con sus cursos, lecciones creadas, publicaciones, clases registradas y última actividad; al elegir una persona se filtra su actividad. **Avance por curso** compara todos los cursos. En **Configuración académica** están los programas. Con **+** junto a **Docencia** crea una sección eligiendo su curso; en su **Horario**, la vista previa dice cuántas clases se programan antes de guardar, y en **Estudiantes** se pega la lista completa, un nombre por línea.
-9. **Filtros:** en **Cursos**, filtra por programa, nivel, formato, área, modalidad o responsable. En **Biblioteca**, filtra por etiqueta o área.
-10. **Estudiante:** en una ventana privada, escribe `DG-MATE-3A` en **¿Eres estudiante?**. El espacio de la sección muestra la próxima clase, su lección y sus recursos, sin cuenta ni datos personales. El código de una lección publicada (por ejemplo `GREETINGS`) abre solo esa lección. Las notas para el docente no aparecen.
+8. **Coordinación:** entra como `marta.ruiz`. En **Educadores** verás cada persona con sus cursos, lecciones creadas, publicaciones, clases registradas y última actividad; al elegir una persona se filtra su actividad. **Avance por curso** compara todos los cursos. En **Configuración académica** están los programas. Con **+** junto a **Secciones**, dentro de un curso, crea una sección de ese curso; en su **Horario**, la vista previa dice cuántas clases se programan antes de guardar, y en **Estudiantes** se pega la lista completa, un nombre por línea.
+9. **Ruta de un programa:** abre **Programación 3: Scratch, juegos → Resumen**. **Ruta en el programa** muestra que requiere Programación 2 y que le sigue Programación 4; **Editar requisitos** lleva a **Configuración académica**, donde cada programa ordena sus cursos y sus requisitos.
+10. **Filtros:** en **Cursos**, filtra por programa, nivel, formato, área, modalidad o responsable. En **Biblioteca**, filtra por etiqueta o área.
+11. **Estudiante:** en una ventana privada, escribe `DG-MATE-3A` en **¿Eres estudiante?**. El espacio de la sección muestra la próxima clase, su lección y sus recursos, sin cuenta ni datos personales. El código de una lección publicada (por ejemplo `GREETINGS`) abre solo esa lección. Las notas para el docente no aparecen.
 
 ## Regenerar el seed
 
-`node scripts/seed/build.mjs` reescribe la migración. Una migración aplicada no se modifica: si la demo necesita cambios después de publicarse, se agrega una migración nueva.
+`node scripts/seed/build.mjs` reescribe `0015_demo_organization.sql` y `0028_program_routes.sql`. Una migración aplicada no se modifica: si la demo necesita cambios después de publicarse, se agrega una migración nueva.

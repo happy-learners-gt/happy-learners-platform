@@ -40,7 +40,7 @@ test("administration reviews each educator's contributions and every course's pr
   await signIn(page, "marta.ruiz", "/educadores");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Educadores");
   const row = page.getByRole("row", { name: /Diego Ramírez/ });
-  await expect(row).toContainText("responsable de 1");
+  await expect(row).toContainText("responsable de 5");
   await expect(row).toContainText(/\d+ creadas · \d+ publicaciones/);
   await row.getByRole("button", { name: "Diego Ramírez", exact: true }).click();
   const feed = page.locator("section").filter({ has: page.getByRole("heading", { name: "Actividad de Diego Ramírez" }) });
