@@ -2,10 +2,9 @@ import { lazy, Suspense, useEffect } from "react";
 import { useNavigation } from "../../navigation";
 import { api } from "../../api";
 import { AppShell } from "../../ui/Shell";
-import type { SidebarModel } from "../../ui/Shell";
+import type { NavContext } from "../../ui/Shell";
 import { EmptyState, ErrorState, Loading, PageHeader } from "../../ui/primitives";
 import { Link } from "../../navigation";
-import { hueFor } from "../../model";
 import { CourseProvider, capabilities, courseConfiguration, useCourseLoader } from "./context";
 import { Overview } from "./Overview";
 import { Content } from "./Content";
@@ -39,13 +38,9 @@ export function CourseRoute({ id, area, item }: { id: string; area: string; item
   // Sections appear when the course's configuration enables attendance; the server shows each person their own sections.
   const attendance = !!configuration?.settings.attendance;
   const current = area === "lecciones" ? "contenido" : area;
-  const sidebar: SidebarModel = {
-    label: "Navegación del curso",
-    back: { href: "/cursos", label: "Todos los cursos" },
-    subtitle: course?.status === "archived" ? "Curso archivado" : "Curso",
-    title: course?.title || "Cargando curso…",
-    hue: hueFor(id),
-    items: [
+  const context: NavContext = {
+    kind: "course", id, title: course?.title, detail: course?.status === "archived" ? "Archivado" : undefined,
+    pages: !course ? [] : [
       { href: base, label: "Resumen", icon: "overview" as const, hue: "violet" as const, active: current === "" },
       { href: `${base}/contenido`, label: "Contenido", icon: "content" as const, hue: "sky" as const, active: current === "contenido" },
       { href: `${base}/plan`, label: "Plan curricular", icon: "spark" as const, hue: "green" as const, active: current === "plan" },
@@ -73,7 +68,7 @@ export function CourseRoute({ id, area, item }: { id: string; area: string; item
       {area === "lecciones" && item && <Suspense fallback={<Loading label="Abriendo editor…" lines={8}/>}><LessonEditor key={item} lessonId={item}/></Suspense>}
     </CourseProvider>;
   }
-  return <AppShell sidebar={sidebar}>{body}</AppShell>;
+  return <AppShell context={context}>{body}</AppShell>;
 }
 
 /** Where a former course location lives now: the section it named, the section of the class it named, or the course's sections. */

@@ -98,7 +98,7 @@ export function Home() {
             <Link href={`/cursos/${lesson.courseId}/lecciones/${lesson.id}`}>{lesson.title}</Link><span className="link-list-meta">{courseTitle(lesson.courseId)} · {timeAgo(lesson.updatedAt)}</span><LessonBadge lesson={lesson}/>
           </li>)}</ul>}
         </Section>
-        {educator && data.sections.length > 0 && <Section title="Mis secciones" className="order-2" action={<Link href="/secciones" className="section-link">Ver todas</Link>}>
+        {educator && data.sections.length > 0 && <Section title="Tus secciones" className="order-2" action={<Link href="/secciones" className="section-link">Ir a Docencia</Link>}>
           <p className="muted small">Indicadores de las secciones que impartes: avance del cronograma, clases dadas y asistencia.</p>
           <SectionCards sections={data.sections.slice(0, 4)} today={data.today} showCourse/>
         </Section>}

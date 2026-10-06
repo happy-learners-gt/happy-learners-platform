@@ -9,13 +9,13 @@ test("1 · login → course → content, with one navigation system and working 
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Inicio");
   await openNavigation(page);
   const global = page.getByRole("navigation", { name: "Navegación principal" });
-  for (const label of ["Inicio", "Mis secciones", "Cursos", "Biblioteca", "Ayuda"]) await expect(global.getByRole("link", { name: label, exact: true })).toBeAttached();
+  for (const label of ["Inicio", "Docencia", "Cursos", "Biblioteca", "Ayuda"]) await expect(global.getByRole("link", { name: label, exact: true })).toBeAttached();
   await openCourse(page);
-  // Entering a course swaps the sidebar context; there is no second, horizontal navigation.
-  await expect(page.getByRole("navigation", { name: "Navegación principal" })).toHaveCount(0);
+  // Entering a course opens it in the same menu, with its pages beneath it; there is no second, horizontal navigation.
   await openNavigation(page);
+  await expect(global.getByRole("link", { name: "Exploradores", exact: true })).toHaveAttribute("aria-current", "true");
   // The course is the definition of what is taught; classes, students and schedules live in each section.
-  for (const label of ["Todos los cursos", "Resumen", "Contenido", "Plan curricular", "Biblioteca del curso", "Secciones", "Configuración"]) await expect(courseNav(page).getByRole("link", { name: label, exact: true })).toBeVisible();
+  for (const label of ["Resumen", "Contenido", "Plan curricular", "Biblioteca del curso", "Secciones", "Configuración"]) await expect(courseNav(page).getByRole("link", { name: label, exact: true })).toBeVisible();
   for (const label of ["Clases", "Asignaciones", "Horario"]) await expect(courseNav(page).getByRole("link", { name: label, exact: true })).toHaveCount(0);
   await courseNav(page).getByRole("link", { name: "Contenido", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Contenido");
@@ -154,8 +154,8 @@ test("5 · administration assigns a student and an educator to a section; the ed
   await page.getByRole("form", { name: `Asignar educador a ${group}` }).getByRole("button", { name: "Asignar" }).click();
   await expect(page.locator(".section-educators")).toContainText("@educador-demo");
   await page.goto(`${section}/estudiantes`);
-  await page.getByLabel(`Nombre o código de lista para ${group}`).fill(learner);
-  await page.getByRole("form", { name: `Asignar estudiante a ${group}` }).getByRole("button", { name: "Asignar" }).click();
+  await page.getByLabel("Nombres de lista").fill(learner);
+  await page.getByRole("form", { name: `Agregar estudiantes a ${group}` }).getByRole("button", { name: "Agregar estudiante", exact: true }).click();
   await expect(page.locator(".roster").getByText(learner, { exact: true })).toBeVisible();
   // The educator finds the section among their own and works in it.
   await signIn(page, "educador-demo", "/secciones");
@@ -205,7 +205,7 @@ test("6 · mobile navigation opens the course drawer, closes on selection and wi
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Contenido");
   await expect(courseNav(page)).toBeHidden();
   await toggle.click();
-  await page.getByRole("link", { name: "Todos los cursos" }).click();
+  await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: "Cursos", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Cursos");
   for (const path of ["/inicio", "/cursos/course-exploradores/contenido", "/cursos/course-exploradores/lecciones/greetings-and-introductions", "/biblioteca"]) {
     await page.goto(path);
@@ -237,4 +237,43 @@ test("7 · no E2E contamination is visible: only curated data or cleanable E2E-p
     const unexpected = names.filter(name => !curated.has(name) && !name.startsWith(E2E_PREFIX));
     expect(unexpected, "records created by E2E must carry the E2E prefix").toEqual([]);
   } finally { await api.dispose(); }
+});
+
+test("8 · HL-150 ST-114: one menu in levels opens sections and courses in place; administration creates a section from it", async ({ page }, info) => {
+  const group = e2eName(info, "Sección del menú");
+  await signIn(page, "admin-demo", "/inicio");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Inicio");
+  await openNavigation(page);
+  const menu = page.getByRole("navigation", { name: "Navegación principal" });
+  // Each area shows or hides its list in place; the list keeps every active section or course.
+  const toggle = menu.getByRole("button", { name: "Mostrar los cursos" });
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(menu.getByRole("link", { name: "Matemáticas 3.º primaria", exact: true })).toBeVisible();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(menu.getByRole("link", { name: "Matemáticas 3.º primaria", exact: true })).toBeHidden();
+  await toggle.click();
+  // + next to Docencia creates a section of the chosen course and opens it, with its pages beneath it in the same menu.
+  await menu.getByRole("button", { name: "Agregar una sección" }).click();
+  const dialog = page.getByRole("dialog", { name: "Nueva sección" });
+  await dialog.getByLabel("Curso").selectOption({ label: "Exploradores" });
+  await dialog.getByLabel("Nombre de la sección").fill(group);
+  await dialog.getByRole("button", { name: "Crear sección" }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(group);
+  await openNavigation(page);
+  const current = menu.getByRole("link", { name: `${group}, Exploradores`, exact: true });
+  await expect(current).toHaveAttribute("aria-current", "true");
+  await sectionNav(page).getByRole("link", { name: "Horario", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Horario");
+  // The schedule editor previews the classes before saving.
+  const editor = page.getByRole("form", { name: `Horario de ${group}` });
+  await editor.getByLabel("Lunes").check();
+  await expect(editor.getByRole("status")).toContainText(/\d+ clases?: lunes de 08:00 a 08:45/);
+  await openNavigation(page);
+  await expect(menu.getByRole("link", { name: `${group}, Exploradores`, exact: true })).toHaveAttribute("aria-current", "true");
+  await menu.getByRole("link", { name: "Exploradores", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Exploradores");
+  await openNavigation(page);
+  await expect(courseNav(page).getByRole("link", { name: "Contenido", exact: true })).toBeVisible();
+  await expect(sectionNav(page)).toHaveCount(0);
 });

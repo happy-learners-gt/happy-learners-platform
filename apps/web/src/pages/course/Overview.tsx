@@ -56,7 +56,7 @@ export function Overview() {
       { label: "Borradores", value: stats.drafts, icon: "edit", hue: "amber" },
       { label: "Cambios sin publicar", value: stats.changes, icon: "sparkles", hue: "pink" },
       ...(plan.summary.total ? [{ label: "Resultados trabajados", value: `${plan.summary.taught} de ${plan.summary.total}`, icon: "spark" as const, hue: "green" as const }] : []),
-      ...(settings.attendance && groups ? [{ label: mine ? "Mis secciones" : "Secciones activas", value: groups.length, icon: "users" as const, hue: "coral" as const }] : []),
+      ...(settings.attendance && groups ? [{ label: mine ? "Tus secciones" : "Secciones activas", value: groups.length, icon: "users" as const, hue: "coral" as const }] : []),
     ]}/>
     <div className="dashboard">
       <div className="dashboard-main">
@@ -76,7 +76,7 @@ export function Overview() {
             <p className="muted small">{plural(plan.summary.taught, "resultado trabajado", "resultados trabajados")} en lecciones de {plan.summary.total}. {plan.summary.gaps ? <Link href={`${base}/plan`}>{plural(plan.summary.gaps, "resultado", "resultados")} con huecos por cubrir</Link> : "Sin huecos."}</p>
           </> : <EmptyState compact icon="spark" title="Sin resultados de aprendizaje" action={publisher && <Link className="button secondary small" href={`${base}/plan`}>Definir resultados</Link>}>Define qué podrán demostrar los estudiantes y alinea las lecciones a ello.</EmptyState>}
         </Section>
-        {settings.attendance && <Section title={mine ? "Mis secciones" : "Secciones"} className="order-4" action={<Link href={`${base}/secciones`} className="section-link">{mine ? "Ver mis secciones" : "Ver secciones"}</Link>}>
+        {settings.attendance && <Section title={mine ? "Tus secciones" : "Secciones"} className="order-4" action={<Link href={`${base}/secciones`} className="section-link">{mine ? "Ver tus secciones" : "Ver secciones"}</Link>}>
           {groups === null ? <p className="muted">Cargando secciones…</p> : groups.length ? <>
             <SectionCards sections={groups.slice(0, 4)} today={today} showCourse={false}/>
             {groups.length > 4 && <Link href={`${base}/secciones`} className="section-link">Ver las {groups.length} secciones</Link>}
