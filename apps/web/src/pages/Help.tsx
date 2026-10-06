@@ -16,6 +16,7 @@ export function Help() {
       <p>Cada educador ve únicamente los cursos en los que participa.</p>
       <h2>Configuración académica</h2>
       <p>Cada curso se describe con clasificaciones de la UNESCO: tipo de educación y nivel (CINE 2011) y área de conocimiento (CINE-F 2013), además de formato, modalidad y ritmo. Esa configuración decide su comportamiento: si tiene secciones con asistencia y grupos de trabajo, con qué secuencia empiezan las lecciones y qué se exige para publicar. En <strong>Configuración</strong> del curso cada ajuste muestra de dónde viene su valor; administración puede cambiarlo, salvo que el programa lo fije.</p>
+      <p>Dentro de un programa, un curso puede <strong>requerir</strong> otros cursos del mismo programa. Administración los define en <strong>Configuración académica › Programas › Requisitos entre cursos</strong>, donde la ruta se ordena en etapas y no se permiten ciclos. El resumen de cada curso muestra en <strong>Ruta en el programa</strong> qué requiere y qué cursos le siguen. Los requisitos orientan la planificación; no impiden abrir un curso.</p>
       <h2>Preparar y publicar una lección</h2>
       <ol>
         <li>En <Link href="/cursos">Cursos</Link>, abre uno de tus cursos.</li>

@@ -414,3 +414,14 @@ class UpgradeTests(unittest.TestCase):
             with self.assertRaises(sqlite3.IntegrityError):
                 demo.execute(statement, values)
         self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_a_course_cannot_require_itself_or_a_missing_course(self):
+        """0026: prerequisites link two existing courses and never a course with itself."""
+        demo = self.scoped("org-demo")
+        first, second = [row[0] for row in demo.execute("SELECT id FROM courses ORDER BY id LIMIT 2").fetchall()]
+        insert = "INSERT INTO course_prerequisites VALUES (?,?,?)"
+        demo.execute(insert, ("org-demo", second, first))
+        for values in [("org-demo", first, first), ("org-demo", first, "missing"), ("org-demo", second, first)]:
+            with self.assertRaises(sqlite3.IntegrityError):
+                demo.execute(insert, values)
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])

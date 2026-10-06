@@ -13,6 +13,7 @@ import { Icon } from "../ui/icons";
 import { Menu } from "../ui/Menu";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section, StatusBadge } from "../ui/primitives";
 import { DaysOff } from "./calendar";
+import { ProgramPathDialog } from "./programPath";
 
 function AdminOnly({ title, children }: { title: string; children: ReactNode }) {
   const { member } = useSession();
@@ -119,6 +120,8 @@ export function AcademicSettings() {
 function ProgramEditor() {
   const { toast } = useFeedback();
   const [programs, setPrograms] = useState<StudyProgram[] | null>(null), [error, setError] = useState(""), [editing, setEditing] = useState<{ item?: StudyProgram } | null>(null);
+  const { url, navigate } = useNavigation();
+  const pathOf = programs?.find(item => item.id === url.searchParams.get("ruta"));
   const load = () => api<{ programs: StudyProgram[] }>("/programs").then(result => setPrograms(result.programs)).catch(cause => setError(message(cause)));
   useEffect(() => { void load(); }, []);
   async function save(body: Record<string, unknown>) {
@@ -150,10 +153,12 @@ function ProgramEditor() {
         <span className="muted small">{plural(program.courseCount || 0, "curso", "cursos")}</span>
         <Menu label={`Acciones de ${program.name}`} items={[
           { label: "Editar", icon: "edit", onSelect: () => setEditing({ item: program }) },
+          { label: "Requisitos entre cursos", icon: "list", onSelect: () => navigate(`/configuracion-academica?ruta=${program.id}`) },
           program.status === "active" ? { label: "Archivar", icon: "archive", danger: true, onSelect: () => void setStatus(program, "archived") } : { label: "Restaurar", icon: "archive", onSelect: () => void setStatus(program, "active") },
         ]}/>
       </li>)}</ul>}
     {editing && <ProgramDialog item={editing.item} onClose={() => setEditing(null)} onSave={save}/>}
+    {pathOf && <ProgramPathDialog program={pathOf} onClose={() => navigate("/configuracion-academica", true)}/>}
   </section>;
 }
 
