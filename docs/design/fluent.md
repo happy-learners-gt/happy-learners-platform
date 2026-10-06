@@ -61,7 +61,8 @@ No se usa `@fluentui/react-components`. Los componentes propios ya cumplen WAI-A
 5. **Elevación y movimiento:** elige la sombra por jerarquía y anima solo entradas, salidas y cambios de estado con las curvas indicadas.
 6. **Accesibilidad:** contraste de texto ≥ 4,5:1, foco visible, nombres accesibles en controles con solo icono, tamaño táctil ≥ 44 px en `pointer: coarse` y orden de tabulación lógico. Agrega la ruta a `tests/e2e/accessibility.spec.ts` para que axe la revise con WCAG 2.2 A/AA.
 7. **Ordenar:** una lista que se reordena usa `SortHandle` de `ui/Sortable.tsx`: el asa con el ícono Fluent «reordenar» se arrastra con puntero o dedo y, enfocada, responde a flecha arriba y abajo, Inicio y Fin. Su nombre accesible dice qué se mueve y en qué lugar está; los menús ofrecen «Mover arriba» y «Mover abajo».
-8. **Revisa en la guía:** si el módulo introduce un patrón nuevo, agrégalo a `pages/StyleGuide.tsx`.
+8. **Navegación:** el menú lateral es uno solo, en niveles como el Nav de Fluent: un área (Docencia, Cursos), sus secciones o cursos y, bajo el actual, sus páginas. Una página nueva de una sección o de un curso se agrega a la lista `pages` de su `NavContext`; no se crea otro menú ni otra barra de pestañas.
+9. **Revisa en la guía:** si el módulo introduce un patrón nuevo, agrégalo a `pages/StyleGuide.tsx`.
 
 ## Ejemplos
 

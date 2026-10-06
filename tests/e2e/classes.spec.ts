@@ -26,11 +26,11 @@ test("HL-61 ST-035 ST-097 ST-098 ST-101 ST-102: administration prepares a sectio
   await openNavigation(page);
   await sectionNav(page).getByRole("link", { name: "Estudiantes", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Estudiantes");
-  for (const learner of [first, second]) {
-    await page.getByLabel(`Nombre o código de lista para ${group}`).fill(learner);
-    await page.getByRole("form", { name: `Asignar estudiante a ${group}` }).getByRole("button", { name: "Asignar" }).click();
-    await expect(page.locator(".roster").getByText(learner, { exact: true })).toBeVisible();
-  }
+  // A pasted list adds every student at once.
+  await page.getByLabel("Nombres de lista").fill(`${first}\n${second}`);
+  await page.getByRole("form", { name: `Agregar estudiantes a ${group}` }).getByRole("button", { name: "Agregar 2 estudiantes" }).click();
+  await expect(toast(page)).toContainText("2 estudiantes agregados");
+  for (const learner of [first, second]) await expect(page.locator(".roster").getByText(learner, { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Generar código" }).click();
   const code = (await page.getByLabel(`Código de la sección ${group}`).textContent())!.trim();
   expect(code).toMatch(/^DG-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
@@ -38,7 +38,8 @@ test("HL-61 ST-035 ST-097 ST-098 ST-101 ST-102: administration prepares a sectio
   // The educator teaches it: the section is theirs to consult, but not to configure.
   await signIn(page, "educador-demo", `/secciones/${groupId}/estudiantes`);
   await expect(page.locator(".roster")).toContainText(first);
-  await expect(page.getByRole("form", { name: `Asignar estudiante a ${group}` })).toHaveCount(0);
+  await expect(page.getByRole("form", { name: `Agregar estudiantes a ${group}` })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Agregar estudiantes" })).toHaveCount(0);
   await page.goto(`/secciones/${groupId}`);
   await expect(page.locator(".page-header")).toContainText("sin horario");
   await expect(page.getByRole("button", { name: `Acciones de la sección ${group}` })).toHaveCount(0);

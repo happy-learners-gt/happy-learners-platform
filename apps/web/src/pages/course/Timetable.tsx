@@ -1,47 +1,170 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { ClassSession, SectionSchedule } from "@happy-learners/contracts";
-import { scheduleSummary, weekdays } from "@happy-learners/domain";
+import { scheduleDates, weekdays } from "@happy-learners/domain";
 import { api, message } from "../../api";
 import { Link } from "../../navigation";
 import { plural, sessionDay } from "../../model";
 import { useFeedback } from "../../ui/feedback";
 import { Icon } from "../../ui/icons";
-import { Menu } from "../../ui/Menu";
-import { EmptyState, ErrorState, Field, Loading, PageHeader } from "../../ui/primitives";
+import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section } from "../../ui/primitives";
 import { useCourse } from "./context";
-import type { SectionView } from "./Sections";
 import { useSection } from "../sections/context";
-import { DaysOff } from "../calendar";
+import { DaysOff, useBreaks } from "../calendar";
 
 const addDays = (day: string, days: number) => { const date = new Date(`${day}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
+const addMonths = (day: string, months: number) => { const date = new Date(`${day}T00:00:00Z`); date.setUTCMonth(date.getUTCMonth() + months); return date.toISOString().slice(0, 10); };
+const endTime = (start: string, minutes: number) => { const [hours, mins] = start.split(":").map(Number), total = hours * 60 + mins + minutes; return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`; };
+const lower = (text: string) => text.charAt(0).toLocaleLowerCase("es") + text.slice(1);
+const durations = [30, 40, 45, 50, 60, 80, 90, 120];
 type Values = { weekdays: number[]; startsAt: string; durationMinutes: string; from: string; until: string };
 
-/** Horario: the weekly class times of the section and its period. Saving it generates the section's classes. */
+/** "Lunes y miércoles" */
+export function dayList(days: number[], style: "long" | "short" = "long") {
+  const names = weekdays.filter(([day]) => days.includes(day)).map(([, name, short]) => lower(style === "long" ? name : short));
+  const text = names.length > 1 ? `${names.slice(0, -1).join(", ")} y ${names[names.length - 1]}` : names[0] || "";
+  return text.charAt(0).toLocaleUpperCase("es") + text.slice(1);
+}
+
+/**
+ * Horario: when the section meets and for how long. It reads as a sentence and a week; administration edits it
+ * with a preview of the classes it will generate, and manages the days without class next to it.
+ */
 export function Timetable() {
   const { course, configurable } = useCourse();
   const { section, base, reload } = useSection();
   const [sessions, setSessions] = useState<ClassSession[] | null>(null), [today, setToday] = useState(""), [error, setError] = useState("");
+  const [editing, setEditing] = useState(false);
+  const breaks = useBreaks(section.id, course.status === "active");
   async function load() {
     setError("");
     try {
-      const s = await api<{ sessions: ClassSession[]; today: string }>(`/courses/${course.id}/sessions`);
-      setSessions(s.sessions.filter(session => session.groupId === section.id)); setToday(s.today);
+      const result = await api<{ sessions: ClassSession[]; today: string }>(`/courses/${course.id}/sessions`);
+      setSessions(result.sessions.filter(session => session.groupId === section.id)); setToday(result.today);
     } catch (cause) { setError(message(cause)); }
   }
   useEffect(() => { if (course.status === "active") void load(); }, [course.id, section.id]);
-  const header = <PageHeader crumbs={[{ label: "Secciones", href: "/secciones" }, { label: section.name, href: base }, { label: "Horario" }]} title="Horario"
-    description={configurable ? "Los días, la hora y el periodo de clases de la sección. Al guardar el horario se generan sus clases, que sus educadores planifican con lecciones en el cronograma." : "Los días, la hora y el periodo de clases de la sección. Administración configura el horario; tú planificas cada clase en el cronograma."}/>;
+  const schedule = section.schedule, writable = configurable && section.status === "active";
+  const refresh = async () => { await Promise.all([load(), reload(), breaks.load()]); };
+  const header = <PageHeader crumbs={[{ label: "Docencia", href: "/secciones" }, { label: section.name, href: base }, { label: "Horario" }]} title="Horario"
+    description={schedule ? <>{dayList(schedule.weekdays)}, de {schedule.startsAt} a {endTime(schedule.startsAt, schedule.durationMinutes)}. {writable ? "Al cambiarlo, las clases pendientes se reprograman solas." : "Administración lo configura; tú planificas cada clase en el cronograma."}</>
+      : writable ? "Elige los días, la hora y el periodo. Las clases de la sección se programan solas." : "Administración configura el horario de la sección; tú planificas cada clase en el cronograma."}
+    primary={writable && schedule && !editing && sessions && <PrimaryAction icon="edit" onClick={() => setEditing(true)}>Editar horario</PrimaryAction>}/>;
   if (course.status !== "active") return <>{header}<EmptyState icon="archive" title="Curso archivado">El horario vuelve a estar disponible cuando administración restaura el curso.</EmptyState></>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
   if (!sessions) return <>{header}<Loading label="Cargando horario…" cards={1}/></>;
+  if (section.status !== "active") return <>{header}<EmptyState icon="archive" title="Sección cerrada">Conserva su historial de clases. Administración puede reactivarla para volver a programar clases.</EmptyState></>;
   return <>
     {header}
-    {section.status !== "active" ? <EmptyState icon="archive" title="Sección cerrada">Conserva su historial de clases. Administración puede reactivarla para volver a programar clases.</EmptyState>
-      : <>{section.schedule && <WeekGrid title="Semana de la sección" sections={[{ ...section, href: `${base}/clases` }]}/>}<div className="group-grid"><ScheduleCard group={section} today={today} sessions={sessions} onSaved={async () => { await Promise.all([load(), reload()]); }}/></div>
-        <DaysOff section={section} writable={configurable} onChanged={async () => { await Promise.all([load(), reload()]); }}/></>}
-    <p className="privacy-note"><Icon name="info" size={16}/>Cambiar un horario rehace solo las clases generadas que aún no comienzan. Las clases impartidas, en curso, canceladas o agregadas a mano se conservan, y las lecciones ya planificadas siguen en el mismo orden. Los días sin clase no generan clases: lo planificado pasa a la siguiente.</p>
+    <div className="dashboard timetable-layout">
+      <div className="dashboard-main">
+        {writable && (editing || !schedule)
+          ? <ScheduleEditor schedule={schedule} sessions={sessions} today={today} breaks={breaks.breaks || []} onDone={async saved => { setEditing(false); if (saved) await refresh(); }}/>
+          : schedule ? <ScheduleSummary schedule={schedule} sessions={sessions} today={today} base={base}/>
+          : <EmptyState icon="clock" title="La sección aún no tiene horario">Cuando administración lo configure, sus clases aparecerán en el <Link href={`${base}/clases`}>cronograma</Link>. También puedes agregar clases a mano desde ahí.</EmptyState>}
+      </div>
+      <div className="dashboard-side">
+        <DaysOff section={section} writable={writable} data={breaks} onChanged={async () => { await Promise.all([load(), reload()]); }}/>
+      </div>
+    </div>
   </>;
+}
+
+/** The section's week at a glance: which days it meets, from when to when, and what the period holds. */
+function ScheduleSummary({ schedule, sessions, today, base }: { schedule: SectionSchedule; sessions: ClassSession[]; today: string; base: string }) {
+  const { section } = useSection();
+  const pending = sessions.filter(session => session.status === "planned" && session.sessionDate >= today);
+  const taught = sessions.filter(session => session.status === "completed").length;
+  const ended = schedule.until < today, next = section.next;
+  return <Section title="Semana de la sección" className="timetable" action={<Link href={`${base}/clases`} className="section-link">Ver cronograma</Link>}>
+    <Week days={schedule.weekdays} time={`${schedule.startsAt}–${endTime(schedule.startsAt, schedule.durationMinutes)}`}/>
+    {ended && <p className="notice"><Icon name="info" size={18}/>El periodo terminó el {lower(sessionDay(schedule.until))}. Para seguir con clases, se programa un nuevo periodo.</p>}
+    <dl className="schedule-facts">
+      <div><dt>Periodo</dt><dd>{sessionDay(schedule.from, "short")} – {sessionDay(schedule.until, "short")}</dd></div>
+      <div><dt>Duración</dt><dd>{schedule.durationMinutes} min por clase</dd></div>
+      <div><dt>Próxima clase</dt><dd>{next ? <Link href={`${base}/clases/${next.id}`}>{sessionDay(next.sessionDate, "short")}{next.startsAt ? `, ${next.startsAt}` : ""}</Link> : "Sin clases próximas"}</dd></div>
+      <div><dt>Clases</dt><dd>{plural(pending.length, "pendiente", "pendientes")} · {plural(taught, "impartida", "impartidas")}</dd></div>
+    </dl>
+  </Section>;
+}
+
+/** Monday to Sunday, with the class days marked and their time. */
+function Week({ days, time }: { days: number[]; time?: string }) {
+  return <ol className="week-strip" aria-label="Días de clase">{weekdays.map(([day, name, short]) => {
+    const on = days.includes(day);
+    return <li key={day} className={on ? "is-on" : undefined}><abbr title={name}>{short}</abbr>{on ? <span>{time}</span> : <span className="sr-only">sin clase</span>}<span className="sr-only">{on ? `: ${name}, clase` : `: ${name}`}</span></li>;
+  })}</ol>;
+}
+
+/** Administration sets the days, time and period, and sees what will be generated before saving. */
+function ScheduleEditor({ schedule, sessions, today, breaks, onDone }: { schedule?: SectionSchedule | null; sessions: ClassSession[]; today: string; breaks: { title: string; from: string; until: string }[]; onDone: (saved: boolean) => Promise<void> }) {
+  const { course } = useCourse();
+  const { section } = useSection();
+  const { toast, confirm } = useFeedback();
+  const [values, setValues] = useState<Values>(() => schedule
+    ? { weekdays: schedule.weekdays, startsAt: schedule.startsAt, durationMinutes: String(schedule.durationMinutes), from: schedule.from, until: schedule.until }
+    : { weekdays: [], startsAt: "08:00", durationMinutes: "45", from: today, until: addMonths(today, 3) });
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const set = (patch: Partial<Values>) => setValues(current => ({ ...current, ...patch }));
+  const path = `/courses/${course.id}/groups/${section.id}/schedule`;
+  const minutes = Number(values.durationMinutes) || 0;
+  const valid = values.weekdays.length > 0 && values.from && values.until && values.until >= values.from && minutes >= 5;
+  const dates = valid ? scheduleDates(values, today) : [], kept = valid ? scheduleDates(values, today, breaks) : [];
+  const skipped = dates.length - kept.length;
+  const pending = sessions.filter(session => session.origin === "schedule" && session.status === "planned" && session.sessionDate >= today).length;
+  const options = durations.includes(minutes) || !minutes ? durations : [...durations, minutes].sort((a, b) => a - b);
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true); setError("");
+    try {
+      const result = await api<{ classes: number }>(path, "PUT", { ...values, durationMinutes: minutes });
+      toast({ message: `Horario guardado: ${plural(result.classes, "clase pendiente", "clases pendientes")} en el cronograma.` });
+      await onDone(true);
+    } catch (cause) { setError(message(cause)); setBusy(false); }
+  }
+  async function remove() {
+    if (!await confirm({ title: `¿Quitar el horario de «${section.name}»?`, body: <p>Se eliminan {plural(pending, "clase pendiente generada", "clases pendientes generadas")} por el horario. Las clases impartidas y las agregadas a mano se conservan.</p>, confirm: "Quitar horario", danger: true })) return;
+    setBusy(true);
+    try { await api(path, "DELETE"); toast({ message: "Horario quitado." }); await onDone(true); }
+    catch (cause) { toast({ tone: "error", message: message(cause) }); setBusy(false); }
+  }
+  return <Section title={schedule ? "Editar horario" : "Configurar horario"} className="schedule-editor">
+    <form className="stack" onSubmit={save} aria-label={`Horario de ${section.name}`}>
+      {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
+      <fieldset disabled={busy} className="stack">
+        <fieldset className="day-toggles"><legend>¿Qué días hay clase?</legend>
+          {weekdays.map(([day, name, short]) => <label key={day} title={name}><input type="checkbox" checked={values.weekdays.includes(day)} aria-label={name} onChange={() => set({ weekdays: values.weekdays.includes(day) ? values.weekdays.filter(value => value !== day) : [...values.weekdays, day] })}/><span aria-hidden="true">{short}</span></label>)}
+        </fieldset>
+        <div className="field-row">
+          <Field label="Hora" hint={minutes ? `Termina a las ${endTime(values.startsAt || "00:00", minutes)}.` : undefined}><input type="time" value={values.startsAt} onChange={event => set({ startsAt: event.target.value })} required/></Field>
+          <Field label="Duración"><select value={values.durationMinutes} onChange={event => set({ durationMinutes: event.target.value })}>{options.map(value => <option key={value} value={value}>{value < 60 || value % 60 ? `${value} min` : `${value / 60} h`}</option>)}</select></Field>
+        </div>
+        <div className="field-row">
+          <Field label="Desde"><input type="date" value={values.from} onChange={event => set({ from: event.target.value, ...(values.until && event.target.value > values.until ? { until: addMonths(event.target.value, 3) } : {}) })} required/></Field>
+          <Field label="Hasta"><input type="date" value={values.until} min={values.from} onChange={event => set({ until: event.target.value })} required/></Field>
+        </div>
+        <div className="period-shortcuts" role="group" aria-label="Duración del periodo">
+          <span className="muted small">Periodo de</span>
+          {[[1, "1 mes"], [3, "3 meses"], [6, "6 meses"], [10, "10 meses"]].map(([months, label]) => <button key={label} type="button" className="chip-button" aria-pressed={values.from ? values.until === addDays(addMonths(values.from, months as number), -1) : false} onClick={() => set({ until: addDays(addMonths(values.from || today, months as number), -1) })}>{label}</button>)}
+        </div>
+        <div className="schedule-preview" role="status">
+          <Icon name="calendar" size={20}/>
+          {!values.weekdays.length ? <p>Elige al menos un día de clase.</p>
+            : !valid ? <p>Revisa el periodo: la fecha final va después de la inicial.</p>
+            : <div>
+              <p><strong>{kept.length ? plural(kept.length, "clase", "clases") : "Ninguna clase"}</strong>{kept.length ? <>: {lower(dayList(values.weekdays))} de {values.startsAt} a {endTime(values.startsAt, minutes)}, del {lower(sessionDay(kept[0], "short"))} al {lower(sessionDay(kept[kept.length - 1], "short"))}.</> : " en el periodo elegido a partir de hoy."}</p>
+              {skipped > 0 && <p className="muted small">{plural(skipped, "día cae", "días caen")} en días sin clase y no se programa{skipped === 1 ? "" : "n"}.</p>}
+              {schedule && pending > 0 && <p className="muted small">Se reprograman {plural(pending, "clase pendiente", "clases pendientes")} del horario actual; sus lecciones pasan, en orden, a las nuevas fechas. Lo impartido, en curso, cancelado o agregado a mano no cambia.</p>}
+            </div>}
+        </div>
+        <div className="button-row">
+          <button className="button primary" disabled={!valid || !kept.length}>{busy ? "Guardando…" : schedule ? "Actualizar horario" : "Guardar horario"}</button>
+          {schedule && <button type="button" className="button ghost" onClick={() => void onDone(false)}>Cancelar</button>}
+          {schedule && <button type="button" className="button ghost danger-text push-end" onClick={() => void remove()}><Icon name="close" size={16}/>Quitar horario</button>}
+        </div>
+      </fieldset>
+    </form>
+  </Section>;
 }
 
 type WeekSection = { id: string; name: string; schedule?: SectionSchedule | null; href: string; detail?: string };
@@ -60,62 +183,4 @@ export function WeekGrid({ title, sections }: { title: string; sections: WeekSec
       </div>;
     })}</div>
   </section>;
-}
-
-function ScheduleCard({ group, today, sessions, onSaved }: { group: Pick<SectionView, "id" | "name" | "schedule">; today: string; sessions: ClassSession[]; onSaved: () => Promise<void> }) {
-  const { course, configurable: writable } = useCourse();
-  const { toast, confirm } = useFeedback();
-  const initial = (schedule?: SectionSchedule | null): Values => schedule
-    ? { weekdays: schedule.weekdays, startsAt: schedule.startsAt, durationMinutes: String(schedule.durationMinutes), from: schedule.from, until: schedule.until }
-    : { weekdays: [], startsAt: "08:00", durationMinutes: "45", from: today, until: addDays(today, 90) };
-  const [values, setValues] = useState<Values>(() => initial(group.schedule)), [busy, setBusy] = useState(false), [error, setError] = useState("");
-  useEffect(() => setValues(initial(group.schedule)), [group.schedule?.weekdays.join(), group.schedule?.startsAt, group.schedule?.durationMinutes, group.schedule?.from, group.schedule?.until]);
-  const set = (patch: Partial<Values>) => setValues(current => ({ ...current, ...patch }));
-  const pending = sessions.filter(session => session.origin === "schedule" && session.status === "planned" && session.sessionDate >= today);
-  const taught = sessions.filter(session => session.status === "completed").length;
-  const path = `/courses/${course.id}/groups/${group.id}/schedule`;
-  async function save(event: FormEvent) {
-    event.preventDefault();
-    if (group.schedule && pending.length && !await confirm({ title: `¿Actualizar el horario de «${group.name}»?`, body: <p>Se rehacen {plural(pending.length, "clase pendiente generada", "clases pendientes generadas")} por el horario. Sus lecciones pasan, en el mismo orden, a las nuevas fechas.</p>, confirm: "Actualizar horario" })) return;
-    setBusy(true); setError("");
-    try {
-      const result = await api<{ classes: number }>(path, "PUT", { ...values, durationMinutes: Number(values.durationMinutes) });
-      toast({ message: `Horario guardado: ${plural(result.classes, "clase pendiente", "clases pendientes")} en el cronograma.` });
-      await onSaved();
-    } catch (cause) { setError(message(cause)); }
-    finally { setBusy(false); }
-  }
-  async function remove() {
-    if (!await confirm({ title: `¿Quitar el horario de «${group.name}»?`, body: <p>Se eliminan {plural(pending.length, "clase pendiente generada", "clases pendientes generadas")} por el horario. Las clases impartidas y las agregadas a mano se conservan.</p>, confirm: "Quitar horario", danger: true })) return;
-    setBusy(true);
-    try { await api(path, "DELETE"); toast({ message: "Horario quitado." }); await onSaved(); }
-    catch (cause) { toast({ tone: "error", message: message(cause) }); }
-    finally { setBusy(false); }
-  }
-  const last = pending.reduce<string>((latest, session) => session.sessionDate > latest ? session.sessionDate : latest, "");
-  return <article id={`horario-${group.id}`} className="group-card" aria-labelledby={`schedule-${group.id}`}>
-    <header>
-      <div><h2 id={`schedule-${group.id}`}>{group.name}</h2><p className="muted">{group.schedule ? scheduleSummary(group.schedule) : "Sin horario"}</p></div>
-      {writable && group.schedule && <Menu label={`Opciones del horario de ${group.name}`} items={[{ label: "Quitar horario", icon: "close", danger: true, onSelect: () => void remove() }]}/>}
-    </header>
-    {group.schedule && <p className="muted small">{plural(pending.length, "clase pendiente", "clases pendientes")}{last ? ` hasta el ${sessionDay(last).replace(/^./, letter => letter.toLowerCase())}` : ""} · {plural(taught, "impartida", "impartidas")} · <Link href={`/secciones/${group.id}/clases`}>Ver cronograma</Link></p>}
-    {writable ? <form className="stack" onSubmit={save} aria-label={`Horario de ${group.name}`}>
-      {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
-      <fieldset disabled={busy} className="stack">
-        <fieldset className="segmented wide weekday-picker"><legend>Días de clase</legend>
-          {weekdays.map(([day, name, short]) => <label key={day} title={name}><input type="checkbox" checked={values.weekdays.includes(day)} aria-label={name} onChange={() => set({ weekdays: values.weekdays.includes(day) ? values.weekdays.filter(value => value !== day) : [...values.weekdays, day] })}/><span aria-hidden="true">{short}</span></label>)}
-        </fieldset>
-        <div className="field-row">
-          <Field label="Hora"><input type="time" value={values.startsAt} onChange={event => set({ startsAt: event.target.value })} required/></Field>
-          <Field label="Duración (min)"><input type="number" min={5} max={480} step={5} value={values.durationMinutes} onChange={event => set({ durationMinutes: event.target.value })} required/></Field>
-        </div>
-        <div className="field-row">
-          <Field label="Desde"><input type="date" value={values.from} onChange={event => set({ from: event.target.value })} required/></Field>
-          <Field label="Hasta"><input type="date" value={values.until} min={values.from} onChange={event => set({ until: event.target.value })} required/></Field>
-        </div>
-        <div className="button-row"><button className="button primary" disabled={!values.weekdays.length}>{busy ? "Guardando…" : group.schedule ? "Actualizar horario" : "Guardar horario"}</button>
-          {!values.weekdays.length && <span className="muted small">Elige al menos un día.</span>}</div>
-      </fieldset>
-    </form> : !group.schedule && <p className="muted">Administración aún no configura el horario de esta sección.</p>}
-  </article>;
 }

@@ -161,9 +161,9 @@ test("ST-103 DEC-024: the co-teacher and the lead each see and teach only the se
 
     // On screen each one finds only their sections, and cannot configure them.
     await signIn(page, "carlos.mejia", "/secciones");
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Mis secciones");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Docencia");
     await page.goto(`/cursos/${slug}/secciones`);
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Mis secciones del curso");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Secciones");
     await expect(page.getByRole("link", { name: kept.name, exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: removed.name, exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Nueva sección", exact: true })).toHaveCount(0);
@@ -205,7 +205,7 @@ test("HL-140 ST-102 ST-103: an educator sees only their own courses; administrat
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Secciones");
   // The team works in the sections it teaches.
   await signIn(page, "lucia.herrera", "/secciones");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Mis secciones");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Docencia");
   await expect(page.getByRole("link", { name: "3.º A", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Mi semana" })).toContainText("Matemáticas 3.º primaria");
   await page.goto("/secciones/seed-group-mat-3a/horario");

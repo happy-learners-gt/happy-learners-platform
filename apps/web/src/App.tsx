@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { Member, Organization } from "@happy-learners/contracts";
 import { api, ApiError, message, sessionExpired, sessionRestored } from "./api";
@@ -7,7 +7,6 @@ import { SessionContext } from "./session";
 import type { Session } from "./session";
 import { FeedbackProvider, useFeedback } from "./ui/feedback";
 import { AppShell } from "./ui/Shell";
-import type { SidebarModel } from "./ui/Shell";
 import { Login, SessionExpiredDialog } from "./pages/Login";
 import { Home } from "./pages/Home";
 import { CourseList, CreateCourse } from "./pages/Courses";
@@ -131,25 +130,7 @@ function page(first: string, second?: string) {
 }
 
 function GlobalShell({ children }: { children: ReactNode }) {
-  const { url } = useNavigation();
-  const session = useContext(SessionContext);
-  const path = url.pathname, admin = session?.member.role === "admin";
-  const sidebar: SidebarModel = {
-    label: "Navegación principal",
-    items: [
-      { href: "/inicio", label: "Inicio", icon: "home", hue: "violet", active: path === "/" || path === "/inicio" },
-      { href: "/secciones", label: admin ? "Secciones" : "Mis secciones", icon: "calendar", hue: "coral", active: path.startsWith("/secciones") },
-      { href: "/cursos", label: "Cursos", icon: "courses", hue: "sky", active: path.startsWith("/cursos") },
-      { href: "/biblioteca", label: "Biblioteca", icon: "library", hue: "teal", active: path === "/biblioteca" },
-      { href: "/ayuda", label: "Ayuda", icon: "help", hue: "amber", active: path === "/ayuda" },
-    ],
-    ...(admin ? { secondary: { label: "Administración", items: [
-      { href: "/organizacion", label: "Organización", icon: "settings" as const, hue: "coral" as const, active: path === "/organizacion" },
-      { href: "/educadores", label: "Educadores", icon: "users" as const, hue: "pink" as const, active: path === "/educadores" },
-      { href: "/configuracion-academica", label: "Configuración académica", icon: "grid" as const, hue: "green" as const, active: path === "/configuracion-academica" },
-    ] } } : {}),
-  };
-  return <AppShell sidebar={sidebar}>{children}</AppShell>;
+  return <AppShell>{children}</AppShell>;
 }
 
 /** Former locations keep working: replace the address without adding a history entry. */

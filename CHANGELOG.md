@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.15 — 2026-10-06
+
+Parche de REL-004 (DEC-031): un solo menú en niveles, y Horario y Estudiantes que se entienden de un vistazo.
+
+- ST-114: el menú lateral ya no se reemplaza al entrar a una sección o a un curso. **Docencia** (antes «Mis secciones» o «Secciones») y **Cursos** se expanden como un acordeón y muestran todas las secciones y cursos activos; al elegir uno, sus páginas se abren debajo. El chevrón muestra u oculta cada área y la pestaña recuerda cómo la dejaste; el área de lo que tienes abierto siempre se abre. El menú se actualiza solo al crear, renombrar, cerrar o archivar.
+- ST-114: administración crea una sección desde cualquier página con **+** junto a Docencia, o con **Nueva sección** en Docencia: elige el curso, le da nombre y llega a ella. **+** junto a Cursos abre Crear curso.
+- ST-114: **Horario** dice en una frase cuándo hay clase y muestra la semana, el periodo, la próxima clase y las clases pendientes e impartidas. **Editar horario** abre el formulario con días en botones, duración en una lista, la hora de salida, atajos de periodo (1, 3, 6 o 10 meses) y una vista previa con cuántas clases se programan, entre qué fechas, cuántas caen en días sin clase y qué pasa con las pendientes. Los días sin clase quedan al lado y se agregan con **Agregar**.
+- ST-114: **Estudiantes** muestra la lista completa, sin desplazamiento interno, con búsqueda cuando pasa de ocho. **Agregar estudiantes** acepta uno o una lista pegada, un nombre por línea: quita numeración y viñetas, no repite nombres ya presentes y avisa cuántos agrega. **Cómo entran** muestra el código, la dirección para entrar, **Copiar código** y **Copiar invitación**.
+- Las migas de las páginas de una sección empiezan en Docencia. Sin cambios de datos ni de API. Se mantiene la autorización de v0.8.1.
+
 ## 0.8.14 — 2026-10-06
 
 Parche de REL-004 (DEC-027 y DEC-030): correcciones del avance a tu ritmo y de la coedición de la estructura de una lección.
