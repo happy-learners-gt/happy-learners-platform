@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { Activity, ActivityBlock, LearningOutcome, Lesson, Material, Resource, RichTextDocument, SequenceTemplate } from "@happy-learners/contracts";
-import { blockKinds, groupings, outcomeCodes, phaseOf, publishChecklist, purposes, resourceIdsOf, sequenceOf, sequenceTemplates, studentActivities, suggestedResources } from "@happy-learners/domain";
+import { blockKinds, formatMinutes, groupings, lessonMinutes, outcomeCodes, phaseOf, publishChecklist, purposes, resourceIdsOf, sequenceOf, sequenceTemplates, studentActivities, suggestedResources } from "@happy-learners/domain";
 import type { CheckItem } from "@happy-learners/domain";
 import type { Phase } from "@happy-learners/domain";
 import type { Editor } from "@tiptap/react";
@@ -348,7 +348,7 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     setTimeout(() => { void flush().then(ok => ok && toast({ message: archived ? "Lección archivada." : "Lección restaurada como borrador." })); }, 0);
   }
 
-  function draftLesson(): Lesson { return { ...lesson!, title: draft!.title, objective: draft!.objective, duration: draft!.duration, sequence: draft!.sequence, outcomeIds: draft!.outcomeIds, activities: draft!.activities, courseUnitId: draft!.unitId }; }
+  function draftLesson(): Lesson { return { ...lesson!, title: draft!.title, objective: draft!.objective, duration: lessonMinutes(draft!), sequence: draft!.sequence, outcomeIds: draft!.outcomeIds, activities: draft!.activities, courseUnitId: draft!.unitId }; }
   function toggleOutcome(id: string) {
     const outcomeIds = draft!.outcomeIds.includes(id) ? draft!.outcomeIds.filter(item => item !== id) : [...draft!.outcomeIds, id];
     // Activities can only name outcomes of their lesson.
@@ -453,7 +453,9 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
             </Field>
             <div className="field-row">
               <Field label={noun.One}><select value={draft.unitId} onChange={event => update({ unitId: event.target.value })}>{units.filter(item => item.status === "active" || item.id === draft.unitId).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
-              <Field label="Duración (minutos)" hint={draft.activities.length ? `Las actividades suman ${minutes} min.` : undefined}><input type="number" min={1} max={300} value={draft.duration} onChange={event => update({ duration: Math.max(1, Math.min(300, Number(event.target.value) || 1)) })}/></Field>
+              <Field label="Duración" hint={draft.activities.length ? `La suma de ${plural(draft.activities.length, "actividad", "actividades")}. Cambia los minutos de cada actividad para ajustarla.` : "Se calcula con los minutos de las actividades."}>
+                <output className="duration-total"><Icon name="clock" size={16}/>{minutes ? formatMinutes(minutes) : "Sin tiempo"}</output>
+              </Field>
             </div>
             <fieldset className="outcome-picker">
               <legend>Resultados de aprendizaje</legend>

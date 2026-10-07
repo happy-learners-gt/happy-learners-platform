@@ -1,5 +1,5 @@
 import type { Activity, Lesson, LessonReview, Member, Resource, ReviewItem } from "@happy-learners/contracts";
-import { assesses, moduleNavigation, sharePrefix, lessonOutcomes, outcomeCodes, resourceIdsOf, sequenceTemplates, studentActivities, validActivities, validOutcomeIds } from "@happy-learners/domain";
+import { assesses, lessonMinutes, moduleNavigation, sharePrefix, lessonOutcomes, outcomeCodes, resourceIdsOf, sequenceTemplates, studentActivities, validActivities, validOutcomeIds } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { configurationOf, curriculumFor, materialsFor } from "./courses";
 import { event, recordEvent } from "./team";
@@ -173,6 +173,7 @@ export async function content(url: URL, method: string, input: unknown, current:
         : { type: a.type, instructions: a.instructions, ...(a.richContent ? { richContent: a.richContent } : {}), ...(a.type === "resource" ? { resourceId: a.resourceId } : {}), ...(a.type === "question" ? { options: a.options, answer: a.answer } : {}) }),
     }));
   } else if (old) lesson.activities = old.activities;
+  lesson.duration = lessonMinutes(lesson);
   // Outcomes come from the lesson's own course; archived ones may stay where they were already named.
   if (v.outcomeIds !== undefined) {
     if (!validOutcomeIds(v.outcomeIds)) return reply({ error: "Elige hasta 12 resultados de aprendizaje distintos." }, 400);

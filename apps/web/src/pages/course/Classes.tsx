@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { CalendarBreak, ClassLesson, ClassLessonPlan, ClassResource, ClassSession, ClassStatus, LessonOutcome, SectionWorkGroups } from "@happy-learners/contracts";
-import { classSequence, classStatusLabels, lessonOutcomeLabels, maxClassLessons, wholeSection } from "@happy-learners/domain";
+import { classLoad, classSequence, classStatusLabels, formatMinutes, lessonMinutes, lessonOutcomeLabels, maxClassLessons, wholeSection } from "@happy-learners/domain";
 import { api, message } from "../../api";
 import { Link, useNavigation, useUnsavedChanges } from "../../navigation";
 import { plural, sessionDay } from "../../model";
@@ -12,6 +12,7 @@ import { Menu } from "../../ui/Menu";
 import type { MenuItem } from "../../ui/Menu";
 import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section, StatTiles, StatusBadge } from "../../ui/primitives";
 import type { Tone } from "../../ui/primitives";
+import { TimeFit } from "../../ui/TimeFit";
 import { ResourcePreview } from "../resources";
 import { useCourse } from "./context";
 import type { SectionView } from "./Sections";
@@ -38,6 +39,12 @@ const byDate = (a: ClassSession, b: ClassSession) => a.sessionDate.localeCompare
 const unique = <T extends { id: string }>(items: T[]) => items.filter((item, index) => items.findIndex(other => other.id === item.id) === index);
 const attendanceText = (session: ClassSession) => session.marked ? `${session.attended} de ${session.marked} presentes${rate(session) !== null ? ` (${rate(session)} %)` : ""}` : "";
 
+/** Minutes of a lesson: its activities in the course, or the activities planned for the class when it is not listed. */
+function useLessonMinutes(plans: Record<string, ClassLessonPlan> = {}) {
+  const { lessons } = useCourse();
+  return (id: string) => { const lesson = lessons.find(item => item.id === id); return lesson ? lessonMinutes(lesson) : lessonMinutes({ activities: plans[id]?.activities }); };
+}
+
 export function Classes({ sessionId }: { sessionId?: string }) {
   return sessionId ? <ClassDetail key={sessionId} id={sessionId}/> : <Schedule/>;
 }
@@ -55,6 +62,7 @@ function Schedule() {
   const [adding, setAdding] = useState(url.searchParams.get("nueva") === "1"), [filling, setFilling] = useState(false), [planning, setPlanning] = useState<ClassSession | null>(null);
   const view = url.searchParams.get("vista") === "historial" ? "history" : url.searchParams.get("vista") === "proximas" ? "upcoming" : "all";
   const page = `${sectionBase}/clases`;
+  const minutesOf = useLessonMinutes(plans);
   async function load() {
     setError("");
     try {
@@ -89,6 +97,7 @@ function Schedule() {
   const entries: ({ kind: "class"; session: ClassSession } | { kind: "break"; item: CalendarBreak })[] = [...rows.map(session => ({ kind: "class" as const, session })), ...offDays.map(item => ({ kind: "break" as const, item }))]
     .sort((a, b) => (a.kind === "class" ? a.session.sessionDate : a.item.from).localeCompare(b.kind === "class" ? b.session.sessionDate : b.item.from) || (a.kind === "break" ? -1 : 1));
   const editable = writable;
+  const over = upcoming.filter(session => classLoad(session.durationMinutes, session.lessons.map(lesson => minutesOf(lesson.id))).state === "over");
   return <>
     {header}
     <div className="toolbar" role="group" aria-label="Mostrar clases">
@@ -105,11 +114,15 @@ function Schedule() {
       { label: "Asistencia promedio", value: marked ? `${Math.round(100 * attended / marked)} %` : "—", icon: "users", hue: "violet" },
       { label: "Sin registrar", value: held.filter(session => session.status === "planned" && session.sessionDate < today).length, icon: "alert", hue: "coral" },
     ]}/>
+    {over.length > 0 && <div className="message-bar warning" role="status"><Icon name="alert" size={20}/><div>
+      <strong>{over.length === 1 ? "1 clase próxima tiene más lecciones de las que caben en su horario." : `${over.length} clases próximas tienen más lecciones de las que caben en su horario.`}</strong>
+      <p>Están marcadas en el cronograma. Puedes dejarlas así si lo que no alcance continúa en la clase siguiente, o planificarlas de nuevo.</p>
+    </div></div>}
     {rows.length ? <div className="table-card" role="region" aria-label={`Cronograma de ${group.name}`} tabIndex={0}>
       <table className="schedule-table">
         <caption className="sr-only">Cronograma de clases de {group.name}: planificación y seguimiento</caption>
         <thead><tr><th scope="col">Fecha</th><th scope="col">{noun.One}</th><th scope="col">Lecciones</th><th scope="col">Actividades</th><th scope="col">Comentarios</th><th scope="col">Recursos</th><th scope="col">Seguimiento</th></tr></thead>
-        <tbody>{entries.map(entry => entry.kind === "break" ? <BreakRow key={entry.item.id} item={entry.item}/> : <ScheduleRow key={entry.session.id} session={entry.session} place={sequence.get(entry.session.id)} extra={entry.session.origin === "manual" && !!group.schedule && entry.session.sessionDate >= group.schedule.from && entry.session.sessionDate <= group.schedule.until} plans={plans} today={today} page={page} editable={editable} onPlan={() => setPlanning(entry.session)}/>)}</tbody>
+        <tbody>{entries.map(entry => entry.kind === "break" ? <BreakRow key={entry.item.id} item={entry.item}/> : <ScheduleRow key={entry.session.id} session={entry.session} minutesOf={minutesOf} place={sequence.get(entry.session.id)} extra={entry.session.origin === "manual" && !!group.schedule && entry.session.sessionDate >= group.schedule.from && entry.session.sessionDate <= group.schedule.until} plans={plans} today={today} page={page} editable={editable} onPlan={() => setPlanning(entry.session)}/>)}</tbody>
       </table>
     </div>
       : !ofGroup.length ? <EmptyState icon="calendar" title="Esta sección aún no tiene clases" action={configurable ? <Link className="button primary" href={`${sectionBase}/horario`}>Configurar horario</Link> : writable && <Button icon="plus" onClick={() => setAdding(true)}>Agregar clase</Button>}>
@@ -134,20 +147,22 @@ function BreakRow({ item }: { item: CalendarBreak }) {
 }
 
 /** One class of the schedule: when, what is planned for it and how it went. */
-function ScheduleRow({ session, place, extra, plans, today, page, editable, onPlan }: { session: ClassSession; place?: { week: number; number: number | null }; extra: boolean; plans: Record<string, ClassLessonPlan>; today: string; page: string; editable: boolean; onPlan: () => void }) {
+function ScheduleRow({ session, minutesOf, place, extra, plans, today, page, editable, onPlan }: { session: ClassSession; minutesOf: (id: string) => number; place?: { week: number; number: number | null }; extra: boolean; plans: Record<string, ClassLessonPlan>; today: string; page: string; editable: boolean; onPlan: () => void }) {
   const { noun } = useCourse();
   const modules = [...new Set(session.lessons.map(lesson => lesson.unitTitle).filter(Boolean))];
   const activities = session.lessons.flatMap(lesson => plans[lesson.id]?.activities || []);
   const resources = unique(session.lessons.flatMap(lesson => plans[lesson.id]?.resources || []));
   const day = sessionDay(session.sessionDate);
   const none = <span className="muted">—</span>;
+  const load = classLoad(session.durationMinutes, session.lessons.map(lesson => minutesOf(lesson.id)));
   return <tr className={session.sessionDate === today ? "is-today" : session.status === "cancelled" ? "is-cancelled" : undefined}>
     <th scope="row" data-label="Fecha"><div className="cell-date">
       <Link href={`${page}/${session.id}`} className="class-row-title">{sessionDay(session.sessionDate, "short")}{session.startsAt ? `, ${session.startsAt}` : ""}</Link>
       <span className="muted small">{place?.number ? `Clase ${place.number} · ` : ""}Semana {place?.week ?? 1}{extra ? " · adicional" : ""}</span>
     </div></th>
     <td data-label={noun.One}>{modules.length ? modules.join(" · ") : none}</td>
-    <td data-label="Lecciones">{session.lessons.length ? <ol className="cell-list">{session.lessons.map(lesson => <li key={lesson.id}>{lesson.title}{session.status === "completed" && lesson.outcome && lesson.outcome !== "completed" && <span className="cell-outcome"> · {lessonOutcomeLabels[lesson.outcome].toLowerCase()}</span>}{!lesson.available && <> <LessonWarning id={lesson.id}/></>}</li>)}</ol> : <span className="muted">Sin lección</span>}</td>
+    <td data-label="Lecciones">{session.lessons.length ? <ol className="cell-list">{session.lessons.map(lesson => <li key={lesson.id}>{lesson.title}{session.status === "completed" && lesson.outcome && lesson.outcome !== "completed" && <span className="cell-outcome"> · {lessonOutcomeLabels[lesson.outcome].toLowerCase()}</span>}{!lesson.available && <> <LessonWarning id={lesson.id}/></>}</li>)}</ol> : <span className="muted">Sin lección</span>}
+      {load.available && session.status !== "cancelled" && (load.state === "over" ? <StatusBadge tone="warning">Excede {formatMinutes(load.excess)}</StatusBadge> : load.state !== "empty" && <span className="muted small nowrap">{formatMinutes(load.planned)} de {formatMinutes(load.available)}</span>)}</td>
     <td data-label="Actividades">{activities.length ? <ul className="cell-list">{activities.slice(0, 4).map((activity, index) => <li key={index}>{activity.title}{activity.minutes ? <span className="muted nowrap"> · {activity.minutes} min</span> : null}</li>)}{activities.length > 4 && <li className="muted">y {activities.length - 4} más</li>}</ul> : none}</td>
     <td data-label="Comentarios">{session.notes ? <p className="cell-notes">{session.notes}</p> : none}</td>
     <td data-label="Recursos">{resources.length ? <ul className="cell-list">{resources.slice(0, 4).map(resource => <li key={resource.id}><Icon name={kindIcon[resource.kind]} size={14}/>{resource.title}</li>)}{resources.length > 4 && <li className="muted">y {resources.length - 4} más</li>}</ul> : none}</td>
@@ -193,8 +208,9 @@ function FillDialog({ groups, sessions, today, initialGroup, onClose, onDone }: 
 }
 
 /** Picks the lessons of a class, in the order they are worked on: none, one, or several in a long class. */
-function LessonPicker({ value, onChange, current, locked }: { value: string[]; onChange: (ids: string[]) => void; current: ClassLesson[]; locked?: boolean }) {
+function LessonPicker({ value, onChange, current, locked, available }: { value: string[]; onChange: (ids: string[]) => void; current: ClassLesson[]; locked?: boolean; available: number | null }) {
   const { lessons, units } = useCourse();
+  const minutesOf = useLessonMinutes();
   const title = (id: string) => lessons.find(item => item.id === id)?.title || current.find(item => item.id === id)?.title || "Lección";
   const groups = units.filter(unit => unit.status === "active").sort((a, b) => a.position - b.position)
     .map(unit => ({ unit, items: lessons.filter(lesson => lesson.courseUnitId === unit.id && lesson.status !== "archived" && !!lesson.revision && !value.includes(lesson.id)).sort((a, b) => (a.position || 0) - (b.position || 0)) }))
@@ -203,14 +219,15 @@ function LessonPicker({ value, onChange, current, locked }: { value: string[]; o
     <legend>Lecciones <span className="optional">(opcional)</span></legend>
     {value.length ? <ol className="lesson-picker-list sortable-list">{value.map((id, index) => <li key={id}>
       {!locked && value.length > 1 && <SortHandle id={`class-lesson-${id}`} label={`Reordenar «${title(id)}», lección ${index + 1} de ${value.length}`} index={index} count={value.length} onMove={to => onChange(moveItem(value, index, to))}/>}
-      <span className="roster-number" aria-hidden="true">{index + 1}</span><span className="lesson-picker-title">{title(id)}</span>
+      <span className="roster-number" aria-hidden="true">{index + 1}</span><span className="lesson-picker-title">{title(id)}</span>{minutesOf(id) > 0 && <span className="muted small nowrap">{formatMinutes(minutesOf(id))}</span>}
       {!locked && <button type="button" className="icon-button" onClick={() => onChange(value.filter(item => item !== id))} aria-label={`Quitar «${title(id)}»`}><Icon name="close" size={16}/></button>}
     </li>)}</ol> : <p className="muted small">Sin lecciones: la clase queda en el cronograma y puedes planificarla después.</p>}
     {locked ? <p className="muted small">Una clase impartida conserva las lecciones que trabajó.</p>
       : value.length < maxClassLessons && <label className="select-inline"><span>Agregar lección</span><select value="" onChange={event => event.target.value && onChange([...value, event.target.value])}>
         <option value="">Elige una lección publicada</option>
-        {groups.map(({ unit, items }) => <optgroup key={unit.id} label={unit.name}>{items.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title}</option>)}</optgroup>)}
+        {groups.map(({ unit, items }) => <optgroup key={unit.id} label={unit.name}>{items.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title} · {formatMinutes(lessonMinutes(lesson))}</option>)}</optgroup>)}
       </select></label>}
+    <TimeFit load={classLoad(available, value.map(minutesOf))}/>
   </fieldset>;
 }
 
@@ -242,7 +259,7 @@ function PlanDialog({ session, onClose, onSaved }: { session: ClassSession; onCl
             <Field label="Duración (min)" optional><input type="number" min={5} max={480} step={5} value={values.durationMinutes} onChange={event => set({ durationMinutes: event.target.value })}/></Field>
           </div>
         </details>}
-        <LessonPicker value={values.lessonIds} onChange={lessonIds => set({ lessonIds })} current={session.lessons} locked={session.status === "completed"}/>
+        <LessonPicker value={values.lessonIds} onChange={lessonIds => set({ lessonIds })} current={session.lessons} locked={session.status === "completed"} available={Number(values.durationMinutes) || session.durationMinutes || null}/>
         <Field label="Comentarios" optional hint="Qué se trabajará o qué quedó pendiente. Solo los ve el equipo docente; no escribas datos personales de los estudiantes."><textarea rows={3} maxLength={2000} value={values.notes} onChange={event => set({ notes: event.target.value })}/></Field>
         <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">{busy ? "Guardando…" : "Guardar planificación"}</button></div>
       </fieldset>
@@ -282,7 +299,7 @@ function AddDialog({ groups, initialGroup, onClose, onSaved }: { groups: Pick<Se
             <Field label="Duración (min)" optional><input type="number" min={5} max={480} step={5} value={values.durationMinutes} onChange={event => set({ durationMinutes: event.target.value })}/></Field>
           </div>
         </details>
-        <LessonPicker value={values.lessonIds} onChange={lessonIds => set({ lessonIds })} current={[]}/>
+        <LessonPicker value={values.lessonIds} onChange={lessonIds => set({ lessonIds })} current={[]} available={Number(values.durationMinutes) || schedule?.durationMinutes || null}/>
         <Field label="Comentarios" optional hint="Solo los ve el equipo docente. No escribas datos personales de los estudiantes."><textarea rows={3} maxLength={2000} value={values.notes} onChange={event => set({ notes: event.target.value })}/></Field>
         <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">{busy ? "Agregando…" : "Agregar clase"}</button></div>
       </fieldset>
@@ -358,6 +375,7 @@ function ClassDetail({ id }: { id: string }) {
       </div>
       <div className="class-side">
         <Section title={lessons.length > 1 ? `Lecciones de la clase (${lessons.length})` : "Lección"}>
+          {session.status !== "cancelled" && <TimeFit load={classLoad(session.durationMinutes, lessons.map(lesson => lessonMinutes({ activities: lesson.activities })))}/>}
           {lessons.length ? <ol className="class-lessons">{lessons.map(lesson => <li key={lesson.id} className="class-lesson">
             <strong>{lesson.title}</strong>
             {session.status === "completed" && lesson.outcome && <StatusBadge tone={outcomeTone[lesson.outcome]}>{lessonOutcomeLabels[lesson.outcome]}</StatusBadge>}

@@ -1,6 +1,7 @@
 import type { Activity, CognitiveLevel, Competency, Curriculum, LearningOutcome, LearningUnit, Lesson } from "@happy-learners/contracts";
 import { cleanText, record } from "./courses";
 import { blocksOf, sequenceOf, phaseOf } from "./sequences";
+import { formatMinutes } from "./time";
 
 /**
  * Curricular framework. A course develops competencies; each competency is evidenced by learning outcomes
@@ -102,11 +103,10 @@ export function publishChecklist(lesson: Lesson, curriculum: Curriculum): CheckI
   const empty = template.value === "free" ? [] : template.phases.filter(phase => !lesson.activities.some(activity => phaseOf(activity, lesson.sequence) === phase.id));
   const checking = lesson.activities.filter(assesses);
   const minutes = lesson.activities.reduce((sum, activity) => sum + activity.minutes, 0);
-  const fits = minutes <= lesson.duration && minutes >= Math.floor(lesson.duration * 0.75);
   return [
     { id: "outcomes", label: "Alineada a resultados de aprendizaje", ok: aligned.length > 0, hint: aligned.length ? `Trabaja ${aligned.length === 1 ? "1 resultado" : `${aligned.length} resultados`} del curso.` : active.length ? "Elige qué resultados del curso desarrolla." : "El curso aún no tiene resultados de aprendizaje: defínelos en el plan curricular." },
     { id: "moments", label: "Cada momento tiene actividades", ok: !empty.length, hint: empty.length ? `Sin actividades: ${empty.map(phase => phase.label).join(", ")}.` : template.value === "free" ? "Secuencia libre." : `${template.phases.length} momentos con actividades.` },
     { id: "assessment", label: "Comprueba lo aprendido", ok: checking.length > 0, hint: checking.length ? `${checking.length === 1 ? "1 actividad comprueba" : `${checking.length} actividades comprueban`} el aprendizaje.` : "Agrega una pregunta o una actividad con propósito Evaluar." },
-    { id: "time", label: "El tiempo cuadra con la duración", ok: fits, hint: `Las actividades suman ${minutes} de ${lesson.duration} min.` },
+    { id: "time", label: "Cada actividad tiene su tiempo", ok: minutes > 0, hint: minutes ? `La lección dura ${formatMinutes(minutes)}: la suma de sus actividades. Al planificar una clase se compara con su duración.` : "Agrega actividades con sus minutos: la duración de la lección es su suma." },
   ];
 }

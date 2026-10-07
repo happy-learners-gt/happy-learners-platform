@@ -3,6 +3,7 @@ import { pathIndicators, sectionIndicators } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { scheduleOf, todayFor } from "./classes";
 import { configurationOf } from "./courses";
+import { educatorConflicts } from "./conflicts";
 
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
 
@@ -64,7 +65,10 @@ export async function sections(path: string, current: Member, db: Database) {
   });
   if (!id) return reply({ sections: list, today });
   const settings = (await configurationOf(db, current.organizationId, list[0].courseId))?.settings;
-  return reply({ section: { ...list[0], workGroups: !!(settings?.attendance && settings.workGroups) }, today });
+  // Schedule conflicts name other courses' sections: administration, who assigns educators, sees them.
+  const conflicts = current.role === "admin" && list[0].status === "active" ? await educatorConflicts(db, current.organizationId, [id], today) : [];
+  const educatorsWith = list[0].educators.map(person => { const own = conflicts.filter(item => item.userId === person.userId); return own.length ? { ...person, conflicts: own } : person; });
+  return reply({ section: { ...list[0], educators: educatorsWith, workGroups: !!(settings?.attendance && settings.workGroups) }, today });
 }
 
 /** The section exists but is not assigned to the person: say so instead of pretending it is not there. */

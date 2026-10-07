@@ -1,5 +1,5 @@
 import type { Activity, ActivityBlock, Course, LearningUnit, Lesson, Material, RichTextDocument, RichTextNode, SequenceTemplate } from "@happy-learners/contracts";
-import { blocksOf, phaseOf, resourceIdsOf, sequenceOf } from "@happy-learners/domain";
+import { blocksOf, lessonMinutes, phaseOf, resourceIdsOf, sequenceOf } from "@happy-learners/domain";
 
 export type LessonState = "draft" | "published" | "changes" | "archived";
 export function lessonState(lesson: Pick<Lesson, "status" | "revision" | "hasDraft">): LessonState {
@@ -110,7 +110,7 @@ export function draftOf(lesson: Lesson, fallback: SequenceTemplate = "free"): Le
 }
 export function lessonBody(courseId: string, draft: LessonDraft, draftVersion?: number) {
   const activities = draft.activities.map((activity, position) => ({ ...activity, position }));
-  return { title: draft.title, objective: draft.objective, courseId, courseUnitId: draft.unitId, duration: draft.duration, draftVersion, status: draft.archived ? "archived" : "draft", sequence: draft.sequence, outcomeIds: draft.outcomeIds, instructions: "", activities };
+  return { title: draft.title, objective: draft.objective, courseId, courseUnitId: draft.unitId, duration: lessonMinutes(draft), draftVersion, status: draft.archived ? "archived" : "draft", sequence: draft.sequence, outcomeIds: draft.outcomeIds, instructions: "", activities };
 }
 const blockLabel: Record<ActivityBlock["kind"], string> = { text: "el texto", resource: "el recurso", question: "la pregunta", "teacher-note": "la nota para el docente" };
 

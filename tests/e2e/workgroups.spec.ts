@@ -22,7 +22,7 @@ test("HL-149 ST-111: a section forms work groups from its students and assigns t
     const names = ["Ana", "Beto", "Caro", "Dani"].map(name => `${E2E_PREFIX} ${name}`);
     const ids: string[] = [];
     for (const displayName of names) ids.push((await (await admin.post(`${section}/learners`, { data: { displayName } })).json()).id);
-    expect((await admin.put(`${section}/educators`, { data: { userIds: ["user-educator"] } })).status()).toBe(200);
+    expect((await admin.put(`${section}/educators`, { data: { userIds: ["user-educator"], conflictReason: "Sección de prueba E2E; su horario puede coincidir con otras secciones de prueba." } })).status()).toBe(200);
     const read = async () => (await (await educator.get(`${section}/work-groups`)).json()) as Groups;
 
     // The whole section is the default group: activities in pairs or teams start without groups of their own.

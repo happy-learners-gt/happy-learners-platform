@@ -46,7 +46,7 @@ test("HL-115 ST-072: only administration changes a course team", async ({ playwr
 });
 
 type Group = { id: string; learners: { id: string }[]; educators: { userId: string }[] };
-const educators = (admin: APIRequestContext, groupId: string, userIds: string[]) => admin.put(`${course}/groups/${groupId}/educators`, { data: { userIds } });
+const educators = (admin: APIRequestContext, groupId: string, userIds: string[]) => admin.put(`${course}/groups/${groupId}/educators`, { data: { userIds, conflictReason: "Sección de prueba E2E; su horario puede coincidir con otras secciones de prueba." } });
 
 test("HL-140 ST-096 ST-102 ST-103: administration configures the sections; only those who teach a section record its classes", async ({ playwright, baseURL }) => {
   const anon = await client(playwright, baseURL!), admin = await client(playwright, baseURL!, "marta.ruiz"), demoAdmin = await client(playwright, baseURL!, "admin-demo");
