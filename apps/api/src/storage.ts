@@ -54,7 +54,10 @@ export class OrganizationStore extends DurableObject<Env> {
   async importData(scope: string, backup: Backup) {
     await this.query(scope, []);
     try { return { restored: this.ctx.storage.transactionSync(() => importStore(this.ctx.storage.sql, scope, backup)) }; }
-    catch (error) { if (error instanceof RestoreError) return { error: error.message }; throw error; }
+    catch (error) {
+      if (error instanceof RestoreError) return { error: error.message };
+      return { error: `La restauración no se completó y no cambió ningún dato (${error instanceof Error ? error.message.slice(0, 240) : "error desconocido"}).` };
+    }
   }
   async authorizeCollaborator(organizationId: string, courseId: string, lessonId: string, userId: string, tokenHash: string): Promise<boolean> {
     if (!/^[a-z0-9-]{1,80}$/.test(organizationId) || !/^[a-z0-9-]{1,100}$/.test(courseId) || !/^[a-z0-9-]{1,100}$/.test(lessonId) || !/^[a-z0-9-]{1,100}$/.test(userId) || !/^[a-f0-9]{64}$/.test(tokenHash)) return false;
