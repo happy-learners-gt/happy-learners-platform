@@ -19,7 +19,7 @@ const raw = (value: Cell): SqlStorageValue => value && typeof value === "object"
 export const canonical = (table: BackupTable) => table.columns.join(",") + "\n" + table.rows.map(row => JSON.stringify(row)).sort().join("\n");
 
 function tables(sql: SqlStorage) {
-  return sql.exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY rowid").toArray()
+  return sql.exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite!_%' ESCAPE '!' AND name NOT LIKE '!_cf!_%' ESCAPE '!' AND name NOT LIKE '!_!_%' ESCAPE '!' ORDER BY rowid").toArray()
     .map(row => row.name).filter(name => !SKIPPED.has(name));
 }
 function columnsOf(sql: SqlStorage, table: string) {
@@ -56,6 +56,10 @@ export function importStore(sql: SqlStorage, scope: string, backup: Backup) {
   if (names.length !== Object.keys(backup.tables).length || names.some(name => !backup.tables[name])) throw new RestoreError("La copia no tiene las mismas tablas que este espacio.");
   const credentials = new Map(sql.exec<{ id: string; password_salt: string; password_hash: string }>("SELECT id,password_salt,password_hash FROM users").toArray().map(row => [row.id, row]));
   sql.exec("PRAGMA defer_foreign_keys = ON");
+  // Triggers check rows against other tables that may not be loaded yet; the copy came from a store that passed
+  // them, and every table is compared with it below. They are recreated before the transaction commits.
+  const triggers = sql.exec<{ name: string; sql: string }>("SELECT name,sql FROM sqlite_master WHERE type='trigger'").toArray();
+  for (const trigger of triggers) sql.exec(`DROP TRIGGER "${trigger.name}"`);
   for (const name of [...names].reverse()) sql.exec(`DELETE FROM "${name}"`);
   for (const name of names) {
     const table = backup.tables[name], secret = SECRET[name] || [];
@@ -68,6 +72,7 @@ export function importStore(sql: SqlStorage, scope: string, backup: Backup) {
       sql.exec(statement, ...row.map(raw), ...extra);
     }
   }
+  for (const trigger of triggers) sql.exec(trigger.sql);
   sql.exec("DELETE FROM sessions WHERE user_id NOT IN (SELECT id FROM users)");
   sql.exec("DELETE FROM group_access_sessions WHERE group_id NOT IN (SELECT id FROM course_groups) OR (learner_id IS NOT NULL AND learner_id NOT IN (SELECT id FROM group_learners))");
   for (const name of names) if (canonical(read(sql, name, backup.tables[name].columns)) !== canonical(backup.tables[name])) throw new RestoreError(`La tabla ${name} no quedó igual a la copia.`);

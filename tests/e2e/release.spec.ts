@@ -19,15 +19,17 @@ test("HL-119 ST-076: retired routes answer 410 and the library still lists its r
 });
 
 test("HL-58 ST-044: administration downloads a backup without credentials; restoring it leaves the organization as it was", async ({ playwright, baseURL }) => {
-  const admin = await as(playwright, baseURL, "admin-externo"), otherAdmin = await as(playwright, baseURL, "admin-demo"), educator = await as(playwright, baseURL, "educador-demo"), anonymous = await as(playwright, baseURL);
+  const admin = await as(playwright, baseURL, "admin-demo"), otherAdmin = await as(playwright, baseURL, "admin-externo"), educator = await as(playwright, baseURL, "educador-demo"), anonymous = await as(playwright, baseURL);
   try {
     expect((await anonymous.get("/api/organization/backup")).status()).toBe(401);
     expect((await educator.get("/api/organization/backup")).status()).toBe(403);
     const response = await admin.get("/api/organization/backup");
     expect(response.status()).toBe(200);
-    expect(response.headers()["content-disposition"]).toContain("org-other-");
+    expect(response.headers()["content-disposition"]).toContain("org-demo-");
     const backup = await response.json();
-    expect(backup).toMatchObject({ format: "happy-learners-backup/1", organizationId: "org-other" });
+    expect(backup).toMatchObject({ format: "happy-learners-backup/1", organizationId: "org-demo" });
+    // Programs and their courses are guarded by triggers that read other tables while the copy is loaded.
+    expect(backup.tables.programs.rows.length).toBeGreaterThan(0);
     expect(backup.tables.users.columns).not.toContain("password_hash");
     expect(backup.tables.users.columns).not.toContain("password_salt");
     for (const name of ["sessions", "group_access_sessions", "login_limits"]) expect(backup.tables[name]).toBeUndefined();
