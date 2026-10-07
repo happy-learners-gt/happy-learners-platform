@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.0-rc.2 — 2026-10-06
+
+Segunda candidata de REL-006 (DEC-035): el tiempo de las lecciones se conecta con el de las clases, los choques de horario de quien imparte se confirman y quedan registrados, la demostración trae inglés por niveles y la zona horaria se elige por su identificador.
+
+- ST-117: la duración de una lección es la suma de los minutos de sus actividades. El editor la muestra calculada y ya no tiene un campo aparte; el servidor ignora la duración enviada cuando las actividades tienen minutos. `0029_lesson_time_and_conflicts.sql` corrige las lecciones guardadas cuya duración no coincidía.
+- ST-117: al planificar, la barra de tiempo compara los minutos de las lecciones con la duración de la clase: cabe, casi llena o **excede por X**. Se puede guardar igual. El Cronograma avisa cuántas clases próximas exceden su horario y cada fila dice **Excede X** o **X de Y**; el detalle de la clase muestra la misma barra.
+- ST-118: asignar a quien ya imparte otra sección activa a la misma hora responde 409 con los choques y abre **Choque de horario**, que pide el motivo de la excepción. Al confirmar, se guarda quién lo aceptó, cuándo y por qué (tabla `educator_conflict_overrides`), queda en la actividad y la sección lo muestra. No se vuelve a pedir para esa persona en ese par de secciones.
+- ST-119: `0030_english_program.sql` agrega a la demostración **Inglés por niveles (MCER)**, de A1 a C2, con requisitos en cadena, lecciones publicadas, secciones con horario y clases planificadas que muestran el aviso de tiempo y un choque para confirmar. Suma a Tomás Aguilar (`tomas.aguilar`).
+- ST-120: **Organización → Zona horaria** lista las zonas IANA agrupadas por región, con su desfase actual (por ejemplo `America/Guatemala (UTC−06:00)`), en lugar de países. La API acepta cualquier zona IANA válida.
+- ST-044: la restauración solo recrea los disparadores de las tablas restauradas y, si falla, responde 503 con `Retry-After` sin cambiar datos; el ensayo de publicación reintenta mientras el Durable Object termina de actualizarse.
+- Se mantiene la autorización de v0.8.1.
+
 ## 1.0.0-rc.1 — 2026-10-06
 
 Versión candidata de REL-006 (DEC-034): la organización se respalda y se restaura, la publicación se ensaya con reversión, la accesibilidad y la seguridad quedan validadas, y se retiran las rutas heredadas.

@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { GroupLearner, SectionEducator, SectionSchedule, SectionSummary } from "@happy-learners/contracts";
+import type { EducatorConflict, GroupLearner, SectionEducator, SectionSchedule, SectionSummary } from "@happy-learners/contracts";
 import { maxSectionEducators } from "@happy-learners/domain";
-import { api, message } from "../../api";
+import { api, ApiError, message } from "../../api";
 import { Link, useNavigation } from "../../navigation";
-import { useFeedback } from "../../ui/feedback";
+import { Modal, useFeedback } from "../../ui/feedback";
 import { Icon } from "../../ui/icons";
 import { Avatar } from "../../ui/progress";
 import { Menu } from "../../ui/Menu";
 import { InlineName } from "../../ui/LessonOutline";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section } from "../../ui/primitives";
-import { matches, plural, rosterNames } from "../../model";
+import { matches, plural, rosterNames, sessionDay, timeAgo } from "../../model";
 import { useCourse } from "./context";
 import { SectionCards } from "../sections/SectionCard";
 import { sectionCrumbs, sectionPath, useSection } from "../sections/context";
@@ -186,26 +186,67 @@ function AddLearners({ learners, path, onAdded, onCancel }: { learners: GroupLea
   </Section>;
 }
 
+const overlapText = (conflict: EducatorConflict) => `${plural(conflict.overlaps, "clase coincide", "clases coinciden")} con «${conflict.otherCourse} · ${conflict.otherGroup}» (${conflict.otherStartsAt}), desde el ${sessionDay(conflict.firstDate)}`;
+
+/** A schedule conflict of an educator in this section: pending, or confirmed with who allowed it and why. */
+function ConflictNote({ conflict }: { conflict: EducatorConflict }) {
+  return conflict.confirmation
+    ? <p className="conflict-note confirmed"><Icon name="check" size={14}/><span><strong>Choque confirmado.</strong> {overlapText(conflict)}. {conflict.confirmation.confirmedBy} lo aceptó {timeAgo(conflict.confirmation.confirmedAt)}: «{conflict.confirmation.reason}»</span></p>
+    : <p className="conflict-note"><Icon name="alert" size={14}/><span><strong>Choque de horario sin confirmar.</strong> {overlapText(conflict)}.</span></p>;
+}
+
+/**
+ * Assigning someone who already teaches at the same time is an exception: it is allowed once someone confirms it
+ * with a reason, and the confirmation stays recorded in the section and in the activity history.
+ */
+function ConflictDialog({ section, conflicts, busy, onClose, onConfirm }: { section: string; conflicts: EducatorConflict[]; busy: boolean; onClose: () => void; onConfirm: (reason: string) => Promise<void> }) {
+  const [reason, setReason] = useState("");
+  const names = [...new Set(conflicts.map(conflict => conflict.name))];
+  return <Modal title="Choque de horario" onClose={onClose}>
+    <form className="stack" onSubmit={event => { event.preventDefault(); void onConfirm(reason.trim()); }}>
+      <div className="message-bar warning" role="alert">
+        <Icon name="alert" size={20}/>
+        <div><strong>{names.join(" y ")} ya {names.length === 1 ? "imparte" : "imparten"} otra sección a la misma hora.</strong>
+          <ul>{conflicts.map(conflict => <li key={`${conflict.userId}-${conflict.otherGroupId}`}>{names.length > 1 ? `${conflict.name}: ` : ""}{overlapText(conflict)}. En {section} empieza a las {conflict.startsAt}.</li>)}</ul>
+        </div>
+      </div>
+      <p className="muted">Normalmente una persona no puede estar en dos clases a la vez. Si es una excepción acordada (por ejemplo, dos secciones que se reúnen en la misma aula), confírmala: quedará registrado quién la aceptó, cuándo y por qué.</p>
+      <Field label="Motivo de la excepción" hint="Entre 3 y 300 caracteres. Lo ve administración en la sección y en la actividad del curso.">
+        <textarea rows={3} minLength={3} maxLength={300} required value={reason} onChange={event => setReason(event.target.value)}/>
+      </Field>
+      <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary" disabled={busy || reason.trim().length < 3}>{busy ? "Asignando…" : "Confirmar y asignar"}</button></div>
+    </form>
+  </Modal>;
+}
+
 /** Who teaches the section, chosen from the course's team (DEC-024). Administration adds or removes them. */
 export function SectionEducators() {
   const { course, configurable } = useCourse();
   const { section, reload } = useSection();
   const { toast } = useFeedback();
   const [adding, setAdding] = useState(""), [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<{ userIds: string[]; done: string; conflicts: EducatorConflict[] } | null>(null);
   const editable = configurable && section.status === "active";
   const ids = section.educators.map(item => item.userId);
   const available = (course.team || []).filter(person => !ids.includes(person.userId));
-  async function save(userIds: string[], done: string) {
+  async function save(userIds: string[], done: string, conflictReason?: string) {
     setBusy(true);
-    try { await api(`/courses/${course.id}/groups/${section.id}/educators`, "PUT", { userIds }); await reload(); toast({ message: done }); }
-    catch (cause) { toast({ tone: "error", message: message(cause) }); }
+    try { await api(`/courses/${course.id}/groups/${section.id}/educators`, "PUT", { userIds, ...(conflictReason ? { conflictReason } : {}) }); setPending(null); await reload(); toast({ message: done }); }
+    catch (cause) {
+      const conflicts = cause instanceof ApiError && cause.status === 409 ? cause.detail.conflicts as EducatorConflict[] | undefined : undefined;
+      if (conflicts?.length) setPending({ userIds, done, conflicts });
+      else toast({ tone: "error", message: message(cause) });
+    }
     finally { setBusy(false); }
   }
   return <div className="section-educators" aria-label={`Educadores de ${section.name}`}>
     {section.educators.length ? <ul className="team-list compact">{section.educators.map(person => <li key={person.userId}>
-      <Avatar name={person.name} size={28}/><div><strong>{person.name}</strong><span className="muted small">@{person.username}</span></div>
+      <Avatar name={person.name} size={28}/><div><strong>{person.name}</strong><span className="muted small">@{person.username}</span>
+        {person.conflicts?.map(conflict => <ConflictNote key={conflict.otherGroupId} conflict={conflict}/>)}
+      </div>
       {editable && <button type="button" className="icon-button" disabled={busy} aria-label={`Quitar a ${person.name} de ${section.name}`} onClick={() => void save(ids.filter(id => id !== person.userId), `${person.name} ya no imparte ${section.name}.`)}><Icon name="close"/></button>}
     </li>)}</ul> : <p className="muted small">{editable ? "Asigna quién imparte la sección para que la vea en sus secciones y registre sus clases." : "Sin educadores asignados."}</p>}
+    {pending && <ConflictDialog section={section.name} conflicts={pending.conflicts} busy={busy} onClose={() => setPending(null)} onConfirm={reason => save(pending.userIds, pending.done, reason)}/>}
     {editable && ids.length < maxSectionEducators && (available.length ? <form className="add-row" aria-label={`Asignar educador a ${section.name}`} onSubmit={event => { event.preventDefault(); const person = available.find(item => item.userId === adding); if (person) { void save([...ids, person.userId], `${person.name} imparte ${section.name}.`); setAdding(""); } }}>
       <label className="sr-only" htmlFor={`educator-${section.id}`}>Educador para {section.name}</label>
       <select id={`educator-${section.id}`} value={adding} disabled={busy} onChange={event => setAdding(event.target.value)}><option value="">Asignar educador del equipo…</option>{available.map(person => <option key={person.userId} value={person.userId}>{person.name} (@{person.username})</option>)}</select>
