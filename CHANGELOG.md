@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.0 — 2026-10-07
+
+Versión 1.0 de REL-006 (DEC-034, DEC-035), aceptada por la Product Owner el 7 de octubre de 2026 sobre la candidata 1.0.0-rc.2 desplegada en producción (ST-078). Reúne las dos candidatas: respaldo y restauración de cada organización, ensayo de publicación y reversión, validación de accesibilidad y seguridad, retiro de las rutas heredadas, el tiempo de las lecciones conectado con el de las clases, los choques de horario confirmados y registrados, el programa de inglés por niveles en la demostración y la zona horaria IANA.
+
+- ST-078: aceptación con los guiones de demostración de SPR-002 y de la versión 1.0; guía de uso en `docs/guia-de-uso.md`.
+- Sin cambios de código ni migraciones respecto de 1.0.0-rc.2. Se mantiene la autorización de v0.8.1.
+
 ## 1.0.0-rc.2 — 2026-10-06
 
 Segunda candidata de REL-006 (DEC-035): el tiempo de las lecciones se conecta con el de las clases, los choques de horario de quien imparte se confirman y quedan registrados, la demostración trae inglés por niveles y la zona horaria se elige por su identificador.
