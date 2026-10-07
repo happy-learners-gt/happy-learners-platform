@@ -1,4 +1,5 @@
-export class ApiError extends Error { constructor(message: string, public status: number) { super(message); } }
+/** `detail` is the error body, for answers that carry more than a message (such as the conflicts to confirm). */
+export class ApiError extends Error { constructor(message: string, public status: number, public detail: Record<string, unknown> = {}) { super(message); } }
 
 /** Fired when an authenticated request returns 401 so the shell can ask to sign in again without losing the page. */
 export const sessionExpired = "hl:session-expired";
@@ -8,10 +9,10 @@ export const changed = "hl:changed";
 const quiet = new Set(["/session", "/login", "/logout"]);
 
 async function parse<T>(response: Response, path: string): Promise<T> {
-  let result: { error?: string } = {};
+  let result: { error?: string } & Record<string, unknown> = {};
   try { result = await response.json(); } catch { /* Non-JSON error bodies fall back to a generic message. */ }
   if (response.status === 401 && !quiet.has(path)) dispatchEvent(new CustomEvent(sessionExpired));
-  if (!response.ok) throw new ApiError(result.error || "No se pudo completar la operación. Vuelve a intentar.", response.status);
+  if (!response.ok) throw new ApiError(result.error || "No se pudo completar la operación. Vuelve a intentar.", response.status, result);
   return result as T;
 }
 

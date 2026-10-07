@@ -22,7 +22,7 @@ test("HL-143 ST-108 ST-109: days without class reschedule the section, cancellin
     }
     const [one, two, three] = lessons.map(lesson => lesson.id);
     const groupId = (await (await admin.post(`${path}/groups`, { data: { name: `${E2E_PREFIX} Sección C` } })).json()).id;
-    expect((await admin.put(`${path}/groups/${groupId}/educators`, { data: { userIds: ["user-educator"] } })).status()).toBe(200);
+    expect((await admin.put(`${path}/groups/${groupId}/educators`, { data: { userIds: ["user-educator"], conflictReason: "Sección de prueba E2E; su horario puede coincidir con otras secciones de prueba." } })).status()).toBe(200);
     expect((await admin.put(`${path}/groups/${groupId}/schedule`, { data: { weekdays: [0, 1, 2, 3, 4, 5, 6], startsAt: "08:00", durationMinutes: 45, from: day(1), until: day(7) } })).status()).toBe(200);
     expect((await educator.post(`${path}/groups/${groupId}/lessons`, { data: { perClass: 1 } })).status()).toBe(200);
     const sessions = async () => ((await (await educator.get(`${path}/sessions`)).json()).sessions as Session[]).filter(item => item.groupId === groupId && item.status !== "cancelled").sort((a, b) => a.sessionDate.localeCompare(b.sessionDate));

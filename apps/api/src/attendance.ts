@@ -4,7 +4,8 @@ import type { Database } from "./storage";
 import { configurationOf } from "./courses";
 import { event } from "./team";
 import { accessTo, forbidden } from "./access";
-import { fillLessons, saveSchedule, scheduleOf, sessions } from "./classes";
+import { fillLessons, saveSchedule, scheduleOf, sessions, todayFor } from "./classes";
+import { educatorConflicts } from "./conflicts";
 import { workGroups } from "./workgroups";
 
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
@@ -110,7 +111,15 @@ async function groupsOf(db: Database, courseId: string, organizationId: string, 
   const groups = await db.prepare(`SELECT g.id,g.course_id AS courseId,g.name,g.status,g.access_code AS accessCode,g.schedule_weekdays AS weekdays,g.schedule_starts_at AS startsAt,g.schedule_duration AS durationMinutes,g.schedule_from AS "from",g.schedule_until AS until,count(l.id) AS learnerCount FROM course_groups g LEFT JOIN group_learners l ON l.group_id=g.id AND l.status='active' WHERE g.course_id=? AND g.organization_id=?${only ? " AND g.id=?" : ""} GROUP BY g.id ORDER BY g.status,g.name,g.created_at`).bind(courseId, organizationId, ...(only ? [only] : [])).all<Omit<ClassGroup, "educators"> & Parameters<typeof scheduleOf>[0]>();
   const learners = await db.prepare(`SELECT id,group_id AS groupId,display_name AS displayName,status FROM group_learners WHERE course_id=? AND organization_id=? AND status='active'${only ? " AND group_id=?" : ""} ORDER BY display_name,id`).bind(courseId, organizationId, ...(only ? [only] : [])).all<GroupLearner>();
   const educators = await educatorsOf(db, courseId, organizationId);
-  return groups.results.filter(group => seesSection(access, group.id)).map(({ weekdays, startsAt, durationMinutes, from, until, ...group }) => ({ ...group, schedule: scheduleOf({ weekdays, startsAt, durationMinutes, from, until }), educators: educators.filter(item => item.groupId === group.id).map(({ groupId: _, ...item }) => item), learners: learners.results.filter(learner => learner.groupId === group.id) }));
+  const seen = groups.results.filter(group => seesSection(access, group.id));
+  // Schedule conflicts name other courses' sections: only those who configure sections see them.
+  const conflicts = access.configure ? await educatorConflicts(db, organizationId, seen.filter(group => group.status === "active").map(group => group.id), await todayFor(db, organizationId)) : [];
+  return seen.map(({ weekdays, startsAt, durationMinutes, from, until, ...group }) => ({ ...group, schedule: scheduleOf({ weekdays, startsAt, durationMinutes, from, until }),
+    educators: educators.filter(item => item.groupId === group.id).map(({ groupId: _, ...item }) => {
+      const own = conflicts.filter(conflict => conflict.groupId === group.id && conflict.userId === item.userId);
+      return own.length ? { ...item, conflicts: own } : item;
+    }),
+    learners: learners.results.filter(learner => learner.groupId === group.id) }));
 }
 
 /**
@@ -122,11 +131,27 @@ async function assignEducators(input: unknown, current: Member, db: Database, co
   if (!Array.isArray(ids) || ids.length > maxSectionEducators || ids.some(id => typeof id !== "string") || new Set(ids).size !== ids.length) return reply({ error: `Elige hasta ${maxSectionEducators} educadores distintos para la sección.` }, 400);
   const team = (await db.prepare("SELECT cm.user_id AS id FROM course_members cm JOIN memberships m ON m.user_id=cm.user_id AND m.organization_id=cm.organization_id AND m.active=1 WHERE cm.course_id=? AND cm.organization_id=?").bind(courseId, current.organizationId).all<{ id: string }>()).results.map(row => row.id);
   if (ids.some(id => !team.includes(id))) return reply({ error: "Elige educadores del equipo docente del curso. Para sumar a alguien, agrégalo primero al equipo en Configuración." }, 400);
+  // Someone who joins the section while teaching another one at the same time needs an explicit, recorded confirmation.
+  const before = (await db.prepare("SELECT user_id AS id FROM section_educators WHERE group_id=?").bind(group.id).all<{ id: string }>()).results.map(row => row.id);
+  const added = (ids as string[]).filter(id => !before.includes(id));
+  const conflicts = (await educatorConflicts(db, current.organizationId, [group.id], await todayFor(db, current.organizationId), added)).filter(conflict => !conflict.confirmation);
+  const raw = (input as Record<string, unknown>).conflictReason;
+  const reason = typeof raw === "string" ? raw.trim().replace(/\s+/g, " ") : "";
+  if (conflicts.length && !reason) {
+    const names = [...new Set(conflicts.map(conflict => conflict.name))].join(" y ");
+    return reply({ error: `${names} ya imparte otra sección a la misma hora. Confirma el choque con un motivo para asignar igualmente.`, conflicts }, 409);
+  }
+  if (conflicts.length && (reason.length < 3 || reason.length > 300 || /[<>\x00-\x1f]/.test(reason))) return reply({ error: "Escribe en 3 a 300 caracteres por qué se acepta el choque de horario." }, 400);
   const now = new Date().toISOString();
   await db.batch([
     db.prepare("DELETE FROM section_educators WHERE group_id=?").bind(group.id),
     ...(ids as string[]).map(id => db.prepare("INSERT INTO section_educators(group_id,user_id,course_id,organization_id,added_at) VALUES (?,?,?,?,?)").bind(group.id, id, courseId, current.organizationId, now)),
     event(db, current, { action: "assigned", targetType: "group", targetId: group.id, courseId, summary: `Asignó ${ids.length === 1 ? "1 educador" : `${ids.length} educadores`} a «${group.name}»` }),
+    ...conflicts.flatMap(conflict => [
+      db.prepare("INSERT INTO educator_conflict_overrides(id,organization_id,group_id,user_id,other_group_id,overlaps,first_date,reason,confirmed_by,confirmed_at) VALUES (?,?,?,?,?,?,?,?,?,?)")
+        .bind(`conflict-${crypto.randomUUID()}`, current.organizationId, group.id, conflict.userId, conflict.otherGroupId, conflict.overlaps, conflict.firstDate, reason, current.id, now),
+      event(db, current, { action: "assigned", targetType: "group", targetId: group.id, courseId, summary: `Confirmó el choque de horario de ${conflict.name} con «${conflict.otherCourse} · ${conflict.otherGroup}» (${conflict.overlaps === 1 ? "1 clase" : `${conflict.overlaps} clases`}). Motivo: ${reason}`.slice(0, 240) }),
+    ]),
   ]);
   return reply({ educators: (await educatorsOf(db, courseId, current.organizationId)).filter(item => item.groupId === group.id).map(({ groupId: _, ...item }) => item) });
 }

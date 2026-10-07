@@ -24,7 +24,7 @@ test("HL-142 ST-110: a self-paced section has no schedule or classes; each stude
     const [ana, beto] = [`${E2E_PREFIX} Ana`, `${E2E_PREFIX} Beto`];
     const anaId = (await (await admin.post(`${path}/groups/${groupId}/learners`, { data: { displayName: ana } })).json()).id;
     expect((await admin.post(`${path}/groups/${groupId}/learners`, { data: { displayName: beto } })).status()).toBe(201);
-    expect((await admin.put(`${path}/groups/${groupId}/educators`, { data: { userIds: ["user-educator"] } })).status()).toBe(200);
+    expect((await admin.put(`${path}/groups/${groupId}/educators`, { data: { userIds: ["user-educator"], conflictReason: "Sección de prueba E2E; su horario puede coincidir con otras secciones de prueba." } })).status()).toBe(200);
     const { accessCode } = await (await admin.post(`${path}/groups/${groupId}/code`)).json();
 
     // No schedule, no classes and no lesson planning: the course is the path.

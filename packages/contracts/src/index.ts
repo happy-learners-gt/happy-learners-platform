@@ -152,7 +152,13 @@ export interface SectionSummary extends ClassGroup {
   workGroups?: boolean;
 }
 /** An educator who teaches a section's classes (DEC-023). */
-export interface SectionEducator { userId: string; name: string; username: string }
+export interface SectionEducator { userId: string; name: string; username: string; conflicts?: EducatorConflict[] }
+/** Classes of a section that overlap with another section the same educator teaches; confirmed ones carry who allowed them. */
+export interface EducatorConflict {
+  groupId: string; userId: string; name: string; otherGroupId: string; otherGroup: string; otherCourseId: string; otherCourse: string;
+  overlaps: number; firstDate: string; startsAt: string; otherStartsAt: string;
+  confirmation: { reason: string; confirmedAt: string; confirmedBy: string } | null;
+}
 export interface GroupLearner { id: string; groupId: string; displayName: string; status: "active" | "archived" }
 /** A published lesson next to the current one in its module, reachable by its share code. */
 export interface LessonLink { title: string; shareCode: string }

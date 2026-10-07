@@ -54,7 +54,7 @@ test("HL-61 ST-035 ST-097 ST-098 ST-101 ST-102: administration prepares a sectio
   await expect(dialog.getByLabel("Sección")).toHaveCount(0);
   await expect(dialog.getByRole("checkbox")).toHaveCount(0);
   await dialog.getByLabel("Hora").fill("08:00");
-  await dialog.getByLabel("Agregar lección").selectOption({ label: "Greetings and Introductions" });
+  await dialog.getByLabel("Agregar lección").selectOption({ label: "Greetings and Introductions · 20 min" });
   await expect(dialog.locator(".lesson-picker-list li")).toHaveCount(1);
   await dialog.getByLabel("Comentarios").fill("Traer tarjetas con nombres");
   await dialog.getByRole("button", { name: "Agregar clase" }).click();
@@ -105,7 +105,7 @@ test("HL-61 ST-035 ST-097 ST-098 ST-101 ST-102: administration prepares a sectio
   await expect(toast(page)).toContainText("Clase agregada al cronograma.");
   await table.getByRole("button", { name: /^Planificar la clase del/ }).click();
   dialog = page.getByRole("dialog", { name: /^Planificar la clase del/ });
-  await dialog.getByLabel("Agregar lección").selectOption({ label: "Greetings and Introductions" });
+  await dialog.getByLabel("Agregar lección").selectOption({ label: "Greetings and Introductions · 20 min" });
   await dialog.getByRole("button", { name: "Guardar planificación" }).click();
   await expect(toast(page)).toContainText("Planificación guardada.");
   const next = table.getByRole("row").filter({ hasText: "09:15" });
@@ -203,7 +203,7 @@ test("HL-61 ST-070: a section is renamed, loses a student, closes without new cl
   const studentLogin = (code: string) => fetch(`${origin}/api/student/login`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
   const name = e2eName(info, "Ciclo");
   const { id } = await (await call("POST", "/groups", { name })).json() as { id: string };
-  expect((await call("PUT", `/groups/${id}/educators`, { userIds: ["user-educator"] })).status).toBe(200);
+  expect((await call("PUT", `/groups/${id}/educators`, { userIds: ["user-educator"], conflictReason: "Sección de prueba E2E; su horario puede coincidir con otras secciones de prueba." })).status).toBe(200);
   const learners: string[] = [];
   for (const displayName of [`${E2E_PREFIX} Uno`, `${E2E_PREFIX} Dos`]) learners.push((await (await call("POST", `/groups/${id}/learners`, { displayName })).json() as { id: string }).id);
   const group = async () => ((await (await call("GET", "/groups")).json()).groups as { id: string; name: string; status: string; learners: { id: string }[] }[]).find(item => item.id === id)!;

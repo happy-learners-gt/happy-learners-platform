@@ -1,19 +1,23 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { assesses, publishChecklist, resolveSettings, studentActivities, validActivities } from "../packages/domain/src/index";
+import { assesses, classLoad, lessonMinutes, publishChecklist, resolveSettings, studentActivities, validActivities } from "../packages/domain/src/index";
 import type { Curriculum, Lesson, StudyProgram } from "../packages/contracts/src/index";
 // @ts-expect-error — plain ESM scripts without type declarations
-import { activitiesOf, build, courses, routes } from "../scripts/seed/build.mjs";
+import { activitiesOf, build, courses, englishSeed, routes } from "../scripts/seed/build.mjs";
 // @ts-expect-error — plain ESM scripts without type declarations
 import { people, programs } from "../scripts/seed/content-a.mjs";
 // @ts-expect-error — plain ESM scripts without type declarations
 import { routeCourses, routePrograms } from "../scripts/seed/content-routes.mjs";
+// @ts-expect-error — plain ESM scripts without type declarations
+import { englishCourses, englishPeople, englishPrograms } from "../scripts/seed/content-english.mjs";
 
 type Seed = { id: string; title: string; program: string | null; lead: string; coTeachers: string[]; educationType: string; level: string; modality: string; pacing: string; format: string; settings: object; archived?: boolean;
   competencies: { outcomes: { id: string }[] }[]; resources: { id: string }[]; groups: { id: string; by: string }[];
   modules: { id: string; plan: string[]; lessons: { id: string; title: string; duration: number; sequence: Lesson["sequence"]; outcomeIds: string[]; published?: string; by: string; activities: unknown[] }[] }[] };
 const all = courses as Seed[];
 const paths = routeCourses as (Seed & { requires: string[] })[];
+type Scheduled = Seed & { requires: string[]; groups: { id: string; by: string; educators: string[]; schedule: { durationMinutes: number }; plan: string[][] }[] };
+const levels = englishCourses as Scheduled[];
 
 describe("demo organization seed", () => {
   it("is generated from its sources and checked in unchanged", () => {
@@ -37,8 +41,8 @@ describe("demo organization seed", () => {
     }
   });
   it("only writes lessons the editor and the server would accept, and publishes what each course requires", () => {
-    for (const course of [...all, ...paths]) {
-      const program = ([...programs, ...routePrograms] as StudyProgram[]).find(item => item.id === course.program) || null;
+    for (const course of [...all, ...paths, ...levels]) {
+      const program = ([...programs, ...routePrograms, ...englishPrograms] as StudyProgram[]).find(item => item.id === course.program) || null;
       const { values } = resolveSettings(course as unknown as Parameters<typeof resolveSettings>[0], program);
       const outcomes = course.competencies.flatMap(item => item.outcomes.map(outcome => outcome.id));
       const resources = course.resources.map(item => item.id);
@@ -82,5 +86,28 @@ describe("demo organization seed", () => {
         expect(course.modules.flatMap(module => module.lessons).every(lesson => lesson.published), course.id).toBe(true);
       }
     }
+  });
+  it("adds an English program from A1 to C2 whose sections plan classes against their time (DEC-035)", () => {
+    expect(readFileSync(new URL("../database/migrations/0030_english_program.sql", import.meta.url), "utf8")).toBe(build(englishSeed).sql);
+    const team = [...people, ...englishPeople] as { id: string }[];
+    expect(levels.map(course => course.title.slice(0, 9))).toEqual(["Inglés A1", "Inglés A2", "Inglés B1", "Inglés B2", "Inglés C1", "Inglés C2"]);
+    levels.forEach((course, index) => expect(course.requires, course.id).toEqual(index ? [levels[index - 1].id] : []));
+    const lessons = new Map(levels.flatMap(course => course.modules.flatMap(module => module.lessons)).map(lesson => [lesson.id, lesson]));
+    for (const course of levels) {
+      expect([course.lead, ...course.coTeachers].every(id => team.some(person => person.id === id)), course.id).toBe(true);
+      for (const lesson of course.modules.flatMap(module => module.lessons)) {
+        expect(lesson.published, lesson.id).toBeTruthy();
+        // A lesson lasts what its activities add up to.
+        expect(lesson.duration, lesson.id).toBe(lessonMinutes({ activities: activitiesOf(lesson) }));
+      }
+      for (const group of course.groups) {
+        expect(group.educators.every(id => [course.lead, ...course.coTeachers].includes(id)), group.id).toBe(true);
+        expect(group.plan.flat().every(id => lessons.has(id) && course.modules.some(module => module.lessons.some(lesson => lesson.id === id))), group.id).toBe(true);
+      }
+    }
+    // The first A1 class plans two 40-minute lessons in one hour: the demo of a plan that exceeds the class.
+    const a1 = levels[0].groups[0];
+    expect(classLoad(a1.schedule.durationMinutes, a1.plan[0].map(id => lessons.get(id)!.duration))).toMatchObject({ planned: 80, available: 60, excess: 20, state: "over" });
+    expect(classLoad(a1.schedule.durationMinutes, a1.plan[1].map(id => lessons.get(id)!.duration)).state).toBe("fits");
   });
 });
