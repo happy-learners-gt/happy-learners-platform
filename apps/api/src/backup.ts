@@ -58,7 +58,7 @@ export function importStore(sql: SqlStorage, scope: string, backup: Backup) {
   sql.exec("PRAGMA defer_foreign_keys = ON");
   // Triggers check rows against other tables that may not be loaded yet; the copy came from a store that passed
   // them, and every table is compared with it below. They are recreated before the transaction commits.
-  const triggers = sql.exec<{ name: string; sql: string }>("SELECT name,sql FROM sqlite_master WHERE type='trigger'").toArray();
+  const triggers = sql.exec<{ name: string; sql: string }>(`SELECT name,sql FROM sqlite_master WHERE type='trigger' AND tbl_name IN (${names.map(() => "?").join(",")})`, ...names).toArray();
   for (const trigger of triggers) sql.exec(`DROP TRIGGER "${trigger.name}"`);
   for (const name of [...names].reverse()) sql.exec(`DELETE FROM "${name}"`);
   for (const name of names) {

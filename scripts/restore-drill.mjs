@@ -24,8 +24,14 @@ try {
   const backupResponse = await from.call("/api/organization/backup");
   if (!backupResponse.ok) throw new Error(`Backup failed: ${backupResponse.status}`);
   const backup = await backupResponse.json();
-  const restore = await to.call("/api/organization/restore", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(backup) });
-  const restored = await restore.json();
+  let restore, restored;
+  for (let attempt = 1; ; attempt++) {
+    restore = await to.call("/api/organization/restore", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(backup) });
+    restored = await restore.json();
+    if (restore.status !== 503 || attempt === 8) break;
+    console.log(`Restore attempt ${attempt}: ${restored.error}`);
+    await new Promise(resolve => setTimeout(resolve, Number(restore.headers.get("retry-after") || 15) * 1000));
+  }
   if (!restore.ok) throw new Error(`Restore failed: ${restore.status} ${restored.error}`);
   const after = await (await to.call("/api/organization/backup")).json();
   const differing = Object.keys(backup.digests).filter(name => after.digests[name] !== backup.digests[name]);
