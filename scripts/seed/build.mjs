@@ -1,4 +1,5 @@
-// Builds the demo organization seeds from content-*.mjs: 0015_demo_organization.sql and 0028_program_routes.sql.
+// Builds the demo organization seeds from content-*.mjs: 0015_demo_organization.sql, 0028_program_routes.sql and
+// 0030_english_program.sql.
 // Deterministic: same input, same SQL. Every statement only inserts when the store holds org-demo, so the
 // migration is a no-op in any other organization. Run: node scripts/seed/build.mjs
 import { createHash, pbkdf2Sync } from "node:crypto";
@@ -7,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { people, programs, tagGroups, mathematics, sciences } from "./content-a.mjs";
 import { english, robotics, art, archivedCourse, exploradores } from "./content-b.mjs";
 import { routePrograms, routeCourses } from "./content-routes.mjs";
+import { englishPeople, englishPrograms, englishCourses } from "./content-english.mjs";
 
 export const ORG = "org-demo";
 export const PASSWORD = "Aprender-2026!";
@@ -49,6 +51,12 @@ export const routes = {
   file: "0028_program_routes.sql", people: [], tagGroups: [], programs: routePrograms, courses: routeCourses, original: false, events: "seed-route-event-",
   header: ["-- Three fictional programs of the demo organization, each a path of courses where every course requires the",
     "-- previous one, with curriculum, modules, published lessons, resources and the activity history (DEC-033)."],
+};
+/** English by CEFR level, A1 to C2, with scheduled sections whose first classes are planned (DEC-035). */
+export const englishSeed = {
+  file: "0030_english_program.sql", people: englishPeople, tagGroups: [], programs: englishPrograms, courses: englishCourses, original: false, events: "seed-english-event-",
+  header: ["-- A fictional English program of the demo organization: six CEFR levels from A1 to C2, each requiring the previous",
+    "-- one, with a scheduled section per level and its first classes planned (DEC-035)."],
 };
 
 export function build(seed = demo) {
@@ -145,13 +153,27 @@ export function build(seed = demo) {
     // Groups, rosters, classes and attendance.
     for (const group of course.groups) {
       const random = rng(group.id);
-      const createdAt = `${group.from || "2026-09-01"}T13:00:00.000Z`;
-      sql.push(insert("course_groups", { id: group.id, course_id: course.id, organization_id: ORG, name: group.name, status: "active", created_at: shift(createdAt, -60 * 24 * 3) }));
+      const createdAt = `${group.from || group.schedule?.from || "2026-09-01"}T13:00:00.000Z`;
+      const schedule = group.schedule ? { schedule_weekdays: group.schedule.weekdays.join(","), schedule_starts_at: group.schedule.startsAt, schedule_duration: group.schedule.durationMinutes, schedule_from: group.schedule.from, schedule_until: group.schedule.until } : {};
+      sql.push(insert("course_groups", { id: group.id, course_id: course.id, organization_id: ORG, name: group.name, status: "active", created_at: shift(createdAt, -60 * 24 * 3), ...schedule }));
       event(group.by, "created", "group", group.id, course.id, `Creó el grupo «${group.name}»`, shift(createdAt, -60 * 24 * 3));
       const roster = Array.from({ length: group.learners }, (_, index) => ({ id: `${group.id}-l${String(index + 1).padStart(2, "0")}`, name: `${names[Math.floor(random() * names.length)]} ${initials[Math.floor(random() * initials.length)]}.`, absence: 0.02 + random() * 0.14 }));
       const seen = new Set();
       for (const learner of roster) { while (seen.has(learner.name)) learner.name = `${names[Math.floor(random() * names.length)]} ${initials[Math.floor(random() * initials.length)]}.`; seen.add(learner.name); }
       roster.forEach(learner => sql.push(insert("group_learners", { id: learner.id, group_id: group.id, course_id: course.id, organization_id: ORG, display_name: learner.name, status: "active", created_at: shift(createdAt, -60 * 24 * 2) })));
+      if (group.schedule) {
+        // A scheduled section: who teaches it, the classes of its period and the lessons planned for the first ones.
+        for (const educator of group.educators) sql.push(insert("section_educators", { group_id: group.id, user_id: educator, course_id: course.id, organization_id: ORG, added_at: shift(createdAt, -60 * 24 * 2) }));
+        event(group.by, "assigned", "group", group.id, course.id, `Asignó ${group.educators.length === 1 ? "1 educador" : `${group.educators.length} educadores`} a «${group.name}»`, shift(createdAt, -60 * 24 * 2));
+        const { weekdays, startsAt, durationMinutes, from, until } = group.schedule;
+        scheduleDays(weekdays, from, until).forEach((date, index) => {
+          const id = `${group.id}-s${String(index + 1).padStart(2, "0")}`, lessons = group.plan[index] || [];
+          sql.push(insert("class_sessions", { id, group_id: group.id, course_id: course.id, organization_id: ORG, lesson_id: lessons[0] || null, session_date: date, created_at: shift(createdAt, -60 * 24), starts_at: startsAt, duration_minutes: durationMinutes, status: "planned", origin: "schedule", updated_at: shift(createdAt, -60 * 24), version: 1 }));
+          lessons.forEach((lessonId, position) => sql.push(insert("class_session_lessons", { session_id: id, lesson_id: lessonId, position })));
+        });
+        event(group.by, "planned", "group", group.id, course.id, `Planificó ${group.plan.length === 1 ? "1 clase" : `${group.plan.length} clases`} de «${group.name}»`, shift(createdAt, -60 * 20));
+        continue;
+      }
       sessionsFor(group.weekdays, group.from || "2026-09-01").forEach((date, index) => {
         const lesson = lessonIndex.filter(item => item.courseId === course.id && item.published && item.published.slice(0, 10) <= date).sort((a, b) => b.published.localeCompare(a.published))[0];
         const id = `${group.id}-s${String(index + 1).padStart(2, "0")}`;
@@ -209,6 +231,13 @@ export function build(seed = demo) {
   return { sql: sql.join("\n") + "\n", events, lessons: lessonIndex };
 }
 
+/** Class dates of a schedule: its weekdays (0 Sunday … 6 Saturday) from `from` to `until`. */
+function scheduleDays(weekdays, from, until) {
+  const dates = [];
+  for (let day = Date.parse(`${from}T12:00:00.000Z`); day <= Date.parse(`${until}T12:00:00.000Z`); day += 86400000) if (weekdays.includes(new Date(day).getUTCDay())) dates.push(new Date(day).toISOString().slice(0, 10));
+  return dates;
+}
+
 /** Class dates on the given weekdays (0 Sunday … 6 Saturday) from `from` until a week after the seed's end. */
 export function sessionsFor(weekdays, from) {
   const dates = [];
@@ -217,7 +246,7 @@ export function sessionsFor(weekdays, from) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  for (const seed of [demo, routes]) {
+  for (const seed of [demo, routes, englishSeed]) {
     const { sql } = build(seed);
     writeFileSync(new URL(`../../database/migrations/${seed.file}`, import.meta.url), sql);
     console.log(`${seed.file}: ${sql.split("\n").length} lines, ${(sql.length / 1024).toFixed(0)} KB`);

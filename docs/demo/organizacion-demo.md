@@ -48,6 +48,19 @@ La organización **Happy Learners** es la del equipo y no tiene datos ficticios:
 
 Si al aplicarse la migración ya existe en la organización un programa con alguno de esos nombres, la migración no agrega nada.
 
+### Inglés por niveles (MCER)
+
+`0030_english_program.sql` agrega **Inglés por niveles (MCER)**, para jóvenes y adultos: seis cursos, de A1 a C2, cada uno requiere el anterior. Cada nivel tiene dos resultados, dos módulos con dos lecciones publicadas, un recurso y una sección con horario del 12 de octubre al 18 de diciembre de 2026, con sus primeras clases ya planificadas. Suma a **Tomás Aguilar** (`tomas.aguilar`, educador). Si ya existe un programa con ese nombre, la migración no agrega nada.
+
+| Nivel | Responsable | Lección | Sección | Clase | Lo que muestra |
+|---|---|---|---|---|---|
+| Inglés A1: primeros pasos | Ana López | 40 min | lunes y miércoles, 08:00 | 60 min | La primera clase planifica dos lecciones: **Excede 20 min**. |
+| Inglés A2: situaciones cotidianas | Tomás Aguilar (colabora Ana López) | 40 min | lunes y miércoles, 08:00 | 60 min | Asignar a Ana López pide confirmar el choque con A1. |
+| Inglés B1: opiniones y planes | Ana López | 45 min | martes y jueves, 17:00 | 90 min | Dos lecciones llenan la clase justo. |
+| Inglés B2: argumentar con fluidez | Tomás Aguilar | 45 min | martes y jueves, 17:00 | 90 min | Clases con una o dos lecciones. |
+| Inglés C1: inglés académico y profesional | Tomás Aguilar | 60 min | sábados, 09:00 | 120 min | Dos lecciones por clase. |
+| Inglés C2: dominio del idioma | Tomás Aguilar | 60 min | sábados, 11:30 | 120 min | Mismo educador que C1, sin choque: empieza cuando C1 ya terminó. |
+
 Cada curso activo tiene competencias, resultados, planificación por módulo, recursos etiquetados (enlaces reales a Khan Academy, PhET, NASA, British Council, Scratch, Code.org y Google Arts & Culture), lecciones con momentos, propósito, organización, bloques y notas para el docente, secciones con 12 a 20 estudiantes ficticios asignados y clases de septiembre con asistencia. La migración `0018_class_planning.sql` agrega hora, duración y estado a cada clase, programa las clases de cada sección hasta el 27 de noviembre de 2026 y asigna a cada sección activa un código para estudiantes. `0019_section_schedule.sql` guarda ese horario en cada sección y da a sus clases pendientes las lecciones publicadas del curso en el orden de Contenido; las clases posteriores a la última lección quedan sin lección. `0020_class_lessons.sql` conserva esa lección como la primera de cada clase; desde ahí cada clase del cronograma puede planificar varias lecciones:
 
 | Sección | Curso | Horario | Código |
@@ -75,8 +88,10 @@ Las clases de septiembre con asistencia quedan como **Impartidas**; las de octub
 8. **Coordinación:** entra como `marta.ruiz`. En **Educadores** verás cada persona con sus cursos, lecciones creadas, publicaciones, clases registradas y última actividad; al elegir una persona se filtra su actividad. **Avance por curso** compara todos los cursos. En **Configuración académica** están los programas. Con **+** junto a **Secciones**, dentro de un curso, crea una sección de ese curso; en su **Horario**, la vista previa dice cuántas clases se programan antes de guardar, y en **Estudiantes** se pega la lista completa, un nombre por línea.
 9. **Ruta de un programa:** abre **Programación 3: Scratch, juegos → Resumen**. **Ruta en el programa** muestra que requiere Programación 2 y que le sigue Programación 4; **Editar requisitos** lleva a **Configuración académica**, donde cada programa ordena sus cursos y sus requisitos.
 10. **Filtros:** en **Cursos**, filtra por programa, nivel, formato, área, modalidad o responsable. En **Biblioteca**, filtra por etiqueta o área.
-11. **Estudiante:** en una ventana privada, escribe `DG-MATE-3A` en **¿Eres estudiante?**. El espacio de la sección muestra la próxima clase, su lección y sus recursos, sin cuenta ni datos personales. El código de una lección publicada (por ejemplo `GREETINGS`) abre solo esa lección. Las notas para el docente no aparecen.
+11. **Tiempo de las clases:** entra como `ana.lopez` y abre **Inglés A1: primeros pasos → Secciones → A1 · Lunes y miércoles 08:00 → Cronograma**. Un aviso indica que una clase próxima tiene más lecciones de las que caben; su fila dice **Excede 20 min**. En **Planificar**, la barra compara los minutos de las lecciones con la duración de la clase; se puede guardar igual. La duración de cada lección es la suma de los minutos de sus actividades.
+12. **Choque de horario:** entra como `marta.ruiz` y abre **Inglés A2 → Secciones → A2 · Lunes y miércoles 08:00 → Resumen**. En **Imparten la sección**, asigna a Ana López: como ya imparte A1 a la misma hora, se pide el motivo de la excepción. Al confirmar, la sección muestra el choque confirmado, quién lo aceptó y el motivo, y queda en la actividad.
+13. **Estudiante:** en una ventana privada, escribe `DG-MATE-3A` en **¿Eres estudiante?**. El espacio de la sección muestra la próxima clase, su lección y sus recursos, sin cuenta ni datos personales. El código de una lección publicada (por ejemplo `GREETINGS`) abre solo esa lección. Las notas para el docente no aparecen.
 
 ## Regenerar el seed
 
-`node scripts/seed/build.mjs` reescribe `0015_demo_organization.sql` y `0028_program_routes.sql`. Una migración aplicada no se modifica: si la demo necesita cambios después de publicarse, se agrega una migración nueva.
+`node scripts/seed/build.mjs` reescribe `0015_demo_organization.sql`, `0028_program_routes.sql` y `0030_english_program.sql`. Una migración aplicada no se modifica: si la demo necesita cambios después de publicarse, se agrega una migración nueva.

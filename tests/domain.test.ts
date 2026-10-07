@@ -1,8 +1,30 @@
 import { expect, it } from "vitest";
-import { organizationInput, validActivities, validRichText } from "../packages/domain/src/index";
+import { classLoad, formatMinutes, lessonMinutes, organizationInput, timezoneGroups, utcOffset, validActivities, validRichText } from "../packages/domain/src/index";
 it("accepts only minimal valid organization settings", () => {
   expect(organizationInput({ name: " Jardín de Colores ", timezone: "America/Guatemala", childName: "discarded" })).toEqual({ name: "Jardín de Colores", timezone: "America/Guatemala" });
-  for (const value of [null, {}, { name: "ab", timezone: "America/Guatemala" }, { name: "<script>", timezone: "America/Guatemala" }, { name: "Nombre", timezone: "Europe/Invalid" }]) expect(organizationInput(value)).toBeNull();
+  expect(organizationInput({ name: "Colegio", timezone: "America/Argentina/Buenos_Aires" })?.timezone).toBe("America/Argentina/Buenos_Aires");
+  for (const value of [null, {}, { name: "ab", timezone: "America/Guatemala" }, { name: "<script>", timezone: "America/Guatemala" }, { name: "Nombre", timezone: "Europe/Invalid" }, { name: "Nombre", timezone: "Guatemala" }, { name: "Nombre", timezone: "EST" }]) expect(organizationInput(value)).toBeNull();
+});
+it("derives a lesson's time from its activities and compares the lessons of a class with its duration", () => {
+  expect(lessonMinutes({ duration: 30, activities: [{ minutes: 10 }, { minutes: 25 }] })).toBe(35);
+  expect(lessonMinutes({ duration: 30, activities: [] })).toBe(30);
+  expect(formatMinutes(80)).toBe("1 h 20 min");
+  expect(formatMinutes(60)).toBe("1 h");
+  expect(formatMinutes(45)).toBe("45 min");
+  expect(classLoad(60, [40, 40])).toEqual({ planned: 80, available: 60, excess: 20, state: "over" });
+  expect(classLoad(60, [55])).toMatchObject({ state: "full", excess: 0 });
+  expect(classLoad(60, [40])).toMatchObject({ state: "fits" });
+  expect(classLoad(null, [40])).toMatchObject({ state: "unknown", available: null });
+  expect(classLoad(60, [])).toMatchObject({ state: "empty" });
+});
+it("lists IANA time zones by region with their current UTC offset", () => {
+  const groups = timezoneGroups(null, new Date("2026-01-15T12:00:00Z"));
+  const america = groups.find(group => group.region === "America")!;
+  expect(america.zones.find(zone => zone.id === "America/Guatemala")).toEqual({ id: "America/Guatemala", city: "Guatemala", offset: "UTC−06:00" });
+  expect(groups.find(group => group.region === "Europe")!.zones.some(zone => zone.id === "Europe/Madrid")).toBe(true);
+  expect(groups.flatMap(group => group.zones).every(zone => zone.id.includes("/"))).toBe(true);
+  expect(utcOffset("Europe/Madrid", new Date("2026-07-15T12:00:00Z"))).toBe("UTC+02:00");
+  expect(utcOffset("Asia/Kolkata", new Date("2026-07-15T12:00:00Z"))).toBe("UTC+05:30");
 });
 it("accepts structured classroom content and rejects executable or oversized documents", () => {
   const doc = { type: "doc", content: [{ type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Idea principal", marks: [{ type: "bold" }] }] }, { type: "bulletList", content: [{ type: "listItem", content: [{ type: "paragraph", content: [{ type: "text", text: "Primer paso" }] }] }] }] };
@@ -77,7 +99,9 @@ it("ST-100 maps coverage: planned, taught, assessed and delivered in completed c
 });
 it("recommends before publishing and suggests resources from lessons with the same outcomes", () => {
   const draft = lesson("l1", "u1", { sequence: "start-develop-close", duration: 20, activities: [{ id: "x", title: "Inicio", minutes: 5, instructions: "", phase: "start", blocks: [{ id: "t", kind: "text", instructions: "Hola" }] }] });
-  expect(publishChecklist(draft, curriculum).map(item => [item.id, item.ok])).toEqual([["outcomes", false], ["moments", false], ["assessment", false], ["time", false]]);
+  expect(publishChecklist(draft, curriculum).map(item => [item.id, item.ok])).toEqual([["outcomes", false], ["moments", false], ["assessment", false], ["time", true]]);
+  expect(publishChecklist({ ...draft, activities: [] }, curriculum).find(item => item.id === "time")).toMatchObject({ ok: false });
+  expect(publishChecklist(draft, curriculum).find(item => item.id === "time")!.hint).toContain("5 min");
   const ready = { ...draft, outcomeIds: ["a"], activities: ["start", "develop", "close"].map((phase, i) => ({ id: `a${i}`, title: phase, minutes: 6, instructions: "", phase, purpose: i === 2 ? "assess" as const : undefined, blocks: [{ id: `b${i}`, kind: "text" as const, instructions: "x" }] })) };
   expect(publishChecklist(ready, curriculum).every(item => item.ok)).toBe(true);
   const other = lesson("l2", "u1", { outcomeIds: ["a"], activities: [{ id: "r", title: "Video", minutes: 5, instructions: "", blocks: [{ id: "rb", kind: "resource", resourceId: "video-1" }] }] });

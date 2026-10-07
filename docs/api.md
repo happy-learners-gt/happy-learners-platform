@@ -54,6 +54,14 @@ Un método no admitido responde 405 con `Allow`; una ruta desconocida, 404.
 | GET, PUT | `/api/courses/:id/sessions/:session`, `…/attendance` · PUT `…/outcomes` |
 | POST | `/api/courses/:id/sessions/:session/start`, `…/complete`, `…/cancel`, `…/restore` |
 
+`PUT …/educators` recibe `{ userIds, conflictReason? }`. Si una persona agregada imparte otra sección activa con
+clases próximas a la misma hora, responde 409 con `conflicts` y no cambia nada; con `conflictReason` (3 a 300
+caracteres) guarda la asignación y registra la confirmación, que ya no se vuelve a pedir para esa persona en ese par
+de secciones.
+Para administración, los educadores de `GET …/groups` y `GET /api/sections/:id` incluyen `conflicts` con su
+confirmación. La `duration` de una lección es la suma de los minutos de sus actividades; la que envía el cliente solo se
+usa si ninguna actividad tiene minutos. La zona horaria de la organización es un identificador IANA, por ejemplo `America/Guatemala`.
+
 ## Estudiantes y lecciones compartidas
 
 | Método | Ruta |

@@ -23,7 +23,14 @@ test("sign-in errors, organization settings, roles, help, logout and 404", async
   await openNavigation(page);
   await page.getByRole("navigation", { name: "Administración" }).getByRole("link", { name: "Organización" }).click();
   await page.getByLabel("Nombre de la organización").fill("Jardín de Colores");
-  await page.getByLabel("Zona horaria").selectOption("America/Guatemala");
+  // ST-120: the time zone is an IANA zone with its offset, grouped by region; not a country.
+  const zone = page.getByLabel("Zona horaria");
+  expect(await zone.locator("option").count()).toBeGreaterThan(300);
+  await expect(zone.locator("optgroup[label='Europe'] option[value='Europe/Madrid']")).toHaveCount(1);
+  await expect(zone.locator("option[value='America/Guatemala']")).toHaveText("America/Guatemala (UTC−06:00)");
+  await zone.selectOption("America/Bogota");
+  await expect(page.locator(".field").filter({ has: zone })).toContainText("(UTC−05:00)");
+  await zone.selectOption("America/Guatemala");
   await page.getByRole("button", { name: "Guardar organización" }).click();
   await expect(toast(page)).toContainText("Organización guardada");
   await page.reload();

@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { AcademicProfile, CourseFormat, CourseSettings, EducationLevel, EducationType, Member, Modality, ModuleLabel, Organization, Pacing, SequenceTemplate, StudyProgram, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
-import { areaLabel, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, moduleLabels, moduleNoun, pacings, sequenceOf, sequenceTemplates, settingDefinitions } from "@happy-learners/domain";
+import { areaLabel, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, moduleLabels, moduleNoun, pacings, sequenceOf, sequenceTemplates, settingDefinitions, timezoneGroups, utcOffset } from "@happy-learners/domain";
 import type { SettingKey } from "@happy-learners/domain";
 import { plural, timeAgo } from "../model";
 import { ActivityFeed, Avatar, CourseProgressList, useProgress } from "../ui/progress";
@@ -29,6 +29,8 @@ function OrganizationForm() {
   const { guard } = useNavigation();
   const { toast } = useFeedback();
   const [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [zone, setZone] = useState(organization?.timezone || "America/Guatemala");
+  const zones = useMemo(() => timezoneGroups(organization?.timezone), [organization?.timezone]);
   useUnsavedChanges(dirty);
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
@@ -42,7 +44,11 @@ function OrganizationForm() {
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
       <fieldset disabled={busy} className="stack">
         <Field label="Nombre de la organización" hint="En la demostración usa un nombre ficticio."><input name="name" required minLength={3} maxLength={80} defaultValue={organization?.name || ""}/></Field>
-        <Field label="Zona horaria"><select name="timezone" defaultValue={organization?.timezone}><option value="America/Guatemala">Guatemala</option><option value="America/Mexico_City">Ciudad de México</option><option value="America/Bogota">Bogotá</option></select></Field>
+        <Field label="Zona horaria" hint={`Hora local: ${new Intl.DateTimeFormat("es-GT", { timeZone: zone, hour: "2-digit", minute: "2-digit" }).format(new Date())} (${utcOffset(zone)}). El día de hoy y las fechas de las clases se calculan en esta zona.`}>
+          <select name="timezone" value={zone} onChange={event => setZone(event.target.value)}>
+            {zones.map(group => <optgroup key={group.region} label={group.region}>{group.zones.map(item => <option key={item.id} value={item.id}>{item.id} ({item.offset})</option>)}</optgroup>)}
+          </select>
+        </Field>
         <div className="form-actions"><button className="button primary">{busy ? "Guardando…" : "Guardar organización"}</button></div>
       </fieldset>
     </form>

@@ -27,6 +27,8 @@ import workGroupsMigration from "../../../database/migrations/0025_work_groups.s
 import prerequisitesMigration from "../../../database/migrations/0026_course_prerequisites.sql";
 import organizationsMigration from "../../../database/migrations/0027_organization_accounts.sql";
 import routesMigration from "../../../database/migrations/0028_program_routes.sql";
+import lessonTimeMigration from "../../../database/migrations/0029_lesson_time_and_conflicts.sql";
+import englishMigration from "../../../database/migrations/0030_english_program.sql";
 import { organizationIds } from "@happy-learners/domain";
 import { exportStore, importStore, RestoreError, type Backup } from "./backup";
 
@@ -112,6 +114,8 @@ export class OrganizationStore extends DurableObject<Env> {
       if (!applied.length || applied[0].version < 26) { this.ctx.storage.sql.exec(prerequisitesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (26,?)", scope); }
       if (!applied.length || applied[0].version < 27) { this.ctx.storage.sql.exec(organizationsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (27,?)", scope); }
       if (!applied.length || applied[0].version < 28) { runScript(this.ctx.storage.sql, routesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (28,?)", scope); }
+      if (!applied.length || applied[0].version < 29) { this.ctx.storage.sql.exec(lessonTimeMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (29,?)", scope); }
+      if (!applied.length || applied[0].version < 30) { runScript(this.ctx.storage.sql, englishMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (30,?)", scope); }
       // Compare-and-write plus dependent writes belong to one SQLite transaction.
       if (guard && !this.ctx.storage.sql.exec(guard.sql, ...guard.values).toArray().length) return [];
       return statements.map(statement => this.ctx.storage.sql.exec(statement.sql, ...statement.values).toArray());

@@ -1,4 +1,8 @@
-export const timezones = ["America/Guatemala", "America/Mexico_City", "America/Bogota"] as const;
+export { isTimezone, timezoneGroups, utcOffset } from "./timezones";
+export { classLoad, formatMinutes, lessonMinutes } from "./time";
+export type { ClassLoad } from "./time";
+export type { TimezoneOption } from "./timezones";
+import { isTimezone } from "./timezones";
 export { courseAccess, seesSection, teachesSection, maxSectionEducators } from "./access";
 export { createsCycle, dependents, maxPrerequisites, prerequisiteInput, prerequisiteStages } from "./prerequisites";
 export type { Requirement } from "./prerequisites";
@@ -26,7 +30,7 @@ export function organizationInput(value: unknown): { name: string; timezone: str
   if (typeof name !== "string" || typeof timezone !== "string") return null;
   const clean = name.trim().normalize("NFC");
   if (clean.length < 3 || clean.length > 80 || /[<>\x00-\x1f]/.test(clean)) return null;
-  if (!timezones.some(item => item === timezone)) return null;
+  if (!isTimezone(timezone)) return null;
   return { name: clean, timezone };
 }
 const purposeValues = new Set(["explain", "explore", "practice", "assess", "reflect"]);

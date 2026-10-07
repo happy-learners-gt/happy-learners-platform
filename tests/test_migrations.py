@@ -96,7 +96,7 @@ class UpgradeTests(unittest.TestCase):
         for path in migrations[:2]:
             db.executescript(path.read_text())
         before = db.execute("SELECT id,content FROM lessons").fetchall()
-        for path in migrations[2:]:
+        for path in migrations[2:28]:
             db.executescript(path.read_text())
         for identifier, content in before:
             self.assertEqual(db.execute("SELECT content,published_content FROM lessons WHERE id=?", (identifier,)).fetchone(), (content, content))
@@ -220,8 +220,9 @@ class UpgradeTests(unittest.TestCase):
                 db.execute("UPDATE courses SET program_id='program-other' WHERE id='course-workshop'")
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
 
-    def scoped(self, scope):
-        """Applies migrations the way each organization's Durable Object does: 0001, then keep only its scope."""
+    def scoped(self, scope, until=None):
+        """Applies migrations the way each organization's Durable Object does: 0001, then keep only its scope.
+        `until` stops after that migration number, for checks written against the store of that release."""
         db = sqlite3.connect(":memory:")
         db.setlimit(sqlite3.SQLITE_LIMIT_LIKE_PATTERN_LENGTH, 50)
         db.execute("PRAGMA foreign_keys=ON")
@@ -233,13 +234,13 @@ class UpgradeTests(unittest.TestCase):
         db.execute("DELETE FROM users WHERE id NOT IN (SELECT user_id FROM memberships)")
         db.execute("DELETE FROM organizations WHERE id<>?", (scope,))
         db.execute("INSERT OR IGNORE INTO organizations(id,name,configured) VALUES (?,NULL,0)", (scope,))
-        for path in migrations[1:]:
+        for path in migrations[1:until]:
             db.executescript(path.read_text())
         return db
 
     def test_demo_seed_is_complete_in_the_demo_store_and_absent_elsewhere(self):
         """0014 adds teams and the activity log; 0015 seeds the demo organization only."""
-        demo = self.scoped("org-demo")
+        demo = self.scoped("org-demo", until=28)
         self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
         self.assertGreaterEqual(demo.execute("SELECT count(*) FROM courses WHERE status='active'").fetchone()[0], 6)
         self.assertEqual(demo.execute("SELECT count(*) FROM memberships WHERE role='instructor' AND user_id LIKE 'seed-user-%'").fetchone()[0], 5)
@@ -258,7 +259,7 @@ class UpgradeTests(unittest.TestCase):
 
     def test_class_planning_backfills_taught_classes_and_plans_the_demo(self):
         """0018: classes with marks become taught, the demo gets upcoming classes with lessons and resources."""
-        demo = self.scoped("org-demo")
+        demo = self.scoped("org-demo", until=28)
         self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
         self.assertEqual(demo.execute("SELECT count(*) FROM class_sessions s WHERE EXISTS(SELECT 1 FROM attendance_marks m WHERE m.session_id=s.id) AND (s.status<>'completed' OR s.taught_by IS NULL OR s.completed_at IS NULL)").fetchone()[0], 0)
         planned = demo.execute("SELECT count(*), min(session_date), count(starts_at), count(lesson_id) FROM class_sessions WHERE status='planned'").fetchone()
@@ -280,7 +281,7 @@ class UpgradeTests(unittest.TestCase):
 
     def test_section_schedule_comes_from_the_demo_classes_and_lessons_follow_content_order(self):
         """0019: each demo section gets the weekly schedule of its classes; their lessons follow the course content."""
-        demo = self.scoped("org-demo")
+        demo = self.scoped("org-demo", until=28)
         self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
         self.assertEqual(demo.execute("SELECT schedule_weekdays,schedule_starts_at,schedule_duration,schedule_from,schedule_until FROM course_groups WHERE id='seed-group-mat-3a'").fetchone(), ("1,3", "08:00", 45, "2026-10-12", "2026-11-25"))
         self.assertEqual(demo.execute("SELECT schedule_weekdays FROM course_groups WHERE id='seed-group-art-k2'").fetchone()[0], "1,3,5")
@@ -303,7 +304,7 @@ class UpgradeTests(unittest.TestCase):
 
     def test_class_lessons_keep_each_planned_lesson_and_its_publication(self):
         """0020: every class with a lesson keeps it as its first lesson; a class can hold several, once each."""
-        demo = self.scoped("org-demo")
+        demo = self.scoped("org-demo", until=28)
         self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
         self.assertEqual(demo.execute("SELECT count(*) FROM class_sessions WHERE lesson_id IS NOT NULL").fetchone()[0], demo.execute("SELECT count(*) FROM class_session_lessons").fetchone()[0])
         self.assertEqual(demo.execute("SELECT count(*) FROM class_sessions s LEFT JOIN class_session_lessons p ON p.session_id=s.id AND p.position=0 WHERE s.lesson_id IS NOT NULL AND (p.lesson_id IS NOT s.lesson_id OR p.revision IS NOT s.lesson_revision)").fetchone()[0], 0)
@@ -319,7 +320,7 @@ class UpgradeTests(unittest.TestCase):
 
     def test_roles_keep_every_team_member_on_every_section_and_one_open_review(self):
         """0021: team members keep teaching every section of their course; a lesson has one pending review at most."""
-        demo = self.scoped("org-demo")
+        demo = self.scoped("org-demo", until=28)
         self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
         expected = demo.execute("SELECT g.id,m.user_id FROM course_groups g JOIN course_members m ON m.course_id=g.course_id ORDER BY 1,2").fetchall()
         self.assertTrue(expected)
@@ -348,7 +349,7 @@ class UpgradeTests(unittest.TestCase):
 
     def test_section_activity_and_openings_belong_to_their_section(self):
         """0022: the activity of a section and of its classes is the section's own; openings start without a section."""
-        demo = self.scoped("org-demo")
+        demo = self.scoped("org-demo", until=28)
         self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
         scoped = demo.execute("SELECT count(*) FROM activity_events WHERE group_id IS NOT NULL").fetchone()[0]
         self.assertGreater(scoped, 0)
@@ -451,3 +452,37 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
         for scope in ["org-other", "org-hl"]:
             self.assertEqual(self.scoped(scope).execute("SELECT count(*) FROM study_programs WHERE id LIKE 'seed-program-%'").fetchone()[0], 0)
+
+    def test_lesson_time_follows_its_activities_and_conflicts_are_recorded(self):
+        """0029 (DEC-035): a lesson whose duration differs from its activities takes their sum; the rest stay byte for byte."""
+        demo = self.scoped("org-demo", until=28)
+        before = dict(demo.execute("SELECT id,content FROM lessons").fetchall())
+        demo.executescript(sorted(pathlib.Path("database/migrations").glob("*.sql"))[28].read_text())
+        total = "(SELECT sum(json_extract(a.value,'$.minutes')) FROM json_each({0},'$.activities') a)"
+        self.assertEqual(demo.execute(f"SELECT count(*) FROM lessons WHERE {total.format('content')}>0 AND json_extract(content,'$.duration')<>{total.format('content')}").fetchone()[0], 0)
+        self.assertEqual(demo.execute(f"SELECT count(*) FROM lessons WHERE published_content IS NOT NULL AND {total.format('published_content')}>0 AND json_extract(published_content,'$.duration')<>{total.format('published_content')}").fetchone()[0], 0)
+        changed = [identifier for identifier, content in demo.execute("SELECT id,content FROM lessons").fetchall() if content != before[identifier]]
+        self.assertEqual(sorted(changed), ["seed-les-art-5", "seed-les-cie-4", "seed-les-eng-2", "seed-les-rob-4"])
+        self.assertEqual(demo.execute("SELECT json_extract(content,'$.duration') FROM lessons WHERE id='seed-les-lectura-1-1'").fetchone()[0], 35)
+        insert = "INSERT INTO educator_conflict_overrides VALUES (?,?,?,?,?,?,?,?,?,?)"
+        demo.execute(insert, ("c1", "org-demo", "seed-group-mat-3a", "seed-user-lucia", "seed-group-mat-3b", 3, "2026-10-12", "Comparten aula", "seed-user-marta", "2026-10-06T12:00:00Z"))
+        for reason, overlaps in [("no", 1), ("Comparten aula", 0)]:
+            with self.assertRaises(sqlite3.IntegrityError):
+                demo.execute(insert, ("c2", "org-demo", "seed-group-mat-3a", "seed-user-lucia", "seed-group-mat-3b", overlaps, "2026-10-12", reason, "seed-user-marta", "2026-10-06T12:00:00Z"))
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_english_program_goes_from_a1_to_c2_with_scheduled_sections(self):
+        """0030 (DEC-035): six English levels, each requiring the previous one, each with a scheduled and planned section."""
+        demo = self.scoped("org-demo")
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+        levels = demo.execute("SELECT c.id,(SELECT group_concat(p.required_course_id) FROM course_prerequisites p WHERE p.course_id=c.id) FROM courses c WHERE c.program_id='seed-program-ingles-mcer' ORDER BY c.id").fetchall()
+        codes = ["a1", "a2", "b1", "b2", "c1", "c2"]
+        self.assertEqual(levels, [(f"seed-course-ingles-{code}", f"seed-course-ingles-{codes[index - 1]}" if index else None) for index, code in enumerate(codes)])
+        self.assertEqual(demo.execute("SELECT count(*) FROM course_groups WHERE course_id LIKE 'seed-course-ingles-%' AND schedule_weekdays IS NOT NULL").fetchone()[0], 6)
+        self.assertEqual(demo.execute("SELECT count(*) FROM course_groups g WHERE g.course_id LIKE 'seed-course-ingles-%' AND NOT EXISTS(SELECT 1 FROM section_educators e WHERE e.group_id=g.id)").fetchone()[0], 0)
+        self.assertEqual(demo.execute("SELECT count(*) FROM class_sessions WHERE group_id LIKE 'seed-group-ingles-%' AND (origin<>'schedule' OR status<>'planned' OR starts_at IS NULL OR duration_minutes IS NULL)").fetchone()[0], 0)
+        first = demo.execute("SELECT s.duration_minutes,sum(json_extract(l.content,'$.duration')) FROM class_sessions s JOIN class_session_lessons cl ON cl.session_id=s.id JOIN lessons l ON l.id=cl.lesson_id WHERE s.id='seed-group-ingles-a1-s01'").fetchone()
+        self.assertEqual(first, (60, 80))
+        self.assertEqual(demo.execute("SELECT count(*) FROM users WHERE username='tomas.aguilar'").fetchone()[0], 1)
+        for scope in ["org-other", "org-hl"]:
+            self.assertEqual(self.scoped(scope).execute("SELECT count(*) FROM courses WHERE id LIKE 'seed-course-ingles-%'").fetchone()[0], 0)
