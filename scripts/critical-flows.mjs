@@ -7,11 +7,12 @@ async function call(path, method = "GET", body) {
 async function check(name, work) { await work(); checks.push({ name, passed: true }); }
 function assert(value) { if (!value) throw new Error("Critical flow assertion failed"); }
 let success = false;
-// A new version takes a few seconds to reach every edge location; wait for it before checking.
+// A new version takes a few seconds to reach every edge location, and until then requests alternate between versions;
+// wait until it answers several times in a row before checking.
 if (process.env.EXPECTED_SHA) {
-  for (const deadline = Date.now() + 90000; Date.now() < deadline; await new Promise(resolve => setTimeout(resolve, 3000))) {
+  for (let streak = 0, deadline = Date.now() + 120000; streak < 5 && Date.now() < deadline; await new Promise(resolve => setTimeout(resolve, 2000))) {
     const sha = await call("/api/version").then(response => response.json()).then(body => body.sha, () => null);
-    if (sha === process.env.EXPECTED_SHA) break;
+    streak = sha === process.env.EXPECTED_SHA ? streak + 1 : 0;
   }
 }
 try {
