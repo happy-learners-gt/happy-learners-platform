@@ -212,7 +212,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (!backup || typeof backup !== "object" || !backup.tables || typeof backup.tables !== "object" || !backup.digests) return json({ error: "Envía una copia de respaldo completa." }, 400);
     const expected = await digests(backup);
     if (Object.keys(expected).length !== Object.keys(backup.digests).length || Object.entries(expected).some(([name, value]) => backup.digests[name] !== value)) return json({ error: "La copia está dañada: sus huellas no coinciden." }, 400);
-    const result = await db.importData(backup);
+    const result = await db.importData(backup).catch((error: unknown) => ({ error: `La restauración no se completó y no cambió ningún dato (${error instanceof Error ? error.message.slice(0, 240) : "error desconocido"}).` }));
     return "error" in result ? json({ error: result.error }, 409) : json({ restored: result.restored, digests: expected });
   }
   if (path === "/api/organization") {
