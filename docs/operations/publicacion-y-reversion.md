@@ -21,7 +21,7 @@ cambio descrito en el manual de despliegue de `happy-learners-ops`.
 
 ## Ensayo de publicación y reversión
 
-El workflow `Release drill` (manual, `previous` = tag anterior) repite la publicación y la reversión en la vista
+El workflow `Release drill` (manual; `previous` es opcional y por defecto toma la última release publicada) repite la publicación y la reversión en la vista
 previa, con flujos críticos en cada paso:
 
 | Paso | Qué ocurre | Comprobación |
@@ -33,7 +33,7 @@ previa, con flujos críticos en cada paso:
 | 5 | `wrangler rollback` a la versión del paso 2 | Flujos críticos con el SHA de la candidata |
 
 ```bash
-gh workflow run release-drill.yml --ref main -f previous=v0.8.17
+gh workflow run release-drill.yml --ref main
 ```
 
 El resumen queda en el artefacto `release-drill-<sha>` (`release-drill.json`, con cada paso, las versiones de Worker
