@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       previous:
-        description: Release tag to roll back to
-        required: true
-        default: v0.8.17
+        description: Release tag to roll back to (by default, the latest published release)
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -33,9 +33,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Resolve the previous release
+        id: previous
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED: ${{ inputs.previous }}
+        run: |
+          tag="${REQUESTED:-$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then echo "Invalid release tag: $tag"; exit 1; fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "PREVIOUS_TAG=$tag" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.previous }}
+          ref: ${{ steps.previous.outputs.tag }}
           path: previous
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -67,7 +77,7 @@ jobs:
         run: EXPECTED_SHA="$GITHUB_SHA" node scripts/critical-flows.mjs && cp .release-evidence/critical-flows.json .release-evidence/3-restored.json
       - name: Roll back to the previous release
         run: |
-          npx --no-install wrangler rollback "$PREVIOUS_VERSION" --name "$PREVIEW" --message "Ensayo de reversión a ${{ inputs.previous }}" --yes
+          npx --no-install wrangler rollback "$PREVIOUS_VERSION" --name "$PREVIEW" --message "Ensayo de reversión a $PREVIOUS_TAG" --yes
           EXPECTED_SHA="$PREVIOUS_SHA" node scripts/critical-flows.mjs && cp .release-evidence/critical-flows.json .release-evidence/4-rolled-back.json
       - name: Roll forward to the candidate
         run: |
@@ -86,7 +96,7 @@ jobs:
             console.log(JSON.stringify(summary));
             if (!summary.success) process.exitCode = 1;'
         env:
-          INPUT_PREVIOUS: ${{ inputs.previous }}
+          INPUT_PREVIOUS: ${{ steps.previous.outputs.tag }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
