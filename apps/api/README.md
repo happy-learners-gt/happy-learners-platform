@@ -1,16 +1,22 @@
 # API
 
-Punto de composición del backend. Orquesta casos de uso, autorización, persistencia e integraciones sin trasladar dependencias técnicas al paquete de dominio.
+Punto de composición del backend. Orquesta casos de uso, autorización, persistencia e integraciones sin trasladar
+dependencias técnicas al paquete de dominio.
 
-ST-043: Worker TypeScript con `GET`/`HEAD /api/health` (`{"status":"ok"}`) y `/api/version` (`{"sha":"<SHA completo>"}`). Las respuestas no se cachean. Las rutas API inexistentes responden 404 y los métodos no permitidos 405. Wrangler genera los tipos desde `infrastructure/wrangler.jsonc`; el build genera el módulo de versión, que no se versiona.
-## Producto v0.2.0
+El Worker atiende solo `/api/*`; las páginas se sirven como activos estáticos. `GET`/`HEAD /api/health` responde
+`{"status":"ok"}` y `/api/version` el SHA desplegado. Las respuestas de la API no se cachean, las rutas inexistentes
+responden 404, los métodos no permitidos 405 y las rutas heredadas retiradas 410.
 
-El Worker expone el catálogo y las lecciones de demostración. `AppState` es el
-único almacenamiento persistente y se crea con la migración `v1` de Wrangler.
-El acceso de educador usa una sesión HttpOnly; la actividad del estudiante solo
-incrementa un contador agregado. El código de demostración es `san-gaspar` y no
-debe usarse como autenticación de producción.
+| Módulo | Responsabilidad |
+| --- | --- |
+| `index.ts` | Enrutamiento, cabeceras de seguridad, sesiones y límite de intentos de acceso. |
+| `auth.ts`, `access.ts`, `roles.ts`, `team.ts` | Sesiones, permisos por organización, curso y sección, roles y equipo. |
+| `courses.ts`, `content.ts`, `prerequisites.ts`, `duplicate.ts` | Programas, cursos, plan curricular, módulos, lecciones y requisitos. |
+| `collaboration.ts`, `collaboration-awareness.ts`, `rich-text.ts` | Coedición en vivo de las lecciones mediante un Durable Object por lección. |
+| `files.ts` | Archivos privados de cada curso en R2. |
+| `sections.ts`, `classes.ts`, `attendance.ts`, `workgroups.ts`, `conflicts.ts` | Secciones, horario, clases, asistencia, grupos de trabajo y choques de horario. |
+| `backup.ts` | Respaldo y restauración de cada organización. |
+| `storage.ts` | Almacenamiento SQLite de cada organización en su Durable Object. |
 
-Rutas principales: `POST /api/login`, `GET /api/state`, `POST /api/resource`,
-`POST /api/lesson`, `POST /api/lesson/:id/publish` y
-`POST /api/lesson/:id/complete`.
+El contrato de cada ruta está en `docs/api.md`; la arquitectura, los datos y la seguridad, en el Manual técnico
+(`happy-learners-ops/docs/deliverables/manuals/technical-manual.md`).
