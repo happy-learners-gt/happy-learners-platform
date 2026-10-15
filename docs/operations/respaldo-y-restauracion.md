@@ -9,7 +9,7 @@ lógica en JSON de esa base:
 
 | Incluye | No incluye |
 | --- | --- |
-| Organización, cuentas y membresías, cursos, programas y requisitos, módulos, lecciones y revisiones, recursos y materiales, clasificaciones, secciones, horarios, clases, asistencia, estudiantes, grupos de trabajo, calendario, actividad y metadatos de documentos. | Contraseñas (sal y hash), sesiones abiertas de educadores y estudiantes, límites de inicio de sesión y el registro de migraciones. |
+| Organización, cuentas y membresías, cursos, programas y requisitos, módulos, lecciones y revisiones, recursos y materiales, clasificaciones, secciones, horarios, clases, asistencia, estudiantes, grupos de trabajo, calendario, actividad y metadatos de documentos. | Contraseñas (sal y hash), sesiones abiertas de educadores y estudiantes, enlaces de calendario (`calendar_feeds`), límites de inicio de sesión y el registro de migraciones. |
 
 El contenido de los documentos Office está en el bucket R2 privado y no forma parte del respaldo. El respaldo
 conserva sus metadatos (curso, nombre, tamaño, clave del objeto y estado). Los documentos no se eliminan: archivarlos
@@ -44,7 +44,7 @@ transacción. La restauración:
 3. Rechaza con 409 una copia de otra organización, de otra versión del esquema o con otras tablas.
 4. Conserva las contraseñas que el espacio ya tenía. Una cuenta que solo existe en la copia queda sin contraseña
    utilizable hasta que administración la restablezca.
-5. Cierra las sesiones de cuentas, secciones o estudiantes que ya no existen.
+5. Cierra las sesiones y los enlaces de calendario de cuentas, secciones o estudiantes que ya no existen.
 6. Compara cada tabla con la copia y revierte todo si alguna difiere.
 
 La ruta solo existe donde la variable `RESTORE_ENABLED` vale `true`: la vista previa aislada y las pruebas locales.

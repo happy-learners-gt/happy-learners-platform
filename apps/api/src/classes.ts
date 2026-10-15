@@ -28,7 +28,7 @@ const sessionJoins = "FROM class_sessions s JOIN course_groups g ON g.id=s.group
 type StoredSession = Omit<ClassSession, "lessons"> & { lessons: string | null };
 const withLessons = (row: StoredSession): ClassSession => ({ ...row, lessons: (JSON.parse(row.lessons || "[]") as (ClassLesson & { available: number | boolean })[]).map(lesson => ({ ...lesson, available: !!lesson.available })) });
 
-async function timezoneOf(db: Database, organizationId: string) {
+export async function timezoneOf(db: Database, organizationId: string) {
   return (await db.prepare("SELECT timezone FROM organizations WHERE id=?").bind(organizationId).first<{ timezone: string | null }>())?.timezone || "America/Guatemala";
 }
 export const todayFor = async (db: Database, organizationId: string) => localDay(await timezoneOf(db, organizationId));
@@ -274,12 +274,17 @@ async function attendanceRows(db: Database, sessionId: string, groupId: string) 
   return (await db.prepare("SELECT l.id AS learnerId,l.display_name AS displayName,COALESCE(a.status,'unmarked') AS status FROM group_learners l LEFT JOIN attendance_marks a ON a.learner_id=l.id AND a.session_id=? WHERE l.group_id=? AND (l.status='active' OR a.status IS NOT NULL) ORDER BY l.display_name,l.id").bind(sessionId, groupId).all()).results;
 }
 
+/**
+ * The classes of the sections a person teaches (binds: user id, organization id), in active sections of active courses
+ * with a schedule. «Mis clases», the Agenda and the calendar subscription (ST-125) all read them from here.
+ */
+export const taughtClasses = `JOIN courses c ON c.id=s.course_id AND c.status='active' LEFT JOIN study_programs sp ON sp.id=c.program_id
+    JOIN section_educators se ON se.group_id=s.group_id AND se.organization_id=s.organization_id AND se.user_id=?
+    WHERE s.organization_id=? AND g.status='active' AND COALESCE(sp.pacing,c.pacing)='scheduled'`;
 /** GET /api/classes — the next classes of the sections the person teaches, for the home page. */
 export async function myClasses(current: Member, db: Database) {
   const today = await todayFor(db, current.organizationId);
-  const rows = (await db.prepare(`SELECT ${sessionColumns},c.title AS courseTitle ${sessionJoins} JOIN courses c ON c.id=s.course_id AND c.status='active' LEFT JOIN study_programs sp ON sp.id=c.program_id
-    JOIN section_educators se ON se.group_id=s.group_id AND se.organization_id=s.organization_id AND se.user_id=?
-    WHERE s.organization_id=? AND g.status='active' AND COALESCE(sp.pacing,c.pacing)='scheduled' AND ((s.session_date>=? AND s.status='planned') OR s.status='in_progress') ORDER BY s.session_date,s.starts_at LIMIT 40`).bind(current.id, current.organizationId, today).all<StoredSession>()).results.map(withLessons);
+  const rows = (await db.prepare(`SELECT ${sessionColumns},c.title AS courseTitle ${sessionJoins} ${taughtClasses} AND ((s.session_date>=? AND s.status='planned') OR s.status='in_progress') ORDER BY s.session_date,s.starts_at LIMIT 40`).bind(current.id, current.organizationId, today).all<StoredSession>()).results.map(withLessons);
   // A class left open on an earlier day still needs to be finished, so it stays first.
   const open = rows.filter(row => row.status === "in_progress" && row.sessionDate < today);
   return reply({ today, classes: [...open, ...upcomingClasses(rows.filter(row => !open.includes(row)), today)].slice(0, 8) });

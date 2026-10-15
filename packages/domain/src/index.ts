@@ -9,6 +9,8 @@ export type { Requirement } from "./prerequisites";
 export { maxWorkGroups, nextInPath, pathIndicators, sectionIndicators, wholeSection, workGroupInput } from "./sections";
 export type { SectionClass } from "./sections";
 export { moduleNavigation } from "./navigation";
+export { calendarFeed, escapeText, feedWindow, foldLine, zonedInstant } from "./calendar-feed";
+export type { FeedClass } from "./calendar-feed";
 export { organizations, organizationIds, fictional, tokenPrefix, sharePrefix, sectionPrefix, tokenPattern, scopeOfToken, scopeOfShare, scopeOfSection } from "./organizations";
 export type { OrganizationId } from "./organizations";
 export type { ModuleLesson } from "./navigation";
