@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { CalendarBreak, ClassLesson, ClassLessonPlan, ClassResource, ClassSession, ClassStatus, LessonOutcome, SectionWorkGroups } from "@happy-learners/contracts";
-import { classLoad, classSequence, classStatusLabels, formatMinutes, lessonMinutes, lessonOutcomeLabels, maxClassLessons, wholeSection } from "@happy-learners/domain";
+import { classLoad, classSequence, classStatusLabels, formatMinutes, isCalendarDay, lessonMinutes, lessonOutcomeLabels, maxClassLessons, wholeSection } from "@happy-learners/domain";
 import { api, message } from "../../api";
 import { Link, useNavigation, useUnsavedChanges } from "../../navigation";
 import { plural, sessionDay } from "../../model";
@@ -16,7 +16,9 @@ import { TimeFit } from "../../ui/TimeFit";
 import { ResourcePreview } from "../resources";
 import { useCourse } from "./context";
 import type { SectionView } from "./Sections";
-import { sectionCrumbs, useSection } from "../sections/context";
+import { sectionCrumbs, sectionPath, useSection } from "../sections/context";
+import { useSession } from "../../session";
+import { useWorkspace } from "../../workspace";
 
 type Mark = "unmarked" | "present" | "late" | "absent" | "excused";
 type Row = { learnerId: string; displayName: string; status: Mark };
@@ -57,6 +59,13 @@ function Schedule() {
   const { course, teaches, configurable, noun } = useCourse();
   const { section: group, base: sectionBase, reload } = useSection();
   const { url, navigate } = useNavigation();
+  const { member } = useSession();
+  const { sections: workspaceSections } = useWorkspace(member.id);
+  // ST-065: the period of the filters lives in the address (?desde=&hasta=); the section is the page itself.
+  const from = url.searchParams.get("desde") || "", to = url.searchParams.get("hasta") || "";
+  const periodError = (from && !isCalendarDay(from)) || (to && !isCalendarDay(to)) ? "Revisa las fechas del periodo." : from && to && to < from ? "La fecha final debe ser igual o posterior a la inicial." : "";
+  const period = !periodError && (from || to) ? new URLSearchParams([...from ? [["from", from]] : [], ...to ? [["to", to]] : []]).toString() : "";
+  const [inPeriod, setInPeriod] = useState<ClassSession[] | null>(null);
   const [sessions, setSessions] = useState<ClassSession[] | null>(null), [plans, setPlans] = useState<Record<string, ClassLessonPlan>>({}), [today, setToday] = useState(""), [error, setError] = useState("");
   const [breaks, setBreaks] = useState<CalendarBreak[]>([]);
   const [adding, setAdding] = useState(url.searchParams.get("nueva") === "1"), [filling, setFilling] = useState(false), [planning, setPlanning] = useState<ClassSession | null>(null);
@@ -66,12 +75,16 @@ function Schedule() {
   async function load() {
     setError("");
     try {
-      const s = await api<{ sessions: ClassSession[]; lessonPlans: Record<string, ClassLessonPlan>; today: string; breaks?: CalendarBreak[] }>(`/courses/${course.id}/sessions`);
-      setSessions(s.sessions.filter(session => session.groupId === group.id)); setPlans(s.lessonPlans); setToday(s.today);
-      setBreaks((s.breaks || []).filter(item => !item.groupId || item.groupId === group.id));
+      // The whole section numbers its classes and weeks; the period, when given, narrows what the page reviews.
+      type Listing = { sessions: ClassSession[]; lessonPlans: Record<string, ClassLessonPlan>; today: string; breaks?: CalendarBreak[] };
+      const listing = `/courses/${course.id}/sessions?section=${encodeURIComponent(group.id)}`;
+      const [s, narrowed] = await Promise.all([api<Listing>(listing), period ? api<Listing>(`${listing}&${period}`) : null]);
+      setSessions(s.sessions.filter(session => session.groupId === group.id)); setPlans({ ...s.lessonPlans, ...narrowed?.lessonPlans }); setToday(s.today);
+      setInPeriod(narrowed ? narrowed.sessions.filter(session => session.groupId === group.id) : null);
+      setBreaks(((narrowed || s).breaks || []).filter(item => !item.groupId || item.groupId === group.id));
     } catch (cause) { setError(message(cause)); }
   }
-  useEffect(() => { if (course.status === "active") void load(); }, [course.id, group.id]);
+  useEffect(() => { if (course.status === "active") void load(); }, [course.id, group.id, period]);
   const changed = async () => { await load(); await reload(); };
   function filter(key: string, value: string) { const next = new URL(url); if (value) next.searchParams.set(key, value); else next.searchParams.delete(key); next.searchParams.delete("nueva"); navigate(next.pathname + next.search, true); }
   const writable = group.status === "active" && teaches(group.id);
@@ -84,22 +97,36 @@ function Schedule() {
   if (course.status !== "active") return <>{header}<EmptyState icon="archive" title="Curso archivado">Las clases vuelven a estar disponibles cuando administración restaura el curso.</EmptyState></>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
   if (!sessions) return <>{header}<Loading label="Cargando el cronograma…" lines={6}/></>;
-  const ofGroup = [...sessions].sort(byDate);
-  const sequence = classSequence(ofGroup, group.schedule?.from);
+  const all = [...sessions].sort(byDate);
+  const sequence = classSequence(all, group.schedule?.from);
   const isUpcoming = (session: ClassSession) => session.status === "in_progress" || (session.status === "planned" && session.sessionDate >= today);
+  // With a period, the counts, indicators and rows describe only its classes.
+  const filtered = !!period && !!inPeriod;
+  const ofGroup = filtered ? [...inPeriod].sort(byDate) : all;
   const upcoming = ofGroup.filter(isUpcoming), history = ofGroup.filter(session => !isUpcoming(session)).reverse();
   const held = ofGroup.filter(session => session.status !== "cancelled"), taught = held.filter(session => session.status === "completed");
   const marked = taught.reduce((sum, session) => sum + Number(session.marked || 0), 0), attended = taught.reduce((sum, session) => sum + Number(session.attended || 0), 0);
   const rows = view === "upcoming" ? upcoming : view === "history" ? history : ofGroup;
   // The whole period also shows its days without class, where they fall among the classes.
-  const first = group.schedule?.from || ofGroup[0]?.sessionDate || "", last = group.schedule?.until || ofGroup[ofGroup.length - 1]?.sessionDate || "";
+  const first = from || group.schedule?.from || ofGroup[0]?.sessionDate || "", last = to || group.schedule?.until || ofGroup[ofGroup.length - 1]?.sessionDate || "";
   const offDays = view === "all" ? breaks.filter(item => item.until >= first && item.from <= last) : [];
   const entries: ({ kind: "class"; session: ClassSession } | { kind: "break"; item: CalendarBreak })[] = [...rows.map(session => ({ kind: "class" as const, session })), ...offDays.map(item => ({ kind: "break" as const, item }))]
     .sort((a, b) => (a.kind === "class" ? a.session.sessionDate : a.item.from).localeCompare(b.kind === "class" ? b.session.sessionDate : b.item.from) || (a.kind === "break" ? -1 : 1));
   const editable = writable;
-  const over = upcoming.filter(session => classLoad(session.durationMinutes, session.lessons.map(lesson => minutesOf(lesson.id))).state === "over");
+  const choices = [...(workspaceSections || []).filter(item => item.courseId === course.id && item.id !== group.id), group].sort((a, b) => a.name.localeCompare(b.name, "es", { numeric: true }));
+  const clear = () => { const next = new URL(url); for (const key of ["desde", "hasta", "nueva"]) next.searchParams.delete(key); navigate(next.pathname + next.search, true); };
+  const filters = <div className="class-filters" role="group" aria-label="Filtrar clases">
+    <Field label="Sección"><select value={group.id} onChange={event => navigate(`${sectionPath(event.target.value)}/clases${url.search}`)}>
+      {choices.map(item => <option key={item.id} value={item.id}>{item.name}{item.status !== "active" ? " (cerrada)" : ""}</option>)}
+    </select></Field>
+    <Field label="Desde"><input type="date" value={from} max={to || undefined} onChange={event => filter("desde", event.target.value)}/></Field>
+    <Field label="Hasta" error={periodError || undefined}><input type="date" value={to} min={from || undefined} onChange={event => filter("hasta", event.target.value)}/></Field>
+    {(from || to) && <Button icon="close" variant="ghost" onClick={clear}>Limpiar filtros</Button>}
+  </div>;
+  const over = all.filter(isUpcoming).filter(session => classLoad(session.durationMinutes, session.lessons.map(lesson => minutesOf(lesson.id))).state === "over");
   return <>
     {header}
+    {filters}
     <div className="toolbar" role="group" aria-label="Mostrar clases">
       <fieldset className="segmented"><legend className="sr-only">Mostrar</legend>
         <label><input type="radio" name="class-view" checked={view === "all"} onChange={() => filter("vista", "")}/><span>Todo el periodo ({ofGroup.length})</span></label>
@@ -125,6 +152,9 @@ function Schedule() {
         <tbody>{entries.map(entry => entry.kind === "break" ? <BreakRow key={entry.item.id} item={entry.item}/> : <ScheduleRow key={entry.session.id} session={entry.session} minutesOf={minutesOf} place={sequence.get(entry.session.id)} extra={entry.session.origin === "manual" && !!group.schedule && entry.session.sessionDate >= group.schedule.from && entry.session.sessionDate <= group.schedule.until} plans={plans} today={today} page={page} editable={editable} onPlan={() => setPlanning(entry.session)}/>)}</tbody>
       </table>
     </div>
+      : filtered && !ofGroup.length ? <EmptyState icon="calendar" title="No hay clases en este periodo" action={<Button icon="close" onClick={clear}>Limpiar filtros</Button>}>
+        Cambia las fechas o limpia los filtros para ver todo el cronograma de la sección.
+      </EmptyState>
       : !ofGroup.length ? <EmptyState icon="calendar" title="Esta sección aún no tiene clases" action={configurable ? <Link className="button primary" href={`${sectionBase}/horario`}>Configurar horario</Link> : writable && <Button icon="plus" onClick={() => setAdding(true)}>Agregar clase</Button>}>
         {configurable ? "Configura su horario para generar su cronograma del periodo." : "Su cronograma se genera cuando administración configura el horario. También puedes agregar una clase suelta."}
       </EmptyState>
