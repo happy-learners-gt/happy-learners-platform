@@ -62,6 +62,13 @@ Para administración, los educadores de `GET …/groups` y `GET /api/sections/:i
 confirmación. La `duration` de una lección es la suma de los minutos de sus actividades; la que envía el cliente solo se
 usa si ninguna actividad tiene minutos. La zona horaria de la organización es un identificador IANA, por ejemplo `America/Guatemala`.
 
+`GET /api/courses/:id/sessions` acepta filtros combinables (ST-065): `section` (la sección o grupo), `from` y `to`
+(días `AAAA-MM-DD` en la zona horaria de la organización, ambos incluidos). Los días sin clase (`breaks`) se limitan a
+los mismos filtros y la respuesta repite el `filter` aplicado. Fechas inválidas o `to` anterior a `from` responden 400.
+Una sección de otro curso o que la persona no ve (un educador solo ve las suyas; administración, todas) responde 404
+sin datos; fuera del equipo del curso responde 403. En la web, el **Cronograma** de una sección filtra por sección y
+periodo, y guarda el periodo en la dirección (`?desde=&hasta=`).
+
 ## Estudiantes y lecciones compartidas
 
 | Método | Ruta |
