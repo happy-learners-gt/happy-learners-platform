@@ -1,13 +1,14 @@
 /**
  * Logical backup of one organization's store (ST-044): every table, in creation order, without credentials.
  * Sessions, student access sessions and login limits are not copied; password columns never leave the store.
- * A restore keeps the credentials the target already has, so a restored account signs in as it did there.
+ * A restore keeps the credentials the target already has, so a restored account signs in as it did there; whether
+ * the password is a temporary one (ST-093) belongs to those credentials and stays with them.
  */
 declare global { interface Env { RESTORE_ENABLED?: string } }
 
 export const BACKUP_FORMAT = "happy-learners-backup/1";
 const SKIPPED = new Set(["sessions", "group_access_sessions", "login_limits", "schema_migrations"]);
-const SECRET: Record<string, string[]> = { users: ["password_salt", "password_hash"] };
+const SECRET: Record<string, string[]> = { users: ["password_salt", "password_hash", "must_change_password"] };
 
 type Cell = string | number | null | { b64: string };
 export interface BackupTable { columns: string[]; rows: Cell[][] }
@@ -54,7 +55,8 @@ export function importStore(sql: SqlStorage, scope: string, backup: Backup) {
   if (backup.schemaVersion !== schemaVersion(sql)) throw new RestoreError(`La copia es del esquema ${backup.schemaVersion} y este espacio usa el ${schemaVersion(sql)}.`);
   const names = tables(sql);
   if (names.length !== Object.keys(backup.tables).length || names.some(name => !backup.tables[name])) throw new RestoreError("La copia no tiene las mismas tablas que este espacio.");
-  const credentials = new Map(sql.exec<{ id: string; password_salt: string; password_hash: string }>("SELECT id,password_salt,password_hash FROM users").toArray().map(row => [row.id, row]));
+  const credentials = new Map(sql.exec<Record<string, SqlStorageValue>>("SELECT id,password_salt,password_hash,must_change_password FROM users").toArray().map(row => [String(row.id), row]));
+  const unusable: Record<string, () => SqlStorageValue> = { password_salt: () => crypto.randomUUID(), password_hash: () => "!", must_change_password: () => 1 };
   sql.exec("PRAGMA defer_foreign_keys = ON");
   // Triggers check rows against other tables that may not be loaded yet; the copy came from a store that passed
   // them, and every table is compared with it below. They are recreated before the transaction commits.
@@ -68,7 +70,7 @@ export function importStore(sql: SqlStorage, scope: string, backup: Backup) {
     for (const row of table.rows) {
       // Accounts the target does not know get credentials nobody can use until administration resets them.
       const kept = secret.length ? credentials.get(String(row[table.columns.indexOf("id")])) : undefined;
-      const extra = secret.map(column => kept ? kept[column as "password_salt" | "password_hash"] : column === "password_salt" ? crypto.randomUUID() : "!");
+      const extra = secret.map(column => kept ? kept[column] : unusable[column]());
       sql.exec(statement, ...row.map(raw), ...extra);
     }
   }

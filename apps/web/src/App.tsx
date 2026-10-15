@@ -7,7 +7,7 @@ import { SessionContext } from "./session";
 import type { Session } from "./session";
 import { FeedbackProvider, useFeedback } from "./ui/feedback";
 import { AppShell } from "./ui/Shell";
-import { Login, SessionExpiredDialog } from "./pages/Login";
+import { ChangePassword, Login, SessionExpiredDialog } from "./pages/Login";
 import { Home } from "./pages/Home";
 import { CourseList, CreateCourse } from "./pages/Courses";
 import { CourseRoute } from "./pages/course/CourseRoute";
@@ -69,8 +69,9 @@ function AuthenticatedApp() {
   const refresh = useCallback(async () => {
     // Sequential on purpose: a 401 from the session check means "show the login", not "offline".
     const session = await api<{ member: Member }>("/session");
-    const org = await api<{ organization: Organization }>("/organization");
-    setMember(session.member); setOrganization(org.organization);
+    // With a temporary password, nothing else opens until the person chooses their own (ST-093).
+    const org = session.member.mustChangePassword ? null : await api<{ organization: Organization }>("/organization");
+    setMember(session.member); setOrganization(org?.organization || null);
   }, []);
   const start = useCallback(() => {
     setStatus("loading");
@@ -87,6 +88,8 @@ function AuthenticatedApp() {
   if (status === "loading") return <main className="splash"><span className="brand-mark" aria-hidden="true">hl</span><p role="status">Abriendo tu espacio…</p></main>;
   if (status === "offline") return <main className="splash"><span className="brand-mark" aria-hidden="true">hl</span><h1>No pudimos conectar</h1><p>Comprueba tu conexión y vuelve a intentar.</p><button type="button" className="button primary" onClick={start}>Volver a intentar</button></main>;
   if (!member) return <Login onSignedIn={async () => { await refresh(); setExpired(false); }}/>;
+  if (member.mustChangePassword) return <ChangePassword member={member} onChanged={async () => { await refresh(); toast({ message: "Contraseña guardada. Ya puedes usar tu espacio." }); }}
+    onLeave={() => { api("/logout", "POST").catch(() => undefined).finally(() => setMember(null)); }}/>;
   const session: Session = {
     member, organization, setOrganization,
     logout: () => {

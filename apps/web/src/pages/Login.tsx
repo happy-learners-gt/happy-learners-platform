@@ -4,7 +4,8 @@ import { api, message } from "../api";
 import { useNavigation } from "../navigation";
 import { Modal } from "../ui/feedback";
 import { Icon } from "../ui/icons";
-import { groupCodePattern } from "@happy-learners/domain";
+import type { Member } from "@happy-learners/contracts";
+import { acceptablePassword, groupCodePattern, maxPasswordLength, minPasswordLength } from "@happy-learners/domain";
 
 function useLogin(onSuccess: () => Promise<void>, initial = "educador-demo") {
   const [username, setUsername] = useState(initial), [password, setPassword] = useState("");
@@ -73,4 +74,37 @@ export function SessionExpiredDialog({ username, onRestored, onLeave }: { userna
       <div className="modal-actions"><button type="button" className="button ghost" onClick={onLeave}>Salir</button><button className="button primary" disabled={form.busy}>{form.busy ? "Entrando…" : "Continuar"}</button></div>
     </form>
   </Modal>;
+}
+
+/** First sign-in with a temporary password (ST-093): the person chooses their own before using the app. */
+export function ChangePassword({ member, onChanged, onLeave }: { member: Member; onChanged: () => Promise<void>; onLeave: () => void }) {
+  const [current, setCurrent] = useState(""), [next, setNext] = useState(""), [repeat, setRepeat] = useState("");
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  async function submit(event: FormEvent) {
+    event.preventDefault(); setError("");
+    if (next !== repeat) { setError("Las contraseñas nuevas no coinciden."); return; }
+    if (!acceptablePassword(next, member.username, current)) { setError(`Usa de ${minPasswordLength} a ${maxPasswordLength} caracteres variados, distintos de tu usuario y de la contraseña temporal.`); return; }
+    setBusy(true);
+    try { await api("/account/password", "POST", { currentPassword: current, newPassword: next }); setCurrent(""); setNext(""); setRepeat(""); await onChanged(); }
+    catch (cause) { setError(message(cause)); setBusy(false); }
+  }
+  return <div className="login-page">
+    <a className="skip-link" href="#main">Saltar al contenido</a>
+    <main id="main" className="login-main">
+      <div className="login-brand"><span className="brand-mark" aria-hidden="true">hl</span><span>Happy Learners</span></div>
+      <section className="login-card" aria-labelledby="password-title">
+        <h1 id="password-title">Cambia tu contraseña</h1>
+        <p>Hola, {member.displayName || member.username}. Entraste con una contraseña temporal; elige una propia para continuar. Solo tú la conocerás.</p>
+        {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
+        <form onSubmit={submit}>
+          <div className="field"><label htmlFor="current-password">Contraseña temporal</label><input id="current-password" type="password" autoComplete="current-password" maxLength={maxPasswordLength} value={current} onChange={event => setCurrent(event.target.value)} required/></div>
+          <div className="field"><label htmlFor="new-password">Nueva contraseña</label><input id="new-password" type="password" autoComplete="new-password" minLength={minPasswordLength} maxLength={maxPasswordLength} aria-describedby="new-password-hint" value={next} onChange={event => setNext(event.target.value)} required/>
+            <small id="new-password-hint" className="hint">Al menos {minPasswordLength} caracteres. Una frase que recuerdes funciona bien.</small></div>
+          <div className="field"><label htmlFor="repeat-password">Repite la nueva contraseña</label><input id="repeat-password" type="password" autoComplete="new-password" maxLength={maxPasswordLength} value={repeat} onChange={event => setRepeat(event.target.value)} required/></div>
+          <button className="button primary full" disabled={busy}>{busy ? "Guardando…" : "Guardar y continuar"}</button>
+          <button type="button" className="button ghost full" onClick={onLeave}>Salir</button>
+        </form>
+      </section>
+    </main>
+  </div>;
 }
