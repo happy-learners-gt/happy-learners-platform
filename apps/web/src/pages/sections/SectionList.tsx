@@ -8,6 +8,7 @@ import { Icon } from "../../ui/icons";
 import { EmptyState, ErrorState, Loading, PageHeader, PrimaryAction, Section, StatusBadge } from "../../ui/primitives";
 import { WeekGrid } from "../course/Timetable";
 import { SectionCards } from "./SectionCard";
+import { CalendarSync } from "./CalendarSync";
 import { sectionPath } from "./context";
 
 /**
@@ -66,5 +67,6 @@ export function Agenda() {
       {visible.length ? <SectionCards sections={visible} today={today}/> : live.length ? <EmptyState icon="search" title="Ninguna sección coincide" action={<button type="button" className="button secondary" onClick={() => navigate(url.pathname, true)}>Quitar filtros</button>}>Prueba con otra palabra o elige otro curso.</EmptyState> : null}
       {closed.length > 0 && <details className="closed-groups"><summary>Secciones cerradas o de cursos archivados ({closed.length})</summary><SectionCards sections={closed} today={today}/></details>}
     </section>
+    <CalendarSync/>
   </>;
 }

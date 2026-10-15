@@ -1,5 +1,9 @@
 # Changelog
 
+## Sin publicar
+
+- ST-125: **Agenda → Sincronizar con mi calendario** crea un enlace de suscripción privado con las clases de las secciones que impartes, compatible con Google Calendar (Desde URL), Outlook (Suscribirse desde la web) y Apple Calendar (Nueva suscripción a calendario). Las cancelaciones, reprogramaciones y cambios aparecen en la siguiente actualización del calendario. **Regenerar enlace** pide confirmación y el anterior deja de funcionar. `GET, POST /api/feeds/calendar` y `GET /api/feeds/calendar/:token.ics`; `0033_calendar_feeds.sql` guarda solo el SHA-256 del token y el respaldo no lo copia.
+
 ## 1.0.0 — 2026-10-07
 
 Versión 1.0 de REL-006 (DEC-034, DEC-035), aceptada por la Product Owner el 7 de octubre de 2026 sobre la candidata 1.0.0-rc.2 desplegada en producción (ST-078). Reúne las dos candidatas: respaldo y restauración de cada organización, ensayo de publicación y reversión, validación de accesibilidad y seguridad, retiro de las rutas heredadas, el tiempo de las lecciones conectado con el de las clases, los choques de horario confirmados y registrados, el programa de inglés por niveles en la demostración y la zona horaria IANA.
