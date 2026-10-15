@@ -16,6 +16,7 @@ responden 404, los métodos no permitidos 405 y las rutas heredadas retiradas 41
 | `files.ts` | Archivos privados de cada curso en R2. |
 | `sections.ts`, `classes.ts`, `attendance.ts`, `workgroups.ts`, `conflicts.ts` | Secciones, horario, clases, asistencia, grupos de trabajo y choques de horario. |
 | `backup.ts` | Respaldo y restauración de cada organización. |
+| `calendar-feed.ts` | Enlace de suscripción al calendario de clases (iCalendar) de cada educador. |
 | `storage.ts` | Almacenamiento SQLite de cada organización en su Durable Object. |
 
 El contrato de cada ruta está en `docs/api.md`; la arquitectura, los datos y la seguridad, en el Manual técnico
