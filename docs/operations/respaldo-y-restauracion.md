@@ -9,7 +9,7 @@ lógica en JSON de esa base:
 
 | Incluye | No incluye |
 | --- | --- |
-| Organización, cuentas y membresías, cursos, programas y requisitos, módulos, lecciones y revisiones, recursos y materiales, clasificaciones, secciones, horarios, clases, asistencia, estudiantes, grupos de trabajo, calendario, actividad y metadatos de documentos. | Contraseñas (sal y hash), sesiones abiertas de educadores y estudiantes, límites de inicio de sesión y el registro de migraciones. |
+| Organización, cuentas y membresías, cursos, programas y requisitos, módulos, lecciones y revisiones, recursos y materiales, clasificaciones, secciones, horarios, clases, asistencia, estudiantes, grupos de trabajo, calendario, actividad, metadatos de documentos y las versiones de términos y privacidad con sus aceptaciones. | Contraseñas (sal y hash), sesiones abiertas de educadores y estudiantes, límites de inicio de sesión y el registro de migraciones. |
 
 El contenido de los documentos Office está en el bucket R2 privado y no forma parte del respaldo. El respaldo
 conserva sus metadatos (curso, nombre, tamaño, clave del objeto y estado). Los documentos no se eliminan: archivarlos

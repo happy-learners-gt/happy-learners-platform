@@ -7,8 +7,8 @@ import { Icon } from "./icons";
 import type { IconName } from "./icons";
 import { EmptyState, ErrorState, Skeleton, StatusBadge } from "./primitives";
 
-const targetIcon: Record<ActivityEvent["targetType"], IconName> = { course: "courses", program: "grid", module: "content", lesson: "edit", resource: "library", competency: "spark", outcome: "spark", group: "users", session: "calendar", team: "users" };
-const targetLabel: Record<ActivityEvent["targetType"], string> = { course: "Curso", program: "Programa", module: "Módulo", lesson: "Lección", resource: "Recurso", competency: "Competencia", outcome: "Resultado de aprendizaje", group: "Sección", session: "Clase", team: "Equipo" };
+const targetIcon: Record<ActivityEvent["targetType"], IconName> = { course: "courses", program: "grid", module: "content", lesson: "edit", resource: "library", competency: "spark", outcome: "spark", group: "users", session: "calendar", team: "users", legal: "shield" };
+const targetLabel: Record<ActivityEvent["targetType"], string> = { course: "Curso", program: "Programa", module: "Módulo", lesson: "Lección", resource: "Recurso", competency: "Competencia", outcome: "Resultado de aprendizaje", group: "Sección", session: "Clase", team: "Equipo", legal: "Términos y privacidad" };
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join("").toUpperCase();
 
 /** A person's initials on their colour; the name is always next to it or in the accessible label. */

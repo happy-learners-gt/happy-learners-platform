@@ -486,3 +486,30 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual(demo.execute("SELECT count(*) FROM users WHERE username='tomas.aguilar'").fetchone()[0], 1)
         for scope in ["org-other", "org-hl"]:
             self.assertEqual(self.scoped(scope).execute("SELECT count(*) FROM courses WHERE id LIKE 'seed-course-ingles-%'").fetchone()[0], 0)
+
+    def test_legal_versions_and_acceptances_are_kept(self):
+        """0032 (ST-126, ST-127): published versions never change, acceptances only record their withdrawal, the log keeps its rows."""
+        db = self.migrated()
+        self.assertEqual(db.execute("SELECT count(*) FROM legal_documents").fetchone()[0], 0)
+        self.assertGreater(db.execute("SELECT count(*) FROM activity_events").fetchone()[0], 0)
+        db.execute("INSERT INTO legal_documents(id,organization_id,kind,status,title,body,consent,updated_by,updated_at) VALUES ('p','org-demo','privacy','draft','Privacidad','Texto ficticio de la política.','Doy mi consentimiento.','user-0','t')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO legal_acceptances(id,organization_id,document_id,user_id,accepted_at) VALUES ('a0','org-demo','p','user-0','t')")
+        db.execute("UPDATE legal_documents SET status='published',version=1,published_by='user-0',published_at='t' WHERE id='p'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE legal_documents SET title='Cambiada' WHERE id='p'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("DELETE FROM legal_documents WHERE id='p'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO legal_documents(id,organization_id,kind,status,title,body,updated_by,updated_at) VALUES ('q','org-demo','privacy','draft','Sin consentimiento','Texto ficticio de la política.','user-0','t')")
+        db.execute("INSERT INTO legal_acceptances(id,organization_id,document_id,user_id,accepted_at) VALUES ('a1','org-demo','p','user-0','2026-10-01')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO legal_acceptances(id,organization_id,document_id,user_id,accepted_at) VALUES ('a2','org-demo','p','user-0','2026-10-02')")
+        db.execute("UPDATE legal_acceptances SET withdrawn_at='2026-10-03' WHERE id='a1'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE legal_acceptances SET withdrawn_at='2026-10-04' WHERE id='a1'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("DELETE FROM legal_acceptances WHERE id='a1'")
+        db.execute("INSERT INTO legal_acceptances(id,organization_id,document_id,user_id,accepted_at) VALUES ('a3','org-demo','p','user-0','2026-10-05')")
+        db.execute("INSERT INTO activity_events(id,organization_id,actor_id,action,target_type,target_id,summary,occurred_at) VALUES ('e','org-demo','user-0','withdrawn','legal','p','Retiró su consentimiento','t')")
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])

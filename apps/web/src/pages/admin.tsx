@@ -14,6 +14,7 @@ import { Menu } from "../ui/Menu";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section, StatusBadge } from "../ui/primitives";
 import { DaysOff } from "./calendar";
 import { ProgramPathDialog } from "./programPath";
+import { LegalSettings } from "./legal";
 
 function AdminOnly({ title, children }: { title: string; children: ReactNode }) {
   const { member } = useSession();
@@ -58,6 +59,7 @@ function OrganizationForm() {
         <p className="muted">Una copia en JSON de los cursos, las lecciones, las secciones, el calendario y los registros de la organización. No incluye contraseñas, sesiones ni el contenido de los documentos subidos. Guárdala en un lugar privado: contiene los nombres de los estudiantes.</p>
       </Section>
     </div>
+    <LegalSettings/>
   </>;
 }
 
