@@ -42,8 +42,8 @@ transacción. La restauración:
 1. Responde 403 a quien no administra la organización.
 2. Rechaza con 400 una copia cuyos resúmenes no coinciden con su contenido (alterada o incompleta).
 3. Rechaza con 409 una copia de otra organización, de otra versión del esquema o con otras tablas.
-4. Conserva las contraseñas que el espacio ya tenía. Una cuenta que solo existe en la copia queda sin contraseña
-   utilizable hasta que administración la restablezca.
+4. Conserva las contraseñas que el espacio ya tenía, y con ellas si son temporales (ST-093). Una cuenta que solo
+   existe en la copia queda sin contraseña utilizable hasta que administración la restablezca desde **Educadores**.
 5. Cierra las sesiones de cuentas, secciones o estudiantes que ya no existen.
 6. Compara cada tabla con la copia y revierte todo si alguna difiere.
 

@@ -10,7 +10,7 @@ responden 404, los métodos no permitidos 405 y las rutas heredadas retiradas 41
 | Módulo | Responsabilidad |
 | --- | --- |
 | `index.ts` | Enrutamiento, cabeceras de seguridad, sesiones y límite de intentos de acceso. |
-| `auth.ts`, `access.ts`, `roles.ts`, `team.ts` | Sesiones, permisos por organización, curso y sección, roles y equipo. |
+| `auth.ts`, `access.ts`, `roles.ts`, `accounts.ts`, `team.ts` | Sesiones, contraseñas, permisos por organización, curso y sección, roles, cuentas del equipo y equipo docente. |
 | `courses.ts`, `content.ts`, `prerequisites.ts`, `duplicate.ts` | Programas, cursos, plan curricular, módulos, lecciones y requisitos. |
 | `collaboration.ts`, `collaboration-awareness.ts`, `rich-text.ts` | Coedición en vivo de las lecciones mediante un Durable Object por lección. |
 | `files.ts` | Archivos privados de cada curso en R2. |

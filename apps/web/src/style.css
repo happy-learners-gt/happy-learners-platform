@@ -1309,3 +1309,8 @@ ul.cell-list li svg { display: inline-block; vertical-align: -2px; margin-right:
 .conflict-note .icon { flex: none; margin-top: 2px; color: var(--color-warning); }
 .conflict-note.confirmed { background: var(--color-neutral-soft); color: var(--color-ink-soft); }
 .conflict-note.confirmed .icon { color: var(--color-ink-soft); }
+/* ST-093: the username and temporary password handed over once. */
+.credentials { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-2) var(--space-4); align-items: baseline; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--color-surface-muted); }
+.credentials dt { color: var(--color-muted); font-size: var(--text-sm); }
+.credentials code { font-size: var(--text-lg); font-weight: var(--weight-bold); letter-spacing: .04em; overflow-wrap: anywhere; user-select: all; }
+.credentials + .button { justify-self: start; }

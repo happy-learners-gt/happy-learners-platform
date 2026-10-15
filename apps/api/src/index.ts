@@ -6,6 +6,7 @@ import type { Database } from "./storage";
 export { OrganizationStore } from "./storage";
 import { cookie, digest, newToken, sessionToken, verifyPassword } from "./auth";
 import { roles } from "./roles";
+import { changePassword } from "./accounts";
 import { digests, type Backup } from "./backup";
 import { content, reviews, shared } from "./content";
 import { courses, programs, taxonomy } from "./courses";
@@ -33,7 +34,7 @@ async function body(request: Request): Promise<unknown> {
   if (!request.headers.get("content-type")?.startsWith("application/json")) throw new Error("INPUT");
   const pathname = new URL(request.url).pathname;
   // Lessons carry rich text for every block; other bodies stay small.
-  const limit = pathname === "/api/login" ? 2048 : pathname === "/api/organization/restore" ? 33554432 : /^\/api\/lessons(\/|$)/.test(pathname) ? 262144 : 65536;
+  const limit = pathname === "/api/login" || pathname === "/api/account/password" ? 2048 : pathname === "/api/organization/restore" ? 33554432 : /^\/api\/lessons(\/|$)/.test(pathname) ? 262144 : 65536;
   const reader = request.body?.getReader();
   if (!reader) throw new Error("INPUT");
   let text = ""; const decoder = new TextDecoder(); let size = 0;
@@ -48,8 +49,16 @@ async function body(request: Request): Promise<unknown> {
 async function member(request: Request, db: Database): Promise<Member | null> {
   const token = sessionToken(request);
   if (!token) return null;
-  return db.prepare("SELECT u.id, u.username, COALESCE(u.display_name,u.username) AS displayName, CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END AS role, m.organization_id AS organizationId FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND m.active=1")
-    .bind(await digest(token), Date.now()).first<Member>();
+  const row = await db.prepare("SELECT u.id, u.username, COALESCE(u.display_name,u.username) AS displayName, CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END AS role, m.organization_id AS organizationId, u.must_change_password AS mustChange FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND m.active=1")
+    .bind(await digest(token), Date.now()).first<Member & { mustChange: number }>();
+  if (!row) return null;
+  const { mustChange, ...current } = row;
+  return mustChange ? { ...current, mustChangePassword: true } : current;
+}
+/** Whether a username exists in any organization, active or not: it decides where its owner signs in (ST-093). */
+async function usernameTaken(env: Env, username: string) {
+  const found = await Promise.all(organizationIds.map(id => database(env, id).prepare("SELECT 1 AS found FROM users WHERE username=?").bind(username).first()));
+  return found.some(Boolean);
 }
 /** The organization a username belongs to: each store is asked once; an unknown name stays with the default one. */
 async function organizationOf(env: Env, username: string) {
@@ -63,7 +72,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     for (const [name, value] of Object.entries(headers)) result.headers.set(name, value);
     return result;
   }
-  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|organization|calendar|members|levels|units|resources|lessons|courses|programs|vocabularies|terms|student)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files"))
+  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|account|organization|calendar|members|levels|units|resources|lessons|courses|programs|vocabularies|terms|student)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files") && !/^\/api\/members\/[a-z0-9-]+\/password$/.test(path))
     || (method === "POST" && path === "/api/organization/restore" && env.RESTORE_ENABLED === "true")
     ? await body(request) : undefined;
   // Finishing or cancelling a class may say what was covered or what happens to its plan; without a body, the defaults apply.
@@ -84,7 +93,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   // Retired in 1.0 (ST-076): no screen uses them; their data stays readable through courses and the library.
   if (/^\/api\/(curriculum|levels|units)(\/[a-z0-9-]+)?$/.test(path) || /^\/api\/resources\/[a-z0-9-]+$/.test(path) || (path === "/api/resources" && !["GET", "HEAD"].includes(method)))
     return json({ error: "Esta ruta se retiró en la versión 1.0." }, 410);
-  const methods: Record<string, string[]> = { "/api/session": ["GET"], "/api/login": ["POST"], "/api/logout": ["POST"], "/api/organization": ["GET", "PUT"], "/api/organization/backup": ["GET"], "/api/resources": ["GET"], "/api/lessons": ["GET", "POST"] };
+  const methods: Record<string, string[]> = { "/api/session": ["GET"], "/api/login": ["POST"], "/api/logout": ["POST"], "/api/account/password": ["POST"], "/api/organization": ["GET", "PUT"], "/api/organization/backup": ["GET"], "/api/resources": ["GET"], "/api/lessons": ["GET", "POST"] };
   // Restoring replaces an organization's data, so only environments that rehearse it (preview, local tests) offer it.
   if (env.RESTORE_ENABLED === "true") methods["/api/organization/restore"] = ["POST"];
   if (/^\/api\/courses$/.test(path)) methods[path] = ["GET", "POST"];
@@ -126,7 +135,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/programs\/[a-z0-9-]+\/prerequisites$/.test(path)) methods[path] = ["GET", "PUT"];
   if (/^\/api\/(vocabularies|terms)$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/(vocabularies|terms)\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
-  const allowed = methods[path] || (path === "/api/members" ? ["GET"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/lessons\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/(publish|duplicate|review|review\/return)$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+\/files\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
+  const allowed = methods[path] || (path === "/api/members" ? ["GET", "POST"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/members\/[a-z0-9-]+\/password$/.test(path) ? ["POST"] : /^\/api\/lessons\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/(publish|duplicate|review|review\/return)$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+\/files\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
   if (!allowed) return json({ error: "Not found" }, 404);
   if (!allowed.includes(method)) return json({ error: "Method not allowed" }, 405, { Allow: allowed.join(", ") });
   if (!["GET", "HEAD"].includes(method)) {
@@ -166,6 +175,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   const current = await member(request, db);
   if (!current) return json({ error: "Inicia sesión para continuar." }, 401);
   if (path === "/api/session") return json({ member: current });
+  if (path === "/api/account/password") return changePassword(input, current, sessionToken(request)!, db);
+  // A temporary password opens nothing else until the person chooses their own (ST-093).
+  if (current.mustChangePassword) return json({ error: "Cambia tu contraseña temporal para continuar.", code: "PASSWORD_CHANGE_REQUIRED" }, 403);
   if (/^\/api\/courses\/[a-z0-9-]+\/files(?:\/|$)/.test(path)) return courseFiles(path, method, request, current, db, env.COURSE_FILES);
   const collaborationMatch = path.match(/^\/api\/courses\/([a-z0-9-]+)\/lessons\/([a-z0-9-]+)\/collaborate$/);
   if (collaborationMatch) {
@@ -201,7 +213,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/progress") return progress(current, db);
   if (path === "/api/people") return people(current, db);
   if (path === "/api/reviews") return reviews(current, db);
-  if (path.startsWith("/api/members")) return roles(path, method, input, current, db);
+  if (path.startsWith("/api/members")) return roles(path, method, input, current, db, username => usernameTaken(env, username));
   if (path === "/api/organization/backup" || path === "/api/organization/restore") {
     if (current.role !== "admin") return json({ error: "Solo administración respalda o restaura la organización." }, 403);
     if (path.endsWith("/backup")) {
