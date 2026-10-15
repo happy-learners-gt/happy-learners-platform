@@ -12,6 +12,7 @@ import { courses, programs, taxonomy } from "./courses";
 import { duplicateCourse } from "./duplicate";
 import { accessTo } from "./access";
 import { activity, people, progress } from "./team";
+import { legal, pendingFor, publicPrivacy } from "./legal";
 import { classroom } from "./attendance";
 import { calendar, myClasses, student, studentToken } from "./classes";
 import { sections } from "./sections";
@@ -33,7 +34,7 @@ async function body(request: Request): Promise<unknown> {
   if (!request.headers.get("content-type")?.startsWith("application/json")) throw new Error("INPUT");
   const pathname = new URL(request.url).pathname;
   // Lessons carry rich text for every block; other bodies stay small.
-  const limit = pathname === "/api/login" ? 2048 : pathname === "/api/organization/restore" ? 33554432 : /^\/api\/lessons(\/|$)/.test(pathname) ? 262144 : 65536;
+  const limit = pathname === "/api/login" ? 2048 : pathname === "/api/organization/restore" ? 33554432 : /^\/api\/(lessons|legal)(\/|$)/.test(pathname) ? 262144 : 65536;
   const reader = request.body?.getReader();
   if (!reader) throw new Error("INPUT");
   let text = ""; const decoder = new TextDecoder(); let size = 0;
@@ -63,7 +64,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     for (const [name, value] of Object.entries(headers)) result.headers.set(name, value);
     return result;
   }
-  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|organization|calendar|members|levels|units|resources|lessons|courses|programs|vocabularies|terms|student)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files"))
+  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|organization|calendar|members|levels|units|resources|lessons|courses|programs|vocabularies|terms|student|legal)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files"))
     || (method === "POST" && path === "/api/organization/restore" && env.RESTORE_ENABLED === "true")
     ? await body(request) : undefined;
   // Finishing or cancelling a class may say what was covered or what happens to its plan; without a body, the defaults apply.
@@ -126,6 +127,10 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/programs\/[a-z0-9-]+\/prerequisites$/.test(path)) methods[path] = ["GET", "PUT"];
   if (/^\/api\/(vocabularies|terms)$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/(vocabularies|terms)\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
+  // ST-126, ST-127: terms and privacy; the privacy policy in force is also public.
+  if (["/api/legal", "/api/legal/documents", "/api/legal/acceptances", "/api/public/privacy"].includes(path)) methods[path] = ["GET"];
+  if (["/api/legal/accept", "/api/legal/withdraw"].includes(path) || /^\/api\/legal\/documents\/[a-z]+\/publish$/.test(path)) methods[path] = ["POST"];
+  if (/^\/api\/legal\/documents\/[a-z]+$/.test(path)) methods[path] = ["PUT"];
   const allowed = methods[path] || (path === "/api/members" ? ["GET"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/lessons\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/(publish|duplicate|review|review\/return)$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+\/files\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
   if (!allowed) return json({ error: "Not found" }, 404);
   if (!allowed.includes(method)) return json({ error: "Method not allowed" }, 405, { Allow: allowed.join(", ") });
@@ -163,9 +168,14 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (token) await db.prepare("DELETE FROM sessions WHERE token_hash=?").bind(await digest(token)).run();
     return json({ ok: true }, 200, { "Set-Cookie": cookie("", request, true) });
   }
+  if (path === "/api/public/privacy") return publicPrivacy(url, id => database(env, id));
   const current = await member(request, db);
   if (!current) return json({ error: "Inicia sesión para continuar." }, 401);
-  if (path === "/api/session") return json({ member: current });
+  // Until the person accepts the terms and consents to the privacy policy in force, only those and the session answer.
+  const pending = await pendingFor(db, current);
+  if (path === "/api/session") return json({ member: current, pending });
+  if (path.startsWith("/api/legal")) return legal(path, method, input, current, db);
+  if (pending.length && !(path === "/api/organization" && method === "GET")) return json({ error: "Acepta los términos y la política de privacidad vigentes para continuar.", pending }, 403);
   if (/^\/api\/courses\/[a-z0-9-]+\/files(?:\/|$)/.test(path)) return courseFiles(path, method, request, current, db, env.COURSE_FILES);
   const collaborationMatch = path.match(/^\/api\/courses\/([a-z0-9-]+)\/lessons\/([a-z0-9-]+)\/collaborate$/);
   if (collaborationMatch) {

@@ -6,12 +6,15 @@ export const sessionExpired = "hl:session-expired";
 export const sessionRestored = "hl:session-restored";
 /** Fired after a write succeeds, with its path, so views that list what it touched can refresh. */
 export const changed = "hl:changed";
+/** Fired when the terms or privacy policy in force still need the person's acceptance (ST-126, ST-127). */
+export const consentRequired = "hl:consent-required";
 const quiet = new Set(["/session", "/login", "/logout"]);
 
 async function parse<T>(response: Response, path: string): Promise<T> {
   let result: { error?: string } & Record<string, unknown> = {};
   try { result = await response.json(); } catch { /* Non-JSON error bodies fall back to a generic message. */ }
   if (response.status === 401 && !quiet.has(path)) dispatchEvent(new CustomEvent(sessionExpired));
+  if (response.status === 403 && Array.isArray(result.pending)) dispatchEvent(new CustomEvent(consentRequired));
   if (!response.ok) throw new ApiError(result.error || "No se pudo completar la operación. Vuelve a intentar.", response.status, result);
   return result as T;
 }

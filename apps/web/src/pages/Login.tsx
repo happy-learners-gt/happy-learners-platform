@@ -57,6 +57,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => Promise<void> }) {
         <div className="code-row"><label htmlFor="lesson-code" className="sr-only">Código de sección o de lección</label><input id="lesson-code" required maxLength={40} value={code} onChange={event => setCode(event.target.value)} placeholder="Ej. DG-MATE-3A" autoCapitalize="characters"/><button className="button secondary" disabled={busy}>{busy ? "Abriendo…" : "Abrir"}</button></div>
       </form>
       <p className="login-privacy"><Icon name="shield" size={16}/>Sin expedientes ni datos personales de estudiantes.</p>
+      <p className="login-privacy"><a href="/privacidad" onClick={event => { event.preventDefault(); navigate("/privacidad"); }}>Política de privacidad</a></p>
     </main>
   </div>;
 }

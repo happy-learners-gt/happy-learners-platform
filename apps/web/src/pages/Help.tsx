@@ -1,5 +1,6 @@
 import { Link } from "../navigation";
 import { EmptyState, PageHeader } from "../ui/primitives";
+import { MyConsent } from "./legal";
 
 export function Help() {
   return <>
@@ -50,6 +51,9 @@ export function Help() {
       <h2>Datos y privacidad</h2>
       <p>La asistencia guarda solo el nombre de lista, la sección, la fecha y el estado. No pide correo, teléfono, fecha de nacimiento ni notas. La consultan administración y quienes imparten la sección.</p>
       <p>Las lecciones publicadas y el espacio de la sección se abren sin cuenta. Solo se cuenta cuántas veces se terminó una lección; no se guardan nombres ni respuestas. En un curso a tu ritmo, el avance de cada estudiante se guarda con el nombre que elige de la lista de su sección, nunca sus respuestas. La sesión del equipo dura hasta ocho horas.</p>
+      <h2>Términos y consentimiento</h2>
+      <p>Administración publica los términos y condiciones y la <a href="/privacidad" target="_blank" rel="noopener">política de privacidad</a>, que se puede leer sin iniciar sesión. Cada nueva versión se acepta en el siguiente ingreso. Puedes retirar tu consentimiento de privacidad en cualquier momento: queda registrado y, sin él, no puedes usar la plataforma hasta darlo de nuevo.</p>
+      <MyConsent/>
       <h2>Diseño</h2>
       <p>La interfaz sigue Fluent Design de Microsoft. La <Link href="/guia-de-estilo">guía de estilo</Link> muestra sus principios y todos los componentes.</p>
       <h2>Esta demostración</h2>
