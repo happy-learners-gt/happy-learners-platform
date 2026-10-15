@@ -221,6 +221,8 @@ describe("ST-125 subscription link in the local Worker", () => {
     expect((await admin.put("/api/members/user-1", { role: "educator", active: false })).status).toBe(200);
     expect((await fetchFeed(otherLink)).status).toBe(404);
     expect((await admin.put("/api/members/user-1", { role: "educator", active: true })).status).toBe(200);
+    // Reactivating does not revive the old link: the person creates a new one.
+    expect((await fetchFeed(otherLink)).status).toBe(404);
   }, 60000);
 
   it("never copies calendar links into backups", async () => {

@@ -486,3 +486,19 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual(demo.execute("SELECT count(*) FROM users WHERE username='tomas.aguilar'").fetchone()[0], 1)
         for scope in ["org-other", "org-hl"]:
             self.assertEqual(self.scoped(scope).execute("SELECT count(*) FROM courses WHERE id LIKE 'seed-course-ingles-%'").fetchone()[0], 0)
+
+    def test_team_accounts_keep_every_activity_event_and_accept_account_changes(self):
+        """0031 (ST-093): existing accounts keep their password; the activity is rebuilt row for row and admits account events."""
+        before = self.scoped("org-demo", until=30)
+        events = before.execute("SELECT * FROM activity_events ORDER BY id").fetchall()
+        demo = self.scoped("org-demo")
+        self.assertEqual(demo.execute("SELECT id,organization_id,actor_id,action,target_type,target_id,course_id,summary,occurred_at,group_id FROM activity_events ORDER BY id").fetchall(), events)
+        self.assertEqual(demo.execute("SELECT count(*) FROM users WHERE must_change_password<>0").fetchone()[0], 0)
+        self.assertEqual(sorted(row[0] for row in demo.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='activity_events' AND sql IS NOT NULL")),
+                         ["activity_events_actor", "activity_events_course", "activity_events_group", "activity_events_organization"])
+        demo.execute("INSERT INTO activity_events(id,organization_id,actor_id,action,target_type,target_id,summary,occurred_at) VALUES ('e-reset','org-demo','user-0','reset','account','user-1','Restableció la contraseña','t')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("INSERT INTO activity_events(id,organization_id,actor_id,action,target_type,target_id,summary,occurred_at) VALUES ('e-bad','org-demo','user-0','deleted','account','user-1','x','t')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("UPDATE users SET must_change_password=2 WHERE id='user-1'")
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])

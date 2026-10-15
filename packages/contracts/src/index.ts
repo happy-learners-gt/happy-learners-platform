@@ -1,6 +1,7 @@
 export interface HealthResponse { status: "ok" }
 export interface VersionResponse { sha: string }
-export interface Member { id: string; username: string; displayName?: string; role: "admin" | "educator"; organizationId: string; active?: boolean }
+/** `mustChangePassword` is present (true) only while the account still signs in with a temporary password (ST-093). */
+export interface Member { id: string; username: string; displayName?: string; role: "admin" | "educator"; organizationId: string; active?: boolean; mustChangePassword?: true }
 export type CourseRole = "lead" | "co-teacher";
 /** Someone on a course's teaching team: the lead or a co-teacher. */
 export interface CourseMember { userId: string; username: string; name: string; role: CourseRole }
@@ -31,8 +32,8 @@ export interface LessonReview {
 export interface ReviewItem extends LessonReview { lessonId: string; lessonTitle: string; courseId: string; courseTitle: string }
 /** An audited operation: who did what, on which course, and when. */
 export interface ActivityEvent {
-  id: string; actorId: string; actorName: string; action: "created" | "updated" | "published" | "archived" | "restored" | "planned" | "recorded" | "uploaded" | "assigned";
-  targetType: "course" | "program" | "module" | "lesson" | "resource" | "competency" | "outcome" | "group" | "session" | "team"; targetId: string; courseId?: string | null; summary: string; occurredAt: string;
+  id: string; actorId: string; actorName: string; action: "created" | "updated" | "published" | "archived" | "restored" | "planned" | "recorded" | "uploaded" | "assigned" | "reset";
+  targetType: "course" | "program" | "module" | "lesson" | "resource" | "competency" | "outcome" | "group" | "session" | "team" | "account"; targetId: string; courseId?: string | null; summary: string; occurredAt: string;
 }
 /** How far a course has come: content, curriculum coverage and attendance. */
 export interface CourseProgress {
