@@ -1309,3 +1309,6 @@ ul.cell-list li svg { display: inline-block; vertical-align: -2px; margin-right:
 .conflict-note .icon { flex: none; margin-top: 2px; color: var(--color-warning); }
 .conflict-note.confirmed { background: var(--color-neutral-soft); color: var(--color-ink-soft); }
 .conflict-note.confirmed .icon { color: var(--color-ink-soft); }
+/* ST-065: filters of a section's classes — section and period, side by side and wrapping on narrow screens. */
+.class-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); margin-block-end: var(--space-3); }
+.class-filters .field { min-width: 10rem; }

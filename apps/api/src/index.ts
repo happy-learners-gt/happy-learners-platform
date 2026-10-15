@@ -190,7 +190,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     return room.fetch(new Request(request, { headers: internalHeaders }));
   }
   if (/^\/api\/(taxonomy|vocabularies|terms)(\/|$)/.test(path)) return taxonomy(path, method, input, current, db);
-  if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions)(\/|$)/.test(path)) return classroom(path, method, input, current, db);
+  if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions)(\/|$)/.test(path)) return classroom(path, method, input, current, db, url.searchParams);
   if (/^\/api\/courses\/[a-z0-9-]+\/duplicate$/.test(path)) return duplicateCourse(path.split("/")[3], current, db, env.COURSE_FILES);
   if (/^\/api\/courses(\/|$)/.test(path)) return courses(path, method, input, current, db);
   if (/^\/api\/programs(\/|$)/.test(path)) return programs(path, method, input, current, db);
