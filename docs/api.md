@@ -35,6 +35,28 @@ usuario y de la actual) y cierra las demás sesiones. Crear una cuenta, cambiar 
 restablecer su contraseña y cambiarla quedan en `GET /api/activity` como `targetType: "account"` (acciones `created`,
 `updated`, `archived`, `restored` y `reset`), visibles para administración.
 
+## Términos y privacidad
+
+ST-126 y ST-127. Cada organización publica versiones de sus términos y condiciones (`terms`) y de su política de
+privacidad (`privacy`), que además lleva el texto del consentimiento. Un borrador no tiene versión; publicarlo le da la
+siguiente y desde entonces no cambia ni se borra. `GET /api/session` responde `{ member, pending }`: `pending` lista la
+última versión publicada de cada documento que la persona no ha aceptado o cuyo consentimiento retiró. Mientras no
+esté vacía, las demás rutas con sesión responden **403** con el mismo `pending`, salvo `GET /api/organization` y
+`/api/legal`. Sin versiones publicadas, nadie tiene pendientes.
+
+| Método | Ruta | Acceso |
+| --- | --- | --- |
+| GET | `/api/public/privacy[?organization=:id]` | Público: la política vigente de cada organización (o de una; 404 si no tiene) |
+| GET | `/api/legal` | Sesión: versiones vigentes, `pending` y los registros propios (`mine`) |
+| POST | `/api/legal/accept` `{ documentIds }` | Sesión: acepta versiones vigentes; una versión anterior responde 409 |
+| POST | `/api/legal/withdraw` `{ documentId }` | Sesión: retira el consentimiento de privacidad vigente; el registro se conserva con `withdrawnAt` |
+| GET | `/api/legal/documents` | Administración: borradores y todas las versiones |
+| PUT | `/api/legal/documents/:kind` `{ title, body, consent? }` | Administración: guarda el borrador de `terms` o `privacy` |
+| POST | `/api/legal/documents/:kind/publish` | Administración: publica el borrador como nueva versión |
+| GET | `/api/legal/acceptances` | Administración: quién aceptó qué versión y cuándo, y las personas activas |
+
+Publicar, aceptar y retirar quedan en `/api/activity` (`targetType: "legal"`), sin el texto de los documentos.
+
 ## Programas, cursos y contenido
 
 | Método | Ruta |
