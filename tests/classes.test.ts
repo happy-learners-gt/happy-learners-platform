@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceptsAttendance, classPlanInput, fictional, groupCodePattern, localDay, newGroupCode, nextClassStatus, normalizeGroupCode, scopeOfSection, scopeOfShare, scopeOfToken, tokenPattern, tokenPrefix, upcomingClasses } from "@happy-learners/domain";
+import { acceptsAttendance, classPlanInput, courseAccess, inSessionFilter, sessionFilterAllowed, sessionFilterInput, fictional, groupCodePattern, localDay, newGroupCode, nextClassStatus, normalizeGroupCode, scopeOfSection, scopeOfShare, scopeOfToken, tokenPattern, tokenPrefix, upcomingClasses } from "@happy-learners/domain";
 
 describe("class lifecycle (HL-61 ST-035, ST-097)", () => {
   it("moves planned → in progress → completed and allows cancelling only before starting", () => {
@@ -83,5 +83,50 @@ describe("upcoming classes", () => {
   it("uses the organization's calendar day", () => {
     expect(localDay("America/Guatemala", new Date("2026-10-05T03:00:00Z"))).toBe("2026-10-04");
     expect(localDay("UTC", new Date("2026-10-05T03:00:00Z"))).toBe("2026-10-05");
+  });
+});
+
+describe("ST-065 (HL-108) session history filters", () => {
+  const classes = [
+    { id: "a1", groupId: "group-a", sessionDate: "2026-09-30" },
+    { id: "a2", groupId: "group-a", sessionDate: "2026-10-01" },
+    { id: "a3", groupId: "group-a", sessionDate: "2026-10-15" },
+    { id: "b1", groupId: "group-b", sessionDate: "2026-10-01" },
+    { id: "b2", groupId: "group-b", sessionDate: "2026-10-31" },
+  ];
+  const filtered = (query: string) => {
+    const filter = sessionFilterInput(new URLSearchParams(query));
+    if ("error" in filter) throw new Error(filter.error);
+    return classes.filter(item => inSessionFilter(item, filter)).map(item => item.id);
+  };
+  it("filters by section (grupo)", () => {
+    expect(filtered("section=group-a")).toEqual(["a1", "a2", "a3"]);
+    expect(filtered("section=group-b")).toEqual(["b1", "b2"]);
+    expect(filtered("")).toEqual(classes.map(item => item.id));
+  });
+  it("filters by period, with both limits included, as calendar days of the organization", () => {
+    expect(filtered("from=2026-10-01&to=2026-10-15")).toEqual(["a2", "a3", "b1"]);
+    expect(filtered("from=2026-10-15")).toEqual(["a3", "b2"]);
+    expect(filtered("to=2026-09-30")).toEqual(["a1"]);
+  });
+  it("combines the section and period filters", () => {
+    expect(filtered("section=group-a&from=2026-10-01&to=2026-10-31")).toEqual(["a2", "a3"]);
+    expect(filtered("section=group-b&to=2026-10-01")).toEqual(["b1"]);
+    expect(filtered("section=group-b&from=2026-10-02&to=2026-10-30")).toEqual([]);
+  });
+  it("rejects invalid filters", () => {
+    for (const query of ["from=2026-02-30", "to=15/10/2026", "from=2026-10-15&to=2026-10-01", "section=GROUP%20A", `section=${"a".repeat(101)}`])
+      expect(sessionFilterInput(new URLSearchParams(query))).toHaveProperty("error");
+    expect(sessionFilterInput(new URLSearchParams("section=&from=&to="))).toEqual({ section: null, from: null, to: null });
+  });
+  it("denies access to an outsider and to sections outside the person's team", () => {
+    const filter = { section: "group-b", from: null, to: null };
+    // Outside the course team there is no access at all, with or without a filter.
+    expect(sessionFilterAllowed(courseAccess(false, null, []), { section: null, from: null, to: null })).toBe(false);
+    expect(sessionFilterAllowed(courseAccess(false, null, []), filter)).toBe(false);
+    // An educator of the team filters only by the sections they teach; administration by any section.
+    expect(sessionFilterAllowed(courseAccess(false, "co-teacher", ["group-a"]), filter)).toBe(false);
+    expect(sessionFilterAllowed(courseAccess(false, "co-teacher", ["group-a"]), { ...filter, section: "group-a" })).toBe(true);
+    expect(sessionFilterAllowed(courseAccess(true, null, []), filter)).toBe(true);
   });
 });

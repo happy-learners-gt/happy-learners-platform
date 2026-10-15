@@ -1,5 +1,5 @@
 import type { CalendarBreak, ClassLesson, ClassLessonPlan, ClassResource, ClassSession, ClassStatus, CourseAccess, Lesson, Material, Member, Pacing, Resource, SectionSchedule, StudentClass, StudentPathModule, StudentSpace } from "@happy-learners/contracts";
-import { acceptsAttendance, breakInput, cancelPlanInput, carryOver, classActions, classPlanInput, classStatusLabels, completionInput, groupCodePattern, lessonsInOrder, maxClassLessons, localDay, nextClassStatus, normalizeGroupCode, resourceIdsOf, scheduleDates, scheduleInput, scheduleSummary, seesSection, teachesSection, upcomingClasses } from "@happy-learners/domain";
+import { acceptsAttendance, breakInput, cancelPlanInput, carryOver, classActions, classPlanInput, classStatusLabels, completionInput, groupCodePattern, inSessionFilter, lessonsInOrder, maxClassLessons, localDay, nextClassStatus, normalizeGroupCode, resourceIdsOf, scheduleDates, scheduleInput, scheduleSummary, seesSection, sessionFilterAllowed, sessionFilterInput, teachesSection, upcomingClasses } from "@happy-learners/domain";
 import { tokenPattern, tokenPrefix } from "@happy-learners/domain";
 import type { ClassAction } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
@@ -99,15 +99,24 @@ const stale = () => reply({ error: "La clase cambió mientras la editabas. Recar
 /**
  * /api/courses/:id/sessions[/:sid[/attendance|/start|/complete|/cancel|/restore]] — the course team plans the schedule
  * of classes (lessons and comments), then teaches each class: it starts it, takes the roll and finishes it.
+ * GET accepts ?section=&from=&to= (ST-065): one section and a period of calendar days, inclusive and combinable.
  */
-export async function sessions(parts: string[], method: string, input: unknown, current: Member, db: Database, courseId: string, access: CourseAccess) {
+export async function sessions(parts: string[], method: string, input: unknown, current: Member, db: Database, courseId: string, access: CourseAccess, query = new URLSearchParams()) {
   const now = new Date().toISOString();
   const [sessionId, sub] = [parts[5], parts[6]];
   if (!sessionId) {
     if (method === "GET") {
-      const rows = (await db.prepare(`SELECT ${sessionColumns} ${sessionJoins} WHERE s.course_id=? AND s.organization_id=? ORDER BY s.session_date DESC,s.starts_at DESC,s.created_at DESC LIMIT 400`).bind(courseId, current.organizationId).all<StoredSession>()).results.map(withLessons).filter(row => seesSection(access, row.groupId));
-      const breaks = (await db.prepare(`SELECT ${breakColumns} FROM calendar_breaks WHERE organization_id=? AND (group_id IS NULL OR group_id IN (SELECT id FROM course_groups WHERE course_id=?)) ORDER BY starts_on,ends_on`).bind(current.organizationId, courseId).all<CalendarBreak>()).results.filter(row => !row.groupId || seesSection(access, row.groupId));
-      return reply({ sessions: rows, lessonPlans: await lessonPlans(db, current.organizationId, rows.flatMap(row => row.lessons.map(lesson => lesson.id))), today: await todayFor(db, current.organizationId), breaks });
+      const filter = sessionFilterInput(query);
+      if ("error" in filter) return reply(filter, 400);
+      // A section outside the course, or one the person does not see, is not there for them: nothing about it leaks.
+      if (!sessionFilterAllowed(access, filter) || (filter.section && !await db.prepare("SELECT id FROM course_groups WHERE id=? AND course_id=? AND organization_id=?").bind(filter.section, courseId, current.organizationId).first()))
+        return reply({ error: "La sección no está disponible en este curso." }, 404);
+      // Class days are calendar days of the organization's time zone, so the period compares them as they are stored.
+      const narrowed = [filter.section && ["s.group_id=?", filter.section], filter.from && ["s.session_date>=?", filter.from], filter.to && ["s.session_date<=?", filter.to]].filter(Boolean) as [string, string][];
+      const rows = (await db.prepare(`SELECT ${sessionColumns} ${sessionJoins} WHERE s.course_id=? AND s.organization_id=?${narrowed.map(([clause]) => ` AND ${clause}`).join("")} ORDER BY s.session_date DESC,s.starts_at DESC,s.created_at DESC LIMIT 400`).bind(courseId, current.organizationId, ...narrowed.map(([, value]) => value)).all<StoredSession>()).results.map(withLessons).filter(row => seesSection(access, row.groupId) && inSessionFilter(row, filter));
+      const breaks = (await db.prepare(`SELECT ${breakColumns} FROM calendar_breaks WHERE organization_id=? AND (group_id IS NULL OR group_id IN (SELECT id FROM course_groups WHERE course_id=?)) ORDER BY starts_on,ends_on`).bind(current.organizationId, courseId).all<CalendarBreak>()).results
+        .filter(row => (!row.groupId || seesSection(access, row.groupId)) && (!filter.section || !row.groupId || row.groupId === filter.section) && (!filter.from || row.until >= filter.from) && (!filter.to || row.from <= filter.to));
+      return reply({ sessions: rows, lessonPlans: await lessonPlans(db, current.organizationId, rows.flatMap(row => row.lessons.map(lesson => lesson.id))), today: await todayFor(db, current.organizationId), breaks, filter });
     }
     if (!access.assigned.length) return notTeaching();
     // An extra class (a make-up, a review) takes the time of its section's schedule unless another one is given.
