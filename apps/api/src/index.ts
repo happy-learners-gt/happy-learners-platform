@@ -16,6 +16,7 @@ import { classroom } from "./attendance";
 import { calendar, myClasses, student, studentToken } from "./classes";
 import { sections } from "./sections";
 import { courseFiles, sharedFile } from "./files";
+import { feed, feedLink, feedPath } from "./calendar-feed";
 import { LessonCollaborationRoom } from "./collaboration";
 import { encodeLessonDraft } from "./rich-text";
 export { LessonCollaborationRoom };
@@ -70,6 +71,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === "POST" && /^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/(complete|cancel)$/.test(path) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   let scope: string = scopeOfToken(sessionToken(request));
   if (path.startsWith("/api/share/")) scope = scopeOfShare(path.split("/")[3]);
+  const feedToken = feedPath.exec(path)?.[1];
+  if (feedToken) scope = scopeOfToken(feedToken);
   if (path.startsWith("/api/student/")) scope = path === "/api/student/login" ? scopeOfSection(String((input as Record<string, unknown> | null)?.code || "").trim().toUpperCase()) : scopeOfToken(studentToken(request));
   if (path === "/api/login" && method === "POST") {
     const credentials = input as Record<string, unknown> | null;
@@ -121,6 +124,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/classes" || path === "/api/student/space" || /^\/api\/student\/files\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET"];
   if (["/api/student/login", "/api/student/logout", "/api/student/identity", "/api/student/progress"].includes(path)) methods[path] = ["POST"];
   if (path === "/api/taxonomy") methods[path] = ["GET"];
+  // ST-125: the calendar link (signed in) and the feed calendars fetch without a session; GET only.
+  if (path === "/api/feeds/calendar") methods[path] = ["GET", "POST"];
+  if (feedToken) methods[path] = ["GET"];
   if (path === "/api/programs") methods[path] = ["GET", "POST"];
   if (/^\/api\/programs\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET", "PUT"];
   if (/^\/api\/programs\/[a-z0-9-]+\/prerequisites$/.test(path)) methods[path] = ["GET", "PUT"];
@@ -157,6 +163,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (shareParts[4] === "files" && method === "GET") return sharedFile(shareParts[3], shareParts[5], scope, db, env.COURSE_FILES);
     return shared(path, method, request, db);
   }
+  if (feedToken) return feed(feedToken, url, scope, db);
   if (path.startsWith("/api/student/")) return student(path, method, input, request, scope, db, env.COURSE_FILES);
   if (path === "/api/logout") {
     const token = sessionToken(request);
@@ -196,6 +203,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/programs(\/|$)/.test(path)) return programs(path, method, input, current, db);
   if (path === "/api/activity") return activity(url, current, db);
   if (path === "/api/classes") return myClasses(current, db);
+  if (path === "/api/feeds/calendar") return feedLink(method, url, current, db);
   if (path.startsWith("/api/calendar")) return calendar(path, method, input, url, current, db);
   if (path.startsWith("/api/sections")) return sections(path, current, db);
   if (path === "/api/progress") return progress(current, db);
@@ -246,7 +254,7 @@ async function route(request: Request, env: Env): Promise<Response> {
 }
 export default {
     async fetch(request, env): Promise<Response> {
-    try { const response = await route(request, env); if (response.status === 101) return response; for (const [key, value] of Object.entries(headers)) response.headers.set(key, value); if (response.headers.has("X-File-SHA256")) response.headers.set("Content-Security-Policy", "sandbox; default-src 'none'; frame-ancestors 'none'"); return response; }
+    try { const response = await route(request, env); if (response.status === 101) return response; for (const [key, value] of Object.entries(headers)) response.headers.set(key, value); if (response.headers.get("Content-Type")?.startsWith("text/calendar")) response.headers.set("Cache-Control", "private, max-age=900"); if (response.headers.has("X-File-SHA256")) response.headers.set("Content-Security-Policy", "sandbox; default-src 'none'; frame-ancestors 'none'"); return response; }
     catch (error) {
       if (error instanceof Error && error.message === "INPUT") return json({ error: "Revisa los datos del formulario." }, 400);
       const cause = error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 240) : "Unknown error";
