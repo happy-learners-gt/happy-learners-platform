@@ -11,14 +11,29 @@ Un método no admitido responde 405 con `Allow`; una ruta desconocida, 404.
 | GET | `/api/health`, `/api/version` | Público |
 | POST | `/api/login`, `/api/logout` | Público; 30 intentos cada 15 minutos por origen |
 | GET | `/api/session` | Sesión |
+| POST | `/api/account/password` | Sesión |
 | GET, PUT | `/api/organization` | Lectura con sesión; escritura de administración |
 | GET | `/api/organization/backup` | Administración |
 | POST | `/api/organization/restore` | Administración, solo donde `RESTORE_ENABLED=true` |
-| GET | `/api/members` · PUT `/api/members/:id` | Administración |
+| GET, POST | `/api/members` · PUT `/api/members/:id` · POST `/api/members/:id/password` | Administración |
 | GET, POST | `/api/calendar` · DELETE `/api/calendar/:id` | Lectura con sesión; escritura de administración |
 | GET | `/api/activity`, `/api/progress`, `/api/people`, `/api/reviews` | Sesión, filtrado por permisos |
 | GET, POST | `/api/feeds/calendar` | Sesión: estado del enlace de calendario propio; POST lo crea o regenera |
 | GET | `/api/feeds/calendar/:token.ics` | Público con el enlace secreto; solo GET |
+
+Cuentas del equipo (ST-093). `POST /api/members` recibe `{ displayName, username, role }` (`admin` o `educator`); el
+usuario tiene de 3 a 32 letras minúsculas, números, puntos, guiones o guiones bajos y es único en todas las
+organizaciones, porque decide dónde inicia sesión su dueño (409 si ya existe). Responde 201 con `member` y
+`temporaryPassword`, que solo aparece en esa respuesta: no se guarda en claro ni entra en la actividad ni en el respaldo.
+`POST /api/members/:id/password` (sin cuerpo) emite otra contraseña temporal y cierra las sesiones de esa persona;
+responde 409 para la propia cuenta y la administradora inicial. `PUT /api/members/:id` recibe `{ role, active }`: con
+`active: false` la cuenta no inicia sesión y conserva su historial; nunca se borra.
+Mientras una cuenta use una contraseña temporal, `GET /api/session` incluye `member.mustChangePassword: true` y las
+demás rutas responden 403 con `code: "PASSWORD_CHANGE_REQUIRED"`, salvo `POST /api/logout` y
+`POST /api/account/password`, que recibe `{ currentPassword, newPassword }` (12 a 128 caracteres variados, distinta del
+usuario y de la actual) y cierra las demás sesiones. Crear una cuenta, cambiar su rol, desactivarla o reactivarla,
+restablecer su contraseña y cambiarla quedan en `GET /api/activity` como `targetType: "account"` (acciones `created`,
+`updated`, `archived`, `restored` y `reset`), visibles para administración.
 
 ## Programas, cursos y contenido
 

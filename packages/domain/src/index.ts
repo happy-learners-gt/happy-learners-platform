@@ -13,6 +13,8 @@ export { calendarFeed, escapeText, feedWindow, foldLine, zonedInstant } from "./
 export type { FeedClass } from "./calendar-feed";
 export { organizations, organizationIds, fictional, tokenPrefix, sharePrefix, sectionPrefix, tokenPattern, scopeOfToken, scopeOfShare, scopeOfSection } from "./organizations";
 export type { OrganizationId } from "./organizations";
+export { accountInput, acceptablePassword, maxPasswordLength, minPasswordLength, temporaryAlphabet, temporaryPassword, usernamePattern } from "./accounts";
+export type { AccountRole } from "./accounts";
 export type { ModuleLesson } from "./navigation";
 export { isCalendarDay, weekdays, scheduleInput, scheduleDates, breakInput, breakOn, carryOver, scheduleSummary, lessonsInOrder, periodWeek, classSequence, maxScheduleDays, maxScheduledClasses } from "./schedule";
 export type { SectionSchedule } from "./schedule";

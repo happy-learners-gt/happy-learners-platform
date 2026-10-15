@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { AcademicProfile, CourseFormat, CourseSettings, EducationLevel, EducationType, Member, Modality, ModuleLabel, Organization, Pacing, SequenceTemplate, StudyProgram, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
-import { areaLabel, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, moduleLabels, moduleNoun, pacings, sequenceOf, sequenceTemplates, settingDefinitions, timezoneGroups, utcOffset } from "@happy-learners/domain";
+import { accountInput, areaLabel, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, moduleLabels, moduleNoun, pacings, sequenceOf, sequenceTemplates, settingDefinitions, timezoneGroups, utcOffset } from "@happy-learners/domain";
 import type { SettingKey } from "@happy-learners/domain";
 import { plural, timeAgo } from "../model";
 import { ActivityFeed, Avatar, CourseProgressList, useProgress } from "../ui/progress";
@@ -67,10 +67,11 @@ export function Members() {
 type MemberStats = Member & { leads: number; coTeaches: number; lessonsCreated: number; publications: number; attendance: number; events: number; lastActivity: string | null };
 /** People of the organization, what each one does and how their courses are progressing. */
 function MemberList() {
-  const { toast } = useFeedback();
+  const { toast, confirm } = useFeedback();
   const [members, setMembers] = useState<MemberStats[] | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(""), [person, setPerson] = useState("");
+  const [adding, setAdding] = useState(false), [issued, setIssued] = useState<Issued | null>(null), [revision, setRevision] = useState(0);
   const progress = useProgress();
-  const load = async () => { setError(""); try { setMembers((await api<{ members: MemberStats[] }>("/members")).members); } catch (cause) { setError(message(cause)); } };
+  const load = async () => { setError(""); try { setMembers((await api<{ members: MemberStats[] }>("/members")).members); setRevision(value => value + 1); } catch (cause) { setError(message(cause)); } };
   useEffect(() => { void load(); }, []);
   async function update(member: Member, patch: Partial<Member>) {
     setBusy(member.id);
@@ -78,7 +79,16 @@ function MemberList() {
     catch (cause) { toast({ tone: "error", message: message(cause) }); }
     finally { setBusy(""); }
   }
-  const header = <PageHeader title="Educadores" description="Quién puede entrar, qué hace cada persona y cómo avanzan los cursos. Los estudiantes no necesitan cuenta."/>;
+  async function reset(member: Member) {
+    const name = member.displayName || member.username;
+    if (!await confirm({ title: `¿Restablecer la contraseña de ${name}?`, body: "Su contraseña actual deja de funcionar y sus sesiones abiertas se cierran. Recibirás una contraseña temporal para entregarle; al entrar, elegirá una propia.", confirm: "Restablecer contraseña", danger: true })) return;
+    setBusy(member.id);
+    try { const result = await api<{ temporaryPassword: string }>(`/members/${member.id}/password`, "POST"); setIssued({ name, username: member.username, password: result.temporaryPassword, created: false }); await load(); }
+    catch (cause) { toast({ tone: "error", message: message(cause) }); }
+    finally { setBusy(""); }
+  }
+  const header = <PageHeader title="Educadores" description="Quién puede entrar, qué hace cada persona y cómo avanzan los cursos. Los estudiantes no necesitan cuenta."
+    primary={members && <PrimaryAction icon="plus" onClick={() => setAdding(true)}>Agregar cuenta</PrimaryAction>}/>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
   if (!members) return <>{header}<Loading label="Cargando equipo…"/></>;
   const titles = Object.fromEntries((progress.courses || []).map(item => [item.courseId, item.title]));
@@ -97,9 +107,10 @@ function MemberList() {
           <td>{member.lessonsCreated ? `${member.lessonsCreated} creadas · ${member.publications} publicaciones` : <span className="muted">—</span>}</td>
           <td>{member.attendance || <span className="muted">—</span>}</td>
           <td>{member.lastActivity ? <time dateTime={member.lastActivity}>{timeAgo(member.lastActivity)}</time> : <span className="muted">Sin actividad</span>}</td>
-          <td><StatusBadge tone={member.active ? "success" : "neutral"}>{member.active ? "Activo" : "Sin acceso"}</StatusBadge></td>
+          <td><StatusBadge tone={!member.active ? "neutral" : member.mustChangePassword ? "warning" : "success"}>{!member.active ? "Sin acceso" : member.mustChangePassword ? "Contraseña temporal" : "Activo"}</StatusBadge></td>
           <td className="cell-actions">{owner ? <span className="muted small">Cuenta principal</span> : <Menu label={`Acciones de ${name}`} items={[
             { label: member.role === "admin" ? "Cambiar a educador" : "Cambiar a administración", icon: "users", disabled: busy === member.id, onSelect: () => void update(member, { role: member.role === "admin" ? "educator" : "admin" }) },
+            { label: "Restablecer contraseña", icon: "undo", disabled: busy === member.id, onSelect: () => void reset(member) },
             { label: member.active ? "Quitar acceso" : "Dar acceso", icon: "shield", danger: member.active, disabled: busy === member.id, onSelect: () => void update(member, { active: !member.active }) },
           ]}/>}</td>
         </tr>;
@@ -110,10 +121,48 @@ function MemberList() {
         {progress.error ? <ErrorState error={progress.error} retry={() => void progress.reload()}/> : !progress.courses ? <Loading label="Calculando avance…" lines={4}/> : <CourseProgressList courses={progress.courses}/>}
       </Section>
       <Section title={selected ? `Actividad de ${selected.displayName || selected.username}` : "Actividad reciente de la organización"} action={selected && <button type="button" className="link-button" onClick={() => setPerson("")}>Ver toda</button>}>
-        <ActivityFeed key={person} actor={person || undefined} limit={15} courseTitles={titles}/>
+        <ActivityFeed key={`${person}-${revision}`} actor={person || undefined} limit={15} courseTitles={titles}/>
       </Section>
     </div>
+    {adding && <AccountDialog onClose={() => setAdding(false)} onCreated={async result => { setAdding(false); setIssued(result); await load(); }}/>}
+    {issued && <TemporaryPassword issued={issued} onClose={() => setIssued(null)}/>}
   </>;
+}
+
+type Issued = { name: string; username: string; password: string; created: boolean };
+/** ST-093: a new account with a name, username and role; the server answers with its temporary password. */
+function AccountDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (issued: Issued) => Promise<void> }) {
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setError("");
+    const account = accountInput(Object.fromEntries(new FormData(event.currentTarget)));
+    if (!account) { setError("Revisa el nombre (2 a 80 caracteres) y el usuario (3 a 32 letras minúsculas, números, puntos o guiones)."); return; }
+    setBusy(true);
+    try { const result = await api<{ member: Member; temporaryPassword: string }>("/members", "POST", account); await onCreated({ name: account.displayName, username: account.username, password: result.temporaryPassword, created: true }); }
+    catch (cause) { setError(message(cause)); setBusy(false); }
+  }
+  return <Modal title="Agregar cuenta" onClose={onClose}>
+    <form className="stack" onSubmit={submit}><fieldset className="stack" disabled={busy}>
+      {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
+      <Field label="Nombre" hint="Como aparecerá en los cursos y en la actividad."><input name="displayName" required minLength={2} maxLength={80} autoComplete="off"/></Field>
+      <Field label="Usuario" hint="Con el que entrará: letras minúsculas, números, puntos o guiones; por ejemplo, ana.lopez."><input name="username" required minLength={3} maxLength={32} pattern="[a-z0-9][a-z0-9._\-]{1,30}[a-z0-9]" autoCapitalize="none" autoComplete="off" spellCheck={false}/></Field>
+      <Field label="Rol"><select name="role" defaultValue="educator"><option value="educator">Educador: prepara e imparte sus cursos</option><option value="admin">Administración: configura la organización y su equipo</option></select></Field>
+      <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">{busy ? "Creando…" : "Crear cuenta"}</button></div>
+    </fieldset></form>
+  </Modal>;
+}
+
+/** The temporary password, shown once: administration hands it over privately and the person replaces it at sign-in. */
+function TemporaryPassword({ issued, onClose }: { issued: Issued; onClose: () => void }) {
+  const { toast } = useFeedback();
+  return <Modal title={issued.created ? "Cuenta creada" : "Contraseña restablecida"} onClose={onClose} footer={<button type="button" className="button primary" data-autofocus onClick={onClose}>Listo, ya la guardé</button>}>
+    <div className="stack">
+      <p>{issued.created ? <>La cuenta de <strong>{issued.name}</strong> está lista.</> : <>La contraseña anterior de <strong>{issued.name}</strong> ya no funciona.</>} Entrega estos datos por un medio privado:</p>
+      <dl className="credentials"><dt>Usuario</dt><dd><code>{issued.username}</code></dd><dt>Contraseña temporal</dt><dd><code aria-label="Contraseña temporal">{issued.password}</code></dd></dl>
+      <button type="button" className="button secondary small" onClick={() => void navigator.clipboard?.writeText(issued.password).then(() => toast({ message: "Contraseña temporal copiada." }), () => toast({ tone: "error", message: "No se pudo copiar. Selecciónala y cópiala a mano." }))}><Icon name="copy" size={16}/>Copiar contraseña</button>
+      <div className="notice warning" role="note"><Icon name="alert" size={18}/><p>Esta contraseña no se volverá a mostrar. Al entrar por primera vez, {issued.name} deberá elegir una propia.</p></div>
+    </div>
+  </Modal>;
 }
 
 export function AcademicSettings() {
