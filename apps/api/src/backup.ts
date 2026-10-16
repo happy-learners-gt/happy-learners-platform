@@ -5,6 +5,7 @@
  * Notifications (ST-124) live in the outbox too and are not copied; preferences and the mandatory policy are.
  * Password columns never leave the store. Staff e-mail addresses (users.email) are copied: the backup is
  * administration's and already holds the organization's personal data.
+ * Onboarding state (ST-122, table onboarding) is copied like any other table.
  * A restore keeps the credentials the target already has, so a restored account signs in as it did there; whether
  * the password is a temporary one (ST-093) belongs to those credentials and stays with them.
  */

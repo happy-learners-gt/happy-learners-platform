@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { test, expect } from "./local-test";
-import { e2eName, origin, publish, sessionToken, signIn, toast } from "./helpers";
+import { completeOnboarding, e2eName, origin, publish, sessionToken, signIn, toast } from "./helpers";
 
 const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 async function audit(page: Page, label: string) {
@@ -49,6 +49,8 @@ test("HL-174 ST-128 ST-135: administration assigns coordination of one program, 
     // Terms or a privacy policy another test published must be accepted first, as for anyone.
     const pending = (await (await coordinator.get("/api/session")).json()).pending as { id: string }[];
     if (pending.length) expect((await coordinator.post("/api/legal/accept", { data: { documentIds: pending.map(item => item.id) } })).status()).toBe(200);
+    // ST-122: and, as a new account, the welcome.
+    await completeOnboarding(token);
 
     // A co-teacher of Ciencias sends a lesson to review: a copy of a published one, so it meets the course's requirements.
     const lessons = (await (await lucia.get("/api/lessons?drafts=1&course=seed-course-ciencias")).json()).lessons as { id: string; revision: number; status: string }[];

@@ -53,7 +53,8 @@ test("HL-137 ST-093: administration creates an account, its first sign-in requir
   await expect(educator.getByRole("alert")).toContainText("no coinciden");
   await educator.getByLabel("Repite la nueva contraseña").fill("Una frase para recordar 2026");
   await educator.getByRole("button", { name: "Guardar y continuar" }).click();
-  await expect(educator.getByRole("heading", { level: 1 })).toHaveText("Inicio");
+  // ST-122: a new account continues to its welcome.
+  await expect(educator.getByRole("heading", { level: 1 })).toHaveText("Bienvenida");
   await expect(toast(educator)).toContainText("Contraseña guardada");
 
   // CA3: a reset closes the session and issues another temporary password; the change is in the activity.

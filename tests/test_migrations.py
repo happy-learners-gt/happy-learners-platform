@@ -729,3 +729,20 @@ class UpgradeTests(unittest.TestCase):
                 demo.execute(insert, values)
         self.assertEqual(demo.execute("SELECT count(*) FROM class_hour_adjustments").fetchone()[0], 1)
         self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+class OnboardingMigrationTests(unittest.TestCase):
+    def test_existing_accounts_count_as_onboarded_and_new_ones_start_pending(self):
+        """0041 (ST-122): every account that exists when it runs is backfilled as onboarded; later accounts start empty."""
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            db.executescript(path.read_text())
+        members = db.execute("SELECT count(*) FROM memberships").fetchone()[0]
+        self.assertGreater(members, 0)
+        self.assertEqual(db.execute("SELECT count(*) FROM onboarding WHERE completed_at IS NOT NULL AND completed_at >= started_at").fetchone()[0], members)
+        self.assertEqual(db.execute("SELECT count(*) FROM onboarding o JOIN memberships m ON m.user_id=o.user_id AND m.organization_id=o.organization_id").fetchone()[0], members)
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO onboarding(user_id,organization_id,started_at) VALUES ('nobody','org-demo','2026-10-15T00:00:00Z')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE onboarding SET completed_at='2000-01-01T00:00:00Z' WHERE user_id='user-0'")
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])

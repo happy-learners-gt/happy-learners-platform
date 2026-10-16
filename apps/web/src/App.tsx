@@ -24,6 +24,7 @@ import { NotificationsAdmin } from "./pages/notifications";
 import { ConsentGate, PrivacyPage } from "./pages/legal";
 import { MyProfile } from "./pages/profile";
 import { HoursPage } from "./pages/hours";
+import { OnboardingWizard } from "./pages/onboarding";
 const StudentLesson = lazy(() => import("./pages/StudentLesson").then(module => ({ default: module.StudentLesson })));
 const StudentSpace = lazy(() => import("./pages/StudentSpace").then(module => ({ default: module.StudentSpace })));
 
@@ -75,14 +76,16 @@ function AuthenticatedApp() {
   const [member, setMember] = useState<Member | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [pending, setPending] = useState<PendingDocument[]>([]);
+  // ST-122: a new account goes through the welcome after its password and the terms.
+  const [onboarding, setOnboarding] = useState(false);
   const [status, setStatus] = useState<"loading" | "ready" | "offline">("loading");
   const [expired, setExpired] = useState(false);
   const refresh = useCallback(async () => {
     // Sequential on purpose: a 401 from the session check means "show the login", not "offline".
-    const session = await api<{ member: Member; pending?: PendingDocument[] }>("/session");
+    const session = await api<{ member: Member; pending?: PendingDocument[]; onboarding?: true }>("/session");
     // With a temporary password, nothing else opens until the person chooses their own (ST-093).
     const org = session.member.mustChangePassword ? null : await api<{ organization: Organization }>("/organization");
-    setMember(session.member); setOrganization(org?.organization || null); setPending(session.pending || []);
+    setMember(session.member); setOrganization(org?.organization || null); setPending(session.pending || []); setOnboarding(!!session.onboarding);
   }, []);
   const start = useCallback(() => {
     setStatus("loading");
@@ -113,7 +116,7 @@ function AuthenticatedApp() {
     },
   };
   return <SessionContext.Provider value={session}>
-    <Routes/>
+    {onboarding ? <OnboardingWizard onDone={async href => { await refresh(); navigate(href, true); toast({ message: "Bienvenida completada. Ya puedes empezar." }); }} onLogout={() => void logout()}/> : <Routes/>}
     {expired && <SessionExpiredDialog username={member.username} onRestored={async () => {
       try { await refresh(); setExpired(false); dispatchEvent(new CustomEvent(sessionRestored)); toast({ message: "Sesión renovada. Puedes continuar donde estabas." }); }
       catch (error) { toast({ tone: "error", message: message(error) }); }

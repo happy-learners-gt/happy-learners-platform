@@ -19,6 +19,8 @@ import { Invitations } from "./invitations";
 import { LegalSettings } from "./legal";
 import { ExpiringDocuments, PersonDetail } from "./profile";
 import { CoordinationBadge, CoordinationDialog } from "./access";
+import { OnboardingBadge, OnboardingFilter, useOnboardingPeople } from "./onboarding";
+import type { OnboardingPersonStatus } from "@happy-learners/contracts";
 
 function AdminOnly({ title, children }: { title: string; children: ReactNode }) {
   const { member } = useSession();
@@ -81,6 +83,8 @@ function MemberList() {
   const [detail, setDetail] = useState<{ id: string; name: string } | null>(null);
   const [coordinating, setCoordinating] = useState<MemberStats | null>(null);
   const progress = useProgress();
+  // ST-122: the onboarding of each person, as a column and a filter.
+  const onboarding = useOnboardingPeople(revision), [onboardingFilter, setOnboardingFilter] = useState<OnboardingPersonStatus | "">("");
   const load = async () => { setError(""); try { setMembers((await api<{ members: MemberStats[] }>("/members")).members); setRevision(value => value + 1); } catch (cause) { setError(message(cause)); } };
   useEffect(() => { void load(); }, []);
   async function update(member: Member, patch: Partial<Member>) {
@@ -106,10 +110,11 @@ function MemberList() {
   const selected = members.find(member => member.id === person);
   return <>
     {header}
+    <div className="table-toolbar"><OnboardingFilter value={onboardingFilter} onChange={setOnboardingFilter}/></div>
     <div className="table-card" role="region" aria-label="Personas de la organización" tabIndex={0}><table className="members-table">
       <caption className="sr-only">Personas de la organización y su actividad</caption>
-      <thead><tr><th scope="col">Persona</th><th scope="col">Rol</th><th scope="col">Cursos</th><th scope="col">Lecciones</th><th scope="col">Clases registradas</th><th scope="col">Última actividad</th><th scope="col">Acceso</th><th scope="col"><span className="sr-only">Acciones</span></th></tr></thead>
-      <tbody>{members.map(member => {
+      <thead><tr><th scope="col">Persona</th><th scope="col">Rol</th><th scope="col">Cursos</th><th scope="col">Lecciones</th><th scope="col">Clases registradas</th><th scope="col">Última actividad</th><th scope="col">Acceso</th><th scope="col">Incorporación</th><th scope="col"><span className="sr-only">Acciones</span></th></tr></thead>
+      <tbody>{members.filter(member => !onboardingFilter || onboarding?.get(member.id)?.status === onboardingFilter).map(member => {
         const owner = member.id === "user-0", name = member.displayName || member.username;
         return <tr key={member.id}>
           <th scope="row"><span className="person-cell"><Avatar name={name} size={30}/><span><button type="button" className="link-button" onClick={() => setPerson(person === member.id ? "" : member.id)} aria-pressed={person === member.id}>{name}</button><span className="muted small">@{member.username}{member.email ? ` · ${member.email}` : ""}</span></span></span></th>
@@ -119,6 +124,7 @@ function MemberList() {
           <td>{member.attendance || <span className="muted">—</span>}</td>
           <td>{member.lastActivity ? <time dateTime={member.lastActivity}>{timeAgo(member.lastActivity)}</time> : <span className="muted">Sin actividad</span>}</td>
           <td><StatusBadge tone={!member.active ? "neutral" : member.mustChangePassword ? "warning" : "success"}>{!member.active ? "Sin acceso" : member.mustChangePassword ? "Contraseña temporal" : "Activo"}</StatusBadge>{member.departedOn && <span className="muted small departed-on">Salió el {departureDay(member.departedOn)}</span>}</td>
+          <td>{onboarding ? <OnboardingBadge person={onboarding.get(member.id)}/> : <span className="muted">…</span>}</td>
           <td className="cell-actions">{owner ? <span className="row-actions"><span className="muted small">Cuenta principal</span><Menu label={`Acciones de ${name}`} items={[{ label: "Perfil y expediente", icon: "user", onSelect: () => setDetail({ id: member.id, name }) }]}/></span> : <Menu label={`Acciones de ${name}`} items={[
             { label: "Perfil y expediente", icon: "user", onSelect: () => setDetail({ id: member.id, name }) },
             { label: member.role === "admin" ? "Cambiar a educador" : "Cambiar a administración", icon: "users", disabled: busy === member.id, onSelect: () => void update(member, { role: member.role === "admin" ? "educator" : "admin" }) },
