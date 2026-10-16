@@ -114,3 +114,4 @@ export function validRichText(value: unknown): boolean {
   const root = value as Record<string, unknown>;
   return root.type === "doc" && Array.isArray(root.content) && root.content.every(child => visit(child, 1)) && textLength > 0;
 }
+export { departureDate, departureReason, maxDepartureReason } from "./departures";

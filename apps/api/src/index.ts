@@ -141,7 +141,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/programs\/[a-z0-9-]+\/prerequisites$/.test(path)) methods[path] = ["GET", "PUT"];
   if (/^\/api\/(vocabularies|terms)$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/(vocabularies|terms)\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
-  const allowed = methods[path] || (path === "/api/members" ? ["GET", "POST"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/members\/[a-z0-9-]+\/password$/.test(path) ? ["POST"] : /^\/api\/lessons\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/(publish|duplicate|review|review\/return)$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+\/files\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
+  const allowed = methods[path] || (path === "/api/members" ? ["GET", "POST"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/members\/[a-z0-9-]+\/password$/.test(path) ? ["POST"] : /^\/api\/members\/[a-z0-9-]+\/departure$/.test(path) ? ["GET", "POST"] : /^\/api\/lessons\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/(publish|duplicate|review|review\/return)$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+\/files\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
   if (!allowed) return json({ error: "Not found" }, 404);
   if (!allowed.includes(method)) return json({ error: "Method not allowed" }, 405, { Allow: allowed.join(", ") });
   if (!["GET", "HEAD"].includes(method)) {

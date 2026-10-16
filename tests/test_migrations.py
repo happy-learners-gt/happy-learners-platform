@@ -502,3 +502,16 @@ class UpgradeTests(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             demo.execute("UPDATE users SET must_change_password=2 WHERE id='user-1'")
         self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_departures_record_a_date_and_keep_every_account(self):
+        """0035 (ST-123): a departure is its own row; users, memberships and activity stay as they were."""
+        before = self.scoped("org-demo", until=-1)
+        demo = self.scoped("org-demo")
+        for table in ["users", "memberships", "activity_events", "course_members", "section_educators"]:
+            self.assertEqual(demo.execute(f"SELECT count(*) FROM {table}").fetchone(), before.execute(f"SELECT count(*) FROM {table}").fetchone(), table)
+        self.assertEqual(demo.execute("SELECT count(*) FROM departures").fetchone()[0], 0)
+        demo.execute("INSERT INTO departures(id,organization_id,user_id,departed_on,reason,recorded_by,recorded_at) VALUES ('d1','org-demo','seed-user-diego','2026-09-30','','user-0','t')")
+        for values in [("d2", "seed-user-diego", "30/09/2026", ""), ("d3", "seed-user-diego", "2026-09-30", "x" * 301), ("d4", "user-missing", "2026-09-30", "")]:
+            with self.assertRaises(sqlite3.IntegrityError):
+                demo.execute("INSERT INTO departures(id,organization_id,user_id,departed_on,reason,recorded_by,recorded_at) VALUES (?,'org-demo',?,?,?,'user-0','t')", values)
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])

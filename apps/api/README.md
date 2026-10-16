@@ -17,6 +17,7 @@ responden 404, los métodos no permitidos 405 y las rutas heredadas retiradas 41
 | `sections.ts`, `classes.ts`, `attendance.ts`, `workgroups.ts`, `conflicts.ts` | Secciones, horario, clases, asistencia, grupos de trabajo y choques de horario. |
 | `backup.ts` | Respaldo y restauración de cada organización. |
 | `calendar-feed.ts` | Enlace de suscripción al calendario de clases (iCalendar) de cada educador. |
+| `departures.ts` | Salida de una persona del equipo: reasignación de sus cursos y secciones, fin del acceso y registro (ST-123). |
 | `storage.ts` | Almacenamiento SQLite de cada organización en su Durable Object. |
 
 El contrato de cada ruta está en `docs/api.md`; la arquitectura, los datos y la seguridad, en el Manual técnico
