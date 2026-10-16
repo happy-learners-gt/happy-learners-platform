@@ -23,6 +23,7 @@ responden 404, los métodos no permitidos 405 y las rutas heredadas retiradas 41
 | `permissions.ts` | Roles y accesos: permisos efectivos de cada solicitud, perfil de coordinación académica y grupos de seguridad con su auditoría (ST-128, ST-135). |
 | `departures.ts` | Salida de una persona del equipo: reasignación de sus cursos y secciones, fin del acceso y registro (ST-123). |
 | `profiles.ts` | Perfil de cada persona (ST-149) y expediente laboral con documentos privados en R2 y vencimientos (ST-150). |
+| `hours.ts` | Horas efectivas impartiendo clases: consulta por periodo, curso, sección y persona, exportación CSV y correcciones con motivo (ST-152). |
 | `storage.ts` | Almacenamiento SQLite de cada organización en su Durable Object. |
 
 El correo transaccional usa el puerto `MailSender` del dominio. Con el secreto `BREVO_API_KEY` y la variable

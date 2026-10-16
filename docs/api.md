@@ -25,6 +25,7 @@ Un método no admitido responde 405 con `Allow`; una ruta desconocida, 404.
 | GET, POST | `/api/invitations/accept/:token` | Público con el enlace secreto; POST limitado a 30 intentos cada 15 minutos por origen |
 | GET, PUT | `/api/notifications/preferences` | Cada persona con sesión: sus avisos y su historial |
 | GET, PUT | `/api/notifications/policy` · GET `/api/notifications/log` | Administración |
+| GET | `/api/hours` · GET `/api/hours/export` · POST `/api/hours/:sessionId/adjustment` | Sesión: administración ve todas las horas y corrige; cualquier otra persona ve solo las suyas |
 
 Cuentas del equipo (ST-093). `POST /api/members` recibe `{ displayName, username, role }` (`admin` o `educator`); el
 usuario tiene de 3 a 32 letras minúsculas, números, puntos, guiones o guiones bajos y es único en todas las
@@ -349,3 +350,31 @@ los módulos de cada curso, y los recursos se agregan en la biblioteca de cada c
 - `/api/levels`, `/api/levels/:id` (incluye `order`)
 - `/api/units`, `/api/units/:id`
 - `POST /api/resources`, `/api/resources/:id`
+
+## Horas efectivas (ST-152)
+
+Migración `0040_effective_hours.sql`. Reconocen el voluntariado ad honorem (DEC-043); no son nómina.
+
+`GET /api/hours?from=&to=&course=&section=&person=` lista las clases **finalizadas** con sus horas. Una clase cuenta
+desde `started_at` (Comenzar clase o pasar lista) hasta `completed_at` (Finalizar clase), en minutos redondeados, y se
+atribuye a quien la comenzó (`taught_by`). Estados: `counted`; `no_start` (sin inicio real: sin `started_at` o igual a la
+finalización, como las clases finalizadas antes de esta versión o finalizadas directamente desde «pendiente») cuenta 0;
+`review` (más de 480 minutos) cuenta 0 hasta que administración la corrige; `adjusted` usa la corrección vigente. Las
+clases canceladas, pendientes o en curso no aparecen ni suman. `from` y `to` (AAAA-MM-DD, ambos incluidos) comparan el día
+del inicio en la zona horaria de la organización (sin inicio, el día de la clase). Administración ve a todas las personas
+(`scope: "all"`); cualquier otra cuenta, solo las clases atribuidas a ella (`scope: "own"`), aunque pida otra `person`.
+Responde `{ filter, timezone, scope, rows, minutes, totals: { people, courses, sections }, options }`; 400 con filtros
+inválidos.
+
+`GET /api/hours/export` acepta los mismos filtros y la misma visibilidad y entrega `text/csv; charset=utf-8` con BOM,
+encabezados en español (Fecha, Curso, Sección, Educador, Inicio, Finalización, Minutos calculados, Minutos efectivos,
+Horas efectivas, Estado, Motivo de la corrección), horas locales, separador coma, líneas CRLF y una fila `Total`. Las
+celdas que empiezan con `=`, `+`, `-` o `@` llevan un apóstrofo delante.
+
+`POST /api/hours/:sessionId/adjustment` (administración) recibe `{ minutes, educatorId?, reason }`: minutos enteros de 0 a
+720, la persona de la organización a quien se atribuye y un motivo de 5 a 300 caracteres. 400 sin motivo o si no cambia
+nada, 403 para otras cuentas, 404 si la clase no existe y 409 si no está finalizada. Guarda la corrección en
+`class_hour_adjustments` (minutos y persona antes y después, motivo, quién y cuándo; la última está vigente) y escribe la
+actividad `updated`/`session` «Corrigió las horas efectivas de la clase del … : antes → después[, atribuidas a …]. Motivo:
+…». Responde `{ row }`. El respaldo incluye `class_hour_adjustments`.
+

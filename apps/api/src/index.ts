@@ -26,6 +26,7 @@ import { LessonCollaborationRoom } from "./collaboration";
 import { encodeLessonDraft } from "./rich-text";
 import { accessMatrix, permissionColumns, withPermissions } from "./permissions";
 import { notificationMethods, notifications } from "./notifications";
+import { hours } from "./hours";
 export { LessonCollaborationRoom };
 
 const headers = {
@@ -80,7 +81,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     for (const [name, value] of Object.entries(headers)) result.headers.set(name, value);
     return result;
   }
-  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|account|organization|calendar|members|access|levels|units|resources|lessons|courses|programs|vocabularies|terms|student|legal)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files") && !/^\/api\/members\/[a-z0-9-]+\/password$/.test(path))
+  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|account|organization|calendar|members|access|levels|units|resources|lessons|courses|programs|vocabularies|terms|student|legal|hours)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files") && !/^\/api\/members\/[a-z0-9-]+\/password$/.test(path))
     || (method === "POST" && path === "/api/organization/restore" && env.RESTORE_ENABLED === "true")
     || (method === "POST" && (path === "/api/invitations" || acceptPath.test(path)))
     ? await body(request) : undefined;
@@ -170,6 +171,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   // ST-153: signatures, their receipts and administration's verification.
   if (path === "/api/legal/signatures" || /^\/api\/legal\/signatures\/signature-[a-z0-9-]+\/receipt$/.test(path)) methods[path] = ["GET"];
   if (path === "/api/legal/signatures/verify") methods[path] = ["POST"];
+  // ST-152: effective hours, their export and administration's corrections.
+  if (path === "/api/hours" || path === "/api/hours/export") methods[path] = ["GET"];
+  if (/^\/api\/hours\/[a-z0-9-]+\/adjustment$/.test(path)) methods[path] = ["POST"];
   // ST-149, ST-150: profile, photo and staff file.
   const staffAllowed = staffMethods(path);
   if (staffAllowed) methods[path] = staffAllowed;
@@ -272,6 +276,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path.startsWith("/api/sections")) return sections(path, current, db);
   if (path === "/api/progress") return progress(current, db);
   if (path === "/api/people") return people(current, db);
+  if (path.startsWith("/api/hours")) return hours(path, method, input, url, current, db);
   if (path === "/api/reviews") return reviews(current, db);
   if (path.startsWith("/api/invitations")) return invitations(path, method, input, url.origin, current, db, mailSender(env));
   if (staffAllowed) return staff(path, method, request, current, db, env.COURSE_FILES);
