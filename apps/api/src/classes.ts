@@ -3,6 +3,7 @@ import { acceptsAttendance, breakInput, cancelPlanInput, carryOver, classActions
 import { tokenPattern, tokenPrefix } from "@happy-learners/domain";
 import type { ClassAction } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
+import { learnerEducatorPhoto, learnerEducators } from "./professional";
 import { materialsFor } from "./courses";
 import { resources } from "./content";
 import { deliverFile, filesFor } from "./files";
@@ -492,7 +493,11 @@ export async function student(path: string, method: string, input: unknown, requ
     if (!linked) return reply({ error: "Este archivo no forma parte de las clases de tu sección." }, 404);
     return deliverFile(fileMatch[1], access.organizationId, db, bucket);
   }
+  const educatorPhoto = path.match(/^\/api\/student\/educators\/([a-z0-9-]+)\/photo$/);
+  if (educatorPhoto) return learnerEducatorPhoto(db, access.groupId, access.organizationId, educatorPhoto[1], bucket);
   if (path !== "/api/student/space" || method !== "GET") return reply({ error: "Ruta no disponible." }, 404);
+  // ST-157: «Tu educador», the published profiles of the section's educators.
+  const educators = await learnerEducators(db, access.groupId, access.organizationId);
   const today = localDay(access.timezone || "America/Guatemala");
   const base = { group: { name: access.groupName }, course: { title: access.courseTitle }, organization: access.organizationName, today, pacing: access.pacing, learner: access.learnerId ? { id: access.learnerId, name: access.learnerName! } : null };
   if (selfPaced) {
@@ -508,7 +513,7 @@ export async function student(path: string, method: string, input: unknown, requ
       if (!unit) path.push(unit = { id: lesson.unitId, name: lesson.unitName, lessons: [] });
       unit.lessons.push({ title: lesson.title || "Lección", shareCode: lesson.shareCode, opened: !!mark, completed: !!mark?.completed });
     }
-    const space: StudentSpace = { ...base, next: null, upcoming: [], recent: [], lessons: [], roster: access.learnerId ? [] : roster, path };
+    const space: StudentSpace = { ...base, next: null, upcoming: [], recent: [], lessons: [], roster: access.learnerId ? [] : roster, path, educators };
     return reply(space);
   }
   const rows = (await db.prepare("SELECT s.id,s.session_date AS sessionDate,s.starts_at AS startsAt,s.duration_minutes AS durationMinutes,s.status FROM class_sessions s WHERE s.group_id=? AND s.status<>'cancelled' ORDER BY s.session_date,s.starts_at").bind(access.groupId).all<{ id: string; sessionDate: string; startsAt: string | null; durationMinutes: number | null; status: ClassStatus }>()).results;
@@ -525,7 +530,7 @@ export async function student(path: string, method: string, input: unknown, requ
   };
   // The lessons of the section's classes, once each, in the order the classes give them.
   const lessons = published.filter((row, index, list) => list.findIndex(other => other.shareCode === row.shareCode) === index).map(row => ({ title: row.title || "Lección", shareCode: row.shareCode! }));
-  const space: StudentSpace = { ...base, next: upcoming[0] ? view(upcoming[0]) : null, upcoming: upcoming.slice(1).map(view), recent: recent.map(view), lessons, roster: [], path: [] };
+  const space: StudentSpace = { ...base, next: upcoming[0] ? view(upcoming[0]) : null, upcoming: upcoming.slice(1).map(view), recent: recent.map(view), lessons, roster: [], path: [], educators };
   return reply(space);
 }
 

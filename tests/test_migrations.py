@@ -1,3 +1,4 @@
+import json
 import pathlib
 import sqlite3
 import unittest
@@ -729,6 +730,62 @@ class UpgradeTests(unittest.TestCase):
                 demo.execute(insert, values)
         self.assertEqual(demo.execute("SELECT count(*) FROM class_hour_adjustments").fetchone()[0], 1)
         self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_professional_profile_keeps_profiles_and_activity_and_checks_publication_and_credentials(self):
+        """0042 (ST-154 to ST-157): specialties become open teaching areas, the activity is rebuilt row for row inside one
+        transaction with foreign keys on and admits profile and credential events; versions and credentials keep their rules."""
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        position = [path.name[:4] for path in migrations].index("0042")
+        self.assertEqual(migrations[position].name, "0042_professional_profile.sql")
+        db = self.scoped("org-demo", until=position)
+        db.isolation_level = None
+        db.execute("INSERT INTO staff_profiles(user_id,organization_id,phone,specialties,availability,updated_at) VALUES ('seed-user-carlos','org-demo','+502 5555-0149','[\"Álgebra\",\"Robótica «educativa»\"]','[]','t')")
+        db.execute("INSERT INTO staff_profiles(user_id,organization_id,updated_at) VALUES ('seed-user-ana','org-demo','t')")
+        events = lambda: db.execute("SELECT id,organization_id,actor_id,action,target_type,target_id,course_id,summary,occurred_at,group_id FROM activity_events ORDER BY id").fetchall()
+        before, profiles = events(), db.execute("SELECT user_id,phone,specialties,availability,updated_at FROM staff_profiles ORDER BY user_id").fetchall()
+        self.assertGreater(len(before), 0)
+        db.executescript("BEGIN;\n" + migrations[position].read_text() + "\nCOMMIT;")
+        self.assertEqual(events(), before)
+        self.assertEqual(db.execute("SELECT user_id,phone,specialties,availability,updated_at FROM staff_profiles ORDER BY user_id").fetchall(), profiles)
+        self.assertEqual(json.loads(db.execute("SELECT draft FROM staff_profiles WHERE user_id='seed-user-carlos'").fetchone()[0]), {"areas": [{"label": "Álgebra", "field": None}, {"label": "Robótica «educativa»", "field": None}]})
+        self.assertEqual(db.execute("SELECT draft,visibility,status,draft_version,hidden_by FROM staff_profiles WHERE user_id='seed-user-ana'").fetchone(), ("{}", "{}", "draft", 0, None))
+        self.assertEqual(db.execute("SELECT profile_review_required FROM organizations").fetchall(), [(1,)])
+        self.assertEqual(sorted(row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='activity_events' AND sql IS NOT NULL")),
+                         ["activity_events_actor", "activity_events_course", "activity_events_group", "activity_events_organization"])
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+        for action, target in [("submitted", "profile"), ("approved", "profile"), ("returned", "profile"), ("hidden", "profile"), ("verified", "credential"), ("rejected", "credential"), ("reset", "account"), ("revoked", "invitation")]:
+            db.execute("INSERT INTO activity_events(id,organization_id,actor_id,action,target_type,target_id,summary,occurred_at) VALUES (?,'org-demo','user-0',?,?,'x','Resumen','t')", (f"e-{action}", action, target))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO activity_events(id,organization_id,actor_id,action,target_type,target_id,summary,occurred_at) VALUES ('e-x','org-demo','user-0','liked','profile','x','Resumen','t')")
+        for statement in ["UPDATE staff_profiles SET status='archived' WHERE user_id='seed-user-ana'", "UPDATE staff_profiles SET draft='[]' WHERE user_id='seed-user-ana'",
+                          "UPDATE staff_profiles SET hidden_by='nobody' WHERE user_id='seed-user-ana'", "UPDATE organizations SET profile_review_required=2"]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=statement):
+                db.execute(statement)
+        version = "INSERT INTO staff_profile_versions(id,organization_id,user_id,version,draft_version,content,status,submitted_by,submitted_at,decided_by,decided_at,decision_note,published_at) VALUES (?,'org-demo','seed-user-carlos',?,1,'{}',?,'seed-user-carlos','t',?,?,?,?)"
+        db.execute(version, ("v1", 1, "returned", "user-0", "t", "Agrega tu enfoque.", None))
+        db.execute(version, ("v2", 2, "published", "user-0", "t", None, "t"))
+        db.execute(version, ("v3", 3, "in_review", None, None, None, None))
+        for values in [("v4", 4, "in_review", None, None, None, None), ("v5", 5, "published", "user-0", "t", None, "t"), ("v6", 6, "returned", "user-0", "t", None, None),
+                       ("v7", 7, "published", "user-0", "t", None, None), ("v8", 3, "withdrawn", None, None, None, None), ("v9", 9, "draft", None, None, None, None), ("v10", 10, "returned", None, None, "Agrega tu enfoque.", None)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=values[0]):
+                db.execute(version, values)
+        db.execute("UPDATE staff_profile_versions SET status='superseded' WHERE id='v2'")
+        db.execute("UPDATE staff_profile_versions SET status='published',decided_by='user-0',decided_at='t',published_at='t' WHERE id='v3'")
+        db.execute("INSERT INTO staff_documents(id,organization_id,user_id,type,title,issued_on,object_key,media_type,size_bytes,sha256,uploaded_by,uploaded_at) VALUES ('d-carlos','org-demo','seed-user-carlos','studies','T','2013-01-01','k1','application/pdf',10,?,'user-0','t')", ("a" * 64,))
+        db.execute("INSERT INTO staff_documents(id,organization_id,user_id,type,title,issued_on,object_key,media_type,size_bytes,sha256,uploaded_by,uploaded_at) VALUES ('d-ana','org-demo','seed-user-ana','studies','T','2013-01-01','k2','application/pdf',10,?,'user-0','t')", ("a" * 64,))
+        credential = "INSERT INTO staff_credentials(id,organization_id,user_id,type,name,issuer,country,issued_on,expires_on,verification_url,document_id,status,rejection_reason,submitted_at,decided_by,decided_at,created_at,updated_at) VALUES (?,'org-demo','seed-user-carlos',?,'Profesorado','Universidad',?,'2013-11-30',?,?,?,?,?,?,?,?,'t','t')"
+        db.execute(credential, ("c1", "degree", "GT", None, "https://registro.example.edu/v", "d-carlos", "verified", None, "t", "user-0", "t"))
+        db.execute(credential, ("c2", "teaching_license", None, "2030-01-01", None, None, "rejected", "El enlace no abre.", "t", "user-0", "t"))
+        db.execute(credential, ("c3", "other", None, None, None, None, "draft", None, None, None, None))
+        for values in [("c4", "passport", None, None, None, None, "draft", None, None, None, None), ("c5", "degree", "gt", None, None, None, "draft", None, None, None, None),
+                       ("c6", "degree", None, "2012-01-01", None, None, "draft", None, None, None, None), ("c7", "degree", None, None, "http://x.org", None, "draft", None, None, None, None),
+                       ("c8", "degree", None, None, None, "d-ana", "draft", None, None, None, None), ("c9", "degree", None, None, None, None, "rejected", None, "t", "user-0", "t"),
+                       ("c10", "degree", None, None, None, None, "verified", None, "t", None, None), ("c11", "degree", None, None, None, None, "submitted", None, None, None, None),
+                       ("c12", "degree", None, None, None, None, "expired", None, "t", "user-0", "t"), ("c13", "degree", None, None, None, None, "draft", "Motivo largo", None, None, None)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=values[0]):
+                db.execute(credential, values)
+        self.assertEqual(db.execute("SELECT count(*) FROM staff_credentials").fetchone()[0], 3)
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
 
 class OnboardingMigrationTests(unittest.TestCase):
     def test_existing_accounts_count_as_onboarded_and_new_ones_start_pending(self):

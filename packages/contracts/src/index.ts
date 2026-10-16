@@ -9,7 +9,7 @@ export interface Member { id: string; username: string; displayName?: string; ro
  * administration ones belong to the administration role only.
  */
 export type GrantablePermission = "courses.view" | "lessons.review" | "teams.assign" | "sections.assign" | "classes.view" | "activity.view";
-export type AdministrationPermission = "organization.configure" | "accounts.manage" | "access.manage" | "backup.manage" | "legal.manage";
+export type AdministrationPermission = "organization.configure" | "accounts.manage" | "access.manage" | "backup.manage" | "legal.manage" | "profiles.review";
 export type PermissionKey = GrantablePermission | AdministrationPermission;
 export type PermissionArea = "content" | "team" | "classes" | "reports" | "administration";
 /** Every program of the organization, or a list of them; courses without a program are only in `all`. */
@@ -67,8 +67,8 @@ export interface LessonReview {
 export interface ReviewItem extends LessonReview { lessonId: string; lessonTitle: string; courseId: string; courseTitle: string }
 /** An audited operation: who did what, on which course, and when. */
 export interface ActivityEvent {
-  id: string; actorId: string; actorName: string; action: "created" | "updated" | "published" | "archived" | "restored" | "planned" | "recorded" | "uploaded" | "assigned" | "reset" | "accepted" | "withdrawn" | "resent" | "revoked";
-  targetType: "course" | "program" | "module" | "lesson" | "resource" | "competency" | "outcome" | "group" | "session" | "team" | "account" | "legal" | "invitation"; targetId: string; courseId?: string | null; summary: string; occurredAt: string;
+  id: string; actorId: string; actorName: string; action: "created" | "updated" | "published" | "archived" | "restored" | "planned" | "recorded" | "uploaded" | "assigned" | "reset" | "accepted" | "withdrawn" | "resent" | "revoked" | "submitted" | "approved" | "returned" | "hidden" | "verified" | "rejected";
+  targetType: "course" | "program" | "module" | "lesson" | "resource" | "competency" | "outcome" | "group" | "session" | "team" | "account" | "legal" | "invitation" | "profile" | "credential"; targetId: string; courseId?: string | null; summary: string; occurredAt: string;
 }
 /** How far a course has come: content, curriculum coverage and attendance. */
 export interface CourseProgress {
@@ -247,6 +247,8 @@ export interface StudentSpace {
   learner: { id: string; name: string } | null;
   roster: { id: string; name: string }[];
   path: StudentPathModule[];
+  /** ST-157: «Tu educador»: the published profiles of the section's educators, with the sections they show to students. */
+  educators: PublicProfile[];
 }
 export interface StudentPathModule { id: string; name: string; lessons: StudentPathLesson[] }
 export interface StudentPathLesson { title: string; shareCode: string; opened: boolean; completed: boolean }
@@ -331,6 +333,88 @@ export interface StaffProfile {
   contact?: { phone: string | null; contactEmail: string | null; loginEmail: string | null };
   updatedAt: string | null;
 }
+/**
+ * ST-154: the professional profile of an educator, agnostic to subject, level and country. Levels follow ISCED 2011
+ * (plus adult and vocational education), languages are BCP 47 tags with a CEFR-like scale (a descriptor applies to
+ * languages without CEFR), countries are ISO 3166-1 alpha-2 codes, time zones are IANA names and teaching areas are an
+ * open taxonomy with an optional ISCED-F 2013 broad field ("00" to "10").
+ */
+export type IscedLevel = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "adult" | "vocational";
+export type LanguageProficiency = "native" | "C2" | "C1" | "B2" | "B1" | "A2" | "A1";
+export type TeachingModality = "in_person" | "online" | "hybrid";
+export type TeachingFormat = "one_to_one" | "group" | "self_paced";
+export type LearnerAudience = "children" | "adolescents" | "adults" | "special_needs";
+export type ProfileLinkKind = "website" | "linkedin" | "orcid" | "other";
+export interface ProfileLanguage { code: string; proficiency: LanguageProficiency; teaches: boolean }
+export interface TeachingArea { label: string; field: string | null }
+/** A position held; `to` is null while it is the current one. Months are YYYY-MM. */
+export interface ProfileExperience { role: string; institution: string; country: string | null; from: string; to: string | null; description: string }
+export interface ProfileEducation { degree: string; institution: string; country: string | null; year: number | null; field: string }
+export interface ProfileLink { kind: ProfileLinkKind; url: string }
+export interface ProfessionalProfile {
+  preferredName: string; pronouns: string; headline: string; country: string | null; city: string; timezone: string | null;
+  bio: string; approach: string; videoUrl: string | null;
+  languages: ProfileLanguage[];
+  areas: TeachingArea[]; levels: IscedLevel[]; modalities: TeachingModality[]; formats: TeachingFormat[]; audiences: LearnerAudience[]; experienceYears: number | null;
+  experience: ProfileExperience[]; education: ProfileEducation[];
+  links: ProfileLink[];
+}
+/** Who sees each section: the person and administration only, the team of the organization, or also the students of their sections. */
+export type ProfileVisibilityLevel = "private" | "organization" | "learners";
+export type ProfileSection = "identity" | "about" | "languages" | "teaching" | "career" | "links" | "credentials" | "availability" | "contact";
+export type ProfileVisibility = Record<ProfileSection, ProfileVisibilityLevel>;
+/** ST-156: draft → in_review → published; in_review → changes_requested → in_review; published ⇄ hidden. */
+export type ProfileStatus = "draft" | "in_review" | "changes_requested" | "published" | "hidden";
+export type ProfileVersionStatus = "in_review" | "returned" | "published" | "superseded" | "withdrawn";
+export interface ProfileVersionSummary { version: number; status: ProfileVersionStatus; submittedAt: string; decidedAt: string | null; decidedBy: string | null; note: string | null; publishedAt: string | null }
+export interface CompletenessStep { key: string; label: string; section: ProfileSection | "photo"; done: boolean }
+export interface ProfileCompleteness { percent: number; steps: CompletenessStep[] }
+/** ST-155: credentials. `expired` is never stored: a verified credential counts as expired after its expiry date. */
+export type CredentialType = "degree" | "certification" | "teaching_license" | "language_certificate" | "other";
+export type CredentialState = "draft" | "submitted" | "verified" | "rejected" | "withdrawn";
+export type CredentialStatus = CredentialState | "expired";
+export interface Credential {
+  id: string; userId: string; type: CredentialType; name: string; issuer: string; country: string | null; issuedOn: string; expiresOn: string | null;
+  credentialCode: string | null; verificationUrl: string | null; documentId: string | null; documentTitle: string | null;
+  status: CredentialStatus; rejectionReason: string | null; submittedAt: string | null; decidedAt: string | null; decidedBy: string | null; version: number; updatedAt: string;
+}
+/** What the team and the students see of a verified credential: never the code, the link or the supporting document. */
+export interface PublicCredential { id: string; type: CredentialType; name: string; issuer: string; country: string | null; issuedOn: string; expiresOn: string | null; status: "verified" | "expired" }
+/** «Mi perfil»: the working copy, its publication, the open review and how complete it is. */
+export interface MyProfessionalProfile {
+  userId: string; username: string; displayName: string; role: "admin" | "educator"; photoVersion: string | null;
+  contact: { phone: string | null; contactEmail: string | null; loginEmail: string | null }; availability: StaffAvailabilitySlot[]; education: string;
+  draft: ProfessionalProfile; draftVersion: number; visibility: ProfileVisibility;
+  status: ProfileStatus; hiddenBy: "self" | "admin" | "system" | null; reviewRequired: boolean;
+  publication: { version: number; publishedAt: string; content: ProfessionalProfile } | null;
+  /** The latest version sent for review while it is open or returned with changes to make. */
+  submission: ProfileVersionSummary | null;
+  /** Whether the working copy differs from what is published (or sent for review). */
+  hasChanges: boolean;
+  history: ProfileVersionSummary[];
+  completeness: ProfileCompleteness; missing: string[];
+  credentials: Credential[];
+}
+/**
+ * ST-157: a published profile as the team (`organization`) or the students of the person's sections (`learners`) see it.
+ * Sections the person keeps for a narrower audience come empty and are not listed in `sections`.
+ */
+export interface PublicProfile {
+  userId: string; displayName: string; photoUrl: string | null; role: "admin" | "educator"; audience: "organization" | "learners";
+  sections: ProfileSection[]; content: ProfessionalProfile; credentials: PublicCredential[];
+  availability?: StaffAvailabilitySlot[]; contact?: { phone: string | null; contactEmail: string | null };
+  version: number; publishedAt: string;
+}
+export interface DirectoryEntry {
+  userId: string; displayName: string; photoUrl: string | null; headline: string; country: string | null;
+  areas: TeachingArea[]; levels: IscedLevel[]; languages: ProfileLanguage[]; modalities: TeachingModality[]; verifiedCredentials: number;
+}
+export interface ProfileReviewItem {
+  userId: string; name: string; photoUrl: string | null; version: number; submittedAt: string; firstPublication: boolean;
+  changes: string[]; content: ProfessionalProfile; published: ProfessionalProfile | null; missing: string[];
+}
+export interface CredentialReviewItem { userId: string; name: string; credential: Credential }
+export interface ProfileReviewQueue { reviewRequired: boolean; profiles: ProfileReviewItem[]; credentials: CredentialReviewItem[] }
 /** ST-150: one document of a person's staff file. Withdrawn documents keep their metadata; only administration sees them. */
 export type StaffDocumentKind = "dpi" | "cv" | "criminal-record" | "police-record" | "studies" | "certificate" | "other";
 export interface StaffDocument {
