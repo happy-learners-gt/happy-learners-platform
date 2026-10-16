@@ -1,6 +1,36 @@
 export interface HealthResponse { status: "ok" }
 export interface VersionResponse { sha: string }
-export interface Member { id: string; username: string; displayName?: string; role: "admin" | "educator"; organizationId: string; active?: boolean }
+/** `mustChangePassword` is present (true) only while the account still signs in with a temporary password (ST-093).
+ * `email` is set once someone joins by invitation (ST-121) and only administration's list of people shows it. */
+export interface Member { id: string; username: string; displayName?: string; role: "admin" | "educator"; organizationId: string; active?: boolean; mustChangePassword?: true; email?: string | null; permissions?: EffectivePermissions; coordination?: ProgramScope | null }
+/**
+ * Roles and access (ST-128, ST-135, DEC-041). Permissions come from a fixed catalog grouped by area. Grantable ones reach
+ * a person through the academic coordination profile or a security group, always within a program scope; the
+ * administration ones belong to the administration role only.
+ */
+export type GrantablePermission = "courses.view" | "lessons.review" | "teams.assign" | "sections.assign" | "classes.view" | "activity.view";
+export type AdministrationPermission = "organization.configure" | "accounts.manage" | "access.manage" | "backup.manage" | "legal.manage";
+export type PermissionKey = GrantablePermission | AdministrationPermission;
+export type PermissionArea = "content" | "team" | "classes" | "reports" | "administration";
+/** Every program of the organization, or a list of them; courses without a program are only in `all`. */
+export type ProgramScope = { all: true } | { programs: string[] };
+/** What the signed-in person may do beyond their course teams; computed again on every request. */
+export interface EffectivePermissions { admin: boolean; coordination: ProgramScope | null; grants: Partial<Record<PermissionKey, ProgramScope>> }
+export interface PermissionGrant { permission: GrantablePermission; scope: ProgramScope }
+export interface SecurityGroup {
+  id: string; name: string; description: string; version: number; updatedAt: string;
+  grants: PermissionGrant[]; members: { userId: string; name: string; username: string }[];
+}
+export interface AccessEvent { id: string; actorName: string; action: string; subjectType: "group" | "coordination"; subjectId: string; summary: string; occurredAt: string }
+/** An invitation by e-mail (ST-121). `delivery` is the state of its latest message; the token is never listed. */
+export type InvitationStatus = "pending" | "accepted" | "revoked" | "expired";
+export type DeliveryStatus = "queued" | "sent" | "failed" | "not_configured" | "deferred";
+export interface Invitation {
+  id: string; email: string; displayName: string; role: "admin" | "educator"; status: InvitationStatus; expiresAt: string; createdAt: string;
+  invitedBy: string; acceptedAt: string | null; delivery: DeliveryStatus | null; deliveryError: string | null; sentAt: string | null;
+}
+/** What the public acceptance page shows before the person chooses a username and password. */
+export interface InvitationPreview { organization: string; displayName: string; email: string; role: "admin" | "educator"; expiresAt: string }
 export type CourseRole = "lead" | "co-teacher";
 /** Someone on a course's teaching team: the lead or a co-teacher. */
 export interface CourseMember { userId: string; username: string; name: string; role: CourseRole }
@@ -17,7 +47,13 @@ export interface CourseAccess {
   edit: boolean;
   /** Publishing and archiving lessons, modules, the curriculum plan and reviews. */
   publish: boolean;
-  /** Sections the person sees: every one for administration, otherwise those assigned. */
+  /** Lessons the person publishes and reviews (returns with observations): the lead, and coordination in its scope (DEC-041). */
+  review?: boolean;
+  /** Choosing the lead and co-teachers: administration, and coordination in its scope. */
+  team?: boolean;
+  /** Choosing who teaches each section among the team: administration, and coordination in its scope. */
+  educators?: boolean;
+  /** Sections the person sees: every one for administration and coordination in its scope, otherwise those assigned. */
   sections: "all" | "assigned";
   /** Sections assigned to the person as educator; they plan and teach their classes. */
   assigned: string[];
@@ -31,8 +67,8 @@ export interface LessonReview {
 export interface ReviewItem extends LessonReview { lessonId: string; lessonTitle: string; courseId: string; courseTitle: string }
 /** An audited operation: who did what, on which course, and when. */
 export interface ActivityEvent {
-  id: string; actorId: string; actorName: string; action: "created" | "updated" | "published" | "archived" | "restored" | "planned" | "recorded" | "uploaded" | "assigned";
-  targetType: "course" | "program" | "module" | "lesson" | "resource" | "competency" | "outcome" | "group" | "session" | "team"; targetId: string; courseId?: string | null; summary: string; occurredAt: string;
+  id: string; actorId: string; actorName: string; action: "created" | "updated" | "published" | "archived" | "restored" | "planned" | "recorded" | "uploaded" | "assigned" | "reset" | "accepted" | "withdrawn" | "resent" | "revoked";
+  targetType: "course" | "program" | "module" | "lesson" | "resource" | "competency" | "outcome" | "group" | "session" | "team" | "account" | "legal" | "invitation"; targetId: string; courseId?: string | null; summary: string; occurredAt: string;
 }
 /** How far a course has come: content, curriculum coverage and attendance. */
 export interface CourseProgress {
@@ -234,3 +270,130 @@ export interface LearningOutcome {
   position: number; status: "active" | "archived"; updatedAt: string;
 }
 export interface Curriculum { competencies: Competency[]; outcomes: LearningOutcome[]; unitOutcomes: { unitId: string; outcomeId: string }[] }
+
+/** ST-123: what a departing person is responsible for, and who can take it over. Administration only. */
+export interface DeparturePerson { id: string; name: string; username: string }
+export interface DeparturePreview {
+  member: DeparturePerson & { active: boolean };
+  today: string;
+  /** Active courses: a course the person leads needs a new lead; co-teaching ends on its own. */
+  courses: { id: string; title: string; role: CourseRole; team: DeparturePerson[] }[];
+  /** Active sections the person teaches; `required` when nobody else teaches it, so it needs a replacement. */
+  sections: { id: string; name: string; courseId: string; courseTitle: string; others: DeparturePerson[]; required: boolean }[];
+  /** Active people of the organization who can take over, without the departing person. */
+  people: DeparturePerson[];
+  /** The latest departure already recorded for the person, with administration's note. */
+  lastDeparture: { departedOn: string; reason: string; recordedAt: string; recordedBy: string } | null;
+}
+export interface DepartureInput {
+  date: string; reason?: string; conflictReason?: string;
+  reassignments: { courses: Record<string, string>; sections: Record<string, string> };
+}
+/**
+ * Terms and conditions and the privacy policy of an organization (ST-126, ST-127). A draft has no version; publishing
+ * gives it the next one and it never changes again. A privacy policy carries the consent text people agree to.
+ */
+export type LegalKind = "terms" | "privacy" | "volunteer";
+export interface LegalDocument {
+  id: string; kind: LegalKind; status: "draft" | "published"; version: number | null; title: string; body: string; consent: string | null;
+  updatedAt: string; publishedAt: string | null; publishedBy: string | null;
+}
+/** A version the signed-in person must accept (terms) or consent to (privacy) before using the platform. */
+export type PendingDocument = Pick<LegalDocument, "id" | "kind" | "version" | "title">;
+/** Who accepted which version and when; a withdrawn privacy consent keeps its record with the withdrawal date. */
+export interface LegalAcceptance {
+  id: string; documentId: string; kind: LegalKind; version: number; userId: string; name: string; acceptedAt: string; withdrawnAt: string | null;
+  /** ST-153: the electronic signature of this acceptance; null for a privacy consent or an acceptance recorded before signing existed ("sin firma"). */
+  signatureId?: string | null; signedName?: string | null;
+}
+/**
+ * ST-153 (DEC-043): what a simple electronic signature records and its receipt shows. documentSha256 fingerprints the
+ * canonical text of the signed version; signatureSha256 fingerprints these fields, so a changed receipt is detected.
+ */
+export interface SignatureRecord {
+  signatureId: string; organizationId: string; userId: string; username: string; signedName: string;
+  documentId: string; kind: LegalKind; version: number; documentSha256: string; signedAt: string;
+}
+export interface LegalSignature extends SignatureRecord {
+  acceptanceId: string; signatureSha256: string; title: string; name: string; active: boolean; departedOn: string | null;
+}
+/** The result of verifying a receipt: valid, a signed document that no longer matches, a changed receipt, or an unknown signature. */
+export type SignatureCheck = "valid" | "document_mismatch" | "receipt_mismatch" | "unknown";
+export interface SignatureVerification { status: SignatureCheck; message: string; signature?: LegalSignature; mismatches?: string[] }
+/**
+ * ST-149: an educator's profile. Phone and contact e-mail are seen only by the person and administration (`contact`
+ * is absent for course teammates); students never receive any of it.
+ */
+export interface StaffAvailabilitySlot { day: 1 | 2 | 3 | 4 | 5 | 6 | 7; start: string; end: string }
+export interface StaffProfile {
+  userId: string; displayName: string; username: string; role: "admin" | "educator"; active: boolean;
+  photo: boolean; photoVersion: string | null; education: string; specialties: string[]; availability: StaffAvailabilitySlot[];
+  contact?: { phone: string | null; contactEmail: string | null; loginEmail: string | null };
+  updatedAt: string | null;
+}
+/** ST-150: one document of a person's staff file. Withdrawn documents keep their metadata; only administration sees them. */
+export type StaffDocumentKind = "dpi" | "cv" | "criminal-record" | "police-record" | "studies" | "certificate" | "other";
+export interface StaffDocument {
+  id: string; userId: string; type: StaffDocumentKind; title: string; issuedOn: string; expiresOn: string | null;
+  status: "valid" | "expiring" | "expired"; mediaType: string; sizeBytes: number; uploadedAt: string; uploadedBy: string;
+  selfUploaded: boolean; withdrawnAt: string | null;
+}
+export interface StaffFile { member: { id: string; name: string; active: boolean }; today: string; documents: StaffDocument[] }
+/** Administration's overview: active people with expired documents or documents that expire within 30 days. */
+export interface ExpiringDocuments { today: string; people: { id: string; name: string; documents: Pick<StaffDocument, "id" | "type" | "title" | "expiresOn" | "status">[] }[] }
+/**
+ * ST-124: e-mail notifications. Each person chooses which types they receive; administration marks the mandatory ones.
+ * Every message is recorded in the outbox with its recipient, its reason (motivo) and its status.
+ */
+export type NotificationKind = "course_assignment" | "section_assignment" | "review_submitted" | "review_returned" | "review_approved" | "class_changed" | "class_cancelled";
+export type NotificationDelivery = DeliveryStatus | "no_address";
+export interface NotificationSetting { type: NotificationKind; label: string; description: string; audience: string; mandatory: boolean; enabled: boolean }
+export interface NotificationRecord {
+  id: string; type: NotificationKind; userId: string; personName: string; recipient: string | null; reason: string; targetId: string | null;
+  status: NotificationDelivery; mandatory: boolean; attempts: number; error: string | null; createdAt: string; sentAt: string | null;
+}
+/**
+ * ST-152 (DEC-043): effective hours teaching classes, as recognition of the volunteer work (not payroll). A completed
+ * class counts from its start to its completion; `counted` counts, `no_start` (no real start recorded) and `review`
+ * (more than 8 hours) count 0 until administration corrects them; `adjusted` carries a correction in force.
+ */
+export type HoursState = "counted" | "no_start" | "review" | "adjusted";
+export interface HoursAdjustment { minutesBefore: number; minutesAfter: number; educatorBefore: string | null; educatorAfter: string; reason: string; adjustedBy: string; adjustedAt: string }
+export interface HoursRow {
+  sessionId: string; courseId: string; courseTitle: string; sectionId: string; sectionName: string; sessionDate: string;
+  /** Calendar day of the start in the organization's time zone (the class day when there is no start). */
+  day: string; startedAt: string | null; completedAt: string;
+  educatorId: string | null; educatorName: string | null; computedMinutes: number; minutes: number; state: HoursState;
+  adjustment: HoursAdjustment | null; adjustments: number;
+}
+export interface HoursTotal { id: string; name: string; minutes: number; classes: number }
+export interface HoursFilter { from: string | null; to: string | null; course: string | null; section: string | null; person: string | null }
+export interface HoursReport {
+  filter: HoursFilter; timezone: string; scope: "all" | "own"; rows: HoursRow[]; minutes: number;
+  totals: { people: HoursTotal[]; courses: HoursTotal[]; sections: HoursTotal[] };
+  /** What the filters can choose from: the courses, sections and people of the classes the person may see. */
+  options: { courses: { id: string; name: string }[]; sections: { id: string; name: string; courseId: string }[]; people: { id: string; name: string }[] };
+}
+export interface HoursAdjustmentInput { minutes: number; educatorId?: string; reason: string }
+/**
+ * ST-122: guided onboarding on the first sign-in. `password`, `legal`, `profile` and `agreement` (signed) are derived
+ * from the real data; `welcome`, `tour` and leaving an optional agreement for later are declared by the person.
+ */
+export type OnboardingStep = "password" | "legal" | "welcome" | "profile" | "agreement" | "tour";
+export interface OnboardingStepState { key: OnboardingStep; label: string; done: boolean; optional: boolean; skipped?: true }
+export type OnboardingPersonStatus = "pending" | "in_progress" | "complete";
+/** GET /api/onboarding: the signed-in person's own onboarding and what to show in each step. */
+export interface OnboardingState {
+  status: OnboardingPersonStatus; startedAt: string | null; completedAt: string | null; steps: OnboardingStepState[]; next: OnboardingStep | null;
+  /** What is still missing for «perfil completo». */
+  profileGaps: string[];
+  /** The volunteer agreement in force to sign, when the step applies and is not done. */
+  agreement: PendingDocument | null;
+  courses: { id: string; title: string; role: CourseRole }[];
+  sections: { id: string; name: string; courseId: string; courseTitle: string }[];
+}
+/** GET /api/onboarding/people: administration's view of each person's onboarding. */
+export interface OnboardingPerson {
+  userId: string; name: string; username: string; role: "admin" | "educator"; active: boolean;
+  status: OnboardingPersonStatus; startedAt: string | null; completedAt: string | null; steps: OnboardingStepState[]; missing: OnboardingStep[];
+}

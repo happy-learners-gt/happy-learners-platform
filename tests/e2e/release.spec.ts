@@ -32,6 +32,7 @@ test("HL-58 ST-044: administration downloads a backup without credentials; resto
     expect(backup.tables.programs.rows.length).toBeGreaterThan(0);
     expect(backup.tables.users.columns).not.toContain("password_hash");
     expect(backup.tables.users.columns).not.toContain("password_salt");
+    expect(backup.tables.users.columns).not.toContain("must_change_password");
     for (const name of ["sessions", "group_access_sessions", "login_limits"]) expect(backup.tables[name]).toBeUndefined();
     expect(Object.keys(backup.digests).sort()).toEqual(Object.keys(backup.tables).sort());
     // Only administration restores; another organization refuses the copy, and its own refuses a tampered one.

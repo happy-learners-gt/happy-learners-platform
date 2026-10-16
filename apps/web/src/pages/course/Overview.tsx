@@ -15,8 +15,8 @@ import { sectionPath } from "../sections/context";
 import { SectionCards } from "../sections/SectionCard";
 
 export function Overview() {
-  const { course, units, lessons, curriculum, access, writable, publisher, configurable, reload, noun, settings, program, pacing, requirements } = useCourse();
-  const teamEditable = configurable;
+  const { course, units, lessons, curriculum, access, writable, publisher, configurable, assignsTeam, reload, noun, settings, program, pacing, requirements } = useCourse();
+  const teamEditable = assignsTeam;
   // Sections are instances of the course: administration sees all of them, each educator only their own (DEC-024).
   const [groups, setGroups] = useState<SectionSummary[] | null>(null), [today, setToday] = useState("");
   const actions = useCourseActions(reload);

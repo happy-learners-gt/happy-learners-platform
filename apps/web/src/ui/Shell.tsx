@@ -13,6 +13,7 @@ import { Menu } from "./Menu";
 import { Modal, useFeedback } from "./feedback";
 import { Field } from "./primitives";
 import { courseConfiguration } from "../pages/course/context";
+import { AgreementBanner } from "../pages/legal";
 
 export function Brand() {
   return <Link href="/inicio" className="brand" aria-label="Happy Learners, ir a Inicio"><span className="brand-mark" aria-hidden="true">hl</span><span className="brand-name">Happy Learners</span></Link>;
@@ -37,7 +38,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="app-body">
       <aside id="app-sidebar" ref={panel} className="sidebar"><Sidebar/></aside>
       {open && <div className="drawer-backdrop" aria-hidden="true" onClick={() => setOpen(false)}/>}
-      <main id="main" tabIndex={-1} className="main">{children}</main>
+      <main id="main" tabIndex={-1} className="main"><AgreementBanner/>{children}</main>
     </div>
   </div>;
 }
@@ -69,6 +70,7 @@ function TopBar({ menuButton }: { menuButton: ReactNode }) {
       <Link href="/ayuda" className="icon-button" aria-label="Ayuda"><Icon name="help"/></Link>
       <Menu label={`Perfil de ${member.displayName || member.username}`} icon="user" text={member.displayName || member.username} items={[
         { label: `${roleLabel(member)}${organization?.name ? ` · ${organization.name}` : ""}`, icon: "shield", onSelect: () => {}, disabled: true },
+        { label: "Mi perfil", icon: "user", onSelect: () => navigate("/perfil") },
         "separator",
         { label: "Cerrar sesión", icon: "logout", onSelect: logout },
       ]}/>
@@ -165,6 +167,7 @@ function Sidebar() {
     <nav aria-label="Navegación principal"><ul className="nav-tree">
       {page({ href: "/inicio", label: "Inicio", icon: "home", hue: "violet", active: path === "/inicio" })}
       {page({ href: "/agenda", label: "Agenda", icon: "calendar", hue: "coral", active: path === "/agenda" })}
+      {page({ href: "/horas", label: admin ? "Horas efectivas" : "Mis horas", icon: "clock", hue: "green", active: path === "/horas" })}
       <Node id="courses" href="/cursos" label="Cursos" icon="courses" hue="sky" open={open.has("courses")} active={path === "/cursos" || path === "/cursos/nuevo"}
         toggleLabel="Mostrar los cursos" onToggle={() => toggle("courses")} onSelect={select("courses", "/cursos")}
         add={admin ? <Link href="/cursos/nuevo" className="nav-action" aria-label="Agregar un curso" title="Agregar un curso"><Icon name="plus" size={16}/></Link> : undefined}>
@@ -183,6 +186,8 @@ function Sidebar() {
       {page({ href: "/organizacion", label: "Organización", icon: "settings", hue: "coral", active: path === "/organizacion" })}
       {page({ href: "/educadores", label: "Educadores", icon: "users", hue: "pink", active: path === "/educadores" })}
       {page({ href: "/configuracion-academica", label: "Configuración académica", icon: "grid", hue: "green", active: path === "/configuracion-academica" })}
+      {page({ href: "/roles-y-accesos", label: "Roles y accesos", icon: "shield", hue: "violet", active: path === "/roles-y-accesos" })}
+      {page({ href: "/notificaciones", label: "Notificaciones", icon: "send", hue: "teal", active: path === "/notificaciones" })}
     </ul></nav>}
     {fictional(member.organizationId) && <p className="sidebar-note"><Icon name="shield" size={16}/><span>Demostración con datos ficticios</span></p>}
     {creating && <NewSection courses={courses || []} preferred={creating} onClose={() => setCreating(null)}/>}

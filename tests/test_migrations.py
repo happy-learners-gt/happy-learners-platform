@@ -486,3 +486,263 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual(demo.execute("SELECT count(*) FROM users WHERE username='tomas.aguilar'").fetchone()[0], 1)
         for scope in ["org-other", "org-hl"]:
             self.assertEqual(self.scoped(scope).execute("SELECT count(*) FROM courses WHERE id LIKE 'seed-course-ingles-%'").fetchone()[0], 0)
+
+    def test_team_accounts_keep_every_activity_event_and_accept_account_changes(self):
+        """0031 (ST-093): existing accounts keep their password; the activity is rebuilt row for row and admits account events."""
+        before = self.scoped("org-demo", until=30)
+        events = before.execute("SELECT * FROM activity_events ORDER BY id").fetchall()
+        demo = self.scoped("org-demo")
+        self.assertEqual(demo.execute("SELECT id,organization_id,actor_id,action,target_type,target_id,course_id,summary,occurred_at,group_id FROM activity_events ORDER BY id").fetchall(), events)
+        self.assertEqual(demo.execute("SELECT count(*) FROM users WHERE must_change_password<>0").fetchone()[0], 0)
+        self.assertEqual(sorted(row[0] for row in demo.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='activity_events' AND sql IS NOT NULL")),
+                         ["activity_events_actor", "activity_events_course", "activity_events_group", "activity_events_organization"])
+        demo.execute("INSERT INTO activity_events(id,organization_id,actor_id,action,target_type,target_id,summary,occurred_at) VALUES ('e-reset','org-demo','user-0','reset','account','user-1','Restableció la contraseña','t')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("INSERT INTO activity_events(id,organization_id,actor_id,action,target_type,target_id,summary,occurred_at) VALUES ('e-bad','org-demo','user-0','deleted','account','user-1','x','t')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("UPDATE users SET must_change_password=2 WHERE id='user-1'")
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_departures_record_a_date_and_keep_every_account(self):
+        """0035 (ST-123): a departure is its own row; users, memberships and activity stay as they were."""
+        before = self.scoped("org-demo", until=-1)
+        demo = self.scoped("org-demo")
+        for table in ["users", "memberships", "activity_events", "course_members", "section_educators"]:
+            self.assertEqual(demo.execute(f"SELECT count(*) FROM {table}").fetchone(), before.execute(f"SELECT count(*) FROM {table}").fetchone(), table)
+        self.assertEqual(demo.execute("SELECT count(*) FROM departures").fetchone()[0], 0)
+        demo.execute("INSERT INTO departures(id,organization_id,user_id,departed_on,reason,recorded_by,recorded_at) VALUES ('d1','org-demo','seed-user-diego','2026-09-30','','user-0','t')")
+        for values in [("d2", "seed-user-diego", "30/09/2026", ""), ("d3", "seed-user-diego", "2026-09-30", "x" * 301), ("d4", "user-missing", "2026-09-30", "")]:
+            with self.assertRaises(sqlite3.IntegrityError):
+                demo.execute("INSERT INTO departures(id,organization_id,user_id,departed_on,reason,recorded_by,recorded_at) VALUES (?,'org-demo',?,?,?,'user-0','t')", values)
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_access_matrix_never_stores_administration_permissions(self):
+        """0036 (ST-128, ST-135): coordination scopes, security groups and their audit; groups only hold grantable permissions."""
+        demo = self.scoped("org-demo")
+        demo.execute("INSERT INTO coordination_scopes(user_id,organization_id,program_id,assigned_by,assigned_at) VALUES ('user-1','org-demo','seed-program-primaria','user-0','t')")
+        demo.execute("INSERT INTO coordination_scopes(user_id,organization_id,program_id,assigned_by,assigned_at) VALUES ('user-1','org-demo','*','user-0','t')")
+        demo.execute("INSERT INTO security_groups(id,organization_id,name,name_key,description,created_at,updated_at) VALUES ('g1','org-demo','Lectura','lectura','','t','t')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("INSERT INTO security_groups(id,organization_id,name,name_key,description,created_at,updated_at) VALUES ('g2','org-demo','LECTURA','lectura','','t','t')")
+        demo.execute("INSERT INTO security_group_grants(group_id,organization_id,permission,program_id) VALUES ('g1','org-demo','activity.view','*')")
+        for permission in ["backup.manage", "accounts.manage", "access.manage", "legal.manage", "organization.configure", "anything"]:
+            with self.assertRaises(sqlite3.IntegrityError):
+                demo.execute("INSERT INTO security_group_grants(group_id,organization_id,permission,program_id) VALUES ('g1','org-demo',?,'*')", (permission,))
+        demo.execute("INSERT INTO security_group_members(group_id,user_id,organization_id,added_by,added_at) VALUES ('g1','seed-user-tomas','org-demo','user-0','t')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("INSERT INTO security_group_members(group_id,user_id,organization_id,added_by,added_at) VALUES ('g1','user-missing','org-demo','user-0','t')")
+        demo.execute("INSERT INTO access_events(id,organization_id,actor_id,action,subject_type,subject_id,summary,occurred_at) VALUES ('a1','org-demo','user-0','created','group','g1','Creó el grupo','t')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("INSERT INTO access_events(id,organization_id,actor_id,action,subject_type,subject_id,summary,occurred_at) VALUES ('a2','org-demo','user-0','created','account','g1','x','t')")
+        demo.execute("DELETE FROM security_groups WHERE id='g1'")
+        self.assertEqual(demo.execute("SELECT count(*) FROM security_group_grants").fetchone()[0], 0)
+        self.assertEqual(demo.execute("SELECT count(*) FROM security_group_members").fetchone()[0], 0)
+        self.assertEqual(demo.execute("SELECT count(*) FROM access_events").fetchone()[0], 1)
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_later_activity_rebuilds_keep_account_events(self):
+        """0031 admits account events and 0032 rebuilds the log again: an account event written in between survives."""
+        db = self.scoped("org-demo", until=31)
+        db.execute("INSERT INTO activity_events(id,organization_id,actor_id,action,target_type,target_id,summary,occurred_at) VALUES ('e-reset','org-demo','user-0','reset','account','user-1','Restableció la contraseña','t')")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql"))[31:]:
+            db.executescript(path.read_text())
+        self.assertEqual(db.execute("SELECT action,target_type FROM activity_events WHERE id='e-reset'").fetchone(), ("reset", "account"))
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_legal_versions_and_acceptances_are_kept(self):
+        """0032 (ST-126, ST-127): published versions never change, acceptances only record their withdrawal, the log keeps its rows."""
+        db = self.migrated()
+        self.assertEqual(db.execute("SELECT count(*) FROM legal_documents").fetchone()[0], 0)
+        self.assertGreater(db.execute("SELECT count(*) FROM activity_events").fetchone()[0], 0)
+        db.execute("INSERT INTO legal_documents(id,organization_id,kind,status,title,body,consent,updated_by,updated_at) VALUES ('p','org-demo','privacy','draft','Privacidad','Texto ficticio de la política.','Doy mi consentimiento.','user-0','t')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO legal_acceptances(id,organization_id,document_id,user_id,accepted_at) VALUES ('a0','org-demo','p','user-0','t')")
+        db.execute("UPDATE legal_documents SET status='published',version=1,published_by='user-0',published_at='t' WHERE id='p'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE legal_documents SET title='Cambiada' WHERE id='p'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("DELETE FROM legal_documents WHERE id='p'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO legal_documents(id,organization_id,kind,status,title,body,updated_by,updated_at) VALUES ('q','org-demo','privacy','draft','Sin consentimiento','Texto ficticio de la política.','user-0','t')")
+        db.execute("INSERT INTO legal_acceptances(id,organization_id,document_id,user_id,accepted_at) VALUES ('a1','org-demo','p','user-0','2026-10-01')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO legal_acceptances(id,organization_id,document_id,user_id,accepted_at) VALUES ('a2','org-demo','p','user-0','2026-10-02')")
+        db.execute("UPDATE legal_acceptances SET withdrawn_at='2026-10-03' WHERE id='a1'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE legal_acceptances SET withdrawn_at='2026-10-04' WHERE id='a1'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("DELETE FROM legal_acceptances WHERE id='a1'")
+        db.execute("INSERT INTO legal_acceptances(id,organization_id,document_id,user_id,accepted_at) VALUES ('a3','org-demo','p','user-0','2026-10-05')")
+        db.execute("INSERT INTO activity_events(id,organization_id,actor_id,action,target_type,target_id,summary,occurred_at) VALUES ('e','org-demo','user-0','withdrawn','legal','p','Retiró su consentimiento','t')")
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_signatures_rebuild_keeps_every_legal_row_and_trigger(self):
+        """0038 (ST-151, ST-153): legal_documents admits 'volunteer' and is rebuilt with legal_acceptances; inside one
+        transaction with foreign keys on, as a Durable Object applies it, every row stays byte-identical, the indexes
+        and triggers are recreated as 0032 wrote them and published versions stay immutable; signatures are kept."""
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        position = [path.name[:4] for path in migrations].index("0038")
+        db = self.scoped("org-demo", until=position)
+        db.isolation_level = None
+        insert = "INSERT INTO legal_documents(id,organization_id,kind,status,title,body,consent,updated_by,updated_at) VALUES (?,'org-demo',?,'draft',?,?,?,'user-0',?)"
+        db.execute(insert, ("t1", "terms", "Términos ñ «uno»", "Texto ficticio de los términos.\n\nSegundo párrafo con acentos: áéíóú.", None, "2026-10-01T00:00:00.000Z"))
+        db.execute(insert, ("p1", "privacy", "Privacidad", "Texto ficticio de la política de privacidad.", "Doy mi consentimiento informado.", "2026-10-01T00:00:01.000Z"))
+        db.execute("UPDATE legal_documents SET status='published',version=1,published_by='user-0',published_at='2026-10-02T00:00:00.000Z' WHERE id IN ('t1','p1')")
+        db.execute(insert, ("t2", "terms", "Borrador", "Borrador ficticio de los términos.", None, "2026-10-03T00:00:00.000Z"))
+        db.execute("INSERT INTO legal_acceptances(id,organization_id,document_id,user_id,accepted_at) VALUES ('a1','org-demo','t1','user-0','2026-10-04T00:00:00.000Z'),('a2','org-demo','p1','user-0','2026-10-04T00:00:00.000Z')")
+        db.execute("UPDATE legal_acceptances SET withdrawn_at='2026-10-05T00:00:00.000Z' WHERE id='a2'")
+        rows = lambda table: db.execute(f"SELECT hex(CAST(quote(id) AS BLOB)),* FROM {table} ORDER BY id").fetchall()
+        schema = lambda: db.execute("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE type IN ('index','trigger') AND tbl_name IN ('legal_documents','legal_acceptances') ORDER BY name").fetchall()
+        documents, acceptances, before = rows("legal_documents"), rows("legal_acceptances"), schema()
+        dump = lambda table: [tuple(value.hex() if isinstance(value, bytes) else value for value in row) for row in db.execute(f"SELECT * FROM {table} ORDER BY id").fetchall()]
+        raw = {table: db.execute(f"SELECT group_concat(hex(CAST(id AS BLOB))||hex(CAST(organization_id AS BLOB))||hex(CAST(kind AS BLOB))||hex(CAST(title AS BLOB))||hex(CAST(body AS BLOB))||ifnull(hex(CAST(consent AS BLOB)),'-')||ifnull(published_at,'-'),'|') FROM (SELECT * FROM {table} ORDER BY id)").fetchone() for table in ["legal_documents"]}
+        db.executescript("BEGIN;\n" + migrations[position].read_text() + "\nCOMMIT;")
+        self.assertEqual(rows("legal_documents"), documents)
+        self.assertEqual(rows("legal_acceptances"), acceptances)
+        self.assertEqual(db.execute("SELECT group_concat(hex(CAST(id AS BLOB))||hex(CAST(organization_id AS BLOB))||hex(CAST(kind AS BLOB))||hex(CAST(title AS BLOB))||hex(CAST(body AS BLOB))||ifnull(hex(CAST(consent AS BLOB)),'-')||ifnull(published_at,'-'),'|') FROM (SELECT * FROM legal_documents ORDER BY id)").fetchone(), raw["legal_documents"])
+        self.assertEqual(dump("legal_acceptances"), [tuple(row[1:]) for row in acceptances])
+        self.assertEqual(schema(), before)
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+        self.assertIn('REFERENCES "legal_documents"(id)', db.execute("SELECT sql FROM sqlite_master WHERE name='legal_acceptances'").fetchone()[0])
+        # Published versions and acceptances keep their protection.
+        for statement in ["UPDATE legal_documents SET title='Cambiada' WHERE id='t1'", "DELETE FROM legal_documents WHERE id='t1'", "DELETE FROM legal_acceptances WHERE id='a1'",
+                          "UPDATE legal_acceptances SET withdrawn_at='2026-10-06' WHERE id='a2'",
+                          "INSERT INTO legal_acceptances(id,organization_id,document_id,user_id,accepted_at) VALUES ('a3','org-demo','t2','user-0','t')",
+                          "INSERT INTO legal_documents(id,organization_id,kind,status,title,body,updated_by,updated_at) VALUES ('x','org-demo','other','draft','Otro','Texto ficticio de otro documento.','user-0','t')"]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=statement):
+                db.execute(statement)
+        db.execute("UPDATE legal_documents SET title='Borrador editado' WHERE id='t2'")
+        db.execute(insert, ("v1", "volunteer", "Acuerdo de voluntariado", "Texto ficticio del acuerdo de voluntariado ad honorem.", None, "t"))
+        db.execute("UPDATE legal_documents SET status='published',version=1,published_by='user-0',published_at='t' WHERE id='v1'")
+        db.execute("INSERT INTO legal_acceptances(id,organization_id,document_id,user_id,accepted_at) VALUES ('a4','org-demo','v1','user-0','2026-10-07')")
+        # A signature belongs to an acceptance of the terms or the agreement by the same person, and is never changed.
+        sign = "INSERT INTO legal_signatures(id,organization_id,acceptance_id,document_id,user_id,username,signed_name,document_sha256,signature_sha256,signed_at) VALUES (?,'org-demo',?,?,?,'admin-demo','Nombre Ficticio',?,?,'2026-10-07')"
+        db.execute(sign, ("s1", "a4", "v1", "user-0", "a" * 64, "b" * 64))
+        for values in [("s2", "a2", "p1", "user-0", "a" * 64, "b" * 64), ("s3", "a1", "t1", "user-1", "a" * 64, "b" * 64), ("s4", "a1", "t1", "user-0", "a" * 63, "b" * 64), ("s5", "a4", "v1", "user-0", "a" * 64, "b" * 64)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=values[0]):
+                db.execute(sign, values)
+        for statement in ["UPDATE legal_signatures SET signed_name='Otro nombre' WHERE id='s1'", "DELETE FROM legal_signatures WHERE id='s1'"]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=statement):
+                db.execute(statement)
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_invitations_add_staff_email_outbox_and_keep_every_activity_event(self):
+        """0034 (ST-121): users gain an optional, unique e-mail; invitations keep only token hashes; the outbox records
+        deliveries; the activity is rebuilt row for row and admits invitation events."""
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        before = self.scoped("org-demo", until=[path.name[:4] for path in migrations].index("0034"))
+        events = before.execute("SELECT id,organization_id,actor_id,action,target_type,target_id,course_id,summary,occurred_at,group_id FROM activity_events ORDER BY id").fetchall()
+        demo = self.scoped("org-demo")
+        self.assertEqual(demo.execute("SELECT id,organization_id,actor_id,action,target_type,target_id,course_id,summary,occurred_at,group_id FROM activity_events ORDER BY id").fetchall(), events)
+        self.assertEqual(demo.execute("SELECT count(*) FROM users WHERE email IS NOT NULL").fetchone()[0], 0)
+        demo.execute("UPDATE users SET email='ana@example.test' WHERE id='user-0'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("UPDATE users SET email='ana@example.test' WHERE id='user-1'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("UPDATE users SET email='Mayus@Example.test' WHERE id='user-1'")
+        insert = "INSERT INTO invitations(id,organization_id,email,display_name,role,token_hash,expires_at,status,invited_by,created_at) VALUES (?,'org-demo',?,'Paula','educator',?,'t','pending','user-0','t')"
+        demo.execute(insert, ("i-1", "paula@example.test", "a" * 64))
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute(insert, ("i-2", "paula@example.test", "b" * 64))
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute(insert, ("i-3", "otra@example.test", "d_" + "c" * 64))
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("UPDATE invitations SET status='accepted' WHERE id='i-1'")
+        demo.execute("UPDATE invitations SET status='revoked' WHERE id='i-1'")
+        demo.execute(insert, ("i-2", "paula@example.test", "b" * 64))
+        demo.execute("INSERT INTO mail_outbox(id,organization_id,kind,reference_id,recipient,subject,status,created_at) VALUES ('m-1','org-demo','invitation','i-2','paula@example.test','Te invitaron a Happy Learners','not_configured','t')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("INSERT INTO mail_outbox(id,organization_id,kind,recipient,subject,status,created_at) VALUES ('m-2','org-demo','invitation','x@example.test','s','bounced','t')")
+        for action in ["resent", "revoked", "accepted", "created"]:
+            demo.execute("INSERT INTO activity_events(id,organization_id,actor_id,action,target_type,target_id,summary,occurred_at) VALUES (?,'org-demo','user-0',?,'invitation','i-2','Invitación','t')", (f"e-{action}", action))
+        self.assertEqual(sorted(row[0] for row in demo.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='activity_events' AND sql IS NOT NULL")),
+                         ["activity_events_actor", "activity_events_course", "activity_events_group", "activity_events_organization"])
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_profiles_and_staff_documents_keep_their_rules(self):
+        """0037 (ST-149, ST-150): profile fields and staff documents are checked; withdrawing keeps the row."""
+        demo = self.scoped("org-demo")
+        demo.execute("INSERT INTO staff_profiles(user_id,organization_id,phone,contact_email,specialties,availability,updated_at) VALUES ('seed-user-carlos','org-demo','+502 5555-0149','c@ejemplo.org','[\"Álgebra\"]','[{\"day\":1,\"start\":\"08:00\",\"end\":\"10:00\"}]','t')")
+        for values in [("seed-user-ana", "123", None, "[]", "[]"), ("seed-user-ana", None, "Mayus@Ejemplo.org", "[]", "[]"), ("seed-user-ana", None, None, "{}", "[]"), ("user-missing", None, None, "[]", "[]")]:
+            with self.assertRaises(sqlite3.IntegrityError):
+                demo.execute("INSERT INTO staff_profiles(user_id,organization_id,phone,contact_email,specialties,availability,updated_at) VALUES (?,'org-demo',?,?,?,?,'t')", values)
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("UPDATE staff_profiles SET photo_key='k' WHERE user_id='seed-user-carlos'")
+        insert = "INSERT INTO staff_documents(id,organization_id,user_id,type,title,issued_on,expires_on,object_key,media_type,size_bytes,sha256,uploaded_by,uploaded_at) VALUES (?,'org-demo','seed-user-carlos',?,'T',?,?,?,?,?,?,'user-0','t')"
+        demo.execute(insert, ("d1", "dpi", "2026-01-01", "2030-01-01", "k1", "application/pdf", 10, "a" * 64))
+        for values in [("d2", "passport", "2026-01-01", None, "k2", "application/pdf", 10, "a" * 64), ("d3", "dpi", "2026-01-01", "2025-01-01", "k3", "application/pdf", 10, "a" * 64),
+                       ("d4", "dpi", "2026-01-01", None, "k1", "application/pdf", 10, "a" * 64), ("d5", "cv", "2026-01-01", None, "k5", "application/zip", 10, "a" * 64), ("d6", "cv", "2026-01-01", None, "k6", "image/png", 10485761, "a" * 64)]:
+            with self.assertRaises(sqlite3.IntegrityError):
+                demo.execute(insert, values)
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("UPDATE staff_documents SET withdrawn_at='t' WHERE id='d1'")
+        demo.execute("UPDATE staff_documents SET withdrawn_at='t',withdrawn_by='user-0' WHERE id='d1'")
+        self.assertEqual(demo.execute("SELECT count(*) FROM staff_documents").fetchone()[0], 1)
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_notifications_rebuild_keeps_every_outbox_row(self):
+        """0039 (ST-124): mail_outbox admits notifications and 'no_address'; inside one transaction with foreign keys on,
+        as a Durable Object applies it, every existing row and its order stay byte-identical and the indexes return."""
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        position = [path.name[:4] for path in migrations].index("0039")
+        db = self.scoped("org-demo", until=position)
+        db.isolation_level = None
+        insert = "INSERT INTO mail_outbox(id,organization_id,kind,reference_id,recipient,subject,status,attempts,last_error,created_at,sent_at,provider_id) VALUES (?,'org-demo','invitation',?,?,?,?,?,?,?,?,?)"
+        db.execute(insert, ("mail-b", "invitation-1", "paula@example.test", "Te invitaron a Happy Learners", "sent", 2, None, "2026-10-01T00:00:00.000Z", "2026-10-01T00:00:01.000Z", "<id@brevo>"))
+        db.execute(insert, ("mail-a", "invitation-2", "ñandú@example.test", "Asunto «ñ»", "failed", 1, "Brevo respondió 401", "2026-10-01T00:00:02.000Z", None, None))
+        db.execute(insert, ("mail-c", None, "x@example.test", "S", "not_configured", 0, "El envío de correo no está configurado.", "2026-10-01T00:00:03.000Z", None, None))
+        old = "id,organization_id,kind,reference_id,recipient,subject,status,attempts,last_error,created_at,sent_at,provider_id"
+        rows = lambda: db.execute(f"SELECT rowid,{old},hex(CAST(recipient AS BLOB)),hex(CAST(subject AS BLOB)) FROM mail_outbox ORDER BY rowid").fetchall()
+        before = rows()
+        indexes = lambda: db.execute("SELECT name,sql FROM sqlite_master WHERE type='index' AND tbl_name='mail_outbox' AND name IN ('mail_outbox_reference','mail_outbox_sent') ORDER BY name").fetchall()
+        kept = indexes()
+        db.executescript("BEGIN;\n" + migrations[position].read_text() + "\nCOMMIT;")
+        self.assertEqual(rows(), before)
+        self.assertEqual(indexes(), kept)
+        self.assertEqual(db.execute("SELECT count(*) FROM mail_outbox WHERE user_id IS NULL AND notification_type IS NULL AND reason IS NULL AND mandatory=0").fetchone()[0], 3)
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+        note = "INSERT INTO mail_outbox(id,organization_id,kind,reference_id,recipient,subject,status,created_at,user_id,notification_type,reason,mandatory) VALUES (?,'org-demo','notification','class_changed:c',?,'Asunto',?,'t',?,?,?,?)"
+        db.execute(note, ("n1", "", "no_address", "user-0", "class_changed", "Cambió la clase", 1))
+        db.execute(note, ("n2", "a@example.test", "not_configured", "user-0", "class_cancelled", "Se canceló la clase", 0))
+        for values in [("n3", "", "sent", "user-0", "class_changed", "Motivo", 0), ("n4", "a@example.test", "sent", "user-0", "otro", "Motivo", 0), ("n5", "a@example.test", "sent", "user-0", "class_changed", None, 0), ("n6", "a@example.test", "sent", None, "class_changed", "Motivo", 0)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(values)):
+                db.execute(note, values)
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO mail_outbox(id,organization_id,kind,recipient,subject,status,created_at,notification_type) VALUES ('i9','org-demo','invitation','a@example.test','S','sent','t','class_changed')")
+        db.execute("INSERT INTO notification_policies VALUES ('org-demo','class_changed',1,'user-0','t')")
+        db.execute("INSERT INTO notification_preferences VALUES ('user-0','org-demo','review_returned',0,'t')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO notification_preferences VALUES ('user-0','org-demo','otro',0,'t')")
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_hour_adjustments_need_a_reason_and_a_completed_class_reference(self):
+        """0040 (ST-152): corrections keep minutes before and after, a person, a reason of 5 to 300 characters and who made them."""
+        demo = self.scoped("org-demo")
+        session = demo.execute("SELECT id FROM class_sessions WHERE status='completed' LIMIT 1").fetchone()[0]
+        # Classes completed before this release have no real start: 0018 set started_at to their completion.
+        self.assertEqual(demo.execute("SELECT count(*) FROM class_sessions WHERE status='completed' AND started_at<>completed_at").fetchone()[0], 0)
+        insert = "INSERT INTO class_hour_adjustments(id,organization_id,session_id,minutes_before,minutes_after,educator_before,educator_after,reason,adjusted_by,adjusted_at) VALUES (?,'org-demo',?,?,?,?,?,?,'user-0','t')"
+        demo.execute(insert, ("h1", session, 0, 90, None, "user-1", "Olvidó comenzar la clase"))
+        for values in [("h2", session, 0, 90, None, "user-1", "    "), ("h3", session, 0, 721, None, "user-1", "Motivo válido"), ("h4", session, -1, 90, None, "user-1", "Motivo válido"),
+                       ("h5", "class-missing", 0, 90, None, "user-1", "Motivo válido"), ("h6", session, 0, 90, None, "user-missing", "Motivo válido"), ("h7", session, 0, 90, None, "user-1", "x" * 301)]:
+            with self.assertRaises(sqlite3.IntegrityError):
+                demo.execute(insert, values)
+        self.assertEqual(demo.execute("SELECT count(*) FROM class_hour_adjustments").fetchone()[0], 1)
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+class OnboardingMigrationTests(unittest.TestCase):
+    def test_existing_accounts_count_as_onboarded_and_new_ones_start_pending(self):
+        """0041 (ST-122): every account that exists when it runs is backfilled as onboarded; later accounts start empty."""
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            db.executescript(path.read_text())
+        members = db.execute("SELECT count(*) FROM memberships").fetchone()[0]
+        self.assertGreater(members, 0)
+        self.assertEqual(db.execute("SELECT count(*) FROM onboarding WHERE completed_at IS NOT NULL AND completed_at >= started_at").fetchone()[0], members)
+        self.assertEqual(db.execute("SELECT count(*) FROM onboarding o JOIN memberships m ON m.user_id=o.user_id AND m.organization_id=o.organization_id").fetchone()[0], members)
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO onboarding(user_id,organization_id,started_at) VALUES ('nobody','org-demo','2026-10-15T00:00:00Z')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE onboarding SET completed_at='2000-01-01T00:00:00Z' WHERE user_id='user-0'")
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])

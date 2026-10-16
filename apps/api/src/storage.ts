@@ -29,6 +29,17 @@ import organizationsMigration from "../../../database/migrations/0027_organizati
 import routesMigration from "../../../database/migrations/0028_program_routes.sql";
 import lessonTimeMigration from "../../../database/migrations/0029_lesson_time_and_conflicts.sql";
 import englishMigration from "../../../database/migrations/0030_english_program.sql";
+import teamAccountsMigration from "../../../database/migrations/0031_team_accounts.sql";
+import legalMigration from "../../../database/migrations/0032_terms_and_privacy.sql";
+import calendarFeedsMigration from "../../../database/migrations/0033_calendar_feeds.sql";
+import invitationsMigration from "../../../database/migrations/0034_invitations.sql";
+import departuresMigration from "../../../database/migrations/0035_departures.sql";
+import accessMatrixMigration from "../../../database/migrations/0036_access_matrix.sql";
+import profileMigration from "../../../database/migrations/0037_profile_and_staff_file.sql";
+import signaturesMigration from "../../../database/migrations/0038_signatures_and_agreement.sql";
+import notificationsMigration from "../../../database/migrations/0039_notifications.sql";
+import effectiveHoursMigration from "../../../database/migrations/0040_effective_hours.sql";
+import onboardingMigration from "../../../database/migrations/0041_onboarding.sql";
 import { organizationIds } from "@happy-learners/domain";
 import { exportStore, importStore, RestoreError, type Backup } from "./backup";
 
@@ -116,6 +127,17 @@ export class OrganizationStore extends DurableObject<Env> {
       if (!applied.length || applied[0].version < 28) { runScript(this.ctx.storage.sql, routesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (28,?)", scope); }
       if (!applied.length || applied[0].version < 29) { this.ctx.storage.sql.exec(lessonTimeMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (29,?)", scope); }
       if (!applied.length || applied[0].version < 30) { runScript(this.ctx.storage.sql, englishMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (30,?)", scope); }
+      if (!applied.length || applied[0].version < 31) { this.ctx.storage.sql.exec(teamAccountsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (31,?)", scope); }
+      if (!applied.length || applied[0].version < 32) { this.ctx.storage.sql.exec(legalMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (32,?)", scope); }
+      if (!applied.length || applied[0].version < 33) { this.ctx.storage.sql.exec(calendarFeedsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (33,?)", scope); }
+      if (!applied.length || applied[0].version < 34) { this.ctx.storage.sql.exec(invitationsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (34,?)", scope); }
+      if (!applied.length || applied[0].version < 35) { this.ctx.storage.sql.exec(departuresMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (35,?)", scope); }
+      if (!applied.length || applied[0].version < 36) { this.ctx.storage.sql.exec(accessMatrixMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (36,?)", scope); }
+      if (!applied.length || applied[0].version < 37) { this.ctx.storage.sql.exec(profileMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (37,?)", scope); }
+      if (!applied.length || applied[0].version < 38) { this.ctx.storage.sql.exec(signaturesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (38,?)", scope); }
+      if (!applied.length || applied[0].version < 39) { this.ctx.storage.sql.exec(notificationsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (39,?)", scope); }
+      if (!applied.length || applied[0].version < 40) { this.ctx.storage.sql.exec(effectiveHoursMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (40,?)", scope); }
+      if (!applied.length || applied[0].version < 41) { this.ctx.storage.sql.exec(onboardingMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (41,?)", scope); }
       // Compare-and-write plus dependent writes belong to one SQLite transaction.
       if (guard && !this.ctx.storage.sql.exec(guard.sql, ...guard.values).toArray().length) return [];
       return statements.map(statement => this.ctx.storage.sql.exec(statement.sql, ...statement.values).toArray());

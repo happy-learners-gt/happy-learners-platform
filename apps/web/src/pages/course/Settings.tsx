@@ -9,7 +9,7 @@ import { CourseForm, useCourseActions } from "../Courses";
 import { useCourse } from "./context";
 
 export function Settings() {
-  const { course, reload, access } = useCourse();
+  const { course, reload, access, assignsTeam } = useCourse();
   const { toast } = useFeedback();
   const actions = useCourseActions(reload);
   const base = `/cursos/${course.id}`;
@@ -19,7 +19,7 @@ export function Settings() {
     <PageHeader crumbs={crumbs} title="Configuración" description="Nombre, objetivo, configuración académica, comportamiento y equipo docente del curso. Administración los gestiona."/>
     <div className="reading stack-lg">
       <CourseForm key={course.version} course={course} cancelHref={base} readOnly onSaved={() => undefined}/>
-      <TeamView/>
+      {assignsTeam ? <TeamEditor/> : <TeamView/>}
     </div>
   </>;
   return <>
@@ -54,7 +54,7 @@ function TeamView() {
 }
 
 type Person = { id: string; username: string; name: string; role: string };
-/** The teaching team: one lead (who answers for the course) and co-teachers. Only administration edits it. */
+/** The teaching team: one lead (who answers for the course) and co-teachers. Administration edits it, and coordination in its scope (DEC-041). */
 function TeamEditor() {
   const { course, reload } = useCourse();
   const { toast } = useFeedback();

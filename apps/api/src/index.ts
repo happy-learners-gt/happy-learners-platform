@@ -6,18 +6,28 @@ import type { Database } from "./storage";
 export { OrganizationStore } from "./storage";
 import { cookie, digest, newToken, sessionToken, verifyPassword } from "./auth";
 import { roles } from "./roles";
+import { changePassword } from "./accounts";
 import { digests, type Backup } from "./backup";
 import { content, reviews, shared } from "./content";
 import { courses, programs, taxonomy } from "./courses";
 import { duplicateCourse } from "./duplicate";
 import { accessTo } from "./access";
 import { activity, people, progress } from "./team";
+import { legal, pendingFor, publicPrivacy } from "./legal";
 import { classroom } from "./attendance";
 import { calendar, myClasses, student, studentToken } from "./classes";
 import { sections } from "./sections";
 import { courseFiles, sharedFile } from "./files";
+import { feed, feedLink, feedPath } from "./calendar-feed";
+import { acceptInvitation, acceptPath, invitations, previewInvitation } from "./invitations";
+import { mailSender } from "./mail";
+import { staff, staffMethods } from "./profiles";
 import { LessonCollaborationRoom } from "./collaboration";
 import { encodeLessonDraft } from "./rich-text";
+import { accessMatrix, permissionColumns, withPermissions } from "./permissions";
+import { notificationMethods, notifications } from "./notifications";
+import { hours } from "./hours";
+import { onboarding, onboardingPending } from "./onboarding";
 export { LessonCollaborationRoom };
 
 const headers = {
@@ -33,7 +43,7 @@ async function body(request: Request): Promise<unknown> {
   if (!request.headers.get("content-type")?.startsWith("application/json")) throw new Error("INPUT");
   const pathname = new URL(request.url).pathname;
   // Lessons carry rich text for every block; other bodies stay small.
-  const limit = pathname === "/api/login" ? 2048 : pathname === "/api/organization/restore" ? 33554432 : /^\/api\/lessons(\/|$)/.test(pathname) ? 262144 : 65536;
+  const limit = pathname === "/api/login" || pathname === "/api/account/password" || acceptPath.test(pathname) ? 2048 : pathname === "/api/organization/restore" ? 33554432 : /^\/api\/(lessons|legal)(\/|$)/.test(pathname) ? 262144 : 65536;
   const reader = request.body?.getReader();
   if (!reader) throw new Error("INPUT");
   let text = ""; const decoder = new TextDecoder(); let size = 0;
@@ -48,8 +58,17 @@ async function body(request: Request): Promise<unknown> {
 async function member(request: Request, db: Database): Promise<Member | null> {
   const token = sessionToken(request);
   if (!token) return null;
-  return db.prepare("SELECT u.id, u.username, COALESCE(u.display_name,u.username) AS displayName, CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END AS role, m.organization_id AS organizationId FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND m.active=1")
-    .bind(await digest(token), Date.now()).first<Member>();
+  const row = await db.prepare(`SELECT u.id, u.username, COALESCE(u.display_name,u.username) AS displayName, CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END AS role, m.organization_id AS organizationId, u.must_change_password AS mustChange, ${permissionColumns} FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND m.active=1`)
+    .bind(await digest(token), Date.now()).first<Member & { mustChange: number }>();
+  if (!row) return null;
+  // ST-128, ST-135: effective permissions are computed on every request, from the same query.
+  const { mustChange, ...current } = row;
+  return withPermissions(mustChange ? { ...current, mustChangePassword: true } : current);
+}
+/** Whether a username exists in any organization, active or not: it decides where its owner signs in (ST-093). */
+async function usernameTaken(env: Env, username: string) {
+  const found = await Promise.all(organizationIds.map(id => database(env, id).prepare("SELECT 1 AS found FROM users WHERE username=?").bind(username).first()));
+  return found.some(Boolean);
 }
 /** The organization a username belongs to: each store is asked once; an unknown name stays with the default one. */
 async function organizationOf(env: Env, username: string) {
@@ -63,13 +82,21 @@ async function route(request: Request, env: Env): Promise<Response> {
     for (const [name, value] of Object.entries(headers)) result.headers.set(name, value);
     return result;
   }
-  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|organization|calendar|members|levels|units|resources|lessons|courses|programs|vocabularies|terms|student)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files"))
+  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|account|organization|calendar|members|access|levels|units|resources|lessons|courses|programs|vocabularies|terms|student|legal|hours)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files") && !/^\/api\/members\/[a-z0-9-]+\/password$/.test(path))
     || (method === "POST" && path === "/api/organization/restore" && env.RESTORE_ENABLED === "true")
+    || (method === "POST" && (path === "/api/invitations" || acceptPath.test(path)))
     ? await body(request) : undefined;
   // Finishing or cancelling a class may say what was covered or what happens to its plan; without a body, the defaults apply.
   if (method === "POST" && /^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/(complete|cancel)$/.test(path) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
+  // ST-124: notification preferences and policy.
+  if (method === "PUT" && notificationMethods(path)) input = await body(request);
   let scope: string = scopeOfToken(sessionToken(request));
   if (path.startsWith("/api/share/")) scope = scopeOfShare(path.split("/")[3]);
+  const feedToken = feedPath.exec(path)?.[1];
+  if (feedToken) scope = scopeOfToken(feedToken);
+  // ST-121: an invitation link names its organization like a session token does.
+  const invitationToken = acceptPath.exec(path)?.[1];
+  if (invitationToken) scope = scopeOfToken(invitationToken);
   if (path.startsWith("/api/student/")) scope = path === "/api/student/login" ? scopeOfSection(String((input as Record<string, unknown> | null)?.code || "").trim().toUpperCase()) : scopeOfToken(studentToken(request));
   if (path === "/api/login" && method === "POST") {
     const credentials = input as Record<string, unknown> | null;
@@ -84,7 +111,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   // Retired in 1.0 (ST-076): no screen uses them; their data stays readable through courses and the library.
   if (/^\/api\/(curriculum|levels|units)(\/[a-z0-9-]+)?$/.test(path) || /^\/api\/resources\/[a-z0-9-]+$/.test(path) || (path === "/api/resources" && !["GET", "HEAD"].includes(method)))
     return json({ error: "Esta ruta se retiró en la versión 1.0." }, 410);
-  const methods: Record<string, string[]> = { "/api/session": ["GET"], "/api/login": ["POST"], "/api/logout": ["POST"], "/api/organization": ["GET", "PUT"], "/api/organization/backup": ["GET"], "/api/resources": ["GET"], "/api/lessons": ["GET", "POST"] };
+  const methods: Record<string, string[]> = { "/api/session": ["GET"], "/api/login": ["POST"], "/api/logout": ["POST"], "/api/account/password": ["POST"], "/api/organization": ["GET", "PUT"], "/api/organization/backup": ["GET"], "/api/resources": ["GET"], "/api/lessons": ["GET", "POST"] };
   // Restoring replaces an organization's data, so only environments that rehearse it (preview, local tests) offer it.
   if (env.RESTORE_ENABLED === "true") methods["/api/organization/restore"] = ["POST"];
   if (/^\/api\/courses$/.test(path)) methods[path] = ["GET", "POST"];
@@ -121,12 +148,42 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/classes" || path === "/api/student/space" || /^\/api\/student\/files\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET"];
   if (["/api/student/login", "/api/student/logout", "/api/student/identity", "/api/student/progress"].includes(path)) methods[path] = ["POST"];
   if (path === "/api/taxonomy") methods[path] = ["GET"];
+  // ST-125: the calendar link (signed in) and the feed calendars fetch without a session; GET only.
+  if (path === "/api/feeds/calendar") methods[path] = ["GET", "POST"];
+  if (feedToken) methods[path] = ["GET"];
+  if (path === "/api/invitations") methods[path] = ["GET", "POST"];
+  // ST-128, ST-135: roles and access.
+  if (path === "/api/access/matrix") methods[path] = ["GET"];
+  if (path === "/api/access/groups") methods[path] = ["GET", "POST"];
+  if (/^\/api\/access\/groups\/security-group-[a-z0-9-]+$/.test(path)) methods[path] = ["PUT", "DELETE"];
+  if (/^\/api\/access\/groups\/security-group-[a-z0-9-]+\/(permissions|members)$/.test(path)) methods[path] = ["PUT"];
+  if (/^\/api\/members\/[a-z0-9-]+\/coordination$/.test(path)) methods[path] = ["PUT"];
+  if (/^\/api\/invitations\/invitation-[a-z0-9-]+\/(resend|revoke)$/.test(path)) methods[path] = ["POST"];
+  if (invitationToken) methods[path] = ["GET", "POST"];
   if (path === "/api/programs") methods[path] = ["GET", "POST"];
   if (/^\/api\/programs\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET", "PUT"];
   if (/^\/api\/programs\/[a-z0-9-]+\/prerequisites$/.test(path)) methods[path] = ["GET", "PUT"];
   if (/^\/api\/(vocabularies|terms)$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/(vocabularies|terms)\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
-  const allowed = methods[path] || (path === "/api/members" ? ["GET"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/lessons\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/(publish|duplicate|review|review\/return)$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+\/files\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
+  // ST-126, ST-127: terms and privacy; the privacy policy in force is also public.
+  if (["/api/legal", "/api/legal/documents", "/api/legal/acceptances", "/api/public/privacy"].includes(path)) methods[path] = ["GET"];
+  if (["/api/legal/accept", "/api/legal/withdraw"].includes(path) || /^\/api\/legal\/documents\/[a-z]+\/publish$/.test(path)) methods[path] = ["POST"];
+  if (/^\/api\/legal\/documents\/[a-z]+$/.test(path)) methods[path] = ["PUT"];
+  // ST-153: signatures, their receipts and administration's verification.
+  if (path === "/api/legal/signatures" || /^\/api\/legal\/signatures\/signature-[a-z0-9-]+\/receipt$/.test(path)) methods[path] = ["GET"];
+  if (path === "/api/legal/signatures/verify") methods[path] = ["POST"];
+  // ST-152: effective hours, their export and administration's corrections.
+  if (path === "/api/hours" || path === "/api/hours/export") methods[path] = ["GET"];
+  if (/^\/api\/hours\/[a-z0-9-]+\/adjustment$/.test(path)) methods[path] = ["POST"];
+  // ST-122: guided onboarding.
+  if (path === "/api/onboarding" || path === "/api/onboarding/people") methods[path] = ["GET"];
+  if (/^\/api\/onboarding\/steps\/[a-z]+$/.test(path)) methods[path] = ["POST"];
+  // ST-149, ST-150: profile, photo and staff file.
+  const staffAllowed = staffMethods(path);
+  if (staffAllowed) methods[path] = staffAllowed;
+  const notificationAllowed = notificationMethods(path);
+  if (notificationAllowed) methods[path] = notificationAllowed;
+  const allowed = methods[path] || (path === "/api/members" ? ["GET", "POST"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/members\/[a-z0-9-]+\/password$/.test(path) ? ["POST"] : /^\/api\/members\/[a-z0-9-]+\/departure$/.test(path) ? ["GET", "POST"] : /^\/api\/lessons\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/(publish|duplicate|review|review\/return)$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+\/files\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
   if (!allowed) return json({ error: "Not found" }, 404);
   if (!allowed.includes(method)) return json({ error: "Method not allowed" }, 405, { Allow: allowed.join(", ") });
   if (!["GET", "HEAD"].includes(method)) {
@@ -157,15 +214,35 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (shareParts[4] === "files" && method === "GET") return sharedFile(shareParts[3], shareParts[5], scope, db, env.COURSE_FILES);
     return shared(path, method, request, db);
   }
+  if (feedToken) return feed(feedToken, url, scope, db);
+  if (invitationToken) {
+    if (method === "GET") return previewInvitation(invitationToken, scope, db);
+    // Choosing a username and password is limited like signing in, with its own bucket.
+    const bucket = await digest(`invitation:${new Date().toISOString().slice(0, 10)}:${request.headers.get("CF-Connecting-IP") || "local"}`), now = Date.now();
+    const limit = await db.prepare("INSERT INTO login_limits (bucket, attempts, expires_at) VALUES (?,1,?) ON CONFLICT(bucket) DO UPDATE SET attempts=CASE WHEN expires_at<? THEN 1 ELSE attempts+1 END, expires_at=CASE WHEN expires_at<? THEN excluded.expires_at ELSE expires_at END RETURNING attempts")
+      .bind(bucket, now + 900000, now, now).first<{ attempts: number }>();
+    if (!limit || limit.attempts > 30) return json({ error: "Demasiados intentos. Espera 15 minutos y vuelve a intentar." }, 429, { "Retry-After": "900" });
+    const accepted = await acceptInvitation(invitationToken, input, scope, db, username => usernameTaken(env, username));
+    return accepted.session ? json(await accepted.response.json(), accepted.response.status, { "Set-Cookie": cookie(accepted.session, request) }) : accepted.response;
+  }
   if (path.startsWith("/api/student/")) return student(path, method, input, request, scope, db, env.COURSE_FILES);
   if (path === "/api/logout") {
     const token = sessionToken(request);
     if (token) await db.prepare("DELETE FROM sessions WHERE token_hash=?").bind(await digest(token)).run();
     return json({ ok: true }, 200, { "Set-Cookie": cookie("", request, true) });
   }
+  if (path === "/api/public/privacy") return publicPrivacy(url, id => database(env, id));
   const current = await member(request, db);
   if (!current) return json({ error: "Inicia sesión para continuar." }, 401);
-  if (path === "/api/session") return json({ member: current });
+  // Until the person accepts the terms and consents to the privacy policy in force, only those and the session answer.
+  const pending = await pendingFor(db, current);
+  // ST-122: `onboarding` is true while the person still has to go through the welcome.
+  if (path === "/api/session") return json({ member: current, pending, ...(await onboardingPending(db, current) ? { onboarding: true } : {}) });
+  if (path === "/api/account/password") return changePassword(input, current, sessionToken(request)!, db);
+  // A temporary password opens nothing else until the person chooses their own (ST-093); the terms come after it.
+  if (current.mustChangePassword) return json({ error: "Cambia tu contraseña temporal para continuar.", code: "PASSWORD_CHANGE_REQUIRED" }, 403);
+  if (path.startsWith("/api/legal")) return legal(path, method, input, current, db);
+  if (pending.length && !(path === "/api/organization" && method === "GET")) return json({ error: "Acepta los términos y la política de privacidad vigentes para continuar.", pending }, 403);
   if (/^\/api\/courses\/[a-z0-9-]+\/files(?:\/|$)/.test(path)) return courseFiles(path, method, request, current, db, env.COURSE_FILES);
   const collaborationMatch = path.match(/^\/api\/courses\/([a-z0-9-]+)\/lessons\/([a-z0-9-]+)\/collaborate$/);
   if (collaborationMatch) {
@@ -189,19 +266,28 @@ async function route(request: Request, env: Env): Promise<Response> {
     internalHeaders.set("X-HL-Session", await digest(token));
     return room.fetch(new Request(request, { headers: internalHeaders }));
   }
+  // ST-124: endpoints that change something tell the people affected by e-mail, after their write.
+  const notifier = { origin: url.origin, sender: mailSender(env) };
+  if (notificationAllowed) return notifications(path, method, input, url, current, db, notifier.sender.configured);
   if (/^\/api\/(taxonomy|vocabularies|terms)(\/|$)/.test(path)) return taxonomy(path, method, input, current, db);
-  if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions)(\/|$)/.test(path)) return classroom(path, method, input, current, db);
+  if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions)(\/|$)/.test(path)) return classroom(path, method, input, current, db, url.searchParams, notifier);
   if (/^\/api\/courses\/[a-z0-9-]+\/duplicate$/.test(path)) return duplicateCourse(path.split("/")[3], current, db, env.COURSE_FILES);
-  if (/^\/api\/courses(\/|$)/.test(path)) return courses(path, method, input, current, db);
+  if (/^\/api\/courses(\/|$)/.test(path)) return courses(path, method, input, current, db, notifier);
   if (/^\/api\/programs(\/|$)/.test(path)) return programs(path, method, input, current, db);
   if (path === "/api/activity") return activity(url, current, db);
   if (path === "/api/classes") return myClasses(current, db);
+  if (path === "/api/feeds/calendar") return feedLink(method, url, current, db);
   if (path.startsWith("/api/calendar")) return calendar(path, method, input, url, current, db);
   if (path.startsWith("/api/sections")) return sections(path, current, db);
   if (path === "/api/progress") return progress(current, db);
   if (path === "/api/people") return people(current, db);
+  if (path.startsWith("/api/hours")) return hours(path, method, input, url, current, db);
   if (path === "/api/reviews") return reviews(current, db);
-  if (path.startsWith("/api/members")) return roles(path, method, input, current, db);
+  if (path.startsWith("/api/onboarding")) return onboarding(path, method, current, db);
+  if (path.startsWith("/api/invitations")) return invitations(path, method, input, url.origin, current, db, mailSender(env));
+  if (staffAllowed) return staff(path, method, request, current, db, env.COURSE_FILES);
+  if (path.startsWith("/api/access/")) return accessMatrix(path, method, input, current, db);
+  if (path.startsWith("/api/members")) return roles(path, method, input, current, db, username => usernameTaken(env, username));
   if (path === "/api/organization/backup" || path === "/api/organization/restore") {
     if (current.role !== "admin") return json({ error: "Solo administración respalda o restaura la organización." }, 403);
     if (path.endsWith("/backup")) {
@@ -242,11 +328,11 @@ async function route(request: Request, env: Env): Promise<Response> {
         : (() => { const doc = live(activity.id); return doc ? { ...activity, richContent: doc, instructions: "" } : activity; })()) };
     }
   }
-  return content(url, method, input, current, db);
+  return content(url, method, input, current, db, notifier);
 }
 export default {
     async fetch(request, env): Promise<Response> {
-    try { const response = await route(request, env); if (response.status === 101) return response; for (const [key, value] of Object.entries(headers)) response.headers.set(key, value); if (response.headers.has("X-File-SHA256")) response.headers.set("Content-Security-Policy", "sandbox; default-src 'none'; frame-ancestors 'none'"); return response; }
+    try { const response = await route(request, env); if (response.status === 101) return response; for (const [key, value] of Object.entries(headers)) response.headers.set(key, value); if (response.headers.get("Content-Type")?.startsWith("text/calendar")) response.headers.set("Cache-Control", "private, max-age=900"); if (response.headers.has("X-File-SHA256")) response.headers.set("Content-Security-Policy", "sandbox; default-src 'none'; frame-ancestors 'none'"); return response; }
     catch (error) {
       if (error instanceof Error && error.message === "INPUT") return json({ error: "Revisa los datos del formulario." }, 400);
       const cause = error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 240) : "Unknown error";

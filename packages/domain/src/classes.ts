@@ -1,4 +1,5 @@
-import type { CancelPlan, ClassStatus, LessonOutcome } from "@happy-learners/contracts";
+import type { CancelPlan, ClassStatus, CourseAccess, LessonOutcome } from "@happy-learners/contracts";
+import { seesSection } from "./access";
 import { isCalendarDay } from "./schedule";
 import { organizations, sectionPrefix } from "./organizations";
 
@@ -83,3 +84,22 @@ export function completionInput(input: unknown, lessonIds: string[]): { outcomes
 }
 /** A cancelled class with something planned either passes it on to the next class or skips it; skipping is the default. */
 export const cancelPlanInput = (input: unknown): CancelPlan => (input && typeof input === "object" && (input as Record<string, unknown>).plan === "shift") ? "shift" : "skip";
+
+/**
+ * ST-065: the filters of a course's class history. A section (the "grupo") and a period of calendar days in the
+ * organization's time zone, both inclusive and combinable; empty values leave that filter out.
+ */
+export type SessionFilter = { section: string | null; from: string | null; to: string | null };
+const sectionIdPattern = /^[a-z0-9-]{1,100}$/;
+export function sessionFilterInput(params: { get(name: string): string | null }): SessionFilter | { error: string } {
+  const [section, from, to] = ["section", "from", "to"].map(name => params.get(name)?.trim() || null);
+  if (section !== null && !sectionIdPattern.test(section)) return { error: "La sección del filtro no es válida." };
+  if ((from !== null && !isCalendarDay(from)) || (to !== null && !isCalendarDay(to))) return { error: "Indica las fechas del periodo como AAAA-MM-DD." };
+  if (from && to && to < from) return { error: "La fecha final del periodo debe ser igual o posterior a la inicial." };
+  return { section, from, to };
+}
+/** Whether a class falls within the filters: its section and its calendar day, both limits included. */
+export const inSessionFilter = (session: { groupId: string; sessionDate: string }, filter: SessionFilter) =>
+  (!filter.section || session.groupId === filter.section) && (!filter.from || session.sessionDate >= filter.from) && (!filter.to || session.sessionDate <= filter.to);
+/** The course team filters only by the sections it sees (DEC-012): administration every section, educators their own. */
+export const sessionFilterAllowed = (access: CourseAccess | null, filter: SessionFilter) => !!access && (!filter.section || seesSection(access, filter.section));

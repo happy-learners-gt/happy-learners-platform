@@ -6,12 +6,18 @@ export const sessionExpired = "hl:session-expired";
 export const sessionRestored = "hl:session-restored";
 /** Fired after a write succeeds, with its path, so views that list what it touched can refresh. */
 export const changed = "hl:changed";
+/** Fired when the terms or privacy policy in force still need the person's acceptance (ST-126, ST-127). */
+export const consentRequired = "hl:consent-required";
+/** Fired when teaching a class waits for the signed volunteer agreement in force (ST-151). */
+export const agreementRequired = "hl:agreement-required";
 const quiet = new Set(["/session", "/login", "/logout"]);
 
 async function parse<T>(response: Response, path: string): Promise<T> {
   let result: { error?: string } & Record<string, unknown> = {};
   try { result = await response.json(); } catch { /* Non-JSON error bodies fall back to a generic message. */ }
   if (response.status === 401 && !quiet.has(path)) dispatchEvent(new CustomEvent(sessionExpired));
+  if (response.status === 403 && Array.isArray(result.pending)) dispatchEvent(new CustomEvent(consentRequired));
+  if (response.status === 403 && result.code === "VOLUNTEER_AGREEMENT_REQUIRED") dispatchEvent(new CustomEvent(agreementRequired));
   if (!response.ok) throw new ApiError(result.error || "No se pudo completar la operación. Vuelve a intentar.", response.status, result);
   return result as T;
 }
@@ -58,6 +64,16 @@ export async function archiveCourseFile(courseId: string, fileId: string) {
   try { response = await fetch(`/api${path}`, { method: "POST", credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(15000) }); }
   catch { throw new ApiError("No pudimos conectar. Comprueba tu conexión y vuelve a intentar.", 0); }
   return parse<{ ok: true }>(response, path);
+}
+
+/** Sends a file as the request body (profile photo, staff file documents: ST-149, ST-150) with its metadata in headers. */
+export async function sendFile<T>(path: string, method: "POST" | "PUT", file: Blob, headers: Record<string, string>): Promise<T> {
+  let response: Response;
+  try { response = await fetch(`/api${path}`, { method, credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(60000), headers, body: file }); }
+  catch { throw new ApiError("No pudimos subir el archivo. Comprueba tu conexión y vuelve a intentar.", 0); }
+  const result = await parse<T>(response, path);
+  dispatchEvent(new CustomEvent(changed, { detail: path }));
+  return result;
 }
 
 export const message = (error: unknown) => error instanceof Error ? error.message : "No se pudo completar la operación. Vuelve a intentar.";
