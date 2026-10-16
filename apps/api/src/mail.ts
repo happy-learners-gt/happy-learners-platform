@@ -1,6 +1,5 @@
 import type { MailMessage, MailResult, MailSender, MailStatus } from "@happy-learners/domain";
 import { dailyMailCap, mailAttempts, mailDecision } from "@happy-learners/domain";
-import type { Database } from "./storage";
 
 /**
  * Adapters of the mail port (DEC-042). Real sending needs the Worker secret BREVO_API_KEY and the variable MAIL_FROM
@@ -64,13 +63,17 @@ export async function attempt(sender: MailSender, message: MailMessage, tries = 
   return { result, attempts };
 }
 
+/** The part of the organization's store the outbox needs (the Durable Object `Database` satisfies it). */
+type Bound = { first<T>(): Promise<T | null>; run(): Promise<unknown> };
+export interface OutboxStore { prepare(sql: string): { bind(...values: (string | number | null)[]): Bound } }
+
 export interface Delivery { status: MailStatus; error: string | null; sentAt: string | null }
 
 /**
  * One message through the organization's outbox: queued, then sent, failed, deferred (over today's cap) or
  * not_configured. The body is not stored (it carries the link's secret).
  */
-export async function deliver(db: Database, sender: MailSender, organizationId: string, kind: "invitation", referenceId: string, message: MailMessage): Promise<Delivery> {
+export async function deliver(db: OutboxStore, sender: MailSender, organizationId: string, kind: "invitation", referenceId: string, message: MailMessage): Promise<Delivery> {
   const id = `mail-${crypto.randomUUID()}`, now = new Date(), day = now.toISOString().slice(0, 10);
   const today = await db.prepare("SELECT count(*) AS sent FROM mail_outbox WHERE organization_id=? AND status='sent' AND sent_at>=?").bind(organizationId, `${day}T00:00:00.000Z`).first<{ sent: number }>();
   const decision = mailDecision(sender.configured, today?.sent || 0, dailyMailCap);

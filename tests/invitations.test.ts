@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { dailyMailCap, invitationInput, invitationMessage, invitationState, mailDecision, normalizeEmail } from "../packages/domain/src/index";
 import type { MailMessage, MailResult, MailSender } from "../packages/domain/src/index";
 import { attempt, BrevoMailSender, brevoEndpoint, deliver, DisabledMailSender, mailSender, sanitize } from "../apps/api/src/mail";
-import type { Database } from "../apps/api/src/storage";
+import type { OutboxStore } from "../apps/api/src/mail";
 
 // ST-121 (HL-167): invitations by e-mail (DEC-042). Domain and adapters first, then the built Worker on a fresh store.
 const details = { organization: "Colegio Ficticio", displayName: "Paula <Gómez>", role: "educator" as const, inviter: "Marta Ruiz", link: "https://example.test/invitacion/d_" + "a".repeat(64), expiresAt: "2026-10-22T18:00:00.000Z", timezone: "America/Guatemala" };
@@ -84,7 +84,7 @@ describe("HL-167 mail adapters", () => {
       const db = { prepare: (sql: string) => ({ bind: (...values: unknown[]) => ({
         first: async () => sql.includes("count(*)") ? { sent: sentToday } : null,
         run: async () => { writes.push({ sql, values }); },
-      }) }) } as unknown as Database;
+      }) }) } as unknown as OutboxStore;
       return { db, writes };
     };
     const ok: MailSender = { configured: true, send: vi.fn(async () => ({ ok: true as const, id: "m-1" })) };
