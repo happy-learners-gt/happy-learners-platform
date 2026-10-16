@@ -15,6 +15,7 @@ responden 404, los métodos no permitidos 405 y las rutas heredadas retiradas 41
 | `collaboration.ts`, `collaboration-awareness.ts`, `rich-text.ts` | Coedición en vivo de las lecciones mediante un Durable Object por lección. |
 | `files.ts` | Archivos privados de cada curso en R2. |
 | `sections.ts`, `classes.ts`, `attendance.ts`, `workgroups.ts`, `conflicts.ts` | Secciones, horario, clases, asistencia, grupos de trabajo y choques de horario. |
+| `legal.ts` | Términos y política de privacidad versionados, aceptaciones y consentimiento (ST-126, ST-127). |
 | `backup.ts` | Respaldo y restauración de cada organización. |
 | `calendar-feed.ts` | Enlace de suscripción al calendario de clases (iCalendar) de cada educador. |
 | `departures.ts` | Salida de una persona del equipo: reasignación de sus cursos y secciones, fin del acceso y registro (ST-123). |
