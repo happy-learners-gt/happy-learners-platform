@@ -117,9 +117,10 @@ export async function courses(path: string, method: string, input: unknown, curr
     const { legacyProgramId: _, ...view } = course!;
     return reply({ course: { ...view, team: teams.get(view.id) || [], access }, units: await unitsFor(db, id), curriculum: await curriculumFor(db, id), requirements: await courseRequirements(db, current.organizationId, view.id, view.programId) });
   }
-  // The team decides who reaches the course's sections, classes and attendance, so only administration changes it.
+  // The team decides who reaches the course's sections, classes and attendance: administration changes it, and
+  // coordination in its scope (DEC-041).
   if (area === "team") {
-    if (!access!.configure) return forbidden("Solo administración puede cambiar el equipo de un curso.");
+    if (!access!.team) return forbidden("Solo administración y la coordinación académica del programa cambian el equipo de un curso.");
     const v = record(input);
     if (!v) return reply({ error: "Completa los datos." }, 400);
     if (course?.status === "archived") return reply({ error: "Restaura el curso antes de modificarlo. Sus enlaces publicados se conservan." }, 409);

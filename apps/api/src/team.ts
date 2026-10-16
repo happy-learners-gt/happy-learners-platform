@@ -3,6 +3,7 @@ import { coverage, record } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { coursesFor, curriculumFor, unitsFor } from "./courses";
 import { reachableCourses } from "./access";
+import { scopedCourses } from "./permissions";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
 type EventInput = Pick<ActivityEvent, "action" | "targetType" | "targetId" | "summary"> & { courseId?: string | null; groupId?: string | null };
@@ -24,15 +25,17 @@ export async function teamsFor(db: Database, organization: string): Promise<Map<
 /**
  * GET /api/activity?course=&section=&actor=&mine=1&limit= — newest first, with the author's name; mine: courses I teach.
  * Educators see the activity of their courses, and of sections and classes only when they teach that section (DEC-024).
+ * The «Consultar la actividad» permission (ST-135) adds every course and section of its scope.
  */
 export async function activity(url: URL, current: Member, db: Database) {
   const course = url.searchParams.get("course"), section = url.searchParams.get("section"), actor = url.searchParams.get("actor");
   const educator = current.role !== "admin", mine = url.searchParams.get("mine") === "1" || educator;
   const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit")) || 20));
+  const scoped = educator ? JSON.stringify(await scopedCourses(db, current, ["activity.view"])) : "[]";
   const rows = (await db.prepare(`SELECT e.id,e.action,e.target_type AS targetType,e.target_id AS targetId,e.course_id AS courseId,e.summary,e.occurred_at AS occurredAt,e.actor_id AS actorId,COALESCE(u.display_name,u.username) AS actorName
-    FROM activity_events e JOIN users u ON u.id=e.actor_id WHERE e.organization_id=?${course ? " AND e.course_id=?" : ""}${section ? " AND e.group_id=?" : ""}${actor ? " AND e.actor_id=?" : ""}${mine ? " AND e.course_id IN (SELECT course_id FROM course_members WHERE user_id=?)" : ""}
-    ${educator ? " AND (e.target_type NOT IN ('group','session') OR e.group_id IN (SELECT group_id FROM section_educators WHERE user_id=?))" : ""} ORDER BY e.occurred_at DESC,e.id LIMIT ?`)
-    .bind(current.organizationId, ...(course ? [course] : []), ...(section ? [section] : []), ...(actor ? [actor] : []), ...(mine ? [current.id] : []), ...(educator ? [current.id] : []), limit).all<ActivityEvent>()).results;
+    FROM activity_events e JOIN users u ON u.id=e.actor_id WHERE e.organization_id=?${course ? " AND e.course_id=?" : ""}${section ? " AND e.group_id=?" : ""}${actor ? " AND e.actor_id=?" : ""}${mine ? " AND (e.course_id IN (SELECT course_id FROM course_members WHERE user_id=?) OR e.course_id IN (SELECT value FROM json_each(?)))" : ""}
+    ${educator ? " AND (e.target_type NOT IN ('group','session') OR e.group_id IN (SELECT group_id FROM section_educators WHERE user_id=?) OR e.course_id IN (SELECT value FROM json_each(?)))" : ""} ORDER BY e.occurred_at DESC,e.id LIMIT ?`)
+    .bind(current.organizationId, ...(course ? [course] : []), ...(section ? [section] : []), ...(actor ? [actor] : []), ...(mine ? [current.id, scoped] : []), ...(educator ? [current.id, scoped] : []), limit).all<ActivityEvent>()).results;
   return reply({ events: rows });
 }
 
@@ -66,10 +69,11 @@ export async function progress(current: Member, db: Database) {
   const courses = (await coursesFor(db, current.organizationId)).filter(course => course.status === "active" && (!reachable || reachable.has(course.id)));
   const teams = await teamsFor(db, current.organizationId);
   const lessonRows = (await db.prepare("SELECT l.id,l.content,l.course_unit_id AS unitId,l.archived,l.revision,l.draft_version AS draftVersion,l.published_version AS publishedVersion,c.id AS courseId FROM lessons l JOIN courses c ON c.legacy_program_id=l.program_id WHERE c.organization_id=?").bind(current.organizationId).all<{ id: string; content: string; unitId: string; archived: number; revision: number; draftVersion: number; publishedVersion: number; courseId: string }>()).results;
-  // Classes and students count only in the sections the person sees: every one for administration, their own for educators.
-  const own = current.role === "admin" ? "" : " AND group_id IN (SELECT group_id FROM section_educators WHERE user_id=?)";
-  const mine = current.role === "admin" ? [] : [current.id];
-  const attendance = (await db.prepare(`SELECT s.course_id AS courseId,count(DISTINCT s.id) AS sessions,sum(CASE WHEN m.status IN ('present','late') THEN 1 ELSE 0 END) AS attended,count(m.learner_id) AS marks FROM class_sessions s LEFT JOIN attendance_marks m ON m.session_id=s.id WHERE s.organization_id=? AND s.status IN ('in_progress','completed')${own.replace("group_id", "s.group_id")} GROUP BY s.course_id`).bind(current.organizationId, ...mine).all<{ courseId: string; sessions: number; attended: number; marks: number }>()).results;
+  // Classes and students count only in the sections the person sees: every one for administration, their own for
+  // educators, and every section of the courses in scope for coordination (DEC-041).
+  const own = current.role === "admin" ? "" : " AND (group_id IN (SELECT group_id FROM section_educators WHERE user_id=?) OR course_id IN (SELECT value FROM json_each(?)))";
+  const mine = current.role === "admin" ? [] : [current.id, JSON.stringify(await scopedCourses(db, current, ["classes.view", "sections.assign"]))];
+  const attendance = (await db.prepare(`SELECT s.course_id AS courseId,count(DISTINCT s.id) AS sessions,sum(CASE WHEN m.status IN ('present','late') THEN 1 ELSE 0 END) AS attended,count(m.learner_id) AS marks FROM class_sessions s LEFT JOIN attendance_marks m ON m.session_id=s.id WHERE s.organization_id=? AND s.status IN ('in_progress','completed')${own.replace("group_id", "s.group_id").replace("OR course_id", "OR s.course_id")} GROUP BY s.course_id`).bind(current.organizationId, ...mine).all<{ courseId: string; sessions: number; attended: number; marks: number }>()).results;
   const learners = (await db.prepare(`SELECT course_id AS courseId,count(*) AS total FROM group_learners WHERE organization_id=? AND status='active'${own} GROUP BY course_id`).bind(current.organizationId, ...mine).all<{ courseId: string; total: number }>()).results;
   const last = (await db.prepare(`SELECT course_id AS courseId,max(occurred_at) AS at FROM activity_events WHERE organization_id=? AND course_id IS NOT NULL${own ? ` AND (target_type NOT IN ('group','session')${own.replace(" AND", " OR")})` : ""} GROUP BY course_id`).bind(current.organizationId, ...mine).all<{ courseId: string; at: string }>()).results;
   const result: CourseProgress[] = [];

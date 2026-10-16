@@ -4,11 +4,16 @@ import type { Database } from "./storage";
 import { scheduleOf, todayFor } from "./classes";
 import { configurationOf } from "./courses";
 import { educatorConflicts } from "./conflicts";
+import { scopedCourses } from "./permissions";
 
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
 
-/** Sections a person sees: every section for administration, otherwise those they teach (DEC-024). */
-const visible = "g.organization_id=? AND (?=1 OR EXISTS(SELECT 1 FROM section_educators e WHERE e.group_id=g.id AND e.user_id=?))";
+/**
+ * Sections a person sees: every section for administration, every section of the courses in scope for coordination
+ * (DEC-041) and security groups that grant it, otherwise those they teach (DEC-024).
+ */
+const visible = "g.organization_id=? AND (?=1 OR g.course_id IN (SELECT value FROM json_each(?)) OR EXISTS(SELECT 1 FROM section_educators e WHERE e.group_id=g.id AND e.user_id=?))";
+const wideCourses = (db: Database, current: Member) => scopedCourses(db, current, ["classes.view", "sections.assign"]);
 
 type Row = { id: string; courseId: string; name: string; status: "active" | "archived"; accessCode: string | null; weekdays: string | null; startsAt: string | null; durationMinutes: number | null; from: string | null; until: string | null; courseTitle: string; courseStatus: "active" | "archived"; pacing: Pacing; teaches: number };
 type ClassRow = { id: string; groupId: string; status: ClassStatus; sessionDate: string; startsAt: string | null; marked: number; attended: number };
@@ -20,7 +25,7 @@ type ClassRow = { id: string; groupId: string; status: ClassStatus; sessionDate:
 export async function sections(path: string, current: Member, db: Database) {
   const [id, sub] = [path.split("/")[3], path.split("/")[4]];
   if (sub === "progress") return progress(id, current, db);
-  const scope = [current.organizationId, current.role === "admin" ? 1 : 0, current.id];
+  const scope = [current.organizationId, current.role === "admin" ? 1 : 0, JSON.stringify(await wideCourses(db, current)), current.id];
   const inScope = `IN (SELECT g.id FROM course_groups g WHERE ${visible}${id ? " AND g.id=?" : ""})`;
   const bound = id ? [...scope, id] : scope;
   const [groups, learners, classes, planned, published, openings, educators, progressRows] = await db.batch([
@@ -66,7 +71,8 @@ export async function sections(path: string, current: Member, db: Database) {
   if (!id) return reply({ sections: list, today });
   const settings = (await configurationOf(db, current.organizationId, list[0].courseId))?.settings;
   // Schedule conflicts name other courses' sections: administration, who assigns educators, sees them.
-  const conflicts = current.role === "admin" && list[0].status === "active" ? await educatorConflicts(db, current.organizationId, [id], today) : [];
+  const assigns = current.role === "admin" || (await scopedCourses(db, current, ["sections.assign"])).includes(list[0].courseId);
+  const conflicts = assigns && list[0].status === "active" ? await educatorConflicts(db, current.organizationId, [id], today) : [];
   const educatorsWith = list[0].educators.map(person => { const own = conflicts.filter(item => item.userId === person.userId); return own.length ? { ...person, conflicts: own } : person; });
   return reply({ section: { ...list[0], educators: educatorsWith, workGroups: !!(settings?.attendance && settings.workGroups) }, today });
 }
@@ -82,7 +88,7 @@ async function unassigned(db: Database, id: string, current: Member) {
  * opened and completed, in the course's content order. Same access as the section.
  */
 async function progress(id: string, current: Member, db: Database) {
-  const group = await db.prepare(`SELECT g.id,g.course_id AS courseId FROM course_groups g WHERE ${visible} AND g.id=?`).bind(current.organizationId, current.role === "admin" ? 1 : 0, current.id, id).first<{ id: string; courseId: string }>();
+  const group = await db.prepare(`SELECT g.id,g.course_id AS courseId FROM course_groups g WHERE ${visible} AND g.id=?`).bind(current.organizationId, current.role === "admin" ? 1 : 0, JSON.stringify(await wideCourses(db, current)), current.id, id).first<{ id: string; courseId: string }>();
   if (!group) return unassigned(db, id, current);
   const [lessons, learners, rows] = await db.batch([
     db.prepare("SELECT l.id,COALESCE(json_extract(l.published_content,'$.title'),'Lección') AS title,u.name AS unitName FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id WHERE u.course_id=? AND u.status='active' AND l.archived=0 AND l.revision>0 ORDER BY u.position,l.position,l.id").bind(group.courseId),

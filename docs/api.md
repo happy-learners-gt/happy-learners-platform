@@ -15,7 +15,8 @@ Un método no admitido responde 405 con `Allow`; una ruta desconocida, 404.
 | GET, PUT | `/api/organization` | Lectura con sesión; escritura de administración |
 | GET | `/api/organization/backup` | Administración |
 | POST | `/api/organization/restore` | Administración, solo donde `RESTORE_ENABLED=true` |
-| GET, POST | `/api/members` · PUT `/api/members/:id` · POST `/api/members/:id/password` · GET, POST `/api/members/:id/departure` | Administración |
+| GET, POST | `/api/members` · PUT `/api/members/:id` · POST `/api/members/:id/password` · GET, POST `/api/members/:id/departure` · PUT `/api/members/:id/coordination` | Administración |
+| GET | `/api/access/matrix` · GET, POST `/api/access/groups` · PUT, DELETE `/api/access/groups/:id` · PUT `/api/access/groups/:id/permissions` · PUT `/api/access/groups/:id/members` | Administración |
 | GET, POST | `/api/calendar` · DELETE `/api/calendar/:id` | Lectura con sesión; escritura de administración |
 | GET | `/api/activity`, `/api/progress`, `/api/people`, `/api/reviews` | Sesión, filtrado por permisos |
 | GET, POST | `/api/feeds/calendar` | Sesión: estado del enlace de calendario propio; POST lo crea o regenera |
@@ -54,6 +55,46 @@ salida de … el AAAA-MM-DD», sin el motivo) y `assigned` sobre `team` o `group
 hizo se borra. Responde 409 para la propia cuenta, la administradora inicial o una salida ya registrada de una cuenta
 sin acceso. Reactivar con `PUT /api/members/:id` conserva la salida; `GET /api/members` incluye `departedOn` con la
 fecha de la última. El respaldo incluye la tabla `departures`.
+
+## Roles y accesos
+
+ST-128 y ST-135 (DEC-041, DEC-043). Un solo modelo de permisos con un catálogo fijo por área: **Contenido**
+(`courses.view` consultar cursos, `lessons.review` revisar, devolver y publicar lecciones), **Equipo docente**
+(`teams.assign` responsable y colaboradores, `sections.assign` educadores de sección), **Secciones y clases**
+(`classes.view` secciones, cronogramas, asistencia y avance), **Reportes** (`activity.view` actividad) y
+**Administración** (`organization.configure`, `accounts.manage`, `access.manage`, `backup.manage`, `legal.manage`), que
+solo tiene el rol de administración y nunca se otorga a un grupo (400; la base de datos también lo impide). Los roles
+integrados son de solo lectura: Administración (todo; publica lecciones solo si es responsable del curso), Educador
+(reglas de equipo de DEC-023 y DEC-024, sin cambios) y Coordinación académica (DEC-041).
+
+Cada permiso otorgable tiene un alcance: `{ all: true }` (todos los programas) o `{ programs: [ids] }`; un curso sin
+programa solo entra en `all`. Cualquier permiso hace visible el curso en su alcance (`/api/courses`, `/api/lessons`,
+`/api/progress`); ninguno deja editar lecciones ni impartir secciones. Fuera del alcance, el curso responde 403 como a
+cualquier educador fuera del equipo, la sección 403 y la lección 404. `GET /api/session` incluye
+`member.permissions: { admin, coordination, grants }`, calculados de nuevo en cada solicitud: un cambio se aplica en la
+siguiente solicitud de la persona.
+
+Coordinación académica (ST-128). `PUT /api/members/:id/coordination` recibe `{ enabled: true, scope }` o
+`{ enabled: false }`. Solo para educadores (409 para administración); los programas deben ser de la organización
+(400). Responde `{ coordination, changed }`; si el alcance no cambia, no escribe nada. Cada asignación, cambio de
+alcance o retiro cierra las sesiones abiertas de la persona y queda en la actividad (`assigned`, `updated` o
+`revoked` sobre `account`) y en el historial de accesos. En su alcance, la coordinación consulta todos los cursos,
+secciones, cronogramas, asistencia y avance (`CourseAccess.sections: "all"`), revisa, devuelve y publica lecciones
+(`review: true`, también en `GET /api/reviews`), asigna el equipo (`PUT /api/courses/:id/team`, `team: true`) y los
+educadores de cada sección (`PUT /api/courses/:id/groups/:gid/educators`, `educators: true`). No configura cursos,
+secciones ni la organización y no usa cuentas, invitaciones, respaldo, términos ni accesos (403). `GET /api/members`
+incluye `coordination` de cada educador.
+
+Grupos de seguridad (ST-135). `GET /api/access/matrix` devuelve `{ areas, catalog, roles, reachLabels, groups,
+coordinators, programs, events }`; `events` son los últimos 50 cambios de accesos. `POST /api/access/groups` recibe
+`{ name, description? }` (nombre de 2 a 80 caracteres, único sin distinguir mayúsculas: 409) y responde 201 con
+`group`. `PUT /api/access/groups/:id` recibe `{ name, description?, version }` (409 si cambió). `PUT
+/api/access/groups/:id/permissions` recibe `{ grants: [{ permission, scope }] }` y reemplaza los permisos;
+`PUT /api/access/groups/:id/members` recibe `{ userIds }` (educadores de la organización) y reemplaza las personas;
+`DELETE /api/access/groups/:id` lo elimina con sus permisos y personas. Los cambios de grupos no cierran sesiones: se
+aplican en la siguiente solicitud. Cada cambio se guarda en `access_events` (quién, qué, cuándo; se conserva al eliminar
+el grupo). El respaldo incluye `coordination_scopes`, `security_groups`, `security_group_grants`,
+`security_group_members` y `access_events`.
 
 ## Términos y privacidad
 

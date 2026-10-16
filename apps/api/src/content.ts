@@ -5,6 +5,7 @@ import { configurationOf, curriculumFor, materialsFor } from "./courses";
 import { event, recordEvent } from "./team";
 import { filesFor } from "./files";
 import { accessTo, forbidden, reachableCourses } from "./access";
+import { scopedCourses } from "./permissions";
 import { digest } from "./auth";
 import { pathLesson, studentAccess, studentToken } from "./classes";
 import { studentActivityGroups } from "./workgroups";
@@ -53,8 +54,10 @@ async function publication(db: Database, current: Member, row: LessonRow) {
 export async function reviews(current: Member, db: Database) {
   const columns = "r.id,r.status,r.note,r.requested_by AS requestedById,COALESCE(ru.display_name,ru.username) AS requestedByName,r.requested_at AS requestedAt,COALESCE(du.display_name,du.username) AS decidedByName,r.decided_at AS decidedAt,r.decision_note AS decisionNote,r.lesson_id AS lessonId,json_extract(l.content,'$.title') AS lessonTitle,c.id AS courseId,c.title AS courseTitle";
   const joins = "FROM lesson_reviews r JOIN users ru ON ru.id=r.requested_by LEFT JOIN users du ON du.id=r.decided_by JOIN lessons l ON l.id=r.lesson_id AND l.archived=0 JOIN courses c ON c.id=r.course_id AND c.status='active'";
+  // The lead decides the course's reviews; coordination too, in the courses of its scope (DEC-041).
+  const scoped = await scopedCourses(db, current, ["lessons.review"]);
   const [toReview, mine] = await db.batch([
-    db.prepare(`SELECT ${columns} ${joins} JOIN course_members cm ON cm.course_id=r.course_id AND cm.user_id=? AND cm.role='lead' WHERE r.organization_id=? AND r.status='pending' ORDER BY r.requested_at`).bind(current.id, current.organizationId),
+    db.prepare(`SELECT ${columns} ${joins} WHERE r.organization_id=? AND r.status='pending' AND (EXISTS(SELECT 1 FROM course_members cm WHERE cm.course_id=r.course_id AND cm.user_id=? AND cm.role='lead') OR r.course_id IN (SELECT value FROM json_each(?))) ORDER BY r.requested_at`).bind(current.organizationId, current.id, JSON.stringify(scoped)),
     // Only the latest request of each lesson: a returned one stays until it is sent again or published.
     db.prepare(`SELECT ${columns} ${joins} WHERE r.organization_id=? AND r.requested_by=? AND r.status IN ('pending','returned') AND NOT EXISTS(SELECT 1 FROM lesson_reviews n WHERE n.lesson_id=r.lesson_id AND (n.requested_at>r.requested_at OR (n.requested_at=r.requested_at AND n.rowid>r.rowid))) ORDER BY COALESCE(r.decided_at,r.requested_at) DESC LIMIT 20`).bind(current.organizationId, current.id),
   ]) as unknown as [ReviewItem[], ReviewItem[]];
@@ -85,10 +88,12 @@ export async function content(url: URL, method: string, input: unknown, current:
   if (id && (!row || (method === "GET" && !draft && (!row.published_content || row.archived)))) return reply({ error: "Lección no disponible." }, 404);
   if (method === "GET") return id ? reply({ lesson: lessonView(row!, draft) }) : reply({ lessons: rows.filter(r => draft || (r.published_content && !r.archived)).map(r => lessonView(r, draft)) });
   const access = row ? await accessOf(row.course_id) : null;
-  if (row && !access?.edit) return forbidden("Solo el equipo docente del curso edita sus lecciones.");
+  // Publishing and returning a review belong to whoever reviews the course: its lead, or coordination in its scope.
+  const deciding = method === "POST" && (path.endsWith("/publish") || path.endsWith("/review/return"));
+  if (row && !access?.edit && !(deciding && access?.review)) return forbidden("Solo el equipo docente del curso edita sus lecciones.");
   const lessonTitle = row ? (JSON.parse(row.content) as Lesson).title : "";
   if (path.endsWith("/publish") && row) {
-    if (!access!.publish) return forbidden("La persona responsable del curso publica sus lecciones. Envía la lección a revisión.");
+    if (!access!.review) return forbidden("La persona responsable del curso publica sus lecciones. Envía la lección a revisión.");
     const expected = url.searchParams.get("draftVersion");
     if (expected !== null && Number(expected) !== row.draft_version) return reply({ error: "La lección cambió desde que la abriste. Recarga para revisar la versión actual antes de publicar." }, 409);
     const result = await publication(db, current, row);
@@ -103,7 +108,7 @@ export async function content(url: URL, method: string, input: unknown, current:
     return reply({ lesson: result.published });
   }
   if (path.endsWith("/review") && row && method === "POST") {
-    if (access!.publish) return reply({ error: "Como responsable del curso, publica la lección directamente." }, 409);
+    if (access!.review) return reply({ error: "Como responsable del curso, publica la lección directamente." }, 409);
     const note = noteOf((input as Record<string, unknown> | null)?.note ?? "");
     if (note === null) return reply({ error: "Escribe un comentario de hasta 600 caracteres." }, 400);
     const result = await publication(db, current, row);
@@ -119,7 +124,7 @@ export async function content(url: URL, method: string, input: unknown, current:
     return reply({ lesson: lessonView(updated!, true) }, 201);
   }
   if (path.endsWith("/review/return") && row && method === "POST") {
-    if (!access!.publish) return forbidden("Solo la persona responsable del curso revisa sus lecciones.");
+    if (!access!.review) return forbidden("Solo la persona responsable del curso y la coordinación académica revisan sus lecciones.");
     const note = noteOf((input as Record<string, unknown> | null)?.note);
     if (!note) return reply({ error: "Escribe qué falta ajustar, en hasta 600 caracteres." }, 400);
     const returned = await db.guardedBatch(

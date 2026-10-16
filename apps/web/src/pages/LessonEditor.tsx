@@ -36,7 +36,7 @@ const AUTOSAVE_MS = 1000;
 const scrollBehavior = (): ScrollBehavior => matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
 
 export function LessonEditor({ lessonId }: { lessonId: string }) {
-  const { course, units, lessons, materials, legacyResources, curriculum, writable, publisher, reload, noun, settings } = useCourse();
+  const { course, units, lessons, materials, legacyResources, curriculum, writable, publisher, reviewer, reload, noun, settings } = useCourse();
   const { member } = useSession();
   const { url, navigate } = useNavigation();
   const { toast, confirm } = useFeedback();
@@ -384,12 +384,14 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
 
   const review = lesson.review, pendingReview = review?.status === "pending";
   // The lead publishes; the rest of the team sends the lesson to review. Archiving and restoring are the lead's.
-  const primary = !writable ? undefined
+  // Coordination reviews and publishes the lessons of its scope without editing them (DEC-041).
+  const decides = publisher || reviewer;
+  const primary = !writable && !reviewer ? undefined
     : state === "archived" ? publisher ? <PrimaryAction icon="archive" onClick={() => void archive(false)}>Restaurar lección</PrimaryAction> : undefined
-    : publisher && pendingReview ? <PrimaryAction icon="check" busy={publishing} disabled={publishing} onClick={() => void publish()}>{publishing ? "Publicando…" : "Aprobar y publicar"}</PrimaryAction>
+    : decides && pendingReview ? <PrimaryAction icon="check" busy={publishing} disabled={publishing} onClick={() => void publish()}>{publishing ? "Publicando…" : "Aprobar y publicar"}</PrimaryAction>
     : state === "published" && lesson.shareCode ? <PrimaryAction icon="copy" onClick={() => void copyLink(lesson.shareCode!)}>Copiar enlace</PrimaryAction>
-    : publisher ? <PrimaryAction icon="check" busy={publishing} disabled={publishing} onClick={() => void publish()}>{publishing ? "Publicando…" : pendingReview ? "Aprobar y publicar" : state === "changes" ? "Publicar cambios" : "Publicar"}</PrimaryAction>
-    : pendingReview ? undefined
+    : decides ? <PrimaryAction icon="check" busy={publishing} disabled={publishing} onClick={() => void publish()}>{publishing ? "Publicando…" : pendingReview ? "Aprobar y publicar" : state === "changes" ? "Publicar cambios" : "Publicar"}</PrimaryAction>
+    : pendingReview || !writable ? undefined
     : <PrimaryAction icon="send" onClick={() => void sendToReview()}>{review?.status === "returned" ? "Volver a enviar a revisión" : "Enviar a revisión"}</PrimaryAction>;
   const goTo = (id: string, focus = true) => {
     setSelected(id);
@@ -414,7 +416,7 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
           <Menu label="Más acciones de la lección" items={[
             ...(lesson.revision && lesson.shareCode && !draft.archived ? [{ label: "Abrir como estudiante", icon: "eye" as const, onSelect: () => window.open(`/aprender/${lesson.shareCode}`, "_blank", "noopener") }, { label: "Copiar enlace", icon: "copy" as const, onSelect: () => void copyLink(lesson.shareCode!) }] : []),
             { label: "Volver al contenido", icon: "back", onSelect: () => navigate(`${base}/contenido`) },
-            ...(publisher && pendingReview ? [{ label: "Devolver con comentarios", icon: "undo" as const, onSelect: () => setReviewing("return") }] : []),
+            ...(decides && pendingReview ? [{ label: "Devolver con comentarios", icon: "undo" as const, onSelect: () => setReviewing("return") }] : []),
             ...(writable && !publisher && pendingReview ? [{ label: "Actualizar el envío", icon: "send" as const, onSelect: () => void sendToReview() }] : []),
             ...(publisher && !draft.archived ? ["separator" as const, { label: "Archivar lección", icon: "archive" as const, danger: true, onSelect: () => void archive(true) }] : []),
           ]}/>
@@ -422,9 +424,9 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
         </div>
       </div>
       {writable && state === "changes" && !review && <p className="draft-note"><Icon name="info" size={16}/>Tus cambios se guardan como borrador. Los estudiantes siguen viendo la versión publicada hasta que {publisher ? <>elijas <strong>Publicar cambios</strong></> : "la persona responsable del curso los publique"}.</p>}
-      {review && !draft.archived && <ReviewBanner review={review} publisher={publisher} writable={writable} onReturn={() => setReviewing("return")}/>}
+      {review && !draft.archived && <ReviewBanner review={review} publisher={decides} writable={writable} onReturn={() => setReviewing("return")}/>}
       {editors.length > 0 && <p className="presence"><Icon name="users" size={16}/>También editando: {[...new Set(editors)].map(name => name === member.username ? `${name} (otra sesión)` : name).join(", ")}</p>}
-      {!writable && <p className="notice"><Icon name="info" size={18}/>{course.status === "archived" ? "El curso está archivado: la lección se muestra en modo lectura." : "Estás viendo el borrador más reciente. Solo el equipo docente del curso edita sus lecciones."}</p>}
+      {!writable && <p className="notice"><Icon name="info" size={18}/>{course.status === "archived" ? "El curso está archivado: la lección se muestra en modo lectura." : reviewer ? "Estás viendo el borrador más reciente. Como coordinación académica, lo revisas, lo devuelves con observaciones o lo publicas; el equipo docente del curso lo edita." : "Estás viendo el borrador más reciente. Solo el equipo docente del curso edita sus lecciones."}</p>}
       {reviewing && <ReviewDialog kind={reviewing} onClose={() => setReviewing(null)} onSubmit={note => decide(reviewing, note)}/>}
     </header>
     <div className="editor-layout">
