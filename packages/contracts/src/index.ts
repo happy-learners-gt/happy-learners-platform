@@ -42,8 +42,8 @@ export interface LessonReview {
 export interface ReviewItem extends LessonReview { lessonId: string; lessonTitle: string; courseId: string; courseTitle: string }
 /** An audited operation: who did what, on which course, and when. */
 export interface ActivityEvent {
-  id: string; actorId: string; actorName: string; action: "created" | "updated" | "published" | "archived" | "restored" | "planned" | "recorded" | "uploaded" | "assigned" | "reset" | "resent" | "revoked" | "accepted";
-  targetType: "course" | "program" | "module" | "lesson" | "resource" | "competency" | "outcome" | "group" | "session" | "team" | "account" | "invitation"; targetId: string; courseId?: string | null; summary: string; occurredAt: string;
+  id: string; actorId: string; actorName: string; action: "created" | "updated" | "published" | "archived" | "restored" | "planned" | "recorded" | "uploaded" | "assigned" | "reset" | "accepted" | "withdrawn" | "resent" | "revoked";
+  targetType: "course" | "program" | "module" | "lesson" | "resource" | "competency" | "outcome" | "group" | "session" | "team" | "account" | "legal" | "invitation"; targetId: string; courseId?: string | null; summary: string; occurredAt: string;
 }
 /** How far a course has come: content, curriculum coverage and attendance. */
 export interface CourseProgress {
@@ -245,3 +245,17 @@ export interface LearningOutcome {
   position: number; status: "active" | "archived"; updatedAt: string;
 }
 export interface Curriculum { competencies: Competency[]; outcomes: LearningOutcome[]; unitOutcomes: { unitId: string; outcomeId: string }[] }
+
+/**
+ * Terms and conditions and the privacy policy of an organization (ST-126, ST-127). A draft has no version; publishing
+ * gives it the next one and it never changes again. A privacy policy carries the consent text people agree to.
+ */
+export type LegalKind = "terms" | "privacy";
+export interface LegalDocument {
+  id: string; kind: LegalKind; status: "draft" | "published"; version: number | null; title: string; body: string; consent: string | null;
+  updatedAt: string; publishedAt: string | null; publishedBy: string | null;
+}
+/** A version the signed-in person must accept (terms) or consent to (privacy) before using the platform. */
+export type PendingDocument = Pick<LegalDocument, "id" | "kind" | "version" | "title">;
+/** Who accepted which version and when; a withdrawn privacy consent keeps its record with the withdrawal date. */
+export interface LegalAcceptance { id: string; documentId: string; kind: LegalKind; version: number; userId: string; name: string; acceptedAt: string; withdrawnAt: string | null }

@@ -9,7 +9,7 @@ lógica en JSON de esa base:
 
 | Incluye | No incluye |
 | --- | --- |
-| Organización, cuentas y membresías, cursos, programas y requisitos, módulos, lecciones y revisiones, recursos y materiales, clasificaciones, secciones, horarios, clases, asistencia, estudiantes, grupos de trabajo, calendario, actividad y metadatos de documentos. | Contraseñas (sal y hash), sesiones abiertas de educadores y estudiantes, enlaces de calendario (`calendar_feeds`), invitaciones por correo (`invitations`, con el hash de su enlace) y la bandeja de salida de correo (`mail_outbox`), límites de inicio de sesión y el registro de migraciones. |
+| Organización, cuentas y membresías, cursos, programas y requisitos, módulos, lecciones y revisiones, recursos y materiales, clasificaciones, secciones, horarios, clases, asistencia, estudiantes, grupos de trabajo, calendario, actividad, metadatos de documentos y las versiones de términos y privacidad con sus aceptaciones. | Contraseñas (sal y hash), sesiones abiertas de educadores y estudiantes, enlaces de calendario (`calendar_feeds`), invitaciones por correo (`invitations`, con el hash de su enlace) y la bandeja de salida de correo (`mail_outbox`), límites de inicio de sesión y el registro de migraciones. |
 
 El correo de las cuentas del equipo (`users.email`, ST-121) es un dato personal y sí se copia: el respaldo es solo
 para administración y ya contiene los datos personales de la organización. Restaurar no toca las invitaciones ni la
