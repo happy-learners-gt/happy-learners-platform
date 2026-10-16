@@ -714,3 +714,18 @@ class UpgradeTests(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             db.execute("INSERT INTO notification_preferences VALUES ('user-0','org-demo','otro',0,'t')")
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_hour_adjustments_need_a_reason_and_a_completed_class_reference(self):
+        """0040 (ST-152): corrections keep minutes before and after, a person, a reason of 5 to 300 characters and who made them."""
+        demo = self.scoped("org-demo")
+        session = demo.execute("SELECT id FROM class_sessions WHERE status='completed' LIMIT 1").fetchone()[0]
+        # Classes completed before this release have no real start: 0018 set started_at to their completion.
+        self.assertEqual(demo.execute("SELECT count(*) FROM class_sessions WHERE status='completed' AND started_at<>completed_at").fetchone()[0], 0)
+        insert = "INSERT INTO class_hour_adjustments(id,organization_id,session_id,minutes_before,minutes_after,educator_before,educator_after,reason,adjusted_by,adjusted_at) VALUES (?,'org-demo',?,?,?,?,?,?,'user-0','t')"
+        demo.execute(insert, ("h1", session, 0, 90, None, "user-1", "Olvidó comenzar la clase"))
+        for values in [("h2", session, 0, 90, None, "user-1", "    "), ("h3", session, 0, 721, None, "user-1", "Motivo válido"), ("h4", session, -1, 90, None, "user-1", "Motivo válido"),
+                       ("h5", "class-missing", 0, 90, None, "user-1", "Motivo válido"), ("h6", session, 0, 90, None, "user-missing", "Motivo válido"), ("h7", session, 0, 90, None, "user-1", "x" * 301)]:
+            with self.assertRaises(sqlite3.IntegrityError):
+                demo.execute(insert, values)
+        self.assertEqual(demo.execute("SELECT count(*) FROM class_hour_adjustments").fetchone()[0], 1)
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])

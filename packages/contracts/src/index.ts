@@ -352,3 +352,26 @@ export interface NotificationRecord {
   id: string; type: NotificationKind; userId: string; personName: string; recipient: string | null; reason: string; targetId: string | null;
   status: NotificationDelivery; mandatory: boolean; attempts: number; error: string | null; createdAt: string; sentAt: string | null;
 }
+/**
+ * ST-152 (DEC-043): effective hours teaching classes, as recognition of the volunteer work (not payroll). A completed
+ * class counts from its start to its completion; `counted` counts, `no_start` (no real start recorded) and `review`
+ * (more than 8 hours) count 0 until administration corrects them; `adjusted` carries a correction in force.
+ */
+export type HoursState = "counted" | "no_start" | "review" | "adjusted";
+export interface HoursAdjustment { minutesBefore: number; minutesAfter: number; educatorBefore: string | null; educatorAfter: string; reason: string; adjustedBy: string; adjustedAt: string }
+export interface HoursRow {
+  sessionId: string; courseId: string; courseTitle: string; sectionId: string; sectionName: string; sessionDate: string;
+  /** Calendar day of the start in the organization's time zone (the class day when there is no start). */
+  day: string; startedAt: string | null; completedAt: string;
+  educatorId: string | null; educatorName: string | null; computedMinutes: number; minutes: number; state: HoursState;
+  adjustment: HoursAdjustment | null; adjustments: number;
+}
+export interface HoursTotal { id: string; name: string; minutes: number; classes: number }
+export interface HoursFilter { from: string | null; to: string | null; course: string | null; section: string | null; person: string | null }
+export interface HoursReport {
+  filter: HoursFilter; timezone: string; scope: "all" | "own"; rows: HoursRow[]; minutes: number;
+  totals: { people: HoursTotal[]; courses: HoursTotal[]; sections: HoursTotal[] };
+  /** What the filters can choose from: the courses, sections and people of the classes the person may see. */
+  options: { courses: { id: string; name: string }[]; sections: { id: string; name: string; courseId: string }[]; people: { id: string; name: string }[] };
+}
+export interface HoursAdjustmentInput { minutes: number; educatorId?: string; reason: string }
