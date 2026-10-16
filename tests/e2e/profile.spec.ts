@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { test, expect } from "./local-test";
-import { e2eName, origin, sessionToken, signIn, toast } from "./helpers";
+import { completeOnboarding, e2eName, origin, sessionToken, signIn, toast } from "./helpers";
 
 const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 async function audit(page: Page, label: string) {
@@ -27,6 +27,8 @@ test("HL-15 ST-149 ST-150: an educator edits their profile with a photo, adminis
     const session = /hl_session=([^;]+)/.exec(login.headers.get("set-cookie") || "")![1];
     const changed = await fetch(`${origin}/api/account/password`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json", Cookie: `hl_session=${session}` }, body: JSON.stringify({ currentPassword: temporaryPassword, newPassword: "Perfil de prueba 2026" }) });
     expect(changed.status).toBe(200);
+    // ST-122: the welcome is completed with a minimal profile; this test then edits it from «Mi perfil».
+    await completeOnboarding(session);
     await page.context().addCookies([{ name: "hl_session", value: session, url: origin, httpOnly: true, sameSite: "Strict" }]);
 
     // ST-149 criterion 1: the person edits their profile, photo included.
@@ -51,7 +53,7 @@ test("HL-15 ST-149 ST-150: an educator edits their profile with a photo, adminis
     await expect(toast(page)).toContainText("Perfil guardado.");
     await audit(page, "mi perfil");
     const saved = (await (await admin.get(`/api/members/${member.id}/profile`)).json()).profile;
-    expect(saved).toMatchObject({ photo: true, specialties: ["Álgebra"], availability: [{ day: 3, start: "14:00", end: "16:30" }], contact: { phone: "+502 5555-0149", contactEmail: "perfil.contacto@ejemplo.org" } });
+    expect(saved).toMatchObject({ photo: true, specialties: ["Pedagogía", "Álgebra"], availability: [{ day: 3, start: "14:00", end: "16:30" }], contact: { phone: "+502 5555-0149", contactEmail: "perfil.contacto@ejemplo.org" } });
 
     // ST-150 criteria 1 and 3: administration files a document with its expiry and sees it flagged.
     const today = (await (await admin.get(`/api/members/${member.id}/files`)).json()).today as string;

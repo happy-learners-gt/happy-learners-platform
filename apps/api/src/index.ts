@@ -25,6 +25,7 @@ import { staff, staffMethods } from "./profiles";
 import { LessonCollaborationRoom } from "./collaboration";
 import { encodeLessonDraft } from "./rich-text";
 import { accessMatrix, permissionColumns, withPermissions } from "./permissions";
+import { onboarding, onboardingPending } from "./onboarding";
 export { LessonCollaborationRoom };
 
 const headers = {
@@ -167,6 +168,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   // ST-153: signatures, their receipts and administration's verification.
   if (path === "/api/legal/signatures" || /^\/api\/legal\/signatures\/signature-[a-z0-9-]+\/receipt$/.test(path)) methods[path] = ["GET"];
   if (path === "/api/legal/signatures/verify") methods[path] = ["POST"];
+  // ST-122: guided onboarding.
+  if (path === "/api/onboarding" || path === "/api/onboarding/people") methods[path] = ["GET"];
+  if (/^\/api\/onboarding\/steps\/[a-z]+$/.test(path)) methods[path] = ["POST"];
   // ST-149, ST-150: profile, photo and staff file.
   const staffAllowed = staffMethods(path);
   if (staffAllowed) methods[path] = staffAllowed;
@@ -223,7 +227,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (!current) return json({ error: "Inicia sesión para continuar." }, 401);
   // Until the person accepts the terms and consents to the privacy policy in force, only those and the session answer.
   const pending = await pendingFor(db, current);
-  if (path === "/api/session") return json({ member: current, pending });
+  // ST-122: `onboarding` is true while the person still has to go through the welcome.
+  if (path === "/api/session") return json({ member: current, pending, ...(await onboardingPending(db, current) ? { onboarding: true } : {}) });
   if (path === "/api/account/password") return changePassword(input, current, sessionToken(request)!, db);
   // A temporary password opens nothing else until the person chooses their own (ST-093); the terms come after it.
   if (current.mustChangePassword) return json({ error: "Cambia tu contraseña temporal para continuar.", code: "PASSWORD_CHANGE_REQUIRED" }, 403);
@@ -265,6 +270,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/progress") return progress(current, db);
   if (path === "/api/people") return people(current, db);
   if (path === "/api/reviews") return reviews(current, db);
+  if (path.startsWith("/api/onboarding")) return onboarding(path, method, current, db);
   if (path.startsWith("/api/invitations")) return invitations(path, method, input, url.origin, current, db, mailSender(env));
   if (staffAllowed) return staff(path, method, request, current, db, env.COURSE_FILES);
   if (path.startsWith("/api/access/")) return accessMatrix(path, method, input, current, db);

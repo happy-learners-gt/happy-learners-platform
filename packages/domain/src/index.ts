@@ -122,3 +122,5 @@ export type { BuiltInRole, GroupGrant, PermissionDefinition, Reach } from "./per
 export { departureDate, departureReason, maxDepartureReason } from "./departures";
 export { availabilityDays, availabilityInput, calendarDate, contactEmailInput, documentStatus, expiringWindowDays, maxAvailabilitySlots, maxEducationLength, maxSpecialties, maxSpecialtyLength, phoneInput, specialtiesInput, staffDocumentInput, staffDocumentLabel, staffDocumentTypes, staffProfileInput } from "./profiles";
 export type { AvailabilitySlot, ProfileInput, StaffDocumentStatus, StaffDocumentType, Weekday } from "./profiles";
+export { declaredSteps, declareStep, missingSteps, nextStep, onboardingStatus, onboardingStatusLabels, onboardingStepLabels, onboardingSteps, onboardingStepStates, profileComplete, profileGaps } from "./onboarding";
+export type { OnboardingFacts, ProfileFacts, StepRefusal } from "./onboarding";

@@ -269,6 +269,27 @@ Cambiar el perfil o la foto, agregar, descargar y retirar documentos quedan en `
 `withdrawn`. El resumen nombra los campos del perfil que cambiaron y el tipo del documento, nunca sus valores, el
 título ni el contenido. Como las demás entradas sin curso, solo las ve administración.
 
+## Incorporación guiada (ST-122)
+
+| Método | Ruta | Quién |
+| --- | --- | --- |
+| GET | `/api/onboarding` | La persona con sesión: su estado (`pending`, `in_progress`, `complete`), los pasos con `done` y `optional`, el siguiente (`next`), lo que falta del perfil (`profileGaps`), el acuerdo por firmar y sus cursos y secciones |
+| POST | `/api/onboarding/steps/:step` | La persona: marca `welcome`, `tour` o deja para después un `agreement` opcional; sin cuerpo |
+| GET | `/api/onboarding/people` | Administración: cada persona con su estado, fechas (`startedAt`, `completedAt`), pasos y los que faltan (`missing`) |
+
+Orden de los pasos: `password` → `legal` → `welcome` → `profile` → `agreement` (solo educadores con un acuerdo de
+voluntariado publicado) → `tour`. `password`, `legal`, `profile` y el acuerdo firmado se derivan de los datos (contraseña
+temporal, aceptaciones vigentes, `staff_profiles`, firmas) y declararlos responde 409 `ONBOARDING_DERIVED`. Un paso
+desconocido o que no aplica responde 404; uno cuyos pasos anteriores faltan, 409 `ONBOARDING_ORDER`; dejar para después
+el acuerdo cuando la persona ya imparte una sección activa, 409 `ONBOARDING_REQUIRED`. Marcar `tour` completa la
+incorporación (`completed_at`, evento `updated`/`account` «Completó su incorporación»); una incorporación completa no se
+reabre y otro POST responde 409. Con contraseña temporal o documentos pendientes, estas rutas responden 403 como las demás.
+
+«Perfil completo»: un teléfono o un correo de contacto y, para educadores, al menos una especialidad; foto, formación y
+disponibilidad son opcionales. Mientras falta, `GET /api/session` incluye `onboarding: true`. Las cuentas que existían
+antes de la migración 0041 cuentan como incorporadas; las nuevas (`POST /api/members`, invitación aceptada) empiezan
+pendientes. La tabla `onboarding` entra en el respaldo.
+
 ## Calendario de clases (ST-125)
 
 `POST /api/feeds/calendar` crea o regenera el enlace de suscripción de quien tiene la sesión y responde 201 con

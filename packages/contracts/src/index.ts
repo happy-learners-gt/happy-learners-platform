@@ -341,3 +341,25 @@ export interface StaffDocument {
 export interface StaffFile { member: { id: string; name: string; active: boolean }; today: string; documents: StaffDocument[] }
 /** Administration's overview: active people with expired documents or documents that expire within 30 days. */
 export interface ExpiringDocuments { today: string; people: { id: string; name: string; documents: Pick<StaffDocument, "id" | "type" | "title" | "expiresOn" | "status">[] }[] }
+/**
+ * ST-122: guided onboarding on the first sign-in. `password`, `legal`, `profile` and `agreement` (signed) are derived
+ * from the real data; `welcome`, `tour` and leaving an optional agreement for later are declared by the person.
+ */
+export type OnboardingStep = "password" | "legal" | "welcome" | "profile" | "agreement" | "tour";
+export interface OnboardingStepState { key: OnboardingStep; label: string; done: boolean; optional: boolean; skipped?: true }
+export type OnboardingPersonStatus = "pending" | "in_progress" | "complete";
+/** GET /api/onboarding: the signed-in person's own onboarding and what to show in each step. */
+export interface OnboardingState {
+  status: OnboardingPersonStatus; startedAt: string | null; completedAt: string | null; steps: OnboardingStepState[]; next: OnboardingStep | null;
+  /** What is still missing for «perfil completo». */
+  profileGaps: string[];
+  /** The volunteer agreement in force to sign, when the step applies and is not done. */
+  agreement: PendingDocument | null;
+  courses: { id: string; title: string; role: CourseRole }[];
+  sections: { id: string; name: string; courseId: string; courseTitle: string }[];
+}
+/** GET /api/onboarding/people: administration's view of each person's onboarding. */
+export interface OnboardingPerson {
+  userId: string; name: string; username: string; role: "admin" | "educator"; active: boolean;
+  status: OnboardingPersonStatus; startedAt: string | null; completedAt: string | null; steps: OnboardingStepState[]; missing: OnboardingStep[];
+}
