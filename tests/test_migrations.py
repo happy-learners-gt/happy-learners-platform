@@ -502,3 +502,36 @@ class UpgradeTests(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             demo.execute("UPDATE users SET must_change_password=2 WHERE id='user-1'")
         self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_invitations_add_staff_email_outbox_and_keep_every_activity_event(self):
+        """0034 (ST-121): users gain an optional, unique e-mail; invitations keep only token hashes; the outbox records
+        deliveries; the activity is rebuilt row for row and admits invitation events."""
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        before = self.scoped("org-demo", until=[path.name[:4] for path in migrations].index("0034"))
+        events = before.execute("SELECT id,organization_id,actor_id,action,target_type,target_id,course_id,summary,occurred_at,group_id FROM activity_events ORDER BY id").fetchall()
+        demo = self.scoped("org-demo")
+        self.assertEqual(demo.execute("SELECT id,organization_id,actor_id,action,target_type,target_id,course_id,summary,occurred_at,group_id FROM activity_events ORDER BY id").fetchall(), events)
+        self.assertEqual(demo.execute("SELECT count(*) FROM users WHERE email IS NOT NULL").fetchone()[0], 0)
+        demo.execute("UPDATE users SET email='ana@example.test' WHERE id='user-0'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("UPDATE users SET email='ana@example.test' WHERE id='user-1'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("UPDATE users SET email='Mayus@Example.test' WHERE id='user-1'")
+        insert = "INSERT INTO invitations(id,organization_id,email,display_name,role,token_hash,expires_at,status,invited_by,created_at) VALUES (?,'org-demo',?,'Paula','educator',?,'t','pending','user-0','t')"
+        demo.execute(insert, ("i-1", "paula@example.test", "a" * 64))
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute(insert, ("i-2", "paula@example.test", "b" * 64))
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute(insert, ("i-3", "otra@example.test", "d_" + "c" * 64))
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("UPDATE invitations SET status='accepted' WHERE id='i-1'")
+        demo.execute("UPDATE invitations SET status='revoked' WHERE id='i-1'")
+        demo.execute(insert, ("i-2", "paula@example.test", "b" * 64))
+        demo.execute("INSERT INTO mail_outbox(id,organization_id,kind,reference_id,recipient,subject,status,created_at) VALUES ('m-1','org-demo','invitation','i-2','paula@example.test','Te invitaron a Happy Learners','not_configured','t')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("INSERT INTO mail_outbox(id,organization_id,kind,recipient,subject,status,created_at) VALUES ('m-2','org-demo','invitation','x@example.test','s','bounced','t')")
+        for action in ["resent", "revoked", "accepted", "created"]:
+            demo.execute("INSERT INTO activity_events(id,organization_id,actor_id,action,target_type,target_id,summary,occurred_at) VALUES (?,'org-demo','user-0',?,'invitation','i-2','Invitación','t')", (f"e-{action}", action))
+        self.assertEqual(sorted(row[0] for row in demo.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='activity_events' AND sql IS NOT NULL")),
+                         ["activity_events_actor", "activity_events_course", "activity_events_group", "activity_events_organization"])
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
