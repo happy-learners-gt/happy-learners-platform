@@ -19,6 +19,12 @@ El contenido de los documentos Office está en el bucket R2 privado y no forma p
 conserva sus metadatos (curso, nombre, tamaño, clave del objeto y estado). Los documentos no se eliminan: archivarlos
 solo cambia su estado, de modo que restaurar una copia vuelve a enlazar el mismo objeto.
 
+El perfil de cada persona (`staff_profiles`, ST-149) y los metadatos de su expediente laboral (`staff_documents`,
+ST-150: tipo, título, emisión, vencimiento, tamaño, SHA-256, clave del objeto, quién lo subió y si se retiró) son datos
+personales y se copian como el resto: el respaldo es solo para administración (DEC-043). La foto y los documentos siguen
+la misma regla que los documentos de los cursos: están en el bucket R2 privado y no forman parte del respaldo; sus
+objetos no se borran al cambiar la foto ni al retirar un documento, de modo que restaurar una copia vuelve a enlazarlos.
+
 Cada tabla lleva un resumen SHA-256 de su contenido normalizado (`digests`). El resumen no depende del orden de las
 filas, así que un respaldo tomado después de restaurar coincide con la copia restaurada.
 

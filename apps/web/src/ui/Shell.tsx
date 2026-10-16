@@ -70,6 +70,7 @@ function TopBar({ menuButton }: { menuButton: ReactNode }) {
       <Link href="/ayuda" className="icon-button" aria-label="Ayuda"><Icon name="help"/></Link>
       <Menu label={`Perfil de ${member.displayName || member.username}`} icon="user" text={member.displayName || member.username} items={[
         { label: `${roleLabel(member)}${organization?.name ? ` · ${organization.name}` : ""}`, icon: "shield", onSelect: () => {}, disabled: true },
+        { label: "Mi perfil", icon: "user", onSelect: () => navigate("/perfil") },
         "separator",
         { label: "Cerrar sesión", icon: "logout", onSelect: logout },
       ]}/>

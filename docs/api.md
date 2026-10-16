@@ -184,6 +184,50 @@ Crear, reenviar, revocar y aceptar quedan en `GET /api/activity` como `targetTyp
 las cuentas solo aparece en `GET /api/members` (administración); `GET /api/people` y las listas de estudiantes no lo
 incluyen. El respaldo copia `users.email` y omite `invitations` y `mail_outbox`.
 
+## Perfil y expediente laboral (ST-149, ST-150, DEC-043)
+
+| Método | Ruta | Quién |
+| --- | --- | --- |
+| GET, PUT | `/api/profile` | La persona con sesión: su perfil completo |
+| PUT, DELETE | `/api/profile/photo` | La persona: sube (cuerpo binario `image/jpeg`, `image/png` o `image/webp`, hasta 2 MB) o quita su foto |
+| GET | `/api/members/:id/profile` | Administración y la propia persona (con contacto); quien comparte el equipo de un curso activo (sin contacto); otros, 403 |
+| GET | `/api/members/:id/photo` | Cualquier persona del equipo con sesión; sin foto, 404 |
+| GET, POST | `/api/members/:id/files` | Administración y la propia persona: lista o agrega un documento |
+| GET | `/api/members/:id/files/:doc/content` | Administración y la propia persona: descarga |
+| POST | `/api/members/:id/files/:doc/withdraw` | Administración: retira el documento |
+| GET | `/api/expiring-documents` | Administración: personas activas con documentos vencidos o por vencer |
+
+`PUT /api/profile` recibe `{ displayName, phone, contactEmail, education, specialties, availability }`: nombre de 2 a
+80 caracteres (es `users.display_name`, el que muestra toda la plataforma), teléfono opcional de 7 a 15 dígitos (admite
+`+`, espacios, guiones y paréntesis), correo de contacto opcional (puede ser distinto del de acceso; se guarda en
+minúsculas), formación de hasta 1000 caracteres, hasta 12 especialidades de 2 a 60 caracteres sin repetir y hasta 21
+franjas `{ day, start, end }` (día 1 = lunes … 7 = domingo, horas `HH:MM`, inicio antes del fin, sin cruces el mismo día).
+Responde `{ profile, changed }`, donde `changed` nombra los campos que cambiaron. El perfil (`StaffProfile`) trae
+`contact: { phone, contactEmail, loginEmail }` solo para administración y la propia persona; los compañeros de equipo
+ven nombre, foto, formación, especialidades y disponibilidad. Ninguna ruta de estudiantes (`/api/student/*`,
+`/api/share/*`) incluye datos del perfil.
+
+La foto y los documentos se guardan en el bucket R2 privado `COURSE_FILES` bajo `<organización>/staff/<persona>/…`, con su
+SHA-256, y se comprueban por sus primeros bytes. Solo el Worker los entrega, con sesión, `Cache-Control: no-store`,
+`X-Content-Type-Options: nosniff` y CSP `sandbox`; los documentos salen como adjunto con un nombre genérico
+(`antecedentes-penales-2026-01-10.pdf`), nunca con el nombre original del archivo.
+
+`POST /api/members/:id/files` recibe el archivo como cuerpo (`application/pdf`, `image/jpeg` o `image/png`, hasta 10 MB)
+y sus datos en cabeceras: `X-Document-Type` (`dpi`, `cv`, `criminal-record`, `police-record`, `studies`,
+`certificate`, `other`), `X-Document-Title` (opcional, codificado con `encodeURIComponent`; sin él, el tipo),
+`X-Issued-On` (`AAAA-MM-DD`, no futura) y `X-Expires-On` (opcional, no anterior a la emisión). Responde 201 con
+`{ document }`; datos o archivo inválidos, 400; más de 100 documentos vigentes por persona o 1 GiB por organización,
+413. La persona puede agregar documentos a su propio expediente (`selfUploaded: true`). Cada documento trae `status`:
+`expired` (pasó su vencimiento), `expiring` (vence en 30 días o menos, en la zona horaria de la organización) o `valid`.
+Retirar solo registra `withdrawnAt`: el registro y el objeto se conservan, administración los sigue viendo y
+descargando, y la persona deja de verlos (404). El expediente se conserva cuando la persona sale del equipo (ST-123).
+`GET /api/expiring-documents` responde `{ today, people: [{ id, name, documents }] }` con las personas activas.
+
+Cambiar el perfil o la foto, agregar, descargar y retirar documentos quedan en `GET /api/activity` como
+`targetType: "account"` con las acciones existentes `updated`, `uploaded`, `recorded` (la consulta o descarga) y
+`withdrawn`. El resumen nombra los campos del perfil que cambiaron y el tipo del documento, nunca sus valores, el
+título ni el contenido. Como las demás entradas sin curso, solo las ve administración.
+
 ## Calendario de clases (ST-125)
 
 `POST /api/feeds/calendar` crea o regenera el enlace de suscripción de quien tiene la sesión y responde 201 con

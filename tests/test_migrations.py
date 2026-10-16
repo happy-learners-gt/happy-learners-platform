@@ -634,3 +634,24 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual(sorted(row[0] for row in demo.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='activity_events' AND sql IS NOT NULL")),
                          ["activity_events_actor", "activity_events_course", "activity_events_group", "activity_events_organization"])
         self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_profiles_and_staff_documents_keep_their_rules(self):
+        """0037 (ST-149, ST-150): profile fields and staff documents are checked; withdrawing keeps the row."""
+        demo = self.scoped("org-demo")
+        demo.execute("INSERT INTO staff_profiles(user_id,organization_id,phone,contact_email,specialties,availability,updated_at) VALUES ('seed-user-carlos','org-demo','+502 5555-0149','c@ejemplo.org','[\"Álgebra\"]','[{\"day\":1,\"start\":\"08:00\",\"end\":\"10:00\"}]','t')")
+        for values in [("seed-user-ana", "123", None, "[]", "[]"), ("seed-user-ana", None, "Mayus@Ejemplo.org", "[]", "[]"), ("seed-user-ana", None, None, "{}", "[]"), ("user-missing", None, None, "[]", "[]")]:
+            with self.assertRaises(sqlite3.IntegrityError):
+                demo.execute("INSERT INTO staff_profiles(user_id,organization_id,phone,contact_email,specialties,availability,updated_at) VALUES (?,'org-demo',?,?,?,?,'t')", values)
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("UPDATE staff_profiles SET photo_key='k' WHERE user_id='seed-user-carlos'")
+        insert = "INSERT INTO staff_documents(id,organization_id,user_id,type,title,issued_on,expires_on,object_key,media_type,size_bytes,sha256,uploaded_by,uploaded_at) VALUES (?,'org-demo','seed-user-carlos',?,'T',?,?,?,?,?,?,'user-0','t')"
+        demo.execute(insert, ("d1", "dpi", "2026-01-01", "2030-01-01", "k1", "application/pdf", 10, "a" * 64))
+        for values in [("d2", "passport", "2026-01-01", None, "k2", "application/pdf", 10, "a" * 64), ("d3", "dpi", "2026-01-01", "2025-01-01", "k3", "application/pdf", 10, "a" * 64),
+                       ("d4", "dpi", "2026-01-01", None, "k1", "application/pdf", 10, "a" * 64), ("d5", "cv", "2026-01-01", None, "k5", "application/zip", 10, "a" * 64), ("d6", "cv", "2026-01-01", None, "k6", "image/png", 10485761, "a" * 64)]:
+            with self.assertRaises(sqlite3.IntegrityError):
+                demo.execute(insert, values)
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("UPDATE staff_documents SET withdrawn_at='t' WHERE id='d1'")
+        demo.execute("UPDATE staff_documents SET withdrawn_at='t',withdrawn_by='user-0' WHERE id='d1'")
+        self.assertEqual(demo.execute("SELECT count(*) FROM staff_documents").fetchone()[0], 1)
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
