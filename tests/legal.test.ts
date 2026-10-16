@@ -49,6 +49,8 @@ const call = (cookie: string, path: string, method = "GET", data?: unknown) =>
 const read = async <T = Record<string, unknown>>(response: Response, status = 200): Promise<T> => { expect(response.status, await response.clone().text()).toBe(status); return response.json() as Promise<T>; };
 type Doc = { id: string; kind: string; status: string; version: number | null; title: string; body: string; consent: string | null; publishedAt: string | null };
 type Record_ = { documentId: string; kind: string; version: number; userId: string; name: string; acceptedAt: string; withdrawnAt: string | null };
+// Since ST-153 the terms are signed with the full name and the account's password.
+const signed = (fullName: string) => ({ fullName, password: "Aprender-2026!" });
 const terms = { title: "Términos de uso ficticios", body: "Texto ficticio de prueba.\n\nSegundo párrafo de los términos de la demostración." };
 const privacy = { title: "Política de privacidad ficticia", body: "Texto ficticio de la política de privacidad de la demostración.", consent: "Doy mi consentimiento informado para el tratamiento de mis datos." };
 
@@ -102,7 +104,7 @@ describe("ST-126 (HL-172) terms and conditions", () => {
     expect((await call(educator, "/organization")).status).toBe(200);
     const current = await read<{ documents: Doc[] }>(await call(educator, "/legal"));
     expect(current.documents.map(item => item.version)).toEqual([1]);
-    const accepted = await read<{ pending: unknown[] }>(await call(educator, "/legal/accept", "POST", { documentIds: [current.documents[0].id] }));
+    const accepted = await read<{ pending: unknown[] }>(await call(educator, "/legal/accept", "POST", { documentIds: [current.documents[0].id], signature: signed("Educador Demo") }));
     expect(accepted.pending).toEqual([]);
     expect((await call(educator, "/courses")).status).toBe(200);
     // Administration is asked as well, including whoever published.
@@ -111,20 +113,20 @@ describe("ST-126 (HL-172) terms and conditions", () => {
   it("ST-126 CA3: se registra quién aceptó qué versión y cuándo, y las versiones anteriores se conservan", async () => {
     const admin = await login("admin-demo"), educator = await login("educador-demo");
     const v1 = (await read<{ documents: Doc[] }>(await call(admin, "/legal"))).documents[0];
-    await read(await call(admin, "/legal/accept", "POST", { documentIds: [v1.id] }));
+    await read(await call(admin, "/legal/accept", "POST", { documentIds: [v1.id], signature: signed("Administración Demo") }));
     await read(await call(admin, "/legal/documents/terms", "PUT", { ...terms, title: "Términos de uso ficticios v2" }));
     const after = await read<{ documents: Doc[] }>(await call(admin, "/legal/documents/terms/publish", "POST"));
     expect(after.documents.map(item => [item.version, item.title])).toEqual([[2, "Términos de uso ficticios v2"], [1, "Términos de uso ficticios v1"]]);
     // Accepting an earlier version is refused: only the one in force counts.
     expect((await call(educator, "/legal/accept", "POST", { documentIds: [v1.id] })).status).toBe(409);
     expect((await read<{ pending: { version: number }[] }>(await call(educator, "/session"))).pending).toMatchObject([{ version: 2 }]);
-    await read(await call(educator, "/legal/accept", "POST", { documentIds: [after.documents[0].id] }));
+    await read(await call(educator, "/legal/accept", "POST", { documentIds: [after.documents[0].id], signature: signed("Educador Demo") }));
     const { acceptances } = await read<{ acceptances: Record_[] }>(await call(admin, "/legal/acceptances"));
     const educatorRecords = acceptances.filter(item => item.userId === "user-educator").map(item => item.version).sort();
     expect(educatorRecords).toEqual([1, 2]);
     expect(acceptances.every(item => item.kind === "terms" && /^\d{4}-\d{2}-\d{2}T/.test(item.acceptedAt) && item.name)).toBe(true);
     expect((await call(educator, "/legal/acceptances")).status).toBe(403);
-    await read(await call(admin, "/legal/accept", "POST", { documentIds: [after.documents[0].id] }));
+    await read(await call(admin, "/legal/accept", "POST", { documentIds: [after.documents[0].id], signature: signed("Administración Demo") }));
     // Published versions and acceptances are recorded in the activity log, without their text.
     const events = (await read<{ events: { action: string; targetType: string; summary: string }[] }>(await call(admin, "/activity?limit=100"))).events.filter(item => item.targetType === "legal");
     expect(events.map(item => item.action)).toEqual(expect.arrayContaining(["published", "accepted"]));

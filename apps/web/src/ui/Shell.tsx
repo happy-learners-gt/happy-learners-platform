@@ -13,6 +13,7 @@ import { Menu } from "./Menu";
 import { Modal, useFeedback } from "./feedback";
 import { Field } from "./primitives";
 import { courseConfiguration } from "../pages/course/context";
+import { AgreementBanner } from "../pages/legal";
 
 export function Brand() {
   return <Link href="/inicio" className="brand" aria-label="Happy Learners, ir a Inicio"><span className="brand-mark" aria-hidden="true">hl</span><span className="brand-name">Happy Learners</span></Link>;
@@ -37,7 +38,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="app-body">
       <aside id="app-sidebar" ref={panel} className="sidebar"><Sidebar/></aside>
       {open && <div className="drawer-backdrop" aria-hidden="true" onClick={() => setOpen(false)}/>}
-      <main id="main" tabIndex={-1} className="main">{children}</main>
+      <main id="main" tabIndex={-1} className="main"><AgreementBanner/>{children}</main>
     </div>
   </div>;
 }
