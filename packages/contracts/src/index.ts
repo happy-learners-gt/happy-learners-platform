@@ -268,7 +268,7 @@ export interface DepartureInput {
  * Terms and conditions and the privacy policy of an organization (ST-126, ST-127). A draft has no version; publishing
  * gives it the next one and it never changes again. A privacy policy carries the consent text people agree to.
  */
-export type LegalKind = "terms" | "privacy";
+export type LegalKind = "terms" | "privacy" | "volunteer";
 export interface LegalDocument {
   id: string; kind: LegalKind; status: "draft" | "published"; version: number | null; title: string; body: string; consent: string | null;
   updatedAt: string; publishedAt: string | null; publishedBy: string | null;
@@ -276,4 +276,22 @@ export interface LegalDocument {
 /** A version the signed-in person must accept (terms) or consent to (privacy) before using the platform. */
 export type PendingDocument = Pick<LegalDocument, "id" | "kind" | "version" | "title">;
 /** Who accepted which version and when; a withdrawn privacy consent keeps its record with the withdrawal date. */
-export interface LegalAcceptance { id: string; documentId: string; kind: LegalKind; version: number; userId: string; name: string; acceptedAt: string; withdrawnAt: string | null }
+export interface LegalAcceptance {
+  id: string; documentId: string; kind: LegalKind; version: number; userId: string; name: string; acceptedAt: string; withdrawnAt: string | null;
+  /** ST-153: the electronic signature of this acceptance; null for a privacy consent or an acceptance recorded before signing existed ("sin firma"). */
+  signatureId?: string | null; signedName?: string | null;
+}
+/**
+ * ST-153 (DEC-043): what a simple electronic signature records and its receipt shows. documentSha256 fingerprints the
+ * canonical text of the signed version; signatureSha256 fingerprints these fields, so a changed receipt is detected.
+ */
+export interface SignatureRecord {
+  signatureId: string; organizationId: string; userId: string; username: string; signedName: string;
+  documentId: string; kind: LegalKind; version: number; documentSha256: string; signedAt: string;
+}
+export interface LegalSignature extends SignatureRecord {
+  acceptanceId: string; signatureSha256: string; title: string; name: string; active: boolean; departedOn: string | null;
+}
+/** The result of verifying a receipt: valid, a signed document that no longer matches, a changed receipt, or an unknown signature. */
+export type SignatureCheck = "valid" | "document_mismatch" | "receipt_mismatch" | "unknown";
+export interface SignatureVerification { status: SignatureCheck; message: string; signature?: LegalSignature; mismatches?: string[] }

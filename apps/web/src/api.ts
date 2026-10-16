@@ -8,6 +8,8 @@ export const sessionRestored = "hl:session-restored";
 export const changed = "hl:changed";
 /** Fired when the terms or privacy policy in force still need the person's acceptance (ST-126, ST-127). */
 export const consentRequired = "hl:consent-required";
+/** Fired when teaching a class waits for the signed volunteer agreement in force (ST-151). */
+export const agreementRequired = "hl:agreement-required";
 const quiet = new Set(["/session", "/login", "/logout"]);
 
 async function parse<T>(response: Response, path: string): Promise<T> {
@@ -15,6 +17,7 @@ async function parse<T>(response: Response, path: string): Promise<T> {
   try { result = await response.json(); } catch { /* Non-JSON error bodies fall back to a generic message. */ }
   if (response.status === 401 && !quiet.has(path)) dispatchEvent(new CustomEvent(sessionExpired));
   if (response.status === 403 && Array.isArray(result.pending)) dispatchEvent(new CustomEvent(consentRequired));
+  if (response.status === 403 && result.code === "VOLUNTEER_AGREEMENT_REQUIRED") dispatchEvent(new CustomEvent(agreementRequired));
   if (!response.ok) throw new ApiError(result.error || "No se pudo completar la operación. Vuelve a intentar.", response.status, result);
   return result as T;
 }

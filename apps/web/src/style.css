@@ -1346,3 +1346,9 @@ ul.cell-list li svg { display: inline-block; vertical-align: -2px; margin-right:
 .legal-mine { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .legal-mine li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-3) var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
 .legal-mine li > span { display: grid; }
+/* ST-153: the electronic signature (name and password) and administration's verification of a receipt. */
+.signature-fields { display: grid; gap: var(--space-3); min-width: 0; margin: 0; padding: var(--space-3) var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-muted); }
+.signature-fields legend { padding: 0 var(--space-1); font-weight: var(--weight-bold); }
+.signature-verify h4 { font-size: var(--text-base); }
+.signature-result { display: grid; gap: var(--space-1); justify-items: start; }
+.signature-result code { overflow-wrap: anywhere; }
