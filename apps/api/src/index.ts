@@ -23,6 +23,7 @@ import { acceptInvitation, acceptPath, invitations, previewInvitation } from "./
 import { mailSender } from "./mail";
 import { LessonCollaborationRoom } from "./collaboration";
 import { encodeLessonDraft } from "./rich-text";
+import { accessMatrix, permissionColumns, withPermissions } from "./permissions";
 export { LessonCollaborationRoom };
 
 const headers = {
@@ -53,11 +54,12 @@ async function body(request: Request): Promise<unknown> {
 async function member(request: Request, db: Database): Promise<Member | null> {
   const token = sessionToken(request);
   if (!token) return null;
-  const row = await db.prepare("SELECT u.id, u.username, COALESCE(u.display_name,u.username) AS displayName, CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END AS role, m.organization_id AS organizationId, u.must_change_password AS mustChange FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND m.active=1")
+  const row = await db.prepare(`SELECT u.id, u.username, COALESCE(u.display_name,u.username) AS displayName, CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END AS role, m.organization_id AS organizationId, u.must_change_password AS mustChange, ${permissionColumns} FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND m.active=1`)
     .bind(await digest(token), Date.now()).first<Member & { mustChange: number }>();
   if (!row) return null;
+  // ST-128, ST-135: effective permissions are computed on every request, from the same query.
   const { mustChange, ...current } = row;
-  return mustChange ? { ...current, mustChangePassword: true } : current;
+  return withPermissions(mustChange ? { ...current, mustChangePassword: true } : current);
 }
 /** Whether a username exists in any organization, active or not: it decides where its owner signs in (ST-093). */
 async function usernameTaken(env: Env, username: string) {
@@ -76,7 +78,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     for (const [name, value] of Object.entries(headers)) result.headers.set(name, value);
     return result;
   }
-  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|account|organization|calendar|members|levels|units|resources|lessons|courses|programs|vocabularies|terms|student|legal)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files") && !/^\/api\/members\/[a-z0-9-]+\/password$/.test(path))
+  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|account|organization|calendar|members|access|levels|units|resources|lessons|courses|programs|vocabularies|terms|student|legal)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files") && !/^\/api\/members\/[a-z0-9-]+\/password$/.test(path))
     || (method === "POST" && path === "/api/organization/restore" && env.RESTORE_ENABLED === "true")
     || (method === "POST" && (path === "/api/invitations" || acceptPath.test(path)))
     ? await body(request) : undefined;
@@ -144,6 +146,12 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/feeds/calendar") methods[path] = ["GET", "POST"];
   if (feedToken) methods[path] = ["GET"];
   if (path === "/api/invitations") methods[path] = ["GET", "POST"];
+  // ST-128, ST-135: roles and access.
+  if (path === "/api/access/matrix") methods[path] = ["GET"];
+  if (path === "/api/access/groups") methods[path] = ["GET", "POST"];
+  if (/^\/api\/access\/groups\/security-group-[a-z0-9-]+$/.test(path)) methods[path] = ["PUT", "DELETE"];
+  if (/^\/api\/access\/groups\/security-group-[a-z0-9-]+\/(permissions|members)$/.test(path)) methods[path] = ["PUT"];
+  if (/^\/api\/members\/[a-z0-9-]+\/coordination$/.test(path)) methods[path] = ["PUT"];
   if (/^\/api\/invitations\/invitation-[a-z0-9-]+\/(resend|revoke)$/.test(path)) methods[path] = ["POST"];
   if (invitationToken) methods[path] = ["GET", "POST"];
   if (path === "/api/programs") methods[path] = ["GET", "POST"];
@@ -251,6 +259,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/people") return people(current, db);
   if (path === "/api/reviews") return reviews(current, db);
   if (path.startsWith("/api/invitations")) return invitations(path, method, input, url.origin, current, db, mailSender(env));
+  if (path.startsWith("/api/access/")) return accessMatrix(path, method, input, current, db);
   if (path.startsWith("/api/members")) return roles(path, method, input, current, db, username => usernameTaken(env, username));
   if (path === "/api/organization/backup" || path === "/api/organization/restore") {
     if (current.role !== "admin") return json({ error: "Solo administración respalda o restaura la organización." }, 403);

@@ -183,6 +183,7 @@ function Sidebar() {
       {page({ href: "/organizacion", label: "Organización", icon: "settings", hue: "coral", active: path === "/organizacion" })}
       {page({ href: "/educadores", label: "Educadores", icon: "users", hue: "pink", active: path === "/educadores" })}
       {page({ href: "/configuracion-academica", label: "Configuración académica", icon: "grid", hue: "green", active: path === "/configuracion-academica" })}
+      {page({ href: "/roles-y-accesos", label: "Roles y accesos", icon: "shield", hue: "violet", active: path === "/roles-y-accesos" })}
     </ul></nav>}
     {fictional(member.organizationId) && <p className="sidebar-note"><Icon name="shield" size={16}/><span>Demostración con datos ficticios</span></p>}
     {creating && <NewSection courses={courses || []} preferred={creating} onClose={() => setCreating(null)}/>}
