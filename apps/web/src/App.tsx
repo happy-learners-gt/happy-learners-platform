@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { Member, Organization } from "@happy-learners/contracts";
-import { api, ApiError, message, sessionExpired, sessionRestored } from "./api";
+import type { Member, Organization, PendingDocument } from "@happy-learners/contracts";
+import { api, ApiError, consentRequired, message, sessionExpired, sessionRestored } from "./api";
 import { NavigationProvider, useNavigation } from "./navigation";
 import { SessionContext } from "./session";
 import type { Session } from "./session";
@@ -19,6 +19,7 @@ import { Help, NotFound } from "./pages/Help";
 import { StyleGuide } from "./pages/StyleGuide";
 import { Members, OrganizationSettings, AcademicSettings } from "./pages/admin";
 import { AcceptInvitation } from "./pages/invitations";
+import { ConsentGate, PrivacyPage } from "./pages/legal";
 const StudentLesson = lazy(() => import("./pages/StudentLesson").then(module => ({ default: module.StudentLesson })));
 const StudentSpace = lazy(() => import("./pages/StudentSpace").then(module => ({ default: module.StudentSpace })));
 
@@ -29,6 +30,7 @@ function Application() {
   const code = url.searchParams.get("code") || (url.pathname.startsWith("/aprender/") ? decodeURIComponent(url.pathname.slice(10)) : "");
   useFocusHeading(url.pathname + (code ? "?lesson" : ""));
   if (code) return <Suspense fallback={<main className="splash"><p role="status">Abriendo lección…</p></main>}><StudentLesson key={code} code={code}/></Suspense>;
+  if (url.pathname.replace(/\/+$/, "") === "/privacidad") return <PrivacyPage/>;
   // ST-121: the invitation link opens without a session.
   const invitation = /^\/invitacion\/([a-z]_[a-f0-9]{64})\/?$/.exec(url.pathname)?.[1];
   if (invitation || url.pathname.startsWith("/invitacion/")) return <AcceptInvitation key={invitation || "invalid"} token={invitation || "invalid"}/>;
@@ -68,14 +70,15 @@ function AuthenticatedApp() {
   const { toast } = useFeedback();
   const [member, setMember] = useState<Member | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
+  const [pending, setPending] = useState<PendingDocument[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "offline">("loading");
   const [expired, setExpired] = useState(false);
   const refresh = useCallback(async () => {
     // Sequential on purpose: a 401 from the session check means "show the login", not "offline".
-    const session = await api<{ member: Member }>("/session");
+    const session = await api<{ member: Member; pending?: PendingDocument[] }>("/session");
     // With a temporary password, nothing else opens until the person chooses their own (ST-093).
     const org = session.member.mustChangePassword ? null : await api<{ organization: Organization }>("/organization");
-    setMember(session.member); setOrganization(org?.organization || null);
+    setMember(session.member); setOrganization(org?.organization || null); setPending(session.pending || []);
   }, []);
   const start = useCallback(() => {
     setStatus("loading");
@@ -84,8 +87,10 @@ function AuthenticatedApp() {
   useEffect(start, [start]);
   useEffect(() => {
     const expire = () => setExpired(true);
-    addEventListener(sessionExpired, expire);
-    return () => removeEventListener(sessionExpired, expire);
+    // A new version was published, or the person withdrew their consent: ask again before anything else.
+    const recheck = () => { refresh().catch(() => undefined); };
+    addEventListener(sessionExpired, expire); addEventListener(consentRequired, recheck);
+    return () => { removeEventListener(sessionExpired, expire); removeEventListener(consentRequired, recheck); };
   }, []);
   // Locations from v0.2.2 keep working.
   useEffect(() => { if (url.pathname.startsWith("/contenido") || url.searchParams.has("biblioteca")) navigate("/cursos", true); }, [url]);
@@ -94,11 +99,13 @@ function AuthenticatedApp() {
   if (!member) return <Login onSignedIn={async () => { await refresh(); setExpired(false); }}/>;
   if (member.mustChangePassword) return <ChangePassword member={member} onChanged={async () => { await refresh(); toast({ message: "Contraseña guardada. Ya puedes usar tu espacio." }); }}
     onLeave={() => { api("/logout", "POST").catch(() => undefined).finally(() => setMember(null)); }}/>;
+  const logout = () => api("/logout", "POST").catch(() => undefined).finally(() => { setMember(null); setOrganization(null); setPending([]); toast({ tone: "info", message: "Sesión cerrada de forma segura." }); });
+  if (pending.length) return <ConsentGate pending={pending} organizationId={member.organizationId} onAccepted={refresh} onLogout={() => void logout()}/>;
   const session: Session = {
     member, organization, setOrganization,
     logout: () => {
       if (!navigate("/inicio")) return;
-      api("/logout", "POST").catch(() => undefined).finally(() => { setMember(null); setOrganization(null); toast({ tone: "info", message: "Sesión cerrada de forma segura." }); });
+      void logout();
     },
   };
   return <SessionContext.Provider value={session}>
