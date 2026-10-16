@@ -1395,3 +1395,7 @@ ul.cell-list li svg { display: inline-block; vertical-align: -2px; margin-right:
 .tab[aria-selected="true"] { border-bottom-color: var(--color-primary); color: var(--color-ink); font-weight: var(--weight-bold); }
 .tab:hover { color: var(--color-ink); }
 @media (max-width: 560px) { .availability-row { grid-template-columns: 1fr 1fr; } .profile-facts { grid-template-columns: minmax(0, 1fr); } }
+/* ST-152: effective hours. */
+.hours-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: var(--space-4); margin-block: var(--space-4); }
+.hours-totals .panel { margin: 0; }
+.hours-table td p { margin: var(--space-1) 0 0; max-width: 24rem; }

@@ -22,6 +22,7 @@ import { AcceptInvitation } from "./pages/invitations";
 import { AccessPage } from "./pages/access";
 import { ConsentGate, PrivacyPage } from "./pages/legal";
 import { MyProfile } from "./pages/profile";
+import { HoursPage } from "./pages/hours";
 const StudentLesson = lazy(() => import("./pages/StudentLesson").then(module => ({ default: module.StudentLesson })));
 const StudentSpace = lazy(() => import("./pages/StudentSpace").then(module => ({ default: module.StudentSpace })));
 
@@ -141,6 +142,7 @@ function page(first: string, second?: string) {
     case "organizacion": return <OrganizationSettings/>;
     case "educadores": return <Members/>;
     case "perfil": return <MyProfile/>;
+    case "horas": return <HoursPage/>;
     case "configuracion-academica": return <AcademicSettings/>;
     case "roles-y-accesos": return <AccessPage/>;
     case "clasificaciones": return <Redirect to="/configuracion-academica"/>;
