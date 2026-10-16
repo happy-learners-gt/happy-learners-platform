@@ -19,6 +19,8 @@ import { calendar, myClasses, student, studentToken } from "./classes";
 import { sections } from "./sections";
 import { courseFiles, sharedFile } from "./files";
 import { feed, feedLink, feedPath } from "./calendar-feed";
+import { acceptInvitation, acceptPath, invitations, previewInvitation } from "./invitations";
+import { mailSender } from "./mail";
 import { LessonCollaborationRoom } from "./collaboration";
 import { encodeLessonDraft } from "./rich-text";
 export { LessonCollaborationRoom };
@@ -36,7 +38,7 @@ async function body(request: Request): Promise<unknown> {
   if (!request.headers.get("content-type")?.startsWith("application/json")) throw new Error("INPUT");
   const pathname = new URL(request.url).pathname;
   // Lessons carry rich text for every block; other bodies stay small.
-  const limit = pathname === "/api/login" || pathname === "/api/account/password" ? 2048 : pathname === "/api/organization/restore" ? 33554432 : /^\/api\/(lessons|legal)(\/|$)/.test(pathname) ? 262144 : 65536;
+  const limit = pathname === "/api/login" || pathname === "/api/account/password" || acceptPath.test(pathname) ? 2048 : pathname === "/api/organization/restore" ? 33554432 : /^\/api\/(lessons|legal)(\/|$)/.test(pathname) ? 262144 : 65536;
   const reader = request.body?.getReader();
   if (!reader) throw new Error("INPUT");
   let text = ""; const decoder = new TextDecoder(); let size = 0;
@@ -76,6 +78,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
   let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|account|organization|calendar|members|levels|units|resources|lessons|courses|programs|vocabularies|terms|student|legal)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files") && !/^\/api\/members\/[a-z0-9-]+\/password$/.test(path))
     || (method === "POST" && path === "/api/organization/restore" && env.RESTORE_ENABLED === "true")
+    || (method === "POST" && (path === "/api/invitations" || acceptPath.test(path)))
     ? await body(request) : undefined;
   // Finishing or cancelling a class may say what was covered or what happens to its plan; without a body, the defaults apply.
   if (method === "POST" && /^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/(complete|cancel)$/.test(path) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
@@ -83,6 +86,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path.startsWith("/api/share/")) scope = scopeOfShare(path.split("/")[3]);
   const feedToken = feedPath.exec(path)?.[1];
   if (feedToken) scope = scopeOfToken(feedToken);
+  // ST-121: an invitation link names its organization like a session token does.
+  const invitationToken = acceptPath.exec(path)?.[1];
+  if (invitationToken) scope = scopeOfToken(invitationToken);
   if (path.startsWith("/api/student/")) scope = path === "/api/student/login" ? scopeOfSection(String((input as Record<string, unknown> | null)?.code || "").trim().toUpperCase()) : scopeOfToken(studentToken(request));
   if (path === "/api/login" && method === "POST") {
     const credentials = input as Record<string, unknown> | null;
@@ -137,6 +143,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   // ST-125: the calendar link (signed in) and the feed calendars fetch without a session; GET only.
   if (path === "/api/feeds/calendar") methods[path] = ["GET", "POST"];
   if (feedToken) methods[path] = ["GET"];
+  if (path === "/api/invitations") methods[path] = ["GET", "POST"];
+  if (/^\/api\/invitations\/invitation-[a-z0-9-]+\/(resend|revoke)$/.test(path)) methods[path] = ["POST"];
+  if (invitationToken) methods[path] = ["GET", "POST"];
   if (path === "/api/programs") methods[path] = ["GET", "POST"];
   if (/^\/api\/programs\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET", "PUT"];
   if (/^\/api\/programs\/[a-z0-9-]+\/prerequisites$/.test(path)) methods[path] = ["GET", "PUT"];
@@ -178,6 +187,16 @@ async function route(request: Request, env: Env): Promise<Response> {
     return shared(path, method, request, db);
   }
   if (feedToken) return feed(feedToken, url, scope, db);
+  if (invitationToken) {
+    if (method === "GET") return previewInvitation(invitationToken, scope, db);
+    // Choosing a username and password is limited like signing in, with its own bucket.
+    const bucket = await digest(`invitation:${new Date().toISOString().slice(0, 10)}:${request.headers.get("CF-Connecting-IP") || "local"}`), now = Date.now();
+    const limit = await db.prepare("INSERT INTO login_limits (bucket, attempts, expires_at) VALUES (?,1,?) ON CONFLICT(bucket) DO UPDATE SET attempts=CASE WHEN expires_at<? THEN 1 ELSE attempts+1 END, expires_at=CASE WHEN expires_at<? THEN excluded.expires_at ELSE expires_at END RETURNING attempts")
+      .bind(bucket, now + 900000, now, now).first<{ attempts: number }>();
+    if (!limit || limit.attempts > 30) return json({ error: "Demasiados intentos. Espera 15 minutos y vuelve a intentar." }, 429, { "Retry-After": "900" });
+    const accepted = await acceptInvitation(invitationToken, input, scope, db, username => usernameTaken(env, username));
+    return accepted.session ? json(await accepted.response.json(), accepted.response.status, { "Set-Cookie": cookie(accepted.session, request) }) : accepted.response;
+  }
   if (path.startsWith("/api/student/")) return student(path, method, input, request, scope, db, env.COURSE_FILES);
   if (path === "/api/logout") {
     const token = sessionToken(request);
@@ -231,6 +250,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/progress") return progress(current, db);
   if (path === "/api/people") return people(current, db);
   if (path === "/api/reviews") return reviews(current, db);
+  if (path.startsWith("/api/invitations")) return invitations(path, method, input, url.origin, current, db, mailSender(env));
   if (path.startsWith("/api/members")) return roles(path, method, input, current, db, username => usernameTaken(env, username));
   if (path === "/api/organization/backup" || path === "/api/organization/restore") {
     if (current.role !== "admin") return json({ error: "Solo administración respalda o restaura la organización." }, 403);

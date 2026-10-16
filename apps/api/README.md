@@ -17,9 +17,15 @@ responden 404, los métodos no permitidos 405 y las rutas heredadas retiradas 41
 | `sections.ts`, `classes.ts`, `attendance.ts`, `workgroups.ts`, `conflicts.ts` | Secciones, horario, clases, asistencia, grupos de trabajo y choques de horario. |
 | `legal.ts` | Términos y política de privacidad versionados, aceptaciones y consentimiento (ST-126, ST-127). |
 | `backup.ts` | Respaldo y restauración de cada organización. |
+| `invitations.ts`, `mail.ts` | Invitaciones por correo (ST-121) y adaptadores del puerto de envío: Brevo por HTTP y envío deshabilitado (DEC-042). |
 | `calendar-feed.ts` | Enlace de suscripción al calendario de clases (iCalendar) de cada educador. |
 | `departures.ts` | Salida de una persona del equipo: reasignación de sus cursos y secciones, fin del acceso y registro (ST-123). |
 | `storage.ts` | Almacenamiento SQLite de cada organización en su Durable Object. |
+
+El correo transaccional usa el puerto `MailSender` del dominio. Con el secreto `BREVO_API_KEY` y la variable
+`MAIL_FROM` (dirección verificada como remitente en Brevo) se usa `BrevoMailSender`; sin ellos, `DisabledMailSender` deja
+cada mensaje en `mail_outbox` como `not_configured` y administración comparte el enlace. Ambos son opcionales: el
+desarrollo local, las pruebas y el dry-run no los necesitan. Cómo configurarlos: `infrastructure/README.md`.
 
 El contrato de cada ruta está en `docs/api.md`; la arquitectura, los datos y la seguridad, en el Manual técnico
 (`happy-learners-ops/docs/deliverables/manuals/technical-manual.md`).
