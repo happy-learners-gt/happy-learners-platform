@@ -2,7 +2,26 @@ export interface HealthResponse { status: "ok" }
 export interface VersionResponse { sha: string }
 /** `mustChangePassword` is present (true) only while the account still signs in with a temporary password (ST-093).
  * `email` is set once someone joins by invitation (ST-121) and only administration's list of people shows it. */
-export interface Member { id: string; username: string; displayName?: string; role: "admin" | "educator"; organizationId: string; active?: boolean; mustChangePassword?: true; email?: string | null }
+export interface Member { id: string; username: string; displayName?: string; role: "admin" | "educator"; organizationId: string; active?: boolean; mustChangePassword?: true; email?: string | null; permissions?: EffectivePermissions; coordination?: ProgramScope | null }
+/**
+ * Roles and access (ST-128, ST-135, DEC-041). Permissions come from a fixed catalog grouped by area. Grantable ones reach
+ * a person through the academic coordination profile or a security group, always within a program scope; the
+ * administration ones belong to the administration role only.
+ */
+export type GrantablePermission = "courses.view" | "lessons.review" | "teams.assign" | "sections.assign" | "classes.view" | "activity.view";
+export type AdministrationPermission = "organization.configure" | "accounts.manage" | "access.manage" | "backup.manage" | "legal.manage";
+export type PermissionKey = GrantablePermission | AdministrationPermission;
+export type PermissionArea = "content" | "team" | "classes" | "reports" | "administration";
+/** Every program of the organization, or a list of them; courses without a program are only in `all`. */
+export type ProgramScope = { all: true } | { programs: string[] };
+/** What the signed-in person may do beyond their course teams; computed again on every request. */
+export interface EffectivePermissions { admin: boolean; coordination: ProgramScope | null; grants: Partial<Record<PermissionKey, ProgramScope>> }
+export interface PermissionGrant { permission: GrantablePermission; scope: ProgramScope }
+export interface SecurityGroup {
+  id: string; name: string; description: string; version: number; updatedAt: string;
+  grants: PermissionGrant[]; members: { userId: string; name: string; username: string }[];
+}
+export interface AccessEvent { id: string; actorName: string; action: string; subjectType: "group" | "coordination"; subjectId: string; summary: string; occurredAt: string }
 /** An invitation by e-mail (ST-121). `delivery` is the state of its latest message; the token is never listed. */
 export type InvitationStatus = "pending" | "accepted" | "revoked" | "expired";
 export type DeliveryStatus = "queued" | "sent" | "failed" | "not_configured" | "deferred";
@@ -28,7 +47,13 @@ export interface CourseAccess {
   edit: boolean;
   /** Publishing and archiving lessons, modules, the curriculum plan and reviews. */
   publish: boolean;
-  /** Sections the person sees: every one for administration, otherwise those assigned. */
+  /** Lessons the person publishes and reviews (returns with observations): the lead, and coordination in its scope (DEC-041). */
+  review?: boolean;
+  /** Choosing the lead and co-teachers: administration, and coordination in its scope. */
+  team?: boolean;
+  /** Choosing who teaches each section among the team: administration, and coordination in its scope. */
+  educators?: boolean;
+  /** Sections the person sees: every one for administration and coordination in its scope, otherwise those assigned. */
   sections: "all" | "assigned";
   /** Sections assigned to the person as educator; they plan and teach their classes. */
   assigned: string[];

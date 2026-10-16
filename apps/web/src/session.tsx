@@ -9,4 +9,4 @@ export function useSession() {
   return session;
 }
 export const isEducator = (member: Member) => member.role === "educator";
-export const roleLabel = (member: Member) => member.role === "admin" ? "Administración" : "Educador";
+export const roleLabel = (member: Member) => member.role === "admin" ? "Administración" : member.permissions?.coordination ? "Educador · Coordinación académica" : "Educador";

@@ -219,14 +219,14 @@ function ConflictDialog({ section, conflicts, busy, onClose, onConfirm }: { sect
   </Modal>;
 }
 
-/** Who teaches the section, chosen from the course's team (DEC-024). Administration adds or removes them. */
+/** Who teaches the section, chosen from the course's team (DEC-024). Administration, and coordination in its scope (DEC-041), add or remove them. */
 export function SectionEducators() {
-  const { course, configurable } = useCourse();
+  const { course, assignsEducators } = useCourse();
   const { section, reload } = useSection();
   const { toast } = useFeedback();
   const [adding, setAdding] = useState(""), [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<{ userIds: string[]; done: string; conflicts: EducatorConflict[] } | null>(null);
-  const editable = configurable && section.status === "active";
+  const editable = assignsEducators && section.status === "active";
   const ids = section.educators.map(item => item.userId);
   const available = (course.team || []).filter(person => !ids.includes(person.userId));
   async function save(userIds: string[], done: string, conflictReason?: string) {

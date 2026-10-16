@@ -516,6 +516,30 @@ class UpgradeTests(unittest.TestCase):
                 demo.execute("INSERT INTO departures(id,organization_id,user_id,departed_on,reason,recorded_by,recorded_at) VALUES (?,'org-demo',?,?,?,'user-0','t')", values)
         self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
 
+    def test_access_matrix_never_stores_administration_permissions(self):
+        """0036 (ST-128, ST-135): coordination scopes, security groups and their audit; groups only hold grantable permissions."""
+        demo = self.scoped("org-demo")
+        demo.execute("INSERT INTO coordination_scopes(user_id,organization_id,program_id,assigned_by,assigned_at) VALUES ('user-1','org-demo','seed-program-primaria','user-0','t')")
+        demo.execute("INSERT INTO coordination_scopes(user_id,organization_id,program_id,assigned_by,assigned_at) VALUES ('user-1','org-demo','*','user-0','t')")
+        demo.execute("INSERT INTO security_groups(id,organization_id,name,name_key,description,created_at,updated_at) VALUES ('g1','org-demo','Lectura','lectura','','t','t')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("INSERT INTO security_groups(id,organization_id,name,name_key,description,created_at,updated_at) VALUES ('g2','org-demo','LECTURA','lectura','','t','t')")
+        demo.execute("INSERT INTO security_group_grants(group_id,organization_id,permission,program_id) VALUES ('g1','org-demo','activity.view','*')")
+        for permission in ["backup.manage", "accounts.manage", "access.manage", "legal.manage", "organization.configure", "anything"]:
+            with self.assertRaises(sqlite3.IntegrityError):
+                demo.execute("INSERT INTO security_group_grants(group_id,organization_id,permission,program_id) VALUES ('g1','org-demo',?,'*')", (permission,))
+        demo.execute("INSERT INTO security_group_members(group_id,user_id,organization_id,added_by,added_at) VALUES ('g1','seed-user-tomas','org-demo','user-0','t')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("INSERT INTO security_group_members(group_id,user_id,organization_id,added_by,added_at) VALUES ('g1','user-missing','org-demo','user-0','t')")
+        demo.execute("INSERT INTO access_events(id,organization_id,actor_id,action,subject_type,subject_id,summary,occurred_at) VALUES ('a1','org-demo','user-0','created','group','g1','Creó el grupo','t')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            demo.execute("INSERT INTO access_events(id,organization_id,actor_id,action,subject_type,subject_id,summary,occurred_at) VALUES ('a2','org-demo','user-0','created','account','g1','x','t')")
+        demo.execute("DELETE FROM security_groups WHERE id='g1'")
+        self.assertEqual(demo.execute("SELECT count(*) FROM security_group_grants").fetchone()[0], 0)
+        self.assertEqual(demo.execute("SELECT count(*) FROM security_group_members").fetchone()[0], 0)
+        self.assertEqual(demo.execute("SELECT count(*) FROM access_events").fetchone()[0], 1)
+        self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+
     def test_later_activity_rebuilds_keep_account_events(self):
         """0031 admits account events and 0032 rebuilds the log again: an account event written in between survives."""
         db = self.scoped("org-demo", until=31)
