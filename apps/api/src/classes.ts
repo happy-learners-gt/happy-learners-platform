@@ -1,5 +1,5 @@
 import type { CalendarBreak, ClassLesson, ClassLessonPlan, ClassResource, ClassSession, ClassStatus, CourseAccess, Lesson, Material, Member, Pacing, Resource, SectionSchedule, StudentClass, StudentPathModule, StudentSpace } from "@happy-learners/contracts";
-import { acceptsAttendance, breakInput, cancelPlanInput, carryOver, classActions, classPlanInput, classStatusLabels, completionInput, groupCodePattern, lessonsInOrder, maxClassLessons, localDay, nextClassStatus, normalizeGroupCode, resourceIdsOf, scheduleDates, scheduleInput, scheduleSummary, seesSection, teachesSection, upcomingClasses } from "@happy-learners/domain";
+import { acceptsAttendance, breakInput, cancelPlanInput, carryOver, classActions, classPlanInput, classStatusLabels, completionInput, groupCodePattern, inSessionFilter, lessonsInOrder, maxClassLessons, localDay, nextClassStatus, normalizeGroupCode, resourceIdsOf, scheduleDates, scheduleInput, scheduleSummary, seesSection, sessionFilterAllowed, sessionFilterInput, teachesSection, upcomingClasses } from "@happy-learners/domain";
 import { tokenPattern, tokenPrefix } from "@happy-learners/domain";
 import type { ClassAction } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
@@ -8,6 +8,8 @@ import { resources } from "./content";
 import { deliverFile, filesFor } from "./files";
 import { event } from "./team";
 import { digest, newToken } from "./auth";
+import { agreementBlock } from "./legal";
+import { notify, type Notifier } from "./notify";
 
 const reply = (data: unknown, status = 200, headers: Record<string, string> = {}) => Response.json(data, { status, headers });
 const unavailable = () => reply({ error: "La clase no está disponible en este curso." }, 404);
@@ -28,7 +30,7 @@ const sessionJoins = "FROM class_sessions s JOIN course_groups g ON g.id=s.group
 type StoredSession = Omit<ClassSession, "lessons"> & { lessons: string | null };
 const withLessons = (row: StoredSession): ClassSession => ({ ...row, lessons: (JSON.parse(row.lessons || "[]") as (ClassLesson & { available: number | boolean })[]).map(lesson => ({ ...lesson, available: !!lesson.available })) });
 
-async function timezoneOf(db: Database, organizationId: string) {
+export async function timezoneOf(db: Database, organizationId: string) {
   return (await db.prepare("SELECT timezone FROM organizations WHERE id=?").bind(organizationId).first<{ timezone: string | null }>())?.timezone || "America/Guatemala";
 }
 export const todayFor = async (db: Database, organizationId: string) => localDay(await timezoneOf(db, organizationId));
@@ -99,15 +101,24 @@ const stale = () => reply({ error: "La clase cambió mientras la editabas. Recar
 /**
  * /api/courses/:id/sessions[/:sid[/attendance|/start|/complete|/cancel|/restore]] — the course team plans the schedule
  * of classes (lessons and comments), then teaches each class: it starts it, takes the roll and finishes it.
+ * GET accepts ?section=&from=&to= (ST-065): one section and a period of calendar days, inclusive and combinable.
  */
-export async function sessions(parts: string[], method: string, input: unknown, current: Member, db: Database, courseId: string, access: CourseAccess) {
+export async function sessions(parts: string[], method: string, input: unknown, current: Member, db: Database, courseId: string, access: CourseAccess, query = new URLSearchParams(), notifier?: Notifier) {
   const now = new Date().toISOString();
   const [sessionId, sub] = [parts[5], parts[6]];
   if (!sessionId) {
     if (method === "GET") {
-      const rows = (await db.prepare(`SELECT ${sessionColumns} ${sessionJoins} WHERE s.course_id=? AND s.organization_id=? ORDER BY s.session_date DESC,s.starts_at DESC,s.created_at DESC LIMIT 400`).bind(courseId, current.organizationId).all<StoredSession>()).results.map(withLessons).filter(row => seesSection(access, row.groupId));
-      const breaks = (await db.prepare(`SELECT ${breakColumns} FROM calendar_breaks WHERE organization_id=? AND (group_id IS NULL OR group_id IN (SELECT id FROM course_groups WHERE course_id=?)) ORDER BY starts_on,ends_on`).bind(current.organizationId, courseId).all<CalendarBreak>()).results.filter(row => !row.groupId || seesSection(access, row.groupId));
-      return reply({ sessions: rows, lessonPlans: await lessonPlans(db, current.organizationId, rows.flatMap(row => row.lessons.map(lesson => lesson.id))), today: await todayFor(db, current.organizationId), breaks });
+      const filter = sessionFilterInput(query);
+      if ("error" in filter) return reply(filter, 400);
+      // A section outside the course, or one the person does not see, is not there for them: nothing about it leaks.
+      if (!sessionFilterAllowed(access, filter) || (filter.section && !await db.prepare("SELECT id FROM course_groups WHERE id=? AND course_id=? AND organization_id=?").bind(filter.section, courseId, current.organizationId).first()))
+        return reply({ error: "La sección no está disponible en este curso." }, 404);
+      // Class days are calendar days of the organization's time zone, so the period compares them as they are stored.
+      const narrowed = [filter.section && ["s.group_id=?", filter.section], filter.from && ["s.session_date>=?", filter.from], filter.to && ["s.session_date<=?", filter.to]].filter(Boolean) as [string, string][];
+      const rows = (await db.prepare(`SELECT ${sessionColumns} ${sessionJoins} WHERE s.course_id=? AND s.organization_id=?${narrowed.map(([clause]) => ` AND ${clause}`).join("")} ORDER BY s.session_date DESC,s.starts_at DESC,s.created_at DESC LIMIT 400`).bind(courseId, current.organizationId, ...narrowed.map(([, value]) => value)).all<StoredSession>()).results.map(withLessons).filter(row => seesSection(access, row.groupId) && inSessionFilter(row, filter));
+      const breaks = (await db.prepare(`SELECT ${breakColumns} FROM calendar_breaks WHERE organization_id=? AND (group_id IS NULL OR group_id IN (SELECT id FROM course_groups WHERE course_id=?)) ORDER BY starts_on,ends_on`).bind(current.organizationId, courseId).all<CalendarBreak>()).results
+        .filter(row => (!row.groupId || seesSection(access, row.groupId)) && (!filter.section || !row.groupId || row.groupId === filter.section) && (!filter.from || row.until >= filter.from) && (!filter.to || row.from <= filter.to));
+      return reply({ sessions: rows, lessonPlans: await lessonPlans(db, current.organizationId, rows.flatMap(row => row.lessons.map(lesson => lesson.id))), today: await todayFor(db, current.organizationId), breaks, filter });
     }
     if (!access.assigned.length) return notTeaching();
     // An extra class (a make-up, a review) takes the time of its section's schedule unless another one is given.
@@ -133,6 +144,8 @@ export async function sessions(parts: string[], method: string, input: unknown, 
   const session = withLessons(stored);
   // Planning and teaching a class belong to whoever teaches its section; administration and the rest of the team read it.
   if (method !== "GET" && !teachesSection(access, session.groupId)) return notTeaching();
+  // ST-151: teaching a class (starting it, taking its roll, completing it) waits for the signed volunteer agreement.
+  if (method !== "GET" && (sub === "start" || sub === "attendance" || sub === "complete")) { const blocked = await agreementBlock(db, current); if (blocked) return blocked; }
   if (!sub) {
     if (method === "GET") {
       const ids = session.lessons.map(lesson => lesson.id);
@@ -167,7 +180,10 @@ export async function sessions(parts: string[], method: string, input: unknown, 
         .bind(plan.sessionDate, plan.startsAt, plan.durationMinutes, plan.lessonIds[0] ?? null, plan.notes, now, sessionId, current.organizationId, Number.isInteger(version) ? version : -1),
       [...(sameList(plan.lessonIds, currentIds) ? [] : planLessons(db, sessionId, plan.lessonIds, new Map(session.lessons.map(lesson => [lesson.id, lesson.revision])), session.status === "in_progress")),
         event(db, current, { action: "updated", targetType: "session", targetId: sessionId, courseId, groupId: session.groupId, summary: `Actualizó la planificación de la clase del ${plan.sessionDate} en «${session.groupName}»` })]);
-    return ok ? reply({ ok: true }) : stale();
+    if (!ok) return stale();
+    // ST-124: a new date, time or length is told to the section's other educators; a change of plan alone is not.
+    if (moved) await notifyClass(db, notifier, current, courseId, session, { type: "class_changed", next: { date: plan.sessionDate, startsAt: plan.startsAt } });
+    return reply({ ok: true });
   }
   if (sub === "attendance") {
     if (method === "GET") return reply({ session, learners: await attendanceRows(db, sessionId, session.groupId) });
@@ -243,7 +259,21 @@ export async function sessions(parts: string[], method: string, input: unknown, 
   } else statements = action === "start" ? start(db, sessionId, current, now) : [db.prepare("UPDATE class_sessions SET status=?,version=version+1,updated_at=? WHERE id=?").bind(target, now, sessionId)];
   const ok = await db.guardedBatch(db.prepare("SELECT id FROM class_sessions WHERE id=? AND status=?").bind(sessionId, session.status), [...statements,
     event(db, current, { action: action === "cancel" ? "archived" : action === "restore" ? "restored" : "recorded", targetType: "session", targetId: sessionId, courseId, groupId: session.groupId, summary })]);
-  return ok ? reply({ status: target as ClassStatus, ...result }) : reply({ error: "La clase cambió mientras tanto. Recarga para ver su estado." }, 409);
+  if (!ok) return reply({ error: "La clase cambió mientras tanto. Recarga para ver su estado." }, 409);
+  if (action === "cancel") await notifyClass(db, notifier, current, courseId, session, { type: "class_cancelled" });
+  if (action === "restore") await notifyClass(db, notifier, current, courseId, session, { type: "class_changed", restored: true });
+  return reply({ status: target as ClassStatus, ...result });
+}
+/** ST-124: tells the section's educators (except whoever acted) that one of its classes changed or was cancelled. */
+async function notifyClass(db: Database, notifier: Notifier | undefined, current: Member, courseId: string, session: { id: string; groupId: string; groupName?: string; sessionDate: string },
+  change: { type: "class_changed"; next?: { date: string; startsAt: string | null }; restored?: boolean } | { type: "class_cancelled" }) {
+  if (!notifier) return;
+  const [educators, course] = await Promise.all([
+    db.prepare("SELECT user_id AS id FROM section_educators WHERE group_id=?").bind(session.groupId).all<{ id: string }>(),
+    db.prepare("SELECT title FROM courses WHERE id=?").bind(courseId).first<{ title: string }>(),
+  ]);
+  const base = { course: course?.title || "", section: session.groupName || "", date: session.sessionDate };
+  await notify(db, notifier, current, educators.results.map(row => ({ userId: row.id, targetId: session.id, path: `/secciones/${session.groupId}/clases/${session.id}`, facts: { ...base, ...change } })));
 }
 /** The section's pending classes after the given one, in order, with what each has planned. */
 async function pendingAfter(db: Database, session: ClassSession) {
@@ -265,12 +295,17 @@ async function attendanceRows(db: Database, sessionId: string, groupId: string) 
   return (await db.prepare("SELECT l.id AS learnerId,l.display_name AS displayName,COALESCE(a.status,'unmarked') AS status FROM group_learners l LEFT JOIN attendance_marks a ON a.learner_id=l.id AND a.session_id=? WHERE l.group_id=? AND (l.status='active' OR a.status IS NOT NULL) ORDER BY l.display_name,l.id").bind(sessionId, groupId).all()).results;
 }
 
+/**
+ * The classes of the sections a person teaches (binds: user id, organization id), in active sections of active courses
+ * with a schedule. «Mis clases», the Agenda and the calendar subscription (ST-125) all read them from here.
+ */
+export const taughtClasses = `JOIN courses c ON c.id=s.course_id AND c.status='active' LEFT JOIN study_programs sp ON sp.id=c.program_id
+    JOIN section_educators se ON se.group_id=s.group_id AND se.organization_id=s.organization_id AND se.user_id=?
+    WHERE s.organization_id=? AND g.status='active' AND COALESCE(sp.pacing,c.pacing)='scheduled'`;
 /** GET /api/classes — the next classes of the sections the person teaches, for the home page. */
 export async function myClasses(current: Member, db: Database) {
   const today = await todayFor(db, current.organizationId);
-  const rows = (await db.prepare(`SELECT ${sessionColumns},c.title AS courseTitle ${sessionJoins} JOIN courses c ON c.id=s.course_id AND c.status='active' LEFT JOIN study_programs sp ON sp.id=c.program_id
-    JOIN section_educators se ON se.group_id=s.group_id AND se.organization_id=s.organization_id AND se.user_id=?
-    WHERE s.organization_id=? AND g.status='active' AND COALESCE(sp.pacing,c.pacing)='scheduled' AND ((s.session_date>=? AND s.status='planned') OR s.status='in_progress') ORDER BY s.session_date,s.starts_at LIMIT 40`).bind(current.id, current.organizationId, today).all<StoredSession>()).results.map(withLessons);
+  const rows = (await db.prepare(`SELECT ${sessionColumns},c.title AS courseTitle ${sessionJoins} ${taughtClasses} AND ((s.session_date>=? AND s.status='planned') OR s.status='in_progress') ORDER BY s.session_date,s.starts_at LIMIT 40`).bind(current.id, current.organizationId, today).all<StoredSession>()).results.map(withLessons);
   // A class left open on an earlier day still needs to be finished, so it stays first.
   const open = rows.filter(row => row.status === "in_progress" && row.sessionDate < today);
   return reply({ today, classes: [...open, ...upcomingClasses(rows.filter(row => !open.includes(row)), today)].slice(0, 8) });

@@ -3,6 +3,7 @@ import { cleanText, competencyInput, competencyLimit, completeOrder, courseInput
 import type { Database } from "./storage";
 import { filesFor } from "./files";
 import { event, recordEvent, teamsFor, updateTeam } from "./team";
+import type { Notifier } from "./notify";
 import { courseRequirements, leaveProgram, programPrerequisites } from "./prerequisites";
 import { accessTo, forbidden, outsider, reachableCourses } from "./access";
 
@@ -100,7 +101,7 @@ export async function taxonomy(path: string, method: string, input: unknown, cur
   return reply({ id: itemId, ...await taxonomyFor(db, current.organizationId) }, id ? 200 : 201);
 }
 
-export async function courses(path: string, method: string, input: unknown, current: Member, db: Database) {
+export async function courses(path: string, method: string, input: unknown, current: Member, db: Database, notifier?: Notifier) {
   const [, , , id, area, itemId] = path.split("/");
   const list = await coursesFor(db, current.organizationId);
   const course = list.find(c => c.id === id);
@@ -117,13 +118,14 @@ export async function courses(path: string, method: string, input: unknown, curr
     const { legacyProgramId: _, ...view } = course!;
     return reply({ course: { ...view, team: teams.get(view.id) || [], access }, units: await unitsFor(db, id), curriculum: await curriculumFor(db, id), requirements: await courseRequirements(db, current.organizationId, view.id, view.programId) });
   }
-  // The team decides who reaches the course's sections, classes and attendance, so only administration changes it.
+  // The team decides who reaches the course's sections, classes and attendance: administration changes it, and
+  // coordination in its scope (DEC-041).
   if (area === "team") {
-    if (!access!.configure) return forbidden("Solo administración puede cambiar el equipo de un curso.");
+    if (!access!.team) return forbidden("Solo administración y la coordinación académica del programa cambian el equipo de un curso.");
     const v = record(input);
     if (!v) return reply({ error: "Completa los datos." }, 400);
     if (course?.status === "archived") return reply({ error: "Restaura el curso antes de modificarlo. Sus enlaces publicados se conservan." }, 409);
-    return updateTeam(id, Number.isInteger(v.version) ? Number(v.version) : -1, v, current, db);
+    return updateTeam(id, Number.isInteger(v.version) ? Number(v.version) : -1, v, current, db, notifier);
   }
   if (!area && current.role !== "admin") return forbidden("Solo administración crea cursos y cambia su configuración.");
   if (area === "materials" && !access!.edit) return forbidden("Solo el equipo docente del curso prepara sus recursos.");

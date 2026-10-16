@@ -27,6 +27,23 @@ export async function signIn(page: Page, username = "educador-demo", path = "/in
   await page.context().addCookies([{ name: "hl_session", value: await sessionToken(username), url: origin, httpOnly: true, sameSite: "Strict" }]);
   await page.goto(path);
 }
+/**
+ * ST-122: a new account goes through the welcome before the app opens. Suites that only need a new account working
+ * complete it through the API with a minimal «perfil completo» (contact e-mail and one specialty); the derived steps
+ * cannot be skipped, so this saves a real profile.
+ */
+export async function completeOnboarding(session: string, specialty = "Pedagogía") {
+  const headers = { Origin: origin, "Content-Type": "application/json", Cookie: `hl_session=${session}` };
+  const call = (path: string, method = "POST", data?: unknown) => fetch(`${origin}/api${path}`, { method, headers, ...(data ? { body: JSON.stringify(data) } : {}) });
+  const current = await (await call("/session", "GET")).json() as { member: { displayName: string; username: string }; onboarding?: true };
+  if (!current.onboarding) return;
+  expect((await call("/onboarding/steps/welcome")).status).toBe(200);
+  const saved = await call("/profile", "PUT", { displayName: current.member.displayName || current.member.username, contactEmail: `${current.member.username}@ejemplo.test`, specialties: [specialty] });
+  expect(saved.status, await saved.clone().text()).toBe(200);
+  const state = (await (await call("/onboarding", "GET")).json()).onboarding as { next: string };
+  if (state.next === "agreement") expect((await call("/onboarding/steps/agreement")).status).toBe(200);
+  expect((await call("/onboarding/steps/tour")).status).toBe(200);
+}
 /** Signs in through the form; only for tests about the login itself. */
 export async function signInWithForm(page: Page, username = "educador-demo", path = "/inicio") {
   await page.goto(path);

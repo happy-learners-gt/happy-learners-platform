@@ -9,11 +9,21 @@ lógica en JSON de esa base:
 
 | Incluye | No incluye |
 | --- | --- |
-| Organización, cuentas y membresías, cursos, programas y requisitos, módulos, lecciones y revisiones, recursos y materiales, clasificaciones, secciones, horarios, clases, asistencia, estudiantes, grupos de trabajo, calendario, actividad y metadatos de documentos. | Contraseñas (sal y hash), sesiones abiertas de educadores y estudiantes, límites de inicio de sesión y el registro de migraciones. |
+| Organización, cuentas y membresías, cursos, programas y requisitos, módulos, lecciones y revisiones, recursos y materiales, clasificaciones, secciones, horarios, clases, asistencia, estudiantes, grupos de trabajo, calendario, actividad, metadatos de documentos y las versiones de términos y privacidad con sus aceptaciones. | Contraseñas (sal y hash), sesiones abiertas de educadores y estudiantes, enlaces de calendario (`calendar_feeds`), invitaciones por correo (`invitations`, con el hash de su enlace) y la bandeja de salida de correo (`mail_outbox`), límites de inicio de sesión y el registro de migraciones. |
+
+El correo de las cuentas del equipo (`users.email`, ST-121) es un dato personal y sí se copia: el respaldo es solo
+para administración y ya contiene los datos personales de la organización. Restaurar no toca las invitaciones ni la
+bandeja de salida del espacio; quita las invitaciones de cuentas que ya no existen.
 
 El contenido de los documentos Office está en el bucket R2 privado y no forma parte del respaldo. El respaldo
 conserva sus metadatos (curso, nombre, tamaño, clave del objeto y estado). Los documentos no se eliminan: archivarlos
 solo cambia su estado, de modo que restaurar una copia vuelve a enlazar el mismo objeto.
+
+El perfil de cada persona (`staff_profiles`, ST-149) y los metadatos de su expediente laboral (`staff_documents`,
+ST-150: tipo, título, emisión, vencimiento, tamaño, SHA-256, clave del objeto, quién lo subió y si se retiró) son datos
+personales y se copian como el resto: el respaldo es solo para administración (DEC-043). La foto y los documentos siguen
+la misma regla que los documentos de los cursos: están en el bucket R2 privado y no forman parte del respaldo; sus
+objetos no se borran al cambiar la foto ni al retirar un documento, de modo que restaurar una copia vuelve a enlazarlos.
 
 Cada tabla lleva un resumen SHA-256 de su contenido normalizado (`digests`). El resumen no depende del orden de las
 filas, así que un respaldo tomado después de restaurar coincide con la copia restaurada.
@@ -42,9 +52,9 @@ transacción. La restauración:
 1. Responde 403 a quien no administra la organización.
 2. Rechaza con 400 una copia cuyos resúmenes no coinciden con su contenido (alterada o incompleta).
 3. Rechaza con 409 una copia de otra organización, de otra versión del esquema o con otras tablas.
-4. Conserva las contraseñas que el espacio ya tenía. Una cuenta que solo existe en la copia queda sin contraseña
-   utilizable hasta que administración la restablezca.
-5. Cierra las sesiones de cuentas, secciones o estudiantes que ya no existen.
+4. Conserva las contraseñas que el espacio ya tenía, y con ellas si son temporales (ST-093). Una cuenta que solo
+   existe en la copia queda sin contraseña utilizable hasta que administración la restablezca desde **Educadores**.
+5. Cierra las sesiones y los enlaces de calendario de cuentas, secciones o estudiantes que ya no existen.
 6. Compara cada tabla con la copia y revierte todo si alguna difiere.
 
 La ruta solo existe donde la variable `RESTORE_ENABLED` vale `true`: la vista previa aislada y las pruebas locales.

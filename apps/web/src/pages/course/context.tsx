@@ -16,8 +16,14 @@ export type CourseData = {
   writable: boolean;
   /** The lead publishes lessons and organizes modules and the curriculum plan. */
   publisher: boolean;
+  /** The lead, and coordination in its scope (DEC-041), review, return and publish lessons. */
+  reviewer: boolean;
   /** Administration configures the course, its team, sections, students and schedules. */
   configurable: boolean;
+  /** Administration and coordination in its scope choose the lead and co-teachers. */
+  assignsTeam: boolean;
+  /** Administration and coordination in its scope choose who teaches each section. */
+  assignsEducators: boolean;
   /** Whether the person plans and teaches the classes of a section. */
   teaches: (groupId: string) => boolean;
   reload: () => Promise<void>;
@@ -66,7 +72,8 @@ export function courseConfiguration(course: Course, program: StudyProgram | null
 /** The capabilities of an active course; an archived course is read-only for everyone but administration's restore. */
 export function capabilities(course: Course) {
   const access = course.access!, active = course.status === "active";
-  return { access, writable: access.edit && active, publisher: access.publish && active, configurable: access.configure && active, teaches: (groupId: string) => active && teachesSection(access, groupId) };
+  return { access, writable: access.edit && active, publisher: access.publish && active, reviewer: !!access.review && active, configurable: access.configure && active,
+    assignsTeam: !!(access.team ?? access.configure) && active, assignsEducators: !!(access.educators ?? access.configure) && active, teaches: (groupId: string) => active && teachesSection(access, groupId) };
 }
 
 export function CourseProvider({ data, children }: { data: CourseData; children: ReactNode }) {
