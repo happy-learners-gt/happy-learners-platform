@@ -25,6 +25,7 @@ import { staff, staffMethods } from "./profiles";
 import { LessonCollaborationRoom } from "./collaboration";
 import { encodeLessonDraft } from "./rich-text";
 import { accessMatrix, permissionColumns, withPermissions } from "./permissions";
+import { notificationMethods, notifications } from "./notifications";
 export { LessonCollaborationRoom };
 
 const headers = {
@@ -85,6 +86,8 @@ async function route(request: Request, env: Env): Promise<Response> {
     ? await body(request) : undefined;
   // Finishing or cancelling a class may say what was covered or what happens to its plan; without a body, the defaults apply.
   if (method === "POST" && /^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/(complete|cancel)$/.test(path) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
+  // ST-124: notification preferences and policy.
+  if (method === "PUT" && notificationMethods(path)) input = await body(request);
   let scope: string = scopeOfToken(sessionToken(request));
   if (path.startsWith("/api/share/")) scope = scopeOfShare(path.split("/")[3]);
   const feedToken = feedPath.exec(path)?.[1];
@@ -170,6 +173,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   // ST-149, ST-150: profile, photo and staff file.
   const staffAllowed = staffMethods(path);
   if (staffAllowed) methods[path] = staffAllowed;
+  const notificationAllowed = notificationMethods(path);
+  if (notificationAllowed) methods[path] = notificationAllowed;
   const allowed = methods[path] || (path === "/api/members" ? ["GET", "POST"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/members\/[a-z0-9-]+\/password$/.test(path) ? ["POST"] : /^\/api\/members\/[a-z0-9-]+\/departure$/.test(path) ? ["GET", "POST"] : /^\/api\/lessons\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/(publish|duplicate|review|review\/return)$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+\/files\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
   if (!allowed) return json({ error: "Not found" }, 404);
   if (!allowed.includes(method)) return json({ error: "Method not allowed" }, 405, { Allow: allowed.join(", ") });
@@ -252,10 +257,13 @@ async function route(request: Request, env: Env): Promise<Response> {
     internalHeaders.set("X-HL-Session", await digest(token));
     return room.fetch(new Request(request, { headers: internalHeaders }));
   }
+  // ST-124: endpoints that change something tell the people affected by e-mail, after their write.
+  const notifier = { origin: url.origin, sender: mailSender(env) };
+  if (notificationAllowed) return notifications(path, method, input, url, current, db, notifier.sender.configured);
   if (/^\/api\/(taxonomy|vocabularies|terms)(\/|$)/.test(path)) return taxonomy(path, method, input, current, db);
-  if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions)(\/|$)/.test(path)) return classroom(path, method, input, current, db, url.searchParams);
+  if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions)(\/|$)/.test(path)) return classroom(path, method, input, current, db, url.searchParams, notifier);
   if (/^\/api\/courses\/[a-z0-9-]+\/duplicate$/.test(path)) return duplicateCourse(path.split("/")[3], current, db, env.COURSE_FILES);
-  if (/^\/api\/courses(\/|$)/.test(path)) return courses(path, method, input, current, db);
+  if (/^\/api\/courses(\/|$)/.test(path)) return courses(path, method, input, current, db, notifier);
   if (/^\/api\/programs(\/|$)/.test(path)) return programs(path, method, input, current, db);
   if (path === "/api/activity") return activity(url, current, db);
   if (path === "/api/classes") return myClasses(current, db);
@@ -309,7 +317,7 @@ async function route(request: Request, env: Env): Promise<Response> {
         : (() => { const doc = live(activity.id); return doc ? { ...activity, richContent: doc, instructions: "" } : activity; })()) };
     }
   }
-  return content(url, method, input, current, db);
+  return content(url, method, input, current, db, notifier);
 }
 export default {
     async fetch(request, env): Promise<Response> {

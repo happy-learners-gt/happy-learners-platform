@@ -7,13 +7,14 @@ import { accessTo, forbidden } from "./access";
 import { fillLessons, saveSchedule, scheduleOf, sessions, todayFor } from "./classes";
 import { educatorConflicts } from "./conflicts";
 import { workGroups } from "./workgroups";
+import { notify, type Notifier } from "./notify";
 
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
 const unavailable = () => reply({ error: "La sección no está disponible en este curso." }, 404);
 const configuresOnly = () => forbidden("Administración crea las secciones, inscribe a sus estudiantes, asigna sus educadores y configura su horario.");
 const validName = (value: unknown, limit: number) => typeof value === "string" && value.trim().length > 0 && value.trim().length <= limit && !/[<>\x00-\x1f]/.test(value);
 
-export async function classroom(path: string, method: string, input: unknown, current: Member, db: Database, query?: URLSearchParams) {
+export async function classroom(path: string, method: string, input: unknown, current: Member, db: Database, query?: URLSearchParams, notifier?: Notifier) {
   const parts = path.split("/");
   const courseId = parts[3];
   const course = await db.prepare("SELECT id FROM courses WHERE id=? AND organization_id=? AND status='active'").bind(courseId, current.organizationId).first();
@@ -26,7 +27,7 @@ export async function classroom(path: string, method: string, input: unknown, cu
   if (configuration && !configuration.settings.attendance) return reply({ error: "La asistencia está desactivada en la configuración de este curso." }, 409);
   // A tu ritmo (DEC-027): sections have no schedule and no classes; each student works through the published course.
   if (configuration?.pacing === "self-paced" && (parts[4] === "sessions" || ["schedule", "lessons"].includes(parts[6]))) return reply({ error: "En un curso a tu ritmo las secciones no tienen horario ni clases: cada estudiante avanza por las lecciones publicadas. Cambia el ritmo del curso a «Con calendario» para programar clases." }, 409);
-  if (parts[4] === "sessions") return sessions(parts, method, input, current, db, courseId, access, query);
+  if (parts[4] === "sessions") return sessions(parts, method, input, current, db, courseId, access, query, notifier);
   const now = new Date().toISOString();
   const value = input as Record<string, unknown> | null;
   const [groupId, sub, learnerId] = [parts[5], parts[6], parts[7]];
@@ -53,7 +54,7 @@ export async function classroom(path: string, method: string, input: unknown, cu
   if (sub === "educators" && method === "PUT") {
     if (!access.educators) return configuresOnly();
     if (group.status !== "active") return reply({ error: "La sección está cerrada. Reactívala para hacer cambios." }, 409);
-    return assignEducators(input, current, db, courseId, group);
+    return assignEducators(input, current, db, courseId, group, notifier);
   }
   if (!access.configure) return configuresOnly();
   if (!sub && method === "PUT") {
@@ -131,7 +132,7 @@ async function groupsOf(db: Database, courseId: string, organizationId: string, 
  * PUT /api/courses/:id/groups/:gid/educators {userIds} — who teaches the section, chosen from the course's team
  * (DEC-024): the team decides who works on the course, and each section picks its educators among them.
  */
-async function assignEducators(input: unknown, current: Member, db: Database, courseId: string, group: { id: string; name: string }) {
+async function assignEducators(input: unknown, current: Member, db: Database, courseId: string, group: { id: string; name: string }, notifier?: Notifier) {
   const ids = (input as Record<string, unknown> | null)?.userIds;
   if (!Array.isArray(ids) || ids.length > maxSectionEducators || ids.some(id => typeof id !== "string") || new Set(ids).size !== ids.length) return reply({ error: `Elige hasta ${maxSectionEducators} educadores distintos para la sección.` }, 400);
   const team = (await db.prepare("SELECT cm.user_id AS id FROM course_members cm JOIN memberships m ON m.user_id=cm.user_id AND m.organization_id=cm.organization_id AND m.active=1 WHERE cm.course_id=? AND cm.organization_id=?").bind(courseId, current.organizationId).all<{ id: string }>()).results.map(row => row.id);
@@ -158,5 +159,8 @@ async function assignEducators(input: unknown, current: Member, db: Database, co
       event(db, current, { action: "assigned", targetType: "group", targetId: group.id, courseId, summary: `Confirmó el choque de horario de ${conflict.name} con «${conflict.otherCourse} · ${conflict.otherGroup}» (${conflict.overlaps === 1 ? "1 clase" : `${conflict.overlaps} clases`}). Motivo: ${reason}`.slice(0, 240) }),
     ]),
   ]);
+  // ST-124: whoever starts teaching the section is told by e-mail.
+  const course = (await db.prepare("SELECT title FROM courses WHERE id=?").bind(courseId).first<{ title: string }>())?.title || "";
+  await notify(db, notifier, current, added.map(userId => ({ userId, targetId: group.id, path: `/secciones/${group.id}`, facts: { type: "section_assignment", course, section: group.name } })));
   return reply({ educators: (await educatorsOf(db, courseId, current.organizationId)).filter(item => item.groupId === group.id).map(({ groupId: _, ...item }) => item) });
 }

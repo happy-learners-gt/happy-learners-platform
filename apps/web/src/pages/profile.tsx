@@ -11,6 +11,7 @@ import { Avatar } from "../ui/progress";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, Section, StatusBadge } from "../ui/primitives";
 import type { Tone } from "../ui/primitives";
 import { departureDay } from "./departure";
+import { MyNotifications } from "./notifications";
 
 /**
  * ST-149: «Mi perfil» for every person of the team, and the profile administration consults.
@@ -33,6 +34,7 @@ export function MyProfile() {
   return <>
     <PageHeader title="Mi perfil" description="Quién eres, qué enseñas y cómo contactarte. Tu teléfono y tu correo de contacto solo los ven administración y tú; los estudiantes nunca los ven."/>
     {error ? <ErrorState error={error} retry={load}/> : !profile ? <Loading label="Cargando tu perfil…"/> : <ProfileForm profile={profile} onSaved={setProfile}/>}
+    <div className="reading"><MyNotifications/></div>
     <div className="reading"><StaffFileSection userId={member.id} title="Mi expediente" admin={false}/></div>
   </>;
 }
