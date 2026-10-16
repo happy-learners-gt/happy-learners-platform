@@ -77,6 +77,38 @@ esté vacía, las demás rutas con sesión responden **403** con el mismo `pendi
 
 Publicar, aceptar y retirar quedan en `/api/activity` (`targetType: "legal"`), sin el texto de los documentos.
 
+### Acuerdo de voluntariado y firma electrónica
+
+ST-151 y ST-153 (migración 0038). El tercer tipo de documento, `volunteer` (Acuerdo de voluntariado ad honorem), se
+redacta, publica y versiona como los términos, pero no cierra la plataforma: `GET /api/legal` lo devuelve en
+`agreement` mientras la persona no haya firmado la versión vigente, y entonces `POST …/sessions/:id/start`,
+`POST …/sessions/:id/complete` y `PUT …/sessions/:id/attendance` responden **403**
+`{ code: "VOLUNTEER_AGREEMENT_REQUIRED", agreement }` a quien imparte la sección (las respuestas 404 y 403 previas
+no cambian). Una organización sin acuerdo publicado no bloquea nada. No se retira como un consentimiento.
+
+Aceptar `terms` o `volunteer` exige firmar (DEC-043, firma electrónica simple): `POST /api/legal/accept`
+`{ documentIds, signature: { fullName, password } }`. `fullName` se guarda tal como se escribe, sin espacios a los lados
+(3 a 120 caracteres, una línea); la contraseña se comprueba con la de la cuenta y no se guarda. Sin firma responde
+**400** `SIGNATURE_REQUIRED`; con una contraseña incorrecta, **403** `SIGNATURE_PASSWORD_INVALID`; tras cinco fallos en
+15 minutos, **429** `SIGNATURE_RATE_LIMITED` con `Retry-After: 900` (contador por cuenta en `login_limits`). La
+respuesta añade `signatures` con los identificadores creados. El consentimiento de privacidad sigue sin firma, y las
+aceptaciones anteriores a la migración se conservan sin firma (`signatureId: null`, «Sin firma»).
+
+Cada firma (`legal_signatures`, sin cambios ni borrado) guarda la aceptación, la cuenta (`userId`, `username`), el
+nombre escrito, el documento y su versión, `signedAt` (UTC ISO), `documentSha256` = SHA-256 del JSON canónico
+(claves ordenadas, sin espacios) de `{ kind, version, title, body, publishedAt }` de la versión, y `signatureSha256` =
+SHA-256 del JSON canónico de `{ signatureId, organizationId, userId, username, signedName, documentId, kind, version,
+documentSha256, signedAt }`.
+
+| Método | Ruta | Acceso |
+| --- | --- | --- |
+| GET | `/api/legal/signatures/:id/receipt` | Quien firmó o administración: constancia HTML descargable (`Content-Disposition: attachment`) con todos los datos, ambas huellas, el texto firmado, cómo verificarla y un bloque `application/json` `#hl-constancia` |
+| GET | `/api/legal/signatures` | Administración: todas las firmas, también de personas sin acceso (`active`, `departedOn`) |
+| POST | `/api/legal/signatures/verify` `{ signatureId }` o `{ receipt }` | Administración: recalcula la huella del documento guardado y la de la firma, y compara la constancia campo a campo. `status`: `valid`, `document_mismatch`, `receipt_mismatch` o `unknown` |
+
+`GET /api/legal/acceptances` añade `signatureId` y `signedName` a cada registro y `role` a cada persona. El respaldo
+incluye `legal_signatures`.
+
 ## Programas, cursos y contenido
 
 | Método | Ruta |

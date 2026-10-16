@@ -552,6 +552,56 @@ class UpgradeTests(unittest.TestCase):
         db.execute("INSERT INTO activity_events(id,organization_id,actor_id,action,target_type,target_id,summary,occurred_at) VALUES ('e','org-demo','user-0','withdrawn','legal','p','Retiró su consentimiento','t')")
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
 
+    def test_signatures_rebuild_keeps_every_legal_row_and_trigger(self):
+        """0038 (ST-151, ST-153): legal_documents admits 'volunteer' and is rebuilt with legal_acceptances; inside one
+        transaction with foreign keys on, as a Durable Object applies it, every row stays byte-identical, the indexes
+        and triggers are recreated as 0032 wrote them and published versions stay immutable; signatures are kept."""
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        position = [path.name[:4] for path in migrations].index("0038")
+        db = self.scoped("org-demo", until=position)
+        db.isolation_level = None
+        insert = "INSERT INTO legal_documents(id,organization_id,kind,status,title,body,consent,updated_by,updated_at) VALUES (?,'org-demo',?,'draft',?,?,?,'user-0',?)"
+        db.execute(insert, ("t1", "terms", "Términos ñ «uno»", "Texto ficticio de los términos.\n\nSegundo párrafo con acentos: áéíóú.", None, "2026-10-01T00:00:00.000Z"))
+        db.execute(insert, ("p1", "privacy", "Privacidad", "Texto ficticio de la política de privacidad.", "Doy mi consentimiento informado.", "2026-10-01T00:00:01.000Z"))
+        db.execute("UPDATE legal_documents SET status='published',version=1,published_by='user-0',published_at='2026-10-02T00:00:00.000Z' WHERE id IN ('t1','p1')")
+        db.execute(insert, ("t2", "terms", "Borrador", "Borrador ficticio de los términos.", None, "2026-10-03T00:00:00.000Z"))
+        db.execute("INSERT INTO legal_acceptances(id,organization_id,document_id,user_id,accepted_at) VALUES ('a1','org-demo','t1','user-0','2026-10-04T00:00:00.000Z'),('a2','org-demo','p1','user-0','2026-10-04T00:00:00.000Z')")
+        db.execute("UPDATE legal_acceptances SET withdrawn_at='2026-10-05T00:00:00.000Z' WHERE id='a2'")
+        rows = lambda table: db.execute(f"SELECT hex(CAST(quote(id) AS BLOB)),* FROM {table} ORDER BY id").fetchall()
+        schema = lambda: db.execute("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE type IN ('index','trigger') AND tbl_name IN ('legal_documents','legal_acceptances') ORDER BY name").fetchall()
+        documents, acceptances, before = rows("legal_documents"), rows("legal_acceptances"), schema()
+        dump = lambda table: [tuple(value.hex() if isinstance(value, bytes) else value for value in row) for row in db.execute(f"SELECT * FROM {table} ORDER BY id").fetchall()]
+        raw = {table: db.execute(f"SELECT group_concat(hex(CAST(id AS BLOB))||hex(CAST(organization_id AS BLOB))||hex(CAST(kind AS BLOB))||hex(CAST(title AS BLOB))||hex(CAST(body AS BLOB))||ifnull(hex(CAST(consent AS BLOB)),'-')||ifnull(published_at,'-'),'|') FROM (SELECT * FROM {table} ORDER BY id)").fetchone() for table in ["legal_documents"]}
+        db.executescript("BEGIN;\n" + migrations[position].read_text() + "\nCOMMIT;")
+        self.assertEqual(rows("legal_documents"), documents)
+        self.assertEqual(rows("legal_acceptances"), acceptances)
+        self.assertEqual(db.execute("SELECT group_concat(hex(CAST(id AS BLOB))||hex(CAST(organization_id AS BLOB))||hex(CAST(kind AS BLOB))||hex(CAST(title AS BLOB))||hex(CAST(body AS BLOB))||ifnull(hex(CAST(consent AS BLOB)),'-')||ifnull(published_at,'-'),'|') FROM (SELECT * FROM legal_documents ORDER BY id)").fetchone(), raw["legal_documents"])
+        self.assertEqual(dump("legal_acceptances"), [tuple(row[1:]) for row in acceptances])
+        self.assertEqual(schema(), before)
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+        self.assertIn('REFERENCES "legal_documents"(id)', db.execute("SELECT sql FROM sqlite_master WHERE name='legal_acceptances'").fetchone()[0])
+        # Published versions and acceptances keep their protection.
+        for statement in ["UPDATE legal_documents SET title='Cambiada' WHERE id='t1'", "DELETE FROM legal_documents WHERE id='t1'", "DELETE FROM legal_acceptances WHERE id='a1'",
+                          "UPDATE legal_acceptances SET withdrawn_at='2026-10-06' WHERE id='a2'",
+                          "INSERT INTO legal_acceptances(id,organization_id,document_id,user_id,accepted_at) VALUES ('a3','org-demo','t2','user-0','t')",
+                          "INSERT INTO legal_documents(id,organization_id,kind,status,title,body,updated_by,updated_at) VALUES ('x','org-demo','other','draft','Otro','Texto ficticio de otro documento.','user-0','t')"]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=statement):
+                db.execute(statement)
+        db.execute("UPDATE legal_documents SET title='Borrador editado' WHERE id='t2'")
+        db.execute(insert, ("v1", "volunteer", "Acuerdo de voluntariado", "Texto ficticio del acuerdo de voluntariado ad honorem.", None, "t"))
+        db.execute("UPDATE legal_documents SET status='published',version=1,published_by='user-0',published_at='t' WHERE id='v1'")
+        db.execute("INSERT INTO legal_acceptances(id,organization_id,document_id,user_id,accepted_at) VALUES ('a4','org-demo','v1','user-0','2026-10-07')")
+        # A signature belongs to an acceptance of the terms or the agreement by the same person, and is never changed.
+        sign = "INSERT INTO legal_signatures(id,organization_id,acceptance_id,document_id,user_id,username,signed_name,document_sha256,signature_sha256,signed_at) VALUES (?,'org-demo',?,?,?,'admin-demo','Nombre Ficticio',?,?,'2026-10-07')"
+        db.execute(sign, ("s1", "a4", "v1", "user-0", "a" * 64, "b" * 64))
+        for values in [("s2", "a2", "p1", "user-0", "a" * 64, "b" * 64), ("s3", "a1", "t1", "user-1", "a" * 64, "b" * 64), ("s4", "a1", "t1", "user-0", "a" * 63, "b" * 64), ("s5", "a4", "v1", "user-0", "a" * 64, "b" * 64)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=values[0]):
+                db.execute(sign, values)
+        for statement in ["UPDATE legal_signatures SET signed_name='Otro nombre' WHERE id='s1'", "DELETE FROM legal_signatures WHERE id='s1'"]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=statement):
+                db.execute(statement)
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
     def test_invitations_add_staff_email_outbox_and_keep_every_activity_event(self):
         """0034 (ST-121): users gain an optional, unique e-mail; invitations keep only token hashes; the outbox records
         deliveries; the activity is rebuilt row for row and admits invitation events."""
