@@ -277,3 +277,24 @@ export interface LegalDocument {
 export type PendingDocument = Pick<LegalDocument, "id" | "kind" | "version" | "title">;
 /** Who accepted which version and when; a withdrawn privacy consent keeps its record with the withdrawal date. */
 export interface LegalAcceptance { id: string; documentId: string; kind: LegalKind; version: number; userId: string; name: string; acceptedAt: string; withdrawnAt: string | null }
+/**
+ * ST-149: an educator's profile. Phone and contact e-mail are seen only by the person and administration (`contact`
+ * is absent for course teammates); students never receive any of it.
+ */
+export interface StaffAvailabilitySlot { day: 1 | 2 | 3 | 4 | 5 | 6 | 7; start: string; end: string }
+export interface StaffProfile {
+  userId: string; displayName: string; username: string; role: "admin" | "educator"; active: boolean;
+  photo: boolean; photoVersion: string | null; education: string; specialties: string[]; availability: StaffAvailabilitySlot[];
+  contact?: { phone: string | null; contactEmail: string | null; loginEmail: string | null };
+  updatedAt: string | null;
+}
+/** ST-150: one document of a person's staff file. Withdrawn documents keep their metadata; only administration sees them. */
+export type StaffDocumentKind = "dpi" | "cv" | "criminal-record" | "police-record" | "studies" | "certificate" | "other";
+export interface StaffDocument {
+  id: string; userId: string; type: StaffDocumentKind; title: string; issuedOn: string; expiresOn: string | null;
+  status: "valid" | "expiring" | "expired"; mediaType: string; sizeBytes: number; uploadedAt: string; uploadedBy: string;
+  selfUploaded: boolean; withdrawnAt: string | null;
+}
+export interface StaffFile { member: { id: string; name: string; active: boolean }; today: string; documents: StaffDocument[] }
+/** Administration's overview: active people with expired documents or documents that expire within 30 days. */
+export interface ExpiringDocuments { today: string; people: { id: string; name: string; documents: Pick<StaffDocument, "id" | "type" | "title" | "expiresOn" | "status">[] }[] }

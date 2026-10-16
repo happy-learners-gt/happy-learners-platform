@@ -118,3 +118,5 @@ export function validRichText(value: unknown): boolean {
   return root.type === "doc" && Array.isArray(root.content) && root.content.every(child => visit(child, 1)) && textLength > 0;
 }
 export { departureDate, departureReason, maxDepartureReason } from "./departures";
+export { availabilityDays, availabilityInput, calendarDate, contactEmailInput, documentStatus, expiringWindowDays, maxAvailabilitySlots, maxEducationLength, maxSpecialties, maxSpecialtyLength, phoneInput, specialtiesInput, staffDocumentInput, staffDocumentLabel, staffDocumentTypes, staffProfileInput } from "./profiles";
+export type { AvailabilitySlot, ProfileInput, StaffDocumentStatus, StaffDocumentType, Weekday } from "./profiles";

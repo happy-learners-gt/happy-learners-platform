@@ -17,6 +17,7 @@ import { ProgramPathDialog } from "./programPath";
 import { DepartureDialog, departureDay } from "./departure";
 import { Invitations } from "./invitations";
 import { LegalSettings } from "./legal";
+import { ExpiringDocuments, PersonDetail } from "./profile";
 
 function AdminOnly({ title, children }: { title: string; children: ReactNode }) {
   const { member } = useSession();
@@ -75,6 +76,8 @@ function MemberList() {
   const [members, setMembers] = useState<MemberStats[] | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(""), [person, setPerson] = useState("");
   const [adding, setAdding] = useState(false), [inviting, setInviting] = useState(false), [issued, setIssued] = useState<Issued | null>(null), [revision, setRevision] = useState(0);
   const [leaving, setLeaving] = useState<{ id: string; name: string } | null>(null), { member: me } = useSession();
+  // ST-149, ST-150: a person's profile and staff file.
+  const [detail, setDetail] = useState<{ id: string; name: string } | null>(null);
   const progress = useProgress();
   const load = async () => { setError(""); try { setMembers((await api<{ members: MemberStats[] }>("/members")).members); setRevision(value => value + 1); } catch (cause) { setError(message(cause)); } };
   useEffect(() => { void load(); }, []);
@@ -114,7 +117,8 @@ function MemberList() {
           <td>{member.attendance || <span className="muted">—</span>}</td>
           <td>{member.lastActivity ? <time dateTime={member.lastActivity}>{timeAgo(member.lastActivity)}</time> : <span className="muted">Sin actividad</span>}</td>
           <td><StatusBadge tone={!member.active ? "neutral" : member.mustChangePassword ? "warning" : "success"}>{!member.active ? "Sin acceso" : member.mustChangePassword ? "Contraseña temporal" : "Activo"}</StatusBadge>{member.departedOn && <span className="muted small departed-on">Salió el {departureDay(member.departedOn)}</span>}</td>
-          <td className="cell-actions">{owner ? <span className="muted small">Cuenta principal</span> : <Menu label={`Acciones de ${name}`} items={[
+          <td className="cell-actions">{owner ? <span className="row-actions"><span className="muted small">Cuenta principal</span><Menu label={`Acciones de ${name}`} items={[{ label: "Perfil y expediente", icon: "user", onSelect: () => setDetail({ id: member.id, name }) }]}/></span> : <Menu label={`Acciones de ${name}`} items={[
+            { label: "Perfil y expediente", icon: "user", onSelect: () => setDetail({ id: member.id, name }) },
             { label: member.role === "admin" ? "Cambiar a educador" : "Cambiar a administración", icon: "users", disabled: busy === member.id, onSelect: () => void update(member, { role: member.role === "admin" ? "educator" : "admin" }) },
             { label: "Restablecer contraseña", icon: "undo", disabled: busy === member.id, onSelect: () => void reset(member) },
             { label: member.active ? "Quitar acceso" : "Dar acceso", icon: "shield", danger: member.active, disabled: busy === member.id, onSelect: () => void update(member, { active: !member.active }) },
@@ -124,6 +128,7 @@ function MemberList() {
       })}</tbody>
     </table></div>
     <Invitations inviting={inviting} onInviting={setInviting} onChanged={() => void load()}/>
+    <ExpiringDocuments onOpen={setDetail} revision={revision}/>
     <div className="admin-grid">
       <Section title="Avance por curso">
         {progress.error ? <ErrorState error={progress.error} retry={() => void progress.reload()}/> : !progress.courses ? <Loading label="Calculando avance…" lines={4}/> : <CourseProgressList courses={progress.courses}/>}
@@ -134,6 +139,7 @@ function MemberList() {
     </div>
     {adding && <AccountDialog onClose={() => setAdding(false)} onCreated={async result => { setAdding(false); setIssued(result); await load(); }}/>}
     {issued && <TemporaryPassword issued={issued} onClose={() => setIssued(null)}/>}
+    {detail && <PersonDetail person={detail} onClose={() => { setDetail(null); void load(); }}/>}
     {leaving && <DepartureDialog person={leaving} onClose={() => setLeaving(null)} onDone={async date => { const name = leaving.name; setLeaving(null); await load(); toast({ message: `Salida de ${name} registrada el ${departureDay(date)}. Ya no puede entrar.` }); }}/>}
   </>;
 }
