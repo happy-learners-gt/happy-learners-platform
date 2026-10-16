@@ -21,6 +21,7 @@ import { courseFiles, sharedFile } from "./files";
 import { feed, feedLink, feedPath } from "./calendar-feed";
 import { acceptInvitation, acceptPath, invitations, previewInvitation } from "./invitations";
 import { mailSender } from "./mail";
+import { staff, staffMethods } from "./profiles";
 import { LessonCollaborationRoom } from "./collaboration";
 import { encodeLessonDraft } from "./rich-text";
 export { LessonCollaborationRoom };
@@ -155,6 +156,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (["/api/legal", "/api/legal/documents", "/api/legal/acceptances", "/api/public/privacy"].includes(path)) methods[path] = ["GET"];
   if (["/api/legal/accept", "/api/legal/withdraw"].includes(path) || /^\/api\/legal\/documents\/[a-z]+\/publish$/.test(path)) methods[path] = ["POST"];
   if (/^\/api\/legal\/documents\/[a-z]+$/.test(path)) methods[path] = ["PUT"];
+  // ST-149, ST-150: profile, photo and staff file.
+  const staffAllowed = staffMethods(path);
+  if (staffAllowed) methods[path] = staffAllowed;
   const allowed = methods[path] || (path === "/api/members" ? ["GET", "POST"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/members\/[a-z0-9-]+\/password$/.test(path) ? ["POST"] : /^\/api\/members\/[a-z0-9-]+\/departure$/.test(path) ? ["GET", "POST"] : /^\/api\/lessons\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/(publish|duplicate|review|review\/return)$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+\/files\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
   if (!allowed) return json({ error: "Not found" }, 404);
   if (!allowed.includes(method)) return json({ error: "Method not allowed" }, 405, { Allow: allowed.join(", ") });
@@ -251,6 +255,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === "/api/people") return people(current, db);
   if (path === "/api/reviews") return reviews(current, db);
   if (path.startsWith("/api/invitations")) return invitations(path, method, input, url.origin, current, db, mailSender(env));
+  if (staffAllowed) return staff(path, method, request, current, db, env.COURSE_FILES);
   if (path.startsWith("/api/members")) return roles(path, method, input, current, db, username => usernameTaken(env, username));
   if (path === "/api/organization/backup" || path === "/api/organization/restore") {
     if (current.role !== "admin") return json({ error: "Solo administración respalda o restaura la organización." }, 403);

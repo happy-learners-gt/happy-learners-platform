@@ -20,6 +20,7 @@ import { StyleGuide } from "./pages/StyleGuide";
 import { Members, OrganizationSettings, AcademicSettings } from "./pages/admin";
 import { AcceptInvitation } from "./pages/invitations";
 import { ConsentGate, PrivacyPage } from "./pages/legal";
+import { MyProfile } from "./pages/profile";
 const StudentLesson = lazy(() => import("./pages/StudentLesson").then(module => ({ default: module.StudentLesson })));
 const StudentSpace = lazy(() => import("./pages/StudentSpace").then(module => ({ default: module.StudentSpace })));
 
@@ -138,6 +139,7 @@ function page(first: string, second?: string) {
     case "guia-de-estilo": return <StyleGuide/>;
     case "organizacion": return <OrganizationSettings/>;
     case "educadores": return <Members/>;
+    case "perfil": return <MyProfile/>;
     case "configuracion-academica": return <AcademicSettings/>;
     case "clasificaciones": return <Redirect to="/configuracion-academica"/>;
     case "contenido": return null;

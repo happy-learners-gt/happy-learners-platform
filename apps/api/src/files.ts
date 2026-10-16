@@ -57,10 +57,11 @@ function safeName(value: string): string | null {
   return name;
 }
 
-async function readBounded(request: Request): Promise<Uint8Array | null> {
+/** Reads a request body of at most `max` bytes (15 MB for Office files); also used by the staff file (ST-149, ST-150). */
+export async function readBounded(request: Request, max = MAX_BYTES): Promise<Uint8Array | null> {
   const contentLength = request.headers.get("Content-Length");
   const declared = contentLength === null ? null : Number(contentLength);
-  if ((declared !== null && (!Number.isSafeInteger(declared) || declared < 1 || declared > MAX_BYTES)) || !request.body) return null;
+  if ((declared !== null && (!Number.isSafeInteger(declared) || declared < 1 || declared > max)) || !request.body) return null;
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -69,7 +70,7 @@ async function readBounded(request: Request): Promise<Uint8Array | null> {
       const chunk = await reader.read();
       if (chunk.done) break;
       total += chunk.value.byteLength;
-      if (total > MAX_BYTES || (declared !== null && total > declared)) { await reader.cancel(); return null; }
+      if (total > max || (declared !== null && total > declared)) { await reader.cancel(); return null; }
       chunks.push(chunk.value);
     }
   } catch {
