@@ -5,6 +5,7 @@ import type { Database } from "./storage";
 import { digest, hashPassword, newToken } from "./auth";
 import { deliver, type Delivery } from "./mail";
 import { event } from "./team";
+import { startOnboarding } from "./onboarding";
 
 /**
  * Invitations by e-mail (ST-121, DEC-042). The link carries a 256-bit secret whose first letter names the
@@ -128,6 +129,7 @@ export async function acceptInvitation(token: string, input: unknown, scope: str
     db.prepare("INSERT INTO memberships(user_id,organization_id,role,active) VALUES (?,?,?,1)").bind(id, found.organizationId, found.role === "educator" ? "instructor" : "admin"),
     db.prepare("INSERT INTO role_events VALUES (?,?,?,?,?,?)").bind(crypto.randomUUID(), found.invitedBy, id, found.role, 1, at),
     db.prepare("UPDATE invitations SET status='accepted',accepted_at=?,accepted_user_id=? WHERE id=?").bind(at, id, found.id),
+    startOnboarding(db, id, found.organizationId, at),
     db.prepare("INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,?)").bind(await digest(session), id, now.getTime() + 28800000),
     event(db, actor, { action: "accepted", targetType: "invitation", targetId: found.id, summary: `Aceptó la invitación y creó su cuenta (@${username}) con rol ${roleLabel(found.role)}` }),
   ]);

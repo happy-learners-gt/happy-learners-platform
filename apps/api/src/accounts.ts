@@ -3,6 +3,7 @@ import { acceptablePassword, accountInput, maxPasswordLength } from "@happy-lear
 import type { Database } from "./storage";
 import { digest, hashPassword, newTemporaryPassword, verifyPassword } from "./auth";
 import { event } from "./team";
+import { startOnboarding } from "./onboarding";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
 const roleName = (role: string) => role === "admin" ? "Administración" : "Educador";
@@ -22,6 +23,8 @@ export async function createAccount(input: unknown, current: Member, db: Databas
     db.prepare("INSERT INTO users(id,username,password_salt,password_hash,display_name,must_change_password) VALUES (?,?,?,?,?,1)").bind(id, account.username, salt, hash, account.displayName),
     db.prepare("INSERT INTO memberships(user_id,organization_id,role,active) VALUES (?,?,?,1)").bind(id, current.organizationId, account.role === "educator" ? "instructor" : "admin"),
     db.prepare("INSERT INTO role_events VALUES (?,?,?,?,?,?)").bind(crypto.randomUUID(), current.id, id, account.role, 1, new Date().toISOString()),
+    // ST-122: a new account goes through the guided onboarding on its first sign-in.
+    startOnboarding(db, id, current.organizationId, new Date().toISOString()),
     event(db, current, { action: "created", targetType: "account", targetId: id, summary: `Creó la cuenta de ${account.displayName} (@${account.username}) con rol ${roleName(account.role)}` }),
   ]);
   if (!ok) return unavailable;

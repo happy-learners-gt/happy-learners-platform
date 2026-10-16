@@ -4,6 +4,7 @@
  * are not copied: they hold link secrets or delivery records that only make sense in the store that issued them.
  * Password columns never leave the store. Staff e-mail addresses (users.email) are copied: the backup is
  * administration's and already holds the organization's personal data.
+ * Onboarding state (ST-122, table onboarding) is copied like any other table.
  * A restore keeps the credentials the target already has, so a restored account signs in as it did there; whether
  * the password is a temporary one (ST-093) belongs to those credentials and stays with them.
  */
