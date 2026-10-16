@@ -1,7 +1,17 @@
 export interface HealthResponse { status: "ok" }
 export interface VersionResponse { sha: string }
-/** `mustChangePassword` is present (true) only while the account still signs in with a temporary password (ST-093). */
-export interface Member { id: string; username: string; displayName?: string; role: "admin" | "educator"; organizationId: string; active?: boolean; mustChangePassword?: true }
+/** `mustChangePassword` is present (true) only while the account still signs in with a temporary password (ST-093).
+ * `email` is set once someone joins by invitation (ST-121) and only administration's list of people shows it. */
+export interface Member { id: string; username: string; displayName?: string; role: "admin" | "educator"; organizationId: string; active?: boolean; mustChangePassword?: true; email?: string | null }
+/** An invitation by e-mail (ST-121). `delivery` is the state of its latest message; the token is never listed. */
+export type InvitationStatus = "pending" | "accepted" | "revoked" | "expired";
+export type DeliveryStatus = "queued" | "sent" | "failed" | "not_configured" | "deferred";
+export interface Invitation {
+  id: string; email: string; displayName: string; role: "admin" | "educator"; status: InvitationStatus; expiresAt: string; createdAt: string;
+  invitedBy: string; acceptedAt: string | null; delivery: DeliveryStatus | null; deliveryError: string | null; sentAt: string | null;
+}
+/** What the public acceptance page shows before the person chooses a username and password. */
+export interface InvitationPreview { organization: string; displayName: string; email: string; role: "admin" | "educator"; expiresAt: string }
 export type CourseRole = "lead" | "co-teacher";
 /** Someone on a course's teaching team: the lead or a co-teacher. */
 export interface CourseMember { userId: string; username: string; name: string; role: CourseRole }
@@ -32,8 +42,8 @@ export interface LessonReview {
 export interface ReviewItem extends LessonReview { lessonId: string; lessonTitle: string; courseId: string; courseTitle: string }
 /** An audited operation: who did what, on which course, and when. */
 export interface ActivityEvent {
-  id: string; actorId: string; actorName: string; action: "created" | "updated" | "published" | "archived" | "restored" | "planned" | "recorded" | "uploaded" | "assigned" | "reset" | "accepted" | "withdrawn";
-  targetType: "course" | "program" | "module" | "lesson" | "resource" | "competency" | "outcome" | "group" | "session" | "team" | "account" | "legal"; targetId: string; courseId?: string | null; summary: string; occurredAt: string;
+  id: string; actorId: string; actorName: string; action: "created" | "updated" | "published" | "archived" | "restored" | "planned" | "recorded" | "uploaded" | "assigned" | "reset" | "accepted" | "withdrawn" | "resent" | "revoked";
+  targetType: "course" | "program" | "module" | "lesson" | "resource" | "competency" | "outcome" | "group" | "session" | "team" | "account" | "legal" | "invitation"; targetId: string; courseId?: string | null; summary: string; occurredAt: string;
 }
 /** How far a course has come: content, curriculum coverage and attendance. */
 export interface CourseProgress {

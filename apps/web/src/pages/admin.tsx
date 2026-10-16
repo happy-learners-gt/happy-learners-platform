@@ -15,6 +15,7 @@ import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Sect
 import { DaysOff } from "./calendar";
 import { ProgramPathDialog } from "./programPath";
 import { DepartureDialog, departureDay } from "./departure";
+import { Invitations } from "./invitations";
 import { LegalSettings } from "./legal";
 
 function AdminOnly({ title, children }: { title: string; children: ReactNode }) {
@@ -72,7 +73,7 @@ type MemberStats = Member & { leads: number; coTeaches: number; lessonsCreated: 
 function MemberList() {
   const { toast, confirm } = useFeedback();
   const [members, setMembers] = useState<MemberStats[] | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(""), [person, setPerson] = useState("");
-  const [adding, setAdding] = useState(false), [issued, setIssued] = useState<Issued | null>(null), [revision, setRevision] = useState(0);
+  const [adding, setAdding] = useState(false), [inviting, setInviting] = useState(false), [issued, setIssued] = useState<Issued | null>(null), [revision, setRevision] = useState(0);
   const [leaving, setLeaving] = useState<{ id: string; name: string } | null>(null), { member: me } = useSession();
   const progress = useProgress();
   const load = async () => { setError(""); try { setMembers((await api<{ members: MemberStats[] }>("/members")).members); setRevision(value => value + 1); } catch (cause) { setError(message(cause)); } };
@@ -92,7 +93,8 @@ function MemberList() {
     finally { setBusy(""); }
   }
   const header = <PageHeader title="Educadores" description="Quién puede entrar, qué hace cada persona y cómo avanzan los cursos. Los estudiantes no necesitan cuenta."
-    primary={members && <PrimaryAction icon="plus" onClick={() => setAdding(true)}>Agregar cuenta</PrimaryAction>}/>;
+    primary={members && <PrimaryAction icon="plus" onClick={() => setAdding(true)}>Agregar cuenta</PrimaryAction>}
+    actions={members && <button type="button" className="button secondary" onClick={() => setInviting(true)}><Icon name="send" size={16}/>Invitar por correo</button>}/>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
   if (!members) return <>{header}<Loading label="Cargando equipo…"/></>;
   const titles = Object.fromEntries((progress.courses || []).map(item => [item.courseId, item.title]));
@@ -105,7 +107,7 @@ function MemberList() {
       <tbody>{members.map(member => {
         const owner = member.id === "user-0", name = member.displayName || member.username;
         return <tr key={member.id}>
-          <th scope="row"><span className="person-cell"><Avatar name={name} size={30}/><span><button type="button" className="link-button" onClick={() => setPerson(person === member.id ? "" : member.id)} aria-pressed={person === member.id}>{name}</button><span className="muted small">@{member.username}</span></span></span></th>
+          <th scope="row"><span className="person-cell"><Avatar name={name} size={30}/><span><button type="button" className="link-button" onClick={() => setPerson(person === member.id ? "" : member.id)} aria-pressed={person === member.id}>{name}</button><span className="muted small">@{member.username}{member.email ? ` · ${member.email}` : ""}</span></span></span></th>
           <td>{member.role === "admin" ? "Administración" : "Educador"}</td>
           <td>{member.leads || member.coTeaches ? <>{member.leads ? `responsable de ${member.leads}` : ""}{member.leads && member.coTeaches ? " · " : ""}{member.coTeaches ? `colabora en ${member.coTeaches}` : ""}</> : <span className="muted">—</span>}</td>
           <td>{member.lessonsCreated ? `${member.lessonsCreated} creadas · ${member.publications} publicaciones` : <span className="muted">—</span>}</td>
@@ -121,6 +123,7 @@ function MemberList() {
         </tr>;
       })}</tbody>
     </table></div>
+    <Invitations inviting={inviting} onInviting={setInviting} onChanged={() => void load()}/>
     <div className="admin-grid">
       <Section title="Avance por curso">
         {progress.error ? <ErrorState error={progress.error} retry={() => void progress.reload()}/> : !progress.courses ? <Loading label="Calculando avance…" lines={4}/> : <CourseProgressList courses={progress.courses}/>}

@@ -19,6 +19,28 @@ npm run test:e2e
 
 La verificación construye la web y el Worker, genera los tipos de los bindings, ejecuta pruebas TypeScript/Python y hace un dry-run de Wrangler. Playwright inicia un Worker local y comprueba los recorridos de escritorio y móvil. No usa el bucket remoto ni despliega.
 
+## Correo transaccional (ST-121, DEC-042)
+
+Las invitaciones se envían con la API HTTP de Brevo en su plan gratuito (300 correos al día por cuenta). Sin
+configuración el Worker no envía nada: cada mensaje queda en la bandeja de salida de la organización como
+`not_configured` y administración copia el enlace de la invitación. Para activar el envío:
+
+1. En Brevo, verifica como remitente la dirección que se usará (mientras no haya dominio propio) y crea una clave de API v3.
+2. Guarda la clave como secreto del Worker; nunca en `wrangler.jsonc`, en variables de Actions visibles ni en el código:
+
+   ```bash
+   npx wrangler secret put BREVO_API_KEY --config build/wrangler.json
+   ```
+
+3. Define la dirección verificada como `MAIL_FROM`. Como `wrangler.jsonc` no la declara (no lleva valores reales) y
+   `wrangler deploy` reemplaza las variables de texto del panel, guárdala también con
+   `npx wrangler secret put MAIL_FROM --config build/wrangler.json`; el Worker la lee igual que una variable.
+   El nombre del remitente es siempre «Happy Learners».
+
+No hay plan de pago: cada organización envía como máximo 250 correos por día UTC; al alcanzarlo, los mensajes quedan
+`deferred` y la invitación conserva su enlace para compartirlo. Si se agregan organizaciones, recuerda que el límite de
+300 es de la cuenta de Brevo. Estos pasos no forman parte del workflow y requieren aprobación antes de ejecutarse.
+
 ## Publicación
 
 El workflow `Platform delivery` verifica los PR y genera un paquete identificado con el SHA. Tras integrar a `main`, el job de despliegue publica exactamente ese artefacto y ejecuta las comprobaciones de producción. Los PR no reciben secretos y no despliegan. El workflow no activa facturación ni crea el bucket.

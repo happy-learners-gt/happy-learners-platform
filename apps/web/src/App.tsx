@@ -18,6 +18,7 @@ import { Search } from "./pages/Search";
 import { Help, NotFound } from "./pages/Help";
 import { StyleGuide } from "./pages/StyleGuide";
 import { Members, OrganizationSettings, AcademicSettings } from "./pages/admin";
+import { AcceptInvitation } from "./pages/invitations";
 import { ConsentGate, PrivacyPage } from "./pages/legal";
 const StudentLesson = lazy(() => import("./pages/StudentLesson").then(module => ({ default: module.StudentLesson })));
 const StudentSpace = lazy(() => import("./pages/StudentSpace").then(module => ({ default: module.StudentSpace })));
@@ -30,6 +31,9 @@ function Application() {
   useFocusHeading(url.pathname + (code ? "?lesson" : ""));
   if (code) return <Suspense fallback={<main className="splash"><p role="status">Abriendo lección…</p></main>}><StudentLesson key={code} code={code}/></Suspense>;
   if (url.pathname.replace(/\/+$/, "") === "/privacidad") return <PrivacyPage/>;
+  // ST-121: the invitation link opens without a session.
+  const invitation = /^\/invitacion\/([a-z]_[a-f0-9]{64})\/?$/.exec(url.pathname)?.[1];
+  if (invitation || url.pathname.startsWith("/invitacion/")) return <AcceptInvitation key={invitation || "invalid"} token={invitation || "invalid"}/>;
   if (url.pathname.replace(/\/+$/, "") === "/estudiante") return <Suspense fallback={<main className="splash"><p role="status">Abriendo tu sección…</p></main>}><StudentSpace/></Suspense>;
   return <AuthenticatedApp/>;
 }
