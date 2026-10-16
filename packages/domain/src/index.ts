@@ -122,3 +122,5 @@ export type { BuiltInRole, GroupGrant, PermissionDefinition, Reach } from "./per
 export { departureDate, departureReason, maxDepartureReason } from "./departures";
 export { availabilityDays, availabilityInput, calendarDate, contactEmailInput, documentStatus, expiringWindowDays, maxAvailabilitySlots, maxEducationLength, maxSpecialties, maxSpecialtyLength, phoneInput, specialtiesInput, staffDocumentInput, staffDocumentLabel, staffDocumentTypes, staffProfileInput } from "./profiles";
 export type { AvailabilitySlot, ProfileInput, StaffDocumentStatus, StaffDocumentType, Weekday } from "./profiles";
+export { isNotificationType, maxNotificationsPerRequest, notificationCatalog, notificationDecision, notificationLabel, notificationMessage, notificationReason, notificationReserve, notificationTypes, optionalNotificationCap, policyInput, preferencesInput, receives } from "./notifications";
+export type { NotificationDefinition, NotificationDetails, NotificationFacts, NotificationStatus, NotificationType } from "./notifications";

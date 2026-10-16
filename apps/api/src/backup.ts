@@ -2,6 +2,7 @@
  * Logical backup of one organization's store (ST-044): every table, in creation order, without credentials.
  * Sessions, student access sessions, login limits, calendar links (ST-125), invitations and the mail outbox (ST-121)
  * are not copied: they hold link secrets or delivery records that only make sense in the store that issued them.
+ * Notifications (ST-124) live in the outbox too and are not copied; preferences and the mandatory policy are.
  * Password columns never leave the store. Staff e-mail addresses (users.email) are copied: the backup is
  * administration's and already holds the organization's personal data.
  * A restore keeps the credentials the target already has, so a restored account signs in as it did there; whether

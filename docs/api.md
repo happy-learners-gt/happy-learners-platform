@@ -23,6 +23,8 @@ Un método no admitido responde 405 con `Allow`; una ruta desconocida, 404.
 | GET | `/api/feeds/calendar/:token.ics` | Público con el enlace secreto; solo GET |
 | GET, POST | `/api/invitations` · POST `/api/invitations/:id/resend` · POST `/api/invitations/:id/revoke` | Administración |
 | GET, POST | `/api/invitations/accept/:token` | Público con el enlace secreto; POST limitado a 30 intentos cada 15 minutos por origen |
+| GET, PUT | `/api/notifications/preferences` | Cada persona con sesión: sus avisos y su historial |
+| GET, PUT | `/api/notifications/policy` · GET `/api/notifications/log` | Administración |
 
 Cuentas del equipo (ST-093). `POST /api/members` recibe `{ displayName, username, role }` (`admin` o `educator`); el
 usuario tiene de 3 a 32 letras minúsculas, números, puntos, guiones o guiones bajos y es único en todas las
@@ -224,6 +226,40 @@ Crear, reenviar, revocar y aceptar quedan en `GET /api/activity` como `targetTyp
 `resent`, `revoked`, `accepted`; la aceptación la registra la nueva cuenta), sin enlaces ni contraseñas. El correo de
 las cuentas solo aparece en `GET /api/members` (administración); `GET /api/people` y las listas de estudiantes no lo
 incluyen. El respaldo copia `users.email` y omite `invitations` y `mail_outbox`.
+
+## Notificaciones por correo (ST-124, DEC-042)
+
+Tipos: `course_assignment` (al llegar al equipo de un curso o cambiar de papel en él), `section_assignment` (al empezar
+a impartir una sección), `review_submitted` (a la persona responsable del curso y a quien tiene `lessons.review` por
+coordinación o grupo en su programa), `review_returned` y `review_approved` (a quien envió la lección; aprobar es
+publicar una lección con revisión pendiente), `class_changed` (cambio de fecha, hora o duración de una clase pendiente
+con `PUT /api/courses/:id/sessions/:sid`, o `restore`) y `class_cancelled` (`cancel`), ambos a quienes imparten la
+sección. Un cambio solo de lecciones o comentarios de la clase no avisa. Nunca se avisa a quien actúa ni a cuentas sin
+acceso. Los avisos se escriben después de la escritura que los causa y nunca la hacen fallar.
+
+`GET /api/notifications/preferences` responde `{ settings: [{ type, label, description, audience, mandatory, enabled }],
+history, hasAddress }`: `history` son los 20 avisos más recientes de la persona. `PUT` con `{ preferences: { <tipo>:
+boolean } }` guarda uno o varios tipos (400 si un tipo es desconocido; 409 si intenta desactivar uno obligatorio) y
+responde igual. Todo tipo está activo hasta que la persona lo desactiva; desactivado, no se escribe registro.
+
+`GET /api/notifications/policy` (administración) responde `{ settings }` sin `enabled`; `PUT` con `{ mandatory: [tipos] }`
+fija la lista completa de obligatorios (400 si hay tipos desconocidos o repetidos) y queda en la actividad. Un tipo
+obligatorio llega aunque la persona lo haya desactivado.
+
+`GET /api/notifications/log?person=&type=&status=&limit=` (administración, hasta 200, por defecto 100) responde
+`{ notifications: [{ id, type, userId, personName, recipient, reason, targetId, status, mandatory, attempts, error,
+createdAt, sentAt }], people, mailConfigured }`. `status` es `queued`, `sent`, `failed`, `not_configured` (sin
+`BREVO_API_KEY`/`MAIL_FROM`), `deferred` o `no_address` (sin `users.email` ni `staff_profiles.contact_email`;
+`recipient` es `null`). `reason` es el motivo en español, de hasta 240 caracteres.
+
+Cada aviso es una fila de `mail_outbox` con `kind = 'notification'`, `reference_id = '<tipo>:<id>'`, `user_id`,
+`notification_type`, `reason` y `mandatory`; el cuerpo no se guarda. Se envía mientras la solicitud espera, con un
+reintento, como las invitaciones; como máximo 20 por solicitud y el resto queda `deferred`. Tope diario (DEC-042,
+250 por organización): los avisos opcionales quedan `deferred` desde 200 correos enviados ese día, para reservar los
+últimos 50 a invitaciones y avisos obligatorios; los obligatorios quedan `deferred` (con `mandatory: true`) desde 250.
+No hay reenvío automático de los diferidos. El correo lleva un enlace a la página del curso, la sección, la lección o la
+clase (origen de la solicitud) y a **Mi perfil**. El respaldo incluye `notification_preferences` y
+`notification_policies` y omite `mail_outbox`, como en ST-121.
 
 ## Perfil y expediente laboral (ST-149, ST-150, DEC-043)
 
