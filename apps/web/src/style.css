@@ -1013,6 +1013,9 @@ dialog.modal.viewer .modal-body > .usage, dialog.modal.viewer .modal-body > p { 
 .person-cell .link-button[aria-pressed="true"], .person-cell .link-button:hover { color: var(--color-primary-ink); text-decoration: underline; }
 .members-table th[scope="row"] { min-width: 200px; }
 .members-table td { min-width: 96px; }
+/* ST-123: what a departure removes without reassigning, and the departure date under the access badge. */
+.departure-list { margin: 0; padding-left: var(--space-6); display: grid; gap: var(--space-2); }
+.departed-on { display: block; margin-top: var(--space-1); }
 .admin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr)); gap: var(--space-5); align-items: start; }
 
 /* Style guide (pages/StyleGuide.tsx) */
