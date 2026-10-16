@@ -60,7 +60,8 @@ test("HL-167 ST-121: administration invites by e-mail, the person accepts from t
   await expect(guest.getByRole("alert")).toContainText("no coinciden");
   await guest.getByLabel("Repite la contraseña").fill("Una frase para recordar 2026");
   await guest.getByRole("button", { name: "Crear cuenta y entrar" }).click();
-  await expect(guest.getByRole("heading", { level: 1 })).toHaveText("Inicio");
+  // ST-122: a new account lands on its welcome.
+  await expect(guest.getByRole("heading", { level: 1 })).toHaveText("Bienvenida");
   expect(await guest.evaluate(async () => (await (await fetch("/api/session")).json()).member.displayName)).toBe(name);
   // The used link no longer opens.
   await guest.goto(link);

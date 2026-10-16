@@ -39,7 +39,7 @@ export function MyProfile() {
   </>;
 }
 
-function ProfileForm({ profile, onSaved }: { profile: StaffProfile; onSaved: (profile: StaffProfile) => void }) {
+export function ProfileForm({ profile, onSaved }: { profile: StaffProfile; onSaved: (profile: StaffProfile) => void }) {
   const { toast } = useFeedback();
   const [name, setName] = useState(profile.displayName), [phone, setPhone] = useState(profile.contact?.phone || ""), [email, setEmail] = useState(profile.contact?.contactEmail || "");
   const [education, setEducation] = useState(profile.education), [specialties, setSpecialties] = useState(profile.specialties), [availability, setAvailability] = useState<StaffAvailabilitySlot[]>(profile.availability);
