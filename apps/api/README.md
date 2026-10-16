@@ -20,6 +20,7 @@ responden 404, los métodos no permitidos 405 y las rutas heredadas retiradas 41
 | `invitations.ts`, `mail.ts` | Invitaciones por correo (ST-121) y adaptadores del puerto de envío: Brevo por HTTP y envío deshabilitado (DEC-042). |
 | `calendar-feed.ts` | Enlace de suscripción al calendario de clases (iCalendar) de cada educador. |
 | `departures.ts` | Salida de una persona del equipo: reasignación de sus cursos y secciones, fin del acceso y registro (ST-123). |
+| `profiles.ts` | Perfil de cada persona (ST-149) y expediente laboral con documentos privados en R2 y vencimientos (ST-150). |
 | `storage.ts` | Almacenamiento SQLite de cada organización en su Durable Object. |
 
 El correo transaccional usa el puerto `MailSender` del dominio. Con el secreto `BREVO_API_KEY` y la variable

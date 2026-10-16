@@ -66,4 +66,14 @@ export async function archiveCourseFile(courseId: string, fileId: string) {
   return parse<{ ok: true }>(response, path);
 }
 
+/** Sends a file as the request body (profile photo, staff file documents: ST-149, ST-150) with its metadata in headers. */
+export async function sendFile<T>(path: string, method: "POST" | "PUT", file: Blob, headers: Record<string, string>): Promise<T> {
+  let response: Response;
+  try { response = await fetch(`/api${path}`, { method, credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(60000), headers, body: file }); }
+  catch { throw new ApiError("No pudimos subir el archivo. Comprueba tu conexión y vuelve a intentar.", 0); }
+  const result = await parse<T>(response, path);
+  dispatchEvent(new CustomEvent(changed, { detail: path }));
+  return result;
+}
+
 export const message = (error: unknown) => error instanceof Error ? error.message : "No se pudo completar la operación. Vuelve a intentar.";
