@@ -4,6 +4,7 @@ import type { Database } from "./storage";
 import { coursesFor, curriculumFor, unitsFor } from "./courses";
 import { reachableCourses } from "./access";
 import { scopedCourses } from "./permissions";
+import { notify, type Notifier } from "./notify";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
 type EventInput = Pick<ActivityEvent, "action" | "targetType" | "targetId" | "summary"> & { courseId?: string | null; groupId?: string | null };
@@ -40,7 +41,7 @@ export async function activity(url: URL, current: Member, db: Database) {
 }
 
 /** PUT /api/courses/:id/team — one lead at most, members must be active people of the organization. */
-export async function updateTeam(courseId: string, version: number, input: unknown, current: Member, db: Database) {
+export async function updateTeam(courseId: string, version: number, input: unknown, current: Member, db: Database, notifier?: Notifier) {
   const v = record(input);
   const list = Array.isArray(v?.members) ? v!.members as Record<string, unknown>[] : null;
   if (!list || list.length > 20 || list.some(item => typeof item?.userId !== "string" || !["lead", "co-teacher"].includes(String(item.role))) || new Set(list.map(item => item.userId)).size !== list.length || list.filter(item => item.role === "lead").length > 1)
@@ -50,6 +51,7 @@ export async function updateTeam(courseId: string, version: number, input: unkno
   if (list.some(item => !people.includes(String(item.userId)))) return reply({ error: "Elige personas activas de tu organización." }, 400);
   const now = new Date().toISOString();
   const kept = list.map(item => String(item.userId));
+  const before = new Map((await db.prepare("SELECT user_id AS id,role FROM course_members WHERE course_id=? AND organization_id=?").bind(courseId, current.organizationId).all<{ id: string; role: string }>()).results.map(row => [row.id, row.role]));
   const ok = await db.guardedBatch(
     db.prepare("UPDATE courses SET version=version+1,updated_at=? WHERE id=? AND organization_id=? AND version=? AND status='active' RETURNING id").bind(now, courseId, current.organizationId, version),
     [db.prepare("DELETE FROM course_members WHERE course_id=? AND organization_id=?").bind(courseId, current.organizationId),
@@ -57,7 +59,12 @@ export async function updateTeam(courseId: string, version: number, input: unkno
       // Leaving the team also leaves its sections.
       db.prepare(`DELETE FROM section_educators WHERE course_id=? AND organization_id=? AND user_id NOT IN (${kept.map(() => "?").join(",")})`).bind(courseId, current.organizationId, ...kept),
       event(db, current, { action: "assigned", targetType: "team", targetId: courseId, courseId, summary: `Actualizó el equipo docente (${list.length} ${list.length === 1 ? "persona" : "personas"})` })]);
-  return ok ? reply({ ok: true }) : reply({ error: "Hay cambios más recientes. Recarga antes de guardar." }, 409);
+  if (!ok) return reply({ error: "Hay cambios más recientes. Recarga antes de guardar." }, 409);
+  // ST-124: whoever joins the team, or changes role in it, is told by e-mail.
+  const course = (await db.prepare("SELECT title FROM courses WHERE id=?").bind(courseId).first<{ title: string }>())?.title || "";
+  await notify(db, notifier, current, list.filter(item => before.get(String(item.userId)) !== item.role)
+    .map(item => ({ userId: String(item.userId), targetId: courseId, path: `/cursos/${courseId}`, facts: { type: "course_assignment", course, role: item.role as "lead" | "co-teacher" } })));
+  return reply({ ok: true });
 }
 
 /**

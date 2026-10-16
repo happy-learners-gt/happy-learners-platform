@@ -9,6 +9,7 @@ import { deliverFile, filesFor } from "./files";
 import { event } from "./team";
 import { digest, newToken } from "./auth";
 import { agreementBlock } from "./legal";
+import { notify, type Notifier } from "./notify";
 
 const reply = (data: unknown, status = 200, headers: Record<string, string> = {}) => Response.json(data, { status, headers });
 const unavailable = () => reply({ error: "La clase no está disponible en este curso." }, 404);
@@ -102,7 +103,7 @@ const stale = () => reply({ error: "La clase cambió mientras la editabas. Recar
  * of classes (lessons and comments), then teaches each class: it starts it, takes the roll and finishes it.
  * GET accepts ?section=&from=&to= (ST-065): one section and a period of calendar days, inclusive and combinable.
  */
-export async function sessions(parts: string[], method: string, input: unknown, current: Member, db: Database, courseId: string, access: CourseAccess, query = new URLSearchParams()) {
+export async function sessions(parts: string[], method: string, input: unknown, current: Member, db: Database, courseId: string, access: CourseAccess, query = new URLSearchParams(), notifier?: Notifier) {
   const now = new Date().toISOString();
   const [sessionId, sub] = [parts[5], parts[6]];
   if (!sessionId) {
@@ -179,7 +180,10 @@ export async function sessions(parts: string[], method: string, input: unknown, 
         .bind(plan.sessionDate, plan.startsAt, plan.durationMinutes, plan.lessonIds[0] ?? null, plan.notes, now, sessionId, current.organizationId, Number.isInteger(version) ? version : -1),
       [...(sameList(plan.lessonIds, currentIds) ? [] : planLessons(db, sessionId, plan.lessonIds, new Map(session.lessons.map(lesson => [lesson.id, lesson.revision])), session.status === "in_progress")),
         event(db, current, { action: "updated", targetType: "session", targetId: sessionId, courseId, groupId: session.groupId, summary: `Actualizó la planificación de la clase del ${plan.sessionDate} en «${session.groupName}»` })]);
-    return ok ? reply({ ok: true }) : stale();
+    if (!ok) return stale();
+    // ST-124: a new date, time or length is told to the section's other educators; a change of plan alone is not.
+    if (moved) await notifyClass(db, notifier, current, courseId, session, { type: "class_changed", next: { date: plan.sessionDate, startsAt: plan.startsAt } });
+    return reply({ ok: true });
   }
   if (sub === "attendance") {
     if (method === "GET") return reply({ session, learners: await attendanceRows(db, sessionId, session.groupId) });
@@ -255,7 +259,21 @@ export async function sessions(parts: string[], method: string, input: unknown, 
   } else statements = action === "start" ? start(db, sessionId, current, now) : [db.prepare("UPDATE class_sessions SET status=?,version=version+1,updated_at=? WHERE id=?").bind(target, now, sessionId)];
   const ok = await db.guardedBatch(db.prepare("SELECT id FROM class_sessions WHERE id=? AND status=?").bind(sessionId, session.status), [...statements,
     event(db, current, { action: action === "cancel" ? "archived" : action === "restore" ? "restored" : "recorded", targetType: "session", targetId: sessionId, courseId, groupId: session.groupId, summary })]);
-  return ok ? reply({ status: target as ClassStatus, ...result }) : reply({ error: "La clase cambió mientras tanto. Recarga para ver su estado." }, 409);
+  if (!ok) return reply({ error: "La clase cambió mientras tanto. Recarga para ver su estado." }, 409);
+  if (action === "cancel") await notifyClass(db, notifier, current, courseId, session, { type: "class_cancelled" });
+  if (action === "restore") await notifyClass(db, notifier, current, courseId, session, { type: "class_changed", restored: true });
+  return reply({ status: target as ClassStatus, ...result });
+}
+/** ST-124: tells the section's educators (except whoever acted) that one of its classes changed or was cancelled. */
+async function notifyClass(db: Database, notifier: Notifier | undefined, current: Member, courseId: string, session: { id: string; groupId: string; groupName?: string; sessionDate: string },
+  change: { type: "class_changed"; next?: { date: string; startsAt: string | null }; restored?: boolean } | { type: "class_cancelled" }) {
+  if (!notifier) return;
+  const [educators, course] = await Promise.all([
+    db.prepare("SELECT user_id AS id FROM section_educators WHERE group_id=?").bind(session.groupId).all<{ id: string }>(),
+    db.prepare("SELECT title FROM courses WHERE id=?").bind(courseId).first<{ title: string }>(),
+  ]);
+  const base = { course: course?.title || "", section: session.groupName || "", date: session.sessionDate };
+  await notify(db, notifier, current, educators.results.map(row => ({ userId: row.id, targetId: session.id, path: `/secciones/${session.groupId}/clases/${session.id}`, facts: { ...base, ...change } })));
 }
 /** The section's pending classes after the given one, in order, with what each has planned. */
 async function pendingAfter(db: Database, session: ClassSession) {
