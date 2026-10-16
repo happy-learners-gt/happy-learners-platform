@@ -3,18 +3,16 @@ import type { FormEvent, KeyboardEvent, ReactNode } from "react";
 import type { ExpiringDocuments as Overview, StaffAvailabilitySlot, StaffDocument, StaffFile, StaffProfile } from "@happy-learners/contracts";
 import { availabilityDays, maxSpecialties, staffDocumentInput, staffDocumentLabel, staffDocumentTypes, staffProfileInput } from "@happy-learners/domain";
 import { api, ApiError, message, sendFile } from "../api";
-import { useUnsavedChanges } from "../navigation";
-import { useSession } from "../session";
+import { Link, useUnsavedChanges } from "../navigation";
 import { Modal, useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import { Avatar } from "../ui/progress";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, Section, StatusBadge } from "../ui/primitives";
 import type { Tone } from "../ui/primitives";
 import { departureDay } from "./departure";
-import { MyNotifications } from "./notifications";
 
 /**
- * ST-149: «Mi perfil» for every person of the team, and the profile administration consults.
+ * ST-149: the profile form of the welcome (ST-122) and the profile administration consults; «Mi perfil» is in professional.tsx (ST-154).
  * ST-150: the staff file (expediente) of each person: administration manages it; the person reads and downloads it.
  */
 const dayLabel = (day: number) => availabilityDays.find(item => item.value === day)?.label || "";
@@ -24,19 +22,6 @@ const photoUrl = (userId: string, version: string) => `/api/members/${userId}/ph
 /** The person's photo when they uploaded one; otherwise their initials. The name is always next to it. */
 export function PersonPhoto({ userId, name, version, size = 40, alt = "" }: { userId: string; name: string; version: string | null; size?: number; alt?: string }) {
   return version ? <img className="profile-photo" src={photoUrl(userId, version)} alt={alt} width={size} height={size}/> : <Avatar name={name} size={size}/>;
-}
-
-export function MyProfile() {
-  const { member } = useSession();
-  const [profile, setProfile] = useState<StaffProfile | null>(null), [error, setError] = useState("");
-  const load = () => { setError(""); api<{ profile: StaffProfile }>("/profile").then(result => setProfile(result.profile)).catch(cause => setError(message(cause))); };
-  useEffect(load, []);
-  return <>
-    <PageHeader title="Mi perfil" description="Quién eres, qué enseñas y cómo contactarte. Tu teléfono y tu correo de contacto solo los ven administración y tú; los estudiantes nunca los ven."/>
-    {error ? <ErrorState error={error} retry={load}/> : !profile ? <Loading label="Cargando tu perfil…"/> : <ProfileForm profile={profile} onSaved={setProfile}/>}
-    <div className="reading"><MyNotifications/></div>
-    <div className="reading"><StaffFileSection userId={member.id} title="Mi expediente" admin={false}/></div>
-  </>;
 }
 
 export function ProfileForm({ profile, onSaved }: { profile: StaffProfile; onSaved: (profile: StaffProfile) => void }) {
@@ -156,6 +141,7 @@ function ProfileSummary({ userId }: { userId: string }) {
       <dt>Disponibilidad</dt><dd>{profile.availability.length ? <ul className="plain-list">{profile.availability.map(slot => <li key={`${slot.day}-${slot.start}`}>{slotText(slot)}</li>)}</ul> : none}</dd>
     </dl>
     {profile.updatedAt && <p className="muted small">Actualizado el {new Date(profile.updatedAt).toLocaleDateString("es-GT", { day: "numeric", month: "long", year: "numeric" })}.</p>}
+    <p><Link href={`/equipo/${profile.userId}`}>Ver su perfil profesional</Link> <span className="muted small">(si lo publicó). Lo que envía a revisión está en «Revisión de perfiles».</span></p>
   </div>;
 }
 
@@ -166,7 +152,7 @@ export function DocumentStatus({ document }: { document: Pick<StaffDocument, "st
 }
 
 /** The staff file: administration uploads, downloads and withdraws; the person reads, downloads and may add documents. */
-function StaffFileSection({ userId, title, admin }: { userId: string; title: string; admin: boolean }) {
+export function StaffFileSection({ userId, title, admin }: { userId: string; title: string; admin: boolean }) {
   const { toast, confirm } = useFeedback();
   const [file, setFile] = useState<StaffFile | null>(null), [error, setError] = useState(""), [adding, setAdding] = useState(false);
   const load = () => { setError(""); api<StaffFile>(`/members/${userId}/files`).then(setFile).catch(cause => setError(message(cause))); };

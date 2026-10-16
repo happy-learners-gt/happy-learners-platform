@@ -7,8 +7,8 @@ import { Icon } from "./icons";
 import type { IconName } from "./icons";
 import { EmptyState, ErrorState, Skeleton, StatusBadge } from "./primitives";
 
-const targetIcon: Record<ActivityEvent["targetType"], IconName> = { course: "courses", program: "grid", module: "content", lesson: "edit", resource: "library", competency: "spark", outcome: "spark", group: "users", session: "calendar", team: "users", account: "user", legal: "shield", invitation: "send" };
-const targetLabel: Record<ActivityEvent["targetType"], string> = { course: "Curso", program: "Programa", module: "Módulo", lesson: "Lección", resource: "Recurso", competency: "Competencia", outcome: "Resultado de aprendizaje", group: "Sección", session: "Clase", team: "Equipo", account: "Cuenta", legal: "Términos y privacidad", invitation: "Invitación" };
+const targetIcon: Record<ActivityEvent["targetType"], IconName> = { course: "courses", program: "grid", module: "content", lesson: "edit", resource: "library", competency: "spark", outcome: "spark", group: "users", session: "calendar", team: "users", account: "user", legal: "shield", invitation: "send", profile: "user", credential: "check" };
+const targetLabel: Record<ActivityEvent["targetType"], string> = { course: "Curso", program: "Programa", module: "Módulo", lesson: "Lección", resource: "Recurso", competency: "Competencia", outcome: "Resultado de aprendizaje", group: "Sección", session: "Clase", team: "Equipo", account: "Cuenta", legal: "Términos y privacidad", invitation: "Invitación", profile: "Perfil profesional", credential: "Credencial" };
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join("").toUpperCase();
 
 /** A person's initials on their colour; the name is always next to it or in the accessible label. */
