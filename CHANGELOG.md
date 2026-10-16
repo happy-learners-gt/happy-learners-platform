@@ -3,6 +3,7 @@
 ## Sin publicar
 
 - ST-125: **Agenda → Sincronizar con mi calendario** crea un enlace de suscripción privado con las clases de las secciones que impartes, compatible con Google Calendar (Desde URL), Outlook (Suscribirse desde la web) y Apple Calendar (Nueva suscripción a calendario). Las cancelaciones, reprogramaciones y cambios aparecen en la siguiente actualización del calendario. **Regenerar enlace** pide confirmación y el anterior deja de funcionar. `GET, POST /api/feeds/calendar` y `GET /api/feeds/calendar/:token.ics`; `0033_calendar_feeds.sql` guarda solo el SHA-256 del token y el respaldo no lo copia.
+- ST-123: **Educadores → Registrar salida** registra la fecha en que una persona deja el equipo y un motivo opcional que solo ve administración. Antes de confirmar exige elegir una nueva persona responsable para cada curso que dirige y quien imparta cada sección que solo ella imparte; lo demás (colaboraciones y secciones compartidas) se retira sin reasignar. Al confirmar, la persona pierde el acceso, su historial se conserva, la lista muestra **Salió el …** y la salida y cada reasignación quedan en la actividad. `GET, POST /api/members/:id/departure`; `0035_departures.sql` crea la tabla `departures`, que entra en el respaldo.
 
 ## 1.0.0 — 2026-10-07
 

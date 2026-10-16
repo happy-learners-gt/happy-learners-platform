@@ -32,6 +32,7 @@ import englishMigration from "../../../database/migrations/0030_english_program.
 import teamAccountsMigration from "../../../database/migrations/0031_team_accounts.sql";
 import legalMigration from "../../../database/migrations/0032_terms_and_privacy.sql";
 import calendarFeedsMigration from "../../../database/migrations/0033_calendar_feeds.sql";
+import departuresMigration from "../../../database/migrations/0035_departures.sql";
 import { organizationIds } from "@happy-learners/domain";
 import { exportStore, importStore, RestoreError, type Backup } from "./backup";
 
@@ -122,6 +123,7 @@ export class OrganizationStore extends DurableObject<Env> {
       if (!applied.length || applied[0].version < 31) { this.ctx.storage.sql.exec(teamAccountsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (31,?)", scope); }
       if (!applied.length || applied[0].version < 32) { this.ctx.storage.sql.exec(legalMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (32,?)", scope); }
       if (!applied.length || applied[0].version < 33) { this.ctx.storage.sql.exec(calendarFeedsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (33,?)", scope); }
+      if (!applied.length || applied[0].version < 35) { this.ctx.storage.sql.exec(departuresMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (35,?)", scope); }
       // Compare-and-write plus dependent writes belong to one SQLite transaction.
       if (guard && !this.ctx.storage.sql.exec(guard.sql, ...guard.values).toArray().length) return [];
       return statements.map(statement => this.ctx.storage.sql.exec(statement.sql, ...statement.values).toArray());

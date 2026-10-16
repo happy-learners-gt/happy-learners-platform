@@ -15,7 +15,7 @@ Un método no admitido responde 405 con `Allow`; una ruta desconocida, 404.
 | GET, PUT | `/api/organization` | Lectura con sesión; escritura de administración |
 | GET | `/api/organization/backup` | Administración |
 | POST | `/api/organization/restore` | Administración, solo donde `RESTORE_ENABLED=true` |
-| GET, POST | `/api/members` · PUT `/api/members/:id` · POST `/api/members/:id/password` | Administración |
+| GET, POST | `/api/members` · PUT `/api/members/:id` · POST `/api/members/:id/password` · GET, POST `/api/members/:id/departure` | Administración |
 | GET, POST | `/api/calendar` · DELETE `/api/calendar/:id` | Lectura con sesión; escritura de administración |
 | GET | `/api/activity`, `/api/progress`, `/api/people`, `/api/reviews` | Sesión, filtrado por permisos |
 | GET, POST | `/api/feeds/calendar` | Sesión: estado del enlace de calendario propio; POST lo crea o regenera |
@@ -34,6 +34,24 @@ demás rutas responden 403 con `code: "PASSWORD_CHANGE_REQUIRED"`, salvo `POST /
 usuario y de la actual) y cierra las demás sesiones. Crear una cuenta, cambiar su rol, desactivarla o reactivarla,
 restablecer su contraseña y cambiarla quedan en `GET /api/activity` como `targetType: "account"` (acciones `created`,
 `updated`, `archived`, `restored` y `reset`), visibles para administración.
+
+Salida de una persona (ST-123). `GET /api/members/:id/departure` devuelve lo que la persona tiene a su cargo en los
+cursos activos: `courses` (`role` `lead` o `co-teacher`, con su equipo), `sections` (secciones activas que imparte,
+con `others` y `required: true` cuando nadie más la imparte), `people` (personas activas que pueden asumirlo), `today`
+y `lastDeparture`. `POST /api/members/:id/departure` recibe `{ date, reason?, reassignments: { courses: { courseId:
+userId }, sections: { sectionId: userId } }, conflictReason? }`: `date` es AAAA-MM-DD, hoy o antes (400 si no);
+`reason`, opcional, hasta 300 caracteres, solo para administración. Cada curso que dirige necesita una nueva persona
+responsable y cada sección que imparte sola o solo, quien la imparta; si falta alguna, responde 409 con
+`missing: { courses, sections }` sin cambiar nada. Las personas elegidas deben estar activas y no ser quien sale (400);
+quien no está en el equipo entra como responsable o como colaborador, hasta 20 por equipo. Si el reemplazo de una
+sección ya imparte otra a la misma hora, responde 409 con `conflicts` hasta recibir `conflictReason` (3 a 300
+caracteres), como en ST-118. En una sola transacción aplica las reasignaciones, retira a la persona de los equipos y
+secciones de los cursos activos (los archivados conservan su equipo), desactiva su acceso, cierra sus sesiones y su
+enlace de calendario, guarda la salida en `departures` y escribe la actividad: `archived`/`account` («Registró la
+salida de … el AAAA-MM-DD», sin el motivo) y `assigned` sobre `team` o `group` por cada reasignación. Nada de lo que
+hizo se borra. Responde 409 para la propia cuenta, la administradora inicial o una salida ya registrada de una cuenta
+sin acceso. Reactivar con `PUT /api/members/:id` conserva la salida; `GET /api/members` incluye `departedOn` con la
+fecha de la última. El respaldo incluye la tabla `departures`.
 
 ## Términos y privacidad
 

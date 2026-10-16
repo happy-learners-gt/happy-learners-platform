@@ -14,6 +14,7 @@ import { Menu } from "../ui/Menu";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section, StatusBadge } from "../ui/primitives";
 import { DaysOff } from "./calendar";
 import { ProgramPathDialog } from "./programPath";
+import { DepartureDialog, departureDay } from "./departure";
 import { LegalSettings } from "./legal";
 
 function AdminOnly({ title, children }: { title: string; children: ReactNode }) {
@@ -66,12 +67,13 @@ function OrganizationForm() {
 export function Members() {
   return <AdminOnly title="Educadores"><MemberList/></AdminOnly>;
 }
-type MemberStats = Member & { leads: number; coTeaches: number; lessonsCreated: number; publications: number; attendance: number; events: number; lastActivity: string | null };
+type MemberStats = Member & { leads: number; coTeaches: number; lessonsCreated: number; publications: number; attendance: number; events: number; lastActivity: string | null; departedOn?: string };
 /** People of the organization, what each one does and how their courses are progressing. */
 function MemberList() {
   const { toast, confirm } = useFeedback();
   const [members, setMembers] = useState<MemberStats[] | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(""), [person, setPerson] = useState("");
   const [adding, setAdding] = useState(false), [issued, setIssued] = useState<Issued | null>(null), [revision, setRevision] = useState(0);
+  const [leaving, setLeaving] = useState<{ id: string; name: string } | null>(null), { member: me } = useSession();
   const progress = useProgress();
   const load = async () => { setError(""); try { setMembers((await api<{ members: MemberStats[] }>("/members")).members); setRevision(value => value + 1); } catch (cause) { setError(message(cause)); } };
   useEffect(() => { void load(); }, []);
@@ -109,11 +111,12 @@ function MemberList() {
           <td>{member.lessonsCreated ? `${member.lessonsCreated} creadas · ${member.publications} publicaciones` : <span className="muted">—</span>}</td>
           <td>{member.attendance || <span className="muted">—</span>}</td>
           <td>{member.lastActivity ? <time dateTime={member.lastActivity}>{timeAgo(member.lastActivity)}</time> : <span className="muted">Sin actividad</span>}</td>
-          <td><StatusBadge tone={!member.active ? "neutral" : member.mustChangePassword ? "warning" : "success"}>{!member.active ? "Sin acceso" : member.mustChangePassword ? "Contraseña temporal" : "Activo"}</StatusBadge></td>
+          <td><StatusBadge tone={!member.active ? "neutral" : member.mustChangePassword ? "warning" : "success"}>{!member.active ? "Sin acceso" : member.mustChangePassword ? "Contraseña temporal" : "Activo"}</StatusBadge>{member.departedOn && <span className="muted small departed-on">Salió el {departureDay(member.departedOn)}</span>}</td>
           <td className="cell-actions">{owner ? <span className="muted small">Cuenta principal</span> : <Menu label={`Acciones de ${name}`} items={[
             { label: member.role === "admin" ? "Cambiar a educador" : "Cambiar a administración", icon: "users", disabled: busy === member.id, onSelect: () => void update(member, { role: member.role === "admin" ? "educator" : "admin" }) },
             { label: "Restablecer contraseña", icon: "undo", disabled: busy === member.id, onSelect: () => void reset(member) },
             { label: member.active ? "Quitar acceso" : "Dar acceso", icon: "shield", danger: member.active, disabled: busy === member.id, onSelect: () => void update(member, { active: !member.active }) },
+            ...(member.id !== me.id && (member.active || !member.departedOn) ? [{ label: "Registrar salida", icon: "logout" as const, danger: true, disabled: busy === member.id, onSelect: () => setLeaving({ id: member.id, name }) }] : []),
           ]}/>}</td>
         </tr>;
       })}</tbody>
@@ -128,6 +131,7 @@ function MemberList() {
     </div>
     {adding && <AccountDialog onClose={() => setAdding(false)} onCreated={async result => { setAdding(false); setIssued(result); await load(); }}/>}
     {issued && <TemporaryPassword issued={issued} onClose={() => setIssued(null)}/>}
+    {leaving && <DepartureDialog person={leaving} onClose={() => setLeaving(null)} onDone={async date => { const name = leaving.name; setLeaving(null); await load(); toast({ message: `Salida de ${name} registrada el ${departureDay(date)}. Ya no puede entrar.` }); }}/>}
   </>;
 }
 

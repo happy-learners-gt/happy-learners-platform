@@ -236,6 +236,24 @@ export interface LearningOutcome {
 }
 export interface Curriculum { competencies: Competency[]; outcomes: LearningOutcome[]; unitOutcomes: { unitId: string; outcomeId: string }[] }
 
+/** ST-123: what a departing person is responsible for, and who can take it over. Administration only. */
+export interface DeparturePerson { id: string; name: string; username: string }
+export interface DeparturePreview {
+  member: DeparturePerson & { active: boolean };
+  today: string;
+  /** Active courses: a course the person leads needs a new lead; co-teaching ends on its own. */
+  courses: { id: string; title: string; role: CourseRole; team: DeparturePerson[] }[];
+  /** Active sections the person teaches; `required` when nobody else teaches it, so it needs a replacement. */
+  sections: { id: string; name: string; courseId: string; courseTitle: string; others: DeparturePerson[]; required: boolean }[];
+  /** Active people of the organization who can take over, without the departing person. */
+  people: DeparturePerson[];
+  /** The latest departure already recorded for the person, with administration's note. */
+  lastDeparture: { departedOn: string; reason: string; recordedAt: string; recordedBy: string } | null;
+}
+export interface DepartureInput {
+  date: string; reason?: string; conflictReason?: string;
+  reassignments: { courses: Record<string, string>; sections: Record<string, string> };
+}
 /**
  * Terms and conditions and the privacy policy of an organization (ST-126, ST-127). A draft has no version; publishing
  * gives it the next one and it never changes again. A privacy policy carries the consent text people agree to.
