@@ -157,6 +157,12 @@ export async function recordDeparture(id: string, input: unknown, current: Membe
     db.prepare("UPDATE memberships SET active=0 WHERE user_id=? AND organization_id=?").bind(id, org),
     db.prepare("DELETE FROM sessions WHERE user_id=?").bind(id),
     db.prepare("DELETE FROM calendar_feeds WHERE user_id=?").bind(id),
+    // Leaving also ends the coordination profile and security groups (ST-128, ST-135), audited, so reactivating the
+    // account later does not bring those accesses back.
+    db.prepare("INSERT INTO access_events(id,organization_id,actor_id,action,subject_type,subject_id,summary,occurred_at) SELECT ?,?,?,'revoked','coordination',?,?,? WHERE EXISTS (SELECT 1 FROM coordination_scopes WHERE user_id=? AND organization_id=?) OR EXISTS (SELECT 1 FROM security_group_members WHERE user_id=? AND organization_id=?)")
+      .bind(`access-${crypto.randomUUID()}`, org, current.id, id, `Retiró la coordinación y los grupos de ${member.name} por su salida`.slice(0, 400), now, id, org, id, org),
+    db.prepare("DELETE FROM coordination_scopes WHERE user_id=? AND organization_id=?").bind(id, org),
+    db.prepare("DELETE FROM security_group_members WHERE user_id=? AND organization_id=?").bind(id, org),
     db.prepare("INSERT INTO role_events VALUES (?,?,?,?,?,?)").bind(crypto.randomUUID(), current.id, id, role, 0, now),
     db.prepare("INSERT INTO departures(id,organization_id,user_id,departed_on,reason,recorded_by,recorded_at) VALUES (?,?,?,?,?,?,?)").bind(`departure-${crypto.randomUUID()}`, org, id, date, reason, current.id, now),
     // The reason stays out of the activity: it is administration's note.

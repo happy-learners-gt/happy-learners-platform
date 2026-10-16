@@ -3,11 +3,14 @@ import type { Database } from "./storage";
 import { createAccount, resetPassword } from "./accounts";
 import { departurePreview, recordDeparture } from "./departures";
 import { event } from "./team";
+import { setCoordination } from "./permissions";
 
 /** /api/members: administration lists people, creates accounts (ST-093), changes roles and access, resets passwords. */
 export async function roles(path: string, method: string, input: unknown, current: Member, db: Database, taken: (username: string) => Promise<boolean>) {
   if (current.role !== "admin") return Response.json({ error: "Solo administración puede administrar educadores." }, { status: 403 });
   // ST-123: a departure, with its reassignments, at /api/members/:id/departure.
+  // ST-128: the academic coordination profile, at /api/members/:id/coordination.
+  if (path.endsWith("/coordination")) return setCoordination(path.split("/")[3], input, current, db);
   if (path.endsWith("/departure")) return method === "GET" ? departurePreview(path.split("/")[3], current, db) : recordDeparture(path.split("/")[3], input, current, db);
   if (method === "GET") {
     // Each person with what they lead, co-teach and have done: the basis for reviewing contributions.
@@ -19,9 +22,11 @@ export async function roles(path: string, method: string, input: unknown, curren
       (SELECT count(DISTINCT e.target_id) FROM activity_events e WHERE e.actor_id=u.id AND e.target_type='session' AND e.action='recorded') AS attendance,
       (SELECT count(*) FROM activity_events e WHERE e.actor_id=u.id) AS events,
       (SELECT max(e.occurred_at) FROM activity_events e WHERE e.actor_id=u.id) AS lastActivity,
-      (SELECT d.departed_on FROM departures d WHERE d.user_id=u.id AND d.organization_id=m.organization_id ORDER BY d.recorded_at DESC LIMIT 1) AS departedOn
+      (SELECT d.departed_on FROM departures d WHERE d.user_id=u.id AND d.organization_id=m.organization_id ORDER BY d.recorded_at DESC LIMIT 1) AS departedOn,
+      (SELECT group_concat(cs.program_id) FROM coordination_scopes cs WHERE cs.user_id=u.id AND cs.organization_id=m.organization_id) AS coordinationScopes
       FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.organization_id=? ORDER BY m.role,displayName`).bind(current.organizationId).all<Member & Record<string, number | string | null>>();
-    return Response.json({ members: rows.results.map(m => ({ ...m, active: !!m.active, mustChangePassword: m.mustChangePassword ? true : undefined, departedOn: m.departedOn || undefined })) });
+    return Response.json({ members: rows.results.map(m => ({ ...m, active: !!m.active, mustChangePassword: m.mustChangePassword ? true : undefined, departedOn: m.departedOn || undefined,
+      coordination: m.role === "educator" && m.coordinationScopes ? String(m.coordinationScopes).split(",").includes("*") ? { all: true } : { programs: String(m.coordinationScopes).split(",").sort() } : null, coordinationScopes: undefined })) });
   }
   if (method === "POST" && path === "/api/members") return createAccount(input, current, db, taken);
   if (method === "POST") return resetPassword(path.split("/")[3], current, db);

@@ -49,6 +49,12 @@ export async function classroom(path: string, method: string, input: unknown, cu
     if (group.status !== "active") return reply({ error: "La sección está cerrada. Reactívala para hacer cambios." }, 409);
     return fillLessons(input, current, db, courseId, group);
   }
+  // DEC-041: coordination assigns who teaches each section of the courses in its scope, without configuring the rest.
+  if (sub === "educators" && method === "PUT") {
+    if (!access.educators) return configuresOnly();
+    if (group.status !== "active") return reply({ error: "La sección está cerrada. Reactívala para hacer cambios." }, 409);
+    return assignEducators(input, current, db, courseId, group);
+  }
   if (!access.configure) return configuresOnly();
   if (!sub && method === "PUT") {
     // ST-070: rename, close and reopen. A closed section keeps its history but takes no new classes or students.
@@ -65,7 +71,6 @@ export async function classroom(path: string, method: string, input: unknown, cu
   }
   if (group.status !== "active") return reply({ error: "La sección está cerrada. Reactívala para hacer cambios." }, 409);
   if (sub === "schedule" && (method === "PUT" || method === "DELETE")) return saveSchedule(method, input, current, db, courseId, group);
-  if (sub === "educators" && method === "PUT") return assignEducators(input, current, db, courseId, group);
   if (sub === "code") {
     // A new code replaces the previous one at once: whoever entered with it loses access on the next request.
     if (method === "DELETE") {
@@ -113,7 +118,7 @@ async function groupsOf(db: Database, courseId: string, organizationId: string, 
   const educators = await educatorsOf(db, courseId, organizationId);
   const seen = groups.results.filter(group => seesSection(access, group.id));
   // Schedule conflicts name other courses' sections: only those who configure sections see them.
-  const conflicts = access.configure ? await educatorConflicts(db, organizationId, seen.filter(group => group.status === "active").map(group => group.id), await todayFor(db, organizationId)) : [];
+  const conflicts = access.configure || access.educators ? await educatorConflicts(db, organizationId, seen.filter(group => group.status === "active").map(group => group.id), await todayFor(db, organizationId)) : [];
   return seen.map(({ weekdays, startsAt, durationMinutes, from, until, ...group }) => ({ ...group, schedule: scheduleOf({ weekdays, startsAt, durationMinutes, from, until }),
     educators: educators.filter(item => item.groupId === group.id).map(({ groupId: _, ...item }) => {
       const own = conflicts.filter(conflict => conflict.groupId === group.id && conflict.userId === item.userId);

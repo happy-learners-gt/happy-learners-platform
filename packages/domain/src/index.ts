@@ -117,6 +117,8 @@ export function validRichText(value: unknown): boolean {
   const root = value as Record<string, unknown>;
   return root.type === "doc" && Array.isArray(root.content) && root.content.every(child => visit(child, 1)) && textLength > 0;
 }
+export { builtInRoles, coordinationPermissions, grantablePermissions, grantedIn, grantsInput, holds, inScope, isGrantable, permissionAreas, permissionCatalog, permissionKeys, permissionsOf, reachLabels, scopeInput, scopeLabel, securityGroupInput } from "./permissions";
+export type { BuiltInRole, GroupGrant, PermissionDefinition, Reach } from "./permissions";
 export { departureDate, departureReason, maxDepartureReason } from "./departures";
 export { availabilityDays, availabilityInput, calendarDate, contactEmailInput, documentStatus, expiringWindowDays, maxAvailabilitySlots, maxEducationLength, maxSpecialties, maxSpecialtyLength, phoneInput, specialtiesInput, staffDocumentInput, staffDocumentLabel, staffDocumentTypes, staffProfileInput } from "./profiles";
 export type { AvailabilitySlot, ProfileInput, StaffDocumentStatus, StaffDocumentType, Weekday } from "./profiles";

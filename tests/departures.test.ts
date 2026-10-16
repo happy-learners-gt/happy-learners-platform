@@ -177,8 +177,16 @@ describe("HL-169 ST-123 departures on the built Worker", () => {
     const view = await (await as(admin, `/members/${carlos}/departure`)).json() as Preview;
     expect(view.courses.map(course => [course.id, course.role])).toEqual([["seed-course-ciencias", "lead"], ["seed-course-matematicas", "co-teacher"]]);
     expect(view.sections.every(section => !section.required && section.others.some(person => person.id === lucia))).toBe(true);
+    // A coordination profile and a security group (ST-128, ST-135) end with the departure and do not come back.
+    expect((await as(admin, `/members/${carlos}/coordination`, "PUT", { enabled: true, scope: { all: true } })).status).toBe(200);
+    const group = await (await as(admin, "/access/groups", "POST", { name: "E2E · Salida", description: "Grupo de prueba de la salida" })).json() as { group: { id: string } };
+    expect((await as(admin, `/access/groups/${group.group.id}/members`, "PUT", { userIds: [carlos] })).status).toBe(200);
     const response = await as(admin, `/members/${carlos}/departure`, "POST", { date: view.today, reassignments: { courses: { "seed-course-ciencias": lucia }, sections: {} } });
     expect(response.status, await response.clone().text()).toBe(200);
+    const backup = await backupOf(admin), userColumn = (table: string) => backup.tables[table].columns.indexOf("user_id");
+    for (const table of ["coordination_scopes", "security_group_members"]) expect(backup.tables[table].rows.filter(row => row[userColumn(table)] === carlos), table).toEqual([]);
+    const access = backup.tables.access_events, summary = access.columns.indexOf("summary");
+    expect(access.rows.map(row => row[summary])).toContain("Retiró la coordinación y los grupos de Carlos Mejía por su salida");
     const progress = await progressOf(admin);
     expect(progress.find(course => course.courseId === "seed-course-ciencias")!.team.map(member => [member.userId, member.role])).toEqual([[lucia, "lead"]]);
     expect(progress.find(course => course.courseId === "seed-course-matematicas")!.team.map(member => member.userId)).toEqual([lucia]);

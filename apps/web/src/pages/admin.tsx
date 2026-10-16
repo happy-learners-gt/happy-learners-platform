@@ -18,6 +18,7 @@ import { DepartureDialog, departureDay } from "./departure";
 import { Invitations } from "./invitations";
 import { LegalSettings } from "./legal";
 import { ExpiringDocuments, PersonDetail } from "./profile";
+import { CoordinationBadge, CoordinationDialog } from "./access";
 
 function AdminOnly({ title, children }: { title: string; children: ReactNode }) {
   const { member } = useSession();
@@ -78,6 +79,7 @@ function MemberList() {
   const [leaving, setLeaving] = useState<{ id: string; name: string } | null>(null), { member: me } = useSession();
   // ST-149, ST-150: a person's profile and staff file.
   const [detail, setDetail] = useState<{ id: string; name: string } | null>(null);
+  const [coordinating, setCoordinating] = useState<MemberStats | null>(null);
   const progress = useProgress();
   const load = async () => { setError(""); try { setMembers((await api<{ members: MemberStats[] }>("/members")).members); setRevision(value => value + 1); } catch (cause) { setError(message(cause)); } };
   useEffect(() => { void load(); }, []);
@@ -111,7 +113,7 @@ function MemberList() {
         const owner = member.id === "user-0", name = member.displayName || member.username;
         return <tr key={member.id}>
           <th scope="row"><span className="person-cell"><Avatar name={name} size={30}/><span><button type="button" className="link-button" onClick={() => setPerson(person === member.id ? "" : member.id)} aria-pressed={person === member.id}>{name}</button><span className="muted small">@{member.username}{member.email ? ` · ${member.email}` : ""}</span></span></span></th>
-          <td>{member.role === "admin" ? "Administración" : "Educador"}</td>
+          <td>{member.role === "admin" ? "Administración" : "Educador"}{member.coordination && <><br/><CoordinationBadge scope={member.coordination}/></>}</td>
           <td>{member.leads || member.coTeaches ? <>{member.leads ? `responsable de ${member.leads}` : ""}{member.leads && member.coTeaches ? " · " : ""}{member.coTeaches ? `colabora en ${member.coTeaches}` : ""}</> : <span className="muted">—</span>}</td>
           <td>{member.lessonsCreated ? `${member.lessonsCreated} creadas · ${member.publications} publicaciones` : <span className="muted">—</span>}</td>
           <td>{member.attendance || <span className="muted">—</span>}</td>
@@ -120,6 +122,7 @@ function MemberList() {
           <td className="cell-actions">{owner ? <span className="row-actions"><span className="muted small">Cuenta principal</span><Menu label={`Acciones de ${name}`} items={[{ label: "Perfil y expediente", icon: "user", onSelect: () => setDetail({ id: member.id, name }) }]}/></span> : <Menu label={`Acciones de ${name}`} items={[
             { label: "Perfil y expediente", icon: "user", onSelect: () => setDetail({ id: member.id, name }) },
             { label: member.role === "admin" ? "Cambiar a educador" : "Cambiar a administración", icon: "users", disabled: busy === member.id, onSelect: () => void update(member, { role: member.role === "admin" ? "educator" : "admin" }) },
+            ...(member.role === "educator" && member.active ? [{ label: member.coordination ? "Cambiar la coordinación académica" : "Asignar coordinación académica", icon: "shield" as const, disabled: busy === member.id, onSelect: () => setCoordinating(member) }] : []),
             { label: "Restablecer contraseña", icon: "undo", disabled: busy === member.id, onSelect: () => void reset(member) },
             { label: member.active ? "Quitar acceso" : "Dar acceso", icon: "shield", danger: member.active, disabled: busy === member.id, onSelect: () => void update(member, { active: !member.active }) },
             ...(member.id !== me.id && (member.active || !member.departedOn) ? [{ label: "Registrar salida", icon: "logout" as const, danger: true, disabled: busy === member.id, onSelect: () => setLeaving({ id: member.id, name }) }] : []),
@@ -138,6 +141,7 @@ function MemberList() {
       </Section>
     </div>
     {adding && <AccountDialog onClose={() => setAdding(false)} onCreated={async result => { setAdding(false); setIssued(result); await load(); }}/>}
+    {coordinating && <CoordinationDialog person={{ id: coordinating.id, name: coordinating.displayName || coordinating.username }} current={coordinating.coordination || null} onClose={() => setCoordinating(null)} onDone={async text => { setCoordinating(null); await load(); toast({ message: text }); }}/>}
     {issued && <TemporaryPassword issued={issued} onClose={() => setIssued(null)}/>}
     {detail && <PersonDetail person={detail} onClose={() => { setDetail(null); void load(); }}/>}
     {leaving && <DepartureDialog person={leaving} onClose={() => setLeaving(null)} onDone={async date => { const name = leaving.name; setLeaving(null); await load(); toast({ message: `Salida de ${name} registrada el ${departureDay(date)}. Ya no puede entrar.` }); }}/>}
