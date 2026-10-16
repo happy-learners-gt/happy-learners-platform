@@ -167,7 +167,7 @@ it("HL-11 published lessons are read-only and isolated from other organizations"
 it("HL-14 responses expose no password data and reject oversized or malformed input", async () => {
   const Cookie = await login("instructor-demo");
   const response = await fetch(`${origin}/api/session`, { headers: { Cookie } });
-  expect(await response.json()).toEqual({ member: { id: "user-1", username: "instructor-demo", displayName: "Instructor de la demostración", role: "educator", organizationId: "org-demo" } });
+  expect(await response.json()).toEqual({ member: { id: "user-1", username: "instructor-demo", displayName: "Instructor de la demostración", role: "educator", organizationId: "org-demo" }, pending: [] });
   expect(response.headers.get("referrer-policy")).toBe("no-referrer");
   for (const body of ["{", JSON.stringify({ username: "x".repeat(3000), password: "x" })]) {
     const invalid = await fetch(`${origin}/api/login`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body });
