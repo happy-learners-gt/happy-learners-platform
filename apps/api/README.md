@@ -18,6 +18,7 @@ responden 404, los métodos no permitidos 405 y las rutas heredadas retiradas 41
 | `legal.ts` | Términos, política de privacidad y acuerdo de voluntariado ad honorem versionados, aceptaciones y consentimiento (ST-126, ST-127, ST-151); firma electrónica simple con constancia y verificación, y el bloqueo de impartir clases sin el acuerdo firmado (ST-153, ST-151). |
 | `backup.ts` | Respaldo y restauración de cada organización. |
 | `invitations.ts`, `mail.ts` | Invitaciones por correo (ST-121) y adaptadores del puerto de envío: Brevo por HTTP y envío deshabilitado (DEC-042). |
+| `notifications.ts` | Avisos por correo (ST-124): `notify` después de cada escritura que afecta a alguien (equipo, sección, revisión, clase), preferencias, avisos obligatorios y registro en `mail_outbox`. |
 | `calendar-feed.ts` | Enlace de suscripción al calendario de clases (iCalendar) de cada educador. |
 | `permissions.ts` | Roles y accesos: permisos efectivos de cada solicitud, perfil de coordinación académica y grupos de seguridad con su auditoría (ST-128, ST-135). |
 | `departures.ts` | Salida de una persona del equipo: reasignación de sus cursos y secciones, fin del acceso y registro (ST-123). |

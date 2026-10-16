@@ -20,6 +20,7 @@ import { StyleGuide } from "./pages/StyleGuide";
 import { Members, OrganizationSettings, AcademicSettings } from "./pages/admin";
 import { AcceptInvitation } from "./pages/invitations";
 import { AccessPage } from "./pages/access";
+import { NotificationsAdmin } from "./pages/notifications";
 import { ConsentGate, PrivacyPage } from "./pages/legal";
 import { MyProfile } from "./pages/profile";
 const StudentLesson = lazy(() => import("./pages/StudentLesson").then(module => ({ default: module.StudentLesson })));
@@ -143,6 +144,7 @@ function page(first: string, second?: string) {
     case "perfil": return <MyProfile/>;
     case "configuracion-academica": return <AcademicSettings/>;
     case "roles-y-accesos": return <AccessPage/>;
+    case "notificaciones": return <NotificationsAdmin/>;
     case "clasificaciones": return <Redirect to="/configuracion-academica"/>;
     case "contenido": return null;
     default: return <NotFound/>;

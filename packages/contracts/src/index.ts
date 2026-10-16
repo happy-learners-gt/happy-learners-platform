@@ -341,3 +341,14 @@ export interface StaffDocument {
 export interface StaffFile { member: { id: string; name: string; active: boolean }; today: string; documents: StaffDocument[] }
 /** Administration's overview: active people with expired documents or documents that expire within 30 days. */
 export interface ExpiringDocuments { today: string; people: { id: string; name: string; documents: Pick<StaffDocument, "id" | "type" | "title" | "expiresOn" | "status">[] }[] }
+/**
+ * ST-124: e-mail notifications. Each person chooses which types they receive; administration marks the mandatory ones.
+ * Every message is recorded in the outbox with its recipient, its reason (motivo) and its status.
+ */
+export type NotificationKind = "course_assignment" | "section_assignment" | "review_submitted" | "review_returned" | "review_approved" | "class_changed" | "class_cancelled";
+export type NotificationDelivery = DeliveryStatus | "no_address";
+export interface NotificationSetting { type: NotificationKind; label: string; description: string; audience: string; mandatory: boolean; enabled: boolean }
+export interface NotificationRecord {
+  id: string; type: NotificationKind; userId: string; personName: string; recipient: string | null; reason: string; targetId: string | null;
+  status: NotificationDelivery; mandatory: boolean; attempts: number; error: string | null; createdAt: string; sentAt: string | null;
+}

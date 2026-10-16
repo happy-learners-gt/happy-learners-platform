@@ -679,3 +679,38 @@ class UpgradeTests(unittest.TestCase):
         demo.execute("UPDATE staff_documents SET withdrawn_at='t',withdrawn_by='user-0' WHERE id='d1'")
         self.assertEqual(demo.execute("SELECT count(*) FROM staff_documents").fetchone()[0], 1)
         self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_notifications_rebuild_keeps_every_outbox_row(self):
+        """0039 (ST-124): mail_outbox admits notifications and 'no_address'; inside one transaction with foreign keys on,
+        as a Durable Object applies it, every existing row and its order stay byte-identical and the indexes return."""
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        position = [path.name[:4] for path in migrations].index("0039")
+        db = self.scoped("org-demo", until=position)
+        db.isolation_level = None
+        insert = "INSERT INTO mail_outbox(id,organization_id,kind,reference_id,recipient,subject,status,attempts,last_error,created_at,sent_at,provider_id) VALUES (?,'org-demo','invitation',?,?,?,?,?,?,?,?,?)"
+        db.execute(insert, ("mail-b", "invitation-1", "paula@example.test", "Te invitaron a Happy Learners", "sent", 2, None, "2026-10-01T00:00:00.000Z", "2026-10-01T00:00:01.000Z", "<id@brevo>"))
+        db.execute(insert, ("mail-a", "invitation-2", "ñandú@example.test", "Asunto «ñ»", "failed", 1, "Brevo respondió 401", "2026-10-01T00:00:02.000Z", None, None))
+        db.execute(insert, ("mail-c", None, "x@example.test", "S", "not_configured", 0, "El envío de correo no está configurado.", "2026-10-01T00:00:03.000Z", None, None))
+        old = "id,organization_id,kind,reference_id,recipient,subject,status,attempts,last_error,created_at,sent_at,provider_id"
+        rows = lambda: db.execute(f"SELECT rowid,{old},hex(CAST(recipient AS BLOB)),hex(CAST(subject AS BLOB)) FROM mail_outbox ORDER BY rowid").fetchall()
+        before = rows()
+        indexes = lambda: db.execute("SELECT name,sql FROM sqlite_master WHERE type='index' AND tbl_name='mail_outbox' AND name IN ('mail_outbox_reference','mail_outbox_sent') ORDER BY name").fetchall()
+        kept = indexes()
+        db.executescript("BEGIN;\n" + migrations[position].read_text() + "\nCOMMIT;")
+        self.assertEqual(rows(), before)
+        self.assertEqual(indexes(), kept)
+        self.assertEqual(db.execute("SELECT count(*) FROM mail_outbox WHERE user_id IS NULL AND notification_type IS NULL AND reason IS NULL AND mandatory=0").fetchone()[0], 3)
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+        note = "INSERT INTO mail_outbox(id,organization_id,kind,reference_id,recipient,subject,status,created_at,user_id,notification_type,reason,mandatory) VALUES (?,'org-demo','notification','class_changed:c',?,'Asunto',?,'t',?,?,?,?)"
+        db.execute(note, ("n1", "", "no_address", "user-0", "class_changed", "Cambió la clase", 1))
+        db.execute(note, ("n2", "a@example.test", "not_configured", "user-0", "class_cancelled", "Se canceló la clase", 0))
+        for values in [("n3", "", "sent", "user-0", "class_changed", "Motivo", 0), ("n4", "a@example.test", "sent", "user-0", "otro", "Motivo", 0), ("n5", "a@example.test", "sent", "user-0", "class_changed", None, 0), ("n6", "a@example.test", "sent", None, "class_changed", "Motivo", 0)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(values)):
+                db.execute(note, values)
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO mail_outbox(id,organization_id,kind,recipient,subject,status,created_at,notification_type) VALUES ('i9','org-demo','invitation','a@example.test','S','sent','t','class_changed')")
+        db.execute("INSERT INTO notification_policies VALUES ('org-demo','class_changed',1,'user-0','t')")
+        db.execute("INSERT INTO notification_preferences VALUES ('user-0','org-demo','review_returned',0,'t')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO notification_preferences VALUES ('user-0','org-demo','otro',0,'t')")
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])

@@ -9,6 +9,8 @@ import { scopedCourses } from "./permissions";
 import { digest } from "./auth";
 import { pathLesson, studentAccess, studentToken } from "./classes";
 import { studentActivityGroups } from "./workgroups";
+import { notify, type Notice, type Notifier } from "./notify";
+import { reviewersOf } from "./notifications";
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
 type LessonRow = { id: string; content: string; published_content: string | null; unit_id: string | null; course_unit_id: string | null; course_id: string | null; position: number; status: "draft" | "published"; archived: number; revision: number; draft_version: number; published_version: number; updated_at: string; completions: number; review: string | null };
 /** The latest review of the lesson, with the names of who asked and who decided. */
@@ -64,7 +66,13 @@ export async function reviews(current: Member, db: Database) {
   return reply({ toReview, mine });
 }
 
-export async function content(url: URL, method: string, input: unknown, current: Member, db: Database): Promise<Response> {
+const courseTitle = async (db: Database, courseId: string | null) => courseId ? (await db.prepare("SELECT title FROM courses WHERE id=?").bind(courseId).first<{ title: string }>())?.title || "" : "";
+/** ST-124: a review notice about a lesson, linked to its editor. */
+function reviewNotice(userId: string, type: "review_submitted" | "review_returned" | "review_approved", row: { id: string; course_id: string | null }, lesson: string, course: string, current: Member): Notice {
+  return { userId, targetId: row.id, path: `/cursos/${row.course_id}/lecciones/${row.id}`, facts: { type, course, lesson, actor: current.displayName || current.username } };
+}
+
+export async function content(url: URL, method: string, input: unknown, current: Member, db: Database, notifier?: Notifier): Promise<Response> {
   const path = url.pathname; const id = path.split("/")[3]; const resourceRoute = path.startsWith("/api/resources");
   const draft = url.searchParams.has("draft") || url.searchParams.has("drafts");
   // The organization's general library, read-only since 1.0 (ST-076): resources are added and edited in each course.
@@ -99,12 +107,15 @@ export async function content(url: URL, method: string, input: unknown, current:
     const result = await publication(db, current, row);
     if ("error" in result) return reply({ error: result.error }, result.status);
     const now = new Date().toISOString();
+    const requested = await db.prepare("SELECT requested_by AS id FROM lesson_reviews WHERE lesson_id=? AND status='pending'").bind(row.id).first<{ id: string }>();
     const written = await db.guardedBatch(
       db.prepare("UPDATE lessons SET published_content=?,published_version=draft_version,revision=revision+1,status='published' WHERE id=? AND draft_version=? RETURNING id").bind(JSON.stringify(result.published), row.id, row.draft_version),
       // Publishing what a co-teacher sent for review approves it.
       [db.prepare("UPDATE lesson_reviews SET status='approved',decided_by=?,decided_at=? WHERE lesson_id=? AND status='pending'").bind(current.id, now, row.id),
         event(db, current, { action: "published", targetType: "lesson", targetId: row.id, courseId: row.course_id, summary: `Publicó «${result.lesson.title}» (publicación ${row.revision + 1})` })]);
     if (!written) return reply({ error: "El borrador cambió. Recarga y vuelve a publicar." }, 409);
+    // ST-124: publishing what someone sent for review approves it, and they are told.
+    if (requested) await notify(db, notifier, current, [reviewNotice(requested.id, "review_approved", row, result.lesson.title, await courseTitle(db, row.course_id), current)]);
     return reply({ lesson: result.published });
   }
   if (path.endsWith("/review") && row && method === "POST") {
@@ -120,6 +131,9 @@ export async function content(url: URL, method: string, input: unknown, current:
         .bind(`review-${crypto.randomUUID()}`, row.id, row.course_id!, current.organizationId, note, current.id, now),
       event(db, current, { action: "updated", targetType: "lesson", targetId: row.id, courseId: row.course_id, summary: `Envió a revisión «${lessonTitle}»` }),
     ]);
+    // ST-124: the lead and whoever reviews the course by coordination are told.
+    const course = await courseTitle(db, row.course_id);
+    await notify(db, notifier, current, (await reviewersOf(db, current.organizationId, row.course_id!)).map(userId => reviewNotice(userId, "review_submitted", row, lessonTitle, course, current)));
     const updated = await db.prepare(lessonQuery + " AND l.id=?").bind(current.organizationId, row.id).first<LessonRow>();
     return reply({ lesson: lessonView(updated!, true) }, 201);
   }
@@ -127,10 +141,12 @@ export async function content(url: URL, method: string, input: unknown, current:
     if (!access!.review) return forbidden("Solo la persona responsable del curso y la coordinación académica revisan sus lecciones.");
     const note = noteOf((input as Record<string, unknown> | null)?.note);
     if (!note) return reply({ error: "Escribe qué falta ajustar, en hasta 600 caracteres." }, 400);
+    const requested = await db.prepare("SELECT requested_by AS id FROM lesson_reviews WHERE lesson_id=? AND status='pending'").bind(row.id).first<{ id: string }>();
     const returned = await db.guardedBatch(
       db.prepare("UPDATE lesson_reviews SET status='returned',decided_by=?,decided_at=?,decision_note=? WHERE lesson_id=? AND status='pending' RETURNING id").bind(current.id, new Date().toISOString(), note, row.id),
       [event(db, current, { action: "updated", targetType: "lesson", targetId: row.id, courseId: row.course_id, summary: `Devolvió «${lessonTitle}» con comentarios` })]);
     if (!returned) return reply({ error: "La lección ya no tiene una revisión pendiente. Recarga para ver su estado." }, 409);
+    if (requested) await notify(db, notifier, current, [reviewNotice(requested.id, "review_returned", row, lessonTitle, await courseTitle(db, row.course_id), current)]);
     const updated = await db.prepare(lessonQuery + " AND l.id=?").bind(current.organizationId, row.id).first<LessonRow>();
     return reply({ lesson: lessonView(updated!, true) });
   }
