@@ -13,12 +13,18 @@ async function audit(page: Page, label: string) {
   expect(violations.map(item => `${label}: ${item.id} · ${item.nodes.map(node => node.target.join(" ")).slice(0, 3).join(" | ")}`)).toEqual([]);
 }
 const gate = (page: Page) => page.getByRole("heading", { level: 1, name: "Acepta los términos y la política de privacidad" });
-async function acceptAll(page: Page) {
+// Since ST-153 the terms are signed: full name and the account's password; the privacy consent alone is not.
+async function acceptAll(page: Page, fullName: string) {
   await expect(gate(page)).toBeVisible();
-  const accept = page.getByRole("button", { name: "Aceptar y continuar" });
+  const accept = page.getByRole("button", { name: /^(Aceptar|Firmar) y continuar$/ });
   await expect(page.getByRole("checkbox").first()).toBeVisible();
   await expect(accept).toBeDisabled();
   for (const box of await page.getByRole("checkbox").all()) await box.check();
+  if (await page.getByRole("group", { name: "Firma electrónica" }).count()) {
+    await expect(accept).toHaveText("Firmar y continuar");
+    await page.getByLabel("Nombre completo").fill(fullName);
+    await page.getByLabel("Contraseña de tu cuenta").fill("Aprender-2026!");
+  }
   await accept.click();
   await expect(gate(page)).toBeHidden();
 }
@@ -39,10 +45,10 @@ test("ST-126 ST-127: administration publishes terms and privacy, the next sign-i
   await signIn(page, "admin-externo", "/organizacion");
   await expect(page.getByRole("heading", { name: "Términos y privacidad" })).toBeVisible();
   await publish(page, "Términos y condiciones", `Términos ficticios ${stamp}`, "Texto ficticio de los términos de la demostración.\n\nNo contiene datos reales.");
-  await acceptAll(page);
+  await acceptAll(page, "Administración Externa Ficticia");
   await expect(page.getByRole("heading", { name: "Términos y privacidad" })).toBeVisible();
   await publish(page, "Política de privacidad", `Privacidad ficticia ${stamp}`, "Texto ficticio de la política de privacidad de la demostración.");
-  await acceptAll(page);
+  await acceptAll(page, "Administración Externa Ficticia");
   await audit(page, "organización con términos y privacidad");
 
   // The educator's next sign-in shows the documents before the app; nothing opens until both are accepted.
@@ -52,7 +58,7 @@ test("ST-126 ST-127: administration publishes terms and privacy, the next sign-i
   await expect(gate(learner)).toBeVisible();
   await expect(learner.getByRole("region", { name: `Texto de Términos ficticios ${stamp}` })).toContainText("No contiene datos reales.");
   await audit(learner, "aceptar términos y privacidad");
-  await acceptAll(learner);
+  await acceptAll(learner, "Educador Externo Ficticio");
   await expect(learner.getByRole("heading", { level: 1 })).toHaveText("Inicio");
 
   // Withdrawing the privacy consent is recorded and closes the platform until consent is given again.
@@ -61,7 +67,7 @@ test("ST-126 ST-127: administration publishes terms and privacy, the next sign-i
   await learner.getByRole("dialog").getByRole("button", { name: "Retirar consentimiento" }).click();
   await expect(gate(learner)).toBeVisible();
   await expect(learner.getByRole("checkbox")).toHaveCount(1);
-  await acceptAll(learner);
+  await acceptAll(learner, "Educador Externo Ficticio");
   await educator.close();
 
   // Administration sees who accepted which version and when, including the withdrawal.
@@ -69,6 +75,8 @@ test("ST-126 ST-127: administration publishes terms and privacy, the next sign-i
   const records = page.getByRole("region", { name: "Registro de aceptaciones" });
   await expect(records.getByRole("row").filter({ hasText: "Educador externo" }).filter({ hasText: "Retirado el" })).not.toHaveCount(0);
   await expect(records.getByRole("row").filter({ hasText: "Educador externo" }).filter({ hasText: "Términos y condiciones" })).not.toHaveCount(0);
+  // ST-153: the terms carry the electronic signature with the name as typed.
+  await expect(records.getByRole("row").filter({ hasText: "Términos y condiciones" }).filter({ hasText: "Firmada como «Educador Externo Ficticio»" })).not.toHaveCount(0);
 
   // The policy in force is public: the login links to it and it opens without a session.
   const visitor = await browser.newContext({ baseURL: info.project.use.baseURL });

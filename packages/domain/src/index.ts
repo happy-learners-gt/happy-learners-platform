@@ -11,7 +11,7 @@ export type { SectionClass } from "./sections";
 export { moduleNavigation } from "./navigation";
 export { calendarFeed, escapeText, feedWindow, foldLine, zonedInstant } from "./calendar-feed";
 export type { FeedClass } from "./calendar-feed";
-export { isLegalKind, legalDraftInput, legalKinds, legalLabels, pendingDocuments } from "./legal";
+export { canonicalJson, documentCanonical, gatedKinds, isLegalKind, legalDraftInput, legalKinds, legalLabels, pendingAgreement, pendingDocuments, signatureCanonical, signedKinds, signedNameInput } from "./legal";
 export { organizations, organizationIds, fictional, tokenPrefix, sharePrefix, sectionPrefix, tokenPattern, scopeOfToken, scopeOfShare, scopeOfSection } from "./organizations";
 export type { OrganizationId } from "./organizations";
 export { accountInput, acceptablePassword, maxPasswordLength, minPasswordLength, temporaryAlphabet, temporaryPassword, usernamePattern } from "./accounts";
