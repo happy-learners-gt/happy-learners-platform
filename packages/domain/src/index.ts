@@ -15,6 +15,8 @@ export { organizations, organizationIds, fictional, tokenPrefix, sharePrefix, se
 export type { OrganizationId } from "./organizations";
 export { accountInput, acceptablePassword, maxPasswordLength, minPasswordLength, temporaryAlphabet, temporaryPassword, usernamePattern } from "./accounts";
 export type { AccountRole } from "./accounts";
+export { dailyMailCap, emailPattern, invitationDays, invitationInput, invitationLifetimeMs, invitationMessage, invitationState, mailAttempts, mailDecision, normalizeEmail, roleLabel } from "./mail";
+export type { InvitationDetails, MailMessage, MailResult, MailSender, MailStatus } from "./mail";
 export type { ModuleLesson } from "./navigation";
 export { isCalendarDay, weekdays, scheduleInput, scheduleDates, breakInput, breakOn, carryOver, scheduleSummary, lessonsInOrder, periodWeek, classSequence, maxScheduleDays, maxScheduledClasses } from "./schedule";
 export type { SectionSchedule } from "./schedule";

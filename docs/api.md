@@ -20,6 +20,8 @@ Un método no admitido responde 405 con `Allow`; una ruta desconocida, 404.
 | GET | `/api/activity`, `/api/progress`, `/api/people`, `/api/reviews` | Sesión, filtrado por permisos |
 | GET, POST | `/api/feeds/calendar` | Sesión: estado del enlace de calendario propio; POST lo crea o regenera |
 | GET | `/api/feeds/calendar/:token.ics` | Público con el enlace secreto; solo GET |
+| GET, POST | `/api/invitations` · POST `/api/invitations/:id/resend` · POST `/api/invitations/:id/revoke` | Administración |
+| GET, POST | `/api/invitations/accept/:token` | Público con el enlace secreto; POST limitado a 30 intentos cada 15 minutos por origen |
 
 Cuentas del equipo (ST-093). `POST /api/members` recibe `{ displayName, username, role }` (`admin` o `educator`); el
 usuario tiene de 3 a 32 letras minúsculas, números, puntos, guiones o guiones bajos y es único en todas las
@@ -75,6 +77,40 @@ restablecer su contraseña y cambiarla quedan en `GET /api/activity` como `targe
 clases próximas a la misma hora, responde 409 con `conflicts` y no cambia nada; con `conflictReason` (3 a 300
 caracteres) guarda la asignación y registra la confirmación, que ya no se vuelve a pedir para esa persona en ese par
 de secciones.
+
+## Invitaciones por correo (ST-121, DEC-042)
+
+`POST /api/invitations` recibe `{ email, displayName, role }` (correo válido que se guarda en minúsculas, nombre de 2 a
+80 caracteres, `admin` o `educator`). Responde 201 con `{ invitation, link, delivery }`: `link` es
+`<origen>/invitacion/<token>` y solo aparece en esta respuesta y en la de reenviar; es la alternativa documentada para
+compartirlo a mano cuando el correo no sale. El token tiene 256 bits aleatorios y empieza por la letra de la
+organización, como los de sesión; solo se guarda su SHA-256. La invitación caduca a los 7 días. Responde 409 si ya hay
+una cuenta con ese correo en la organización o una invitación pendiente para él.
+
+`delivery` es el estado del mensaje en la bandeja de salida de la organización (`mail_outbox`): `sent`, `failed`
+(se intentó dos veces si el fallo era temporal: red, 429 o 5xx), `not_configured` (el Worker no tiene
+`BREVO_API_KEY` y `MAIL_FROM`; es el caso de desarrollo local y pruebas) o `deferred` (la organización ya envió 250
+correos ese día UTC, por debajo del límite de 300 del plan gratuito de Brevo). El mensaje sale con el remitente
+«Happy Learners», asunto «Te invitaron a Happy Learners», texto y HTML con la organización, el rol, quien invita, el
+enlace y su caducidad. La bandeja no guarda el cuerpo (contiene el enlace) y `last_error` nunca lleva la clave.
+
+`GET /api/invitations` lista las últimas 100 con `status` (`pending`, `accepted`, `revoked`, `expired`), `expiresAt`,
+`invitedBy`, `delivery`, `deliveryError` y `sentAt`, nunca el token; incluye `mailConfigured`.
+`POST /api/invitations/:id/resend` (sin cuerpo; también es «Reintentar envío») emite un enlace nuevo con 7 días de
+vigencia, el anterior responde 404, y vuelve a enviar; responde como la creación. `POST /api/invitations/:id/revoke`
+(sin cuerpo) la invalida. Ambas responden 409 si la invitación ya fue aceptada o revocada.
+
+`GET /api/invitations/accept/<token>` no requiere sesión y responde `{ invitation: { organization, displayName, email,
+role, expiresAt } }`; un token desconocido o reemplazado responde 404 (`INVITATION_NOT_FOUND`) y uno caducado, revocado
+o ya usado, 410 (`INVITATION_EXPIRED`, `INVITATION_REVOKED`, `INVITATION_USED`). `POST` con `{ username, password }`
+(reglas de ST-093: usuario único en todas las organizaciones, 409 si existe; contraseña de 12 a 128 caracteres
+variados distinta del usuario) crea la cuenta con el rol, el nombre y el correo de la invitación, sin contraseña
+temporal, la marca aceptada y responde 201 con `member` y la cookie de sesión, como el inicio de sesión.
+
+Crear, reenviar, revocar y aceptar quedan en `GET /api/activity` como `targetType: "invitation"` (acciones `created`,
+`resent`, `revoked`, `accepted`; la aceptación la registra la nueva cuenta), sin enlaces ni contraseñas. El correo de
+las cuentas solo aparece en `GET /api/members` (administración); `GET /api/people` y las listas de estudiantes no lo
+incluyen. El respaldo copia `users.email` y omite `invitations` y `mail_outbox`.
 
 ## Calendario de clases (ST-125)
 
