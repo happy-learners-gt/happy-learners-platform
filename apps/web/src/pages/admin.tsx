@@ -16,6 +16,7 @@ import { DaysOff } from "./calendar";
 import { ProgramPathDialog } from "./programPath";
 import { DepartureDialog, departureDay } from "./departure";
 import { Invitations } from "./invitations";
+import { ClosureRequests } from "./account";
 import { LegalSettings } from "./legal";
 import { ExpiringDocuments, PersonDetail } from "./profile";
 import { CoordinationBadge, CoordinationDialog } from "./access";
@@ -137,6 +138,7 @@ function MemberList() {
       })}</tbody>
     </table></div>
     <Invitations inviting={inviting} onInviting={setInviting} onChanged={() => void load()}/>
+    <ClosureRequests revision={revision} onDeparture={setLeaving}/>
     <ExpiringDocuments onOpen={setDetail} revision={revision}/>
     <div className="admin-grid">
       <Section title="Avance por curso">

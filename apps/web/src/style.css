@@ -1419,3 +1419,16 @@ ul.cell-list li svg { display: inline-block; vertical-align: -2px; margin-right:
 .onboarding-cell { display: grid; gap: var(--space-1); justify-items: start; }
 .table-toolbar { display: flex; justify-content: flex-end; margin-bottom: var(--space-3); }
 .onboarding-filter { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+
+/* ST-158, ST-159: «Cuenta» — sections reachable from a short table of contents, sessions and history tables, my data. */
+.account-toc ul { display: flex; flex-wrap: wrap; gap: var(--space-2); list-style: none; margin: 0; padding: 0; }
+.account-toc a { display: inline-flex; align-items: center; min-height: 32px; padding: 0 var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-ink-soft); font-size: var(--text-sm); text-decoration: none; }
+.account-toc a:hover { background: var(--color-surface-muted); color: var(--color-ink); }
+.account-anchor { scroll-margin-top: calc(var(--topbar-h) + 16px); }
+.device-cell { display: inline-flex; align-items: center; gap: var(--space-2); }
+.device-cell > .icon { flex: none; color: var(--color-muted); }
+.account-table th[scope="row"] { min-width: 180px; }
+.data-sections { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-3) var(--space-4); list-style: none; margin: 0; padding: 0; }
+.data-sections li { display: grid; gap: 2px; }
+.closure-history summary { cursor: pointer; font-weight: var(--weight-medium); }
+.closure-history ul { margin-top: var(--space-2); }

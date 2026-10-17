@@ -71,6 +71,7 @@ function TopBar({ menuButton }: { menuButton: ReactNode }) {
       <Menu label={`Perfil de ${member.displayName || member.username}`} icon="user" text={member.displayName || member.username} items={[
         { label: `${roleLabel(member)}${organization?.name ? ` · ${organization.name}` : ""}`, icon: "shield", onSelect: () => {}, disabled: true },
         { label: "Mi perfil", icon: "user", onSelect: () => navigate("/perfil") },
+        { label: "Cuenta", icon: "settings", onSelect: () => navigate("/cuenta") },
         "separator",
         { label: "Cerrar sesión", icon: "logout", onSelect: logout },
       ]}/>

@@ -6,6 +6,7 @@ import { digest, hashPassword, newToken } from "./auth";
 import { deliver, type Delivery } from "./mail";
 import { event } from "./team";
 import { startOnboarding } from "./onboarding";
+import { openSession, type Client } from "./account";
 
 /**
  * Invitations by e-mail (ST-121, DEC-042). The link carries a 256-bit secret whose first letter names the
@@ -108,7 +109,7 @@ export async function previewInvitation(token: string, scope: string, db: Databa
  * the password the person chooses, marks the invitation used and opens a session. Returns the session token so the
  * caller can set the cookie.
  */
-export async function acceptInvitation(token: string, input: unknown, scope: string, db: Database, taken: (username: string) => Promise<boolean>): Promise<{ response: Response; session?: string }> {
+export async function acceptInvitation(token: string, input: unknown, scope: string, db: Database, taken: (username: string) => Promise<boolean>, client: Client = { device: "Navegador desconocido", country: null }): Promise<{ response: Response; session?: string }> {
   const found = await lookup(token, scope, db);
   if (!found) return { response: missing() };
   const now = new Date();
@@ -130,7 +131,8 @@ export async function acceptInvitation(token: string, input: unknown, scope: str
     db.prepare("INSERT INTO role_events VALUES (?,?,?,?,?,?)").bind(crypto.randomUUID(), found.invitedBy, id, found.role, 1, at),
     db.prepare("UPDATE invitations SET status='accepted',accepted_at=?,accepted_user_id=? WHERE id=?").bind(at, id, found.id),
     startOnboarding(db, id, found.organizationId, at),
-    db.prepare("INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,?)").bind(await digest(session), id, now.getTime() + 28800000),
+    // ST-158: the first session of the account, with its device and country, opens the sign-in history.
+    ...openSession(db, await digest(session), id, found.organizationId, "invitation", client, now.getTime()),
     event(db, actor, { action: "accepted", targetType: "invitation", targetId: found.id, summary: `Aceptó la invitación y creó su cuenta (@${username}) con rol ${roleLabel(found.role)}` }),
   ]);
   if (!ok) {

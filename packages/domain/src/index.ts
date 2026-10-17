@@ -127,3 +127,7 @@ export type { NotificationDefinition, NotificationDetails, NotificationFacts, No
 export { csvCell, decimalHours, effectiveDuration, hoursAdjustmentInput, hoursCsv, hoursCsvHeader, hoursDay, hoursFilterInput, hoursStateLabels, hoursTotals, inHoursFilter, localDateTime, maxAdjustedMinutes, maxAdjustmentReason, minAdjustmentReason, reviewAfterMinutes } from "./hours";
 export { declaredSteps, declareStep, missingSteps, nextStep, onboardingStatus, onboardingStatusLabels, onboardingStepLabels, onboardingSteps, onboardingStepStates, profileComplete, profileGaps } from "./onboarding";
 export type { OnboardingFacts, ProfileFacts, StepRefusal } from "./onboarding";
+export { accountMessage, accountNoticeReason, countryCode, deviceLabel, emailChangeHours, emailChangeInput, emailChangeLifetimeMs, emailChangeState, maskEmail, sessionTouchMs, signInHistoryLimit, signInRetentionDays } from "./account-settings";
+export type { AccountNotice, AccountNoticeDetails, AccountNoticeKind, EmailChangeStatus } from "./account-settings";
+export { closureLabels, closureOpen, closureReasonInput, closureStatuses, closureTransition, maxClosureReason, personalDataFile, personalDataFormat, personalDataSections } from "./closures";
+export type { ClosureAction, ClosureStatus, PersonalDataSection } from "./closures";

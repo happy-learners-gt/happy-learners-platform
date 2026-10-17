@@ -4,6 +4,8 @@ import type { Database } from "./storage";
 import { digest, hashPassword, newTemporaryPassword, verifyPassword } from "./auth";
 import { event } from "./team";
 import { startOnboarding } from "./onboarding";
+import type { MailSender } from "@happy-learners/domain";
+import { sendNotice } from "./account-notices";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
 const roleName = (role: string) => role === "admin" ? "Administración" : "Educador";
@@ -48,9 +50,10 @@ export async function resetPassword(id: string, current: Member, db: Database) {
 
 /**
  * POST /api/account/password — the signed-in person replaces their password; required after a temporary one.
- * Their other sessions close; this one stays open.
+ * Their other sessions close; this one stays open. ST-158: the sign-in e-mail, when there is one, gets a mandatory
+ * security notice (not for the first change of a temporary password: that one was given by administration).
  */
-export async function changePassword(input: unknown, current: Member, token: string, db: Database) {
+export async function changePassword(input: unknown, current: Member, token: string, db: Database, sender?: MailSender) {
   const value = input as Record<string, unknown> | null;
   if (!value || typeof value.currentPassword !== "string" || value.currentPassword.length > maxPasswordLength) return reply({ error: "Escribe tu contraseña actual." }, 400);
   const user = await db.prepare("SELECT password_salt AS salt,password_hash AS hash FROM users WHERE id=?").bind(current.id).first<{ salt: string; hash: string }>();
@@ -63,5 +66,9 @@ export async function changePassword(input: unknown, current: Member, token: str
     db.prepare("DELETE FROM sessions WHERE user_id=? AND token_hash<>?").bind(current.id, await digest(token)),
     event(db, current, { action: "updated", targetType: "account", targetId: current.id, summary: "Cambió su contraseña" }),
   ]);
+  if (sender && !current.mustChangePassword) {
+    const address = await db.prepare("SELECT email FROM users WHERE id=?").bind(current.id).first<{ email: string | null }>();
+    if (address?.email) await sendNotice(db, sender, current.organizationId, { id: current.id, name: current.displayName || current.username, email: address.email }, `password:${current.id}`, { kind: "password_changed", username: current.username });
+  }
   return reply({ ok: true });
 }

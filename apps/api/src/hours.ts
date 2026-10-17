@@ -97,3 +97,9 @@ export async function hours(path: string, method: string, input: unknown, url: U
   const after = (await storedRows(db, current.organizationId, null, sessionId))[0];
   return reply({ row: hoursRow(after, timezone) });
 }
+
+/** ST-159: the classes attributed to the person, with their effective hours, for «Exportar mis datos». */
+export async function ownHours(db: Database, current: Member): Promise<{ timezone: string; rows: HoursRow[] }> {
+  const timezone = await timezoneOf(db, current.organizationId);
+  return { timezone, rows: (await storedRows(db, current.organizationId, current.id)).map(row => hoursRow(row, timezone)) };
+}
