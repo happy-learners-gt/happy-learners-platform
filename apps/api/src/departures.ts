@@ -2,6 +2,7 @@ import type { CourseRole, DeparturePerson, DeparturePreview, Member } from "@hap
 import { departureDate, departureReason, record } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { todayFor } from "./classes";
+import { profileOnLeave } from "./professional";
 import { educatorConflicts } from "./conflicts";
 import { event } from "./team";
 
@@ -154,6 +155,8 @@ export async function recordDeparture(id: string, input: unknown, current: Membe
     ]),
     // Leaving every active team also leaves its sections, archived ones included.
     db.prepare(`DELETE FROM section_educators WHERE user_id=? AND organization_id=? AND course_id IN (${active})`).bind(id, org, org),
+    // ST-156: leaving hides a published profile and closes a review in progress.
+    ...profileOnLeave(db, current, id, member.name, "departure"),
     db.prepare("UPDATE memberships SET active=0 WHERE user_id=? AND organization_id=?").bind(id, org),
     db.prepare("DELETE FROM sessions WHERE user_id=?").bind(id),
     db.prepare("DELETE FROM calendar_feeds WHERE user_id=?").bind(id),

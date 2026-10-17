@@ -4,6 +4,7 @@ import { createAccount, resetPassword } from "./accounts";
 import { departurePreview, recordDeparture } from "./departures";
 import { event } from "./team";
 import { setCoordination } from "./permissions";
+import { profileOnLeave } from "./professional";
 
 /** /api/members: administration lists people, creates accounts (ST-093), changes roles and access, resets passwords. */
 export async function roles(path: string, method: string, input: unknown, current: Member, db: Database, taken: (username: string) => Promise<boolean>) {
@@ -46,6 +47,8 @@ export async function roles(path: string, method: string, input: unknown, curren
     db.prepare("UPDATE memberships SET role=?,active=? WHERE user_id=? AND organization_id=?").bind(role, value.active ? 1 : 0, id, current.organizationId),
     db.prepare("DELETE FROM sessions WHERE user_id=?").bind(id),
     ...(value.active ? [] : [db.prepare("DELETE FROM calendar_feeds WHERE user_id=?").bind(id)]),
+    // ST-156: losing access hides a published profile.
+    ...(target.active && !value.active ? profileOnLeave(db, current, id, target.name, "deactivation") : []),
     db.prepare("INSERT INTO role_events VALUES (?,?,?,?,?,?)").bind(crypto.randomUUID(), current.id, id, String(value.role), value.active ? 1 : 0, new Date().toISOString()),
     ...changes,
   ]);

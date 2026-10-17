@@ -5,6 +5,7 @@ import { Link, useNavigation } from "../navigation";
 import { sessionDay } from "../model";
 import { Icon } from "../ui/icons";
 import { EmptyState, ErrorState, Loading, Progress, StatusBadge } from "../ui/primitives";
+import { LearnerEducators } from "./professional";
 
 /** The group's space for learners: next class, its lesson and resources, and earlier classes. Read-only, no account. */
 export function StudentSpace() {
@@ -43,6 +44,7 @@ export function StudentSpace() {
       <h2 id="recent-title">Clases anteriores</h2>
       <ol className="student-classes">{space.recent.map(item => <li key={item.id}><ClassCard item={item} today={space.today}/></li>)}</ol>
     </section>}
+    <LearnerEducators educators={space.educators || []}/>
     <p className="login-privacy"><Icon name="shield" size={16}/>Solo ves las clases de tu sección. No guardamos tu nombre ni tus datos.</p>
   </main>;
 }
@@ -98,6 +100,7 @@ function SelfPaced({ space, reload, leave }: { space: Space; reload: () => Promi
           {space.learner && <span className="muted small">{lesson.completed ? "Terminada" : lesson.opened ? "En curso" : "Pendiente"}</span>}
         </li>)}</ol>
       </section>)}
+      <LearnerEducators educators={space.educators || []}/>
     </>}
     <p className="login-privacy"><Icon name="shield" size={16}/>{space.learner ? "Tu avance se guarda con tu nombre de la lista de la sección para que tu educador te acompañe. Tus respuestas se quedan en este dispositivo." : "Solo ves las lecciones de tu sección. No guardamos tu nombre ni tus datos."}</p>
   </main>;

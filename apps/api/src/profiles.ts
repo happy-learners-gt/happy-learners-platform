@@ -1,5 +1,5 @@
 import type { ExpiringDocuments, Member, StaffDocument, StaffFile, StaffProfile } from "@happy-learners/contracts";
-import { documentStatus, expiringWindowDays, staffProfileInput, staffDocumentInput, staffDocumentLabel } from "@happy-learners/domain";
+import { areasFromSpecialties, documentStatus, expiringWindowDays, staffProfileInput, staffDocumentInput, staffDocumentLabel, storedProfile } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { readBounded } from "./files";
 import { event } from "./team";
@@ -77,10 +77,14 @@ async function saveProfile(request: Request, current: Member, db: Database) {
   const changed = fieldLabels.filter(([key]) => before[key] !== after[key]).map(([, label]) => label);
   if (changed.length) {
     const now = new Date().toISOString();
+    // ST-154: specialties are the labels of the teaching areas of the professional profile's working copy.
+    const draft = storedProfile(JSON.parse((await db.prepare("SELECT draft FROM staff_profiles WHERE user_id=?").bind(current.id).first<{ draft: string }>())?.draft || "{}"));
+    const areas = before.specialties === after.specialties ? null : JSON.stringify(areasFromSpecialties(value.specialties, draft.areas));
     await db.batch([
       db.prepare("UPDATE users SET display_name=? WHERE id=?").bind(value.displayName, current.id),
       db.prepare("INSERT INTO staff_profiles(user_id,organization_id,phone,contact_email,education,specialties,availability,updated_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET phone=excluded.phone,contact_email=excluded.contact_email,education=excluded.education,specialties=excluded.specialties,availability=excluded.availability,updated_at=excluded.updated_at")
         .bind(current.id, current.organizationId, value.phone, value.contactEmail, value.education, after.specialties, after.availability, now),
+      ...(areas ? [db.prepare("UPDATE staff_profiles SET draft=json_set(draft,'$.areas',json(?)),draft_version=draft_version+1 WHERE user_id=?").bind(areas, current.id)] : []),
       // Which fields changed, never their values: phone and e-mail are personal data.
       event(db, current, { action: "updated", targetType: "account", targetId: current.id, summary: `Actualizó su perfil: ${changed.join(", ")}` }),
     ]);
@@ -116,11 +120,15 @@ async function savePhoto(method: string, request: Request, current: Member, db: 
 }
 
 async function photo(id: string, current: Member, db: Database, bucket: R2Bucket) {
-  const row = await db.prepare("SELECT p.photo_key,p.photo_type,p.photo_size,p.photo_sha256 FROM staff_profiles p JOIN memberships m ON m.user_id=p.user_id AND m.organization_id=p.organization_id WHERE p.user_id=? AND p.organization_id=? AND p.photo_key IS NOT NULL").bind(id, current.organizationId).first<{ photo_key: string; photo_type: string; photo_size: number; photo_sha256: string }>();
+  return photoResponse(db, id, current.organizationId, bucket);
+}
+/** The stored photo of a person of the organization, checked against its fingerprint; also served to students (ST-157). */
+export async function photoResponse(db: Database, id: string, organizationId: string, bucket: R2Bucket) {
+  const row = await db.prepare("SELECT p.photo_key,p.photo_type,p.photo_size,p.photo_sha256 FROM staff_profiles p JOIN memberships m ON m.user_id=p.user_id AND m.organization_id=p.organization_id WHERE p.user_id=? AND p.organization_id=? AND p.photo_key IS NOT NULL").bind(id, organizationId).first<{ photo_key: string; photo_type: string; photo_size: number; photo_sha256: string }>();
   if (!row) return reply({ error: "Esta persona no tiene foto." }, 404);
   const object = await bucket.get(row.photo_key);
   if (!object) return reply({ error: "No se encontró la foto almacenada." }, 404);
-  if (object.size !== row.photo_size || object.customMetadata?.sha256 !== row.photo_sha256 || object.customMetadata?.organizationId !== current.organizationId) return reply({ error: "La foto almacenada no pasó la verificación de integridad." }, 503);
+  if (object.size !== row.photo_size || object.customMetadata?.sha256 !== row.photo_sha256 || object.customMetadata?.organizationId !== organizationId) return reply({ error: "La foto almacenada no pasó la verificación de integridad." }, 503);
   return new Response(object.body, { headers: { "Content-Type": row.photo_type, "Content-Length": String(row.photo_size), "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "Cross-Origin-Resource-Policy": "same-origin", "X-File-SHA256": row.photo_sha256 } });
 }
 

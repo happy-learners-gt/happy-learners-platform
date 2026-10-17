@@ -28,6 +28,7 @@ import { accessMatrix, permissionColumns, withPermissions } from "./permissions"
 import { notificationMethods, notifications } from "./notifications";
 import { hours } from "./hours";
 import { onboarding, onboardingPending } from "./onboarding";
+import { professional, professionalMethods } from "./professional";
 export { LessonCollaborationRoom };
 
 const headers = {
@@ -82,7 +83,9 @@ async function route(request: Request, env: Env): Promise<Response> {
     for (const [name, value] of Object.entries(headers)) result.headers.set(name, value);
     return result;
   }
-  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|account|organization|calendar|members|access|levels|units|resources|lessons|courses|programs|vocabularies|terms|student|legal|hours)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files") && !/^\/api\/members\/[a-z0-9-]+\/password$/.test(path))
+  // ST-154 to ST-157: the professional profile reads an optional JSON body (sending, hiding and approving carry none).
+  const professionalAllowed = professionalMethods(path);
+  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|account|organization|calendar|members|access|levels|units|resources|lessons|courses|programs|vocabularies|terms|student|legal|hours)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files") && !/^\/api\/members\/[a-z0-9-]+\/password$/.test(path) && !professionalAllowed)
     || (method === "POST" && path === "/api/organization/restore" && env.RESTORE_ENABLED === "true")
     || (method === "POST" && (path === "/api/invitations" || acceptPath.test(path)))
     ? await body(request) : undefined;
@@ -90,6 +93,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === "POST" && /^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/(complete|cancel)$/.test(path) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   // ST-124: notification preferences and policy.
   if (method === "PUT" && notificationMethods(path)) input = await body(request);
+  if (professionalAllowed && ["POST", "PUT"].includes(method) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   let scope: string = scopeOfToken(sessionToken(request));
   if (path.startsWith("/api/share/")) scope = scopeOfShare(path.split("/")[3]);
   const feedToken = feedPath.exec(path)?.[1];
@@ -145,7 +149,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/outcomes$/.test(path)) methods[path] = ["PUT"];
   if (path === "/api/calendar") methods[path] = ["GET", "POST"];
   if (/^\/api\/calendar\/[a-z0-9-]+$/.test(path)) methods[path] = ["DELETE"];
-  if (path === "/api/classes" || path === "/api/student/space" || /^\/api\/student\/files\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET"];
+  if (path === "/api/classes" || path === "/api/student/space" || /^\/api\/student\/files\/[a-z0-9-]+$/.test(path) || /^\/api\/student\/educators\/[a-z0-9-]+\/photo$/.test(path)) methods[path] = ["GET"];
   if (["/api/student/login", "/api/student/logout", "/api/student/identity", "/api/student/progress"].includes(path)) methods[path] = ["POST"];
   if (path === "/api/taxonomy") methods[path] = ["GET"];
   // ST-125: the calendar link (signed in) and the feed calendars fetch without a session; GET only.
@@ -183,6 +187,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (staffAllowed) methods[path] = staffAllowed;
   const notificationAllowed = notificationMethods(path);
   if (notificationAllowed) methods[path] = notificationAllowed;
+  if (professionalAllowed) methods[path] = professionalAllowed;
   const allowed = methods[path] || (path === "/api/members" ? ["GET", "POST"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/members\/[a-z0-9-]+\/password$/.test(path) ? ["POST"] : /^\/api\/members\/[a-z0-9-]+\/departure$/.test(path) ? ["GET", "POST"] : /^\/api\/lessons\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/(publish|duplicate|review|review\/return)$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+\/files\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
   if (!allowed) return json({ error: "Not found" }, 404);
   if (!allowed.includes(method)) return json({ error: "Method not allowed" }, 405, { Allow: allowed.join(", ") });
@@ -269,6 +274,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   // ST-124: endpoints that change something tell the people affected by e-mail, after their write.
   const notifier = { origin: url.origin, sender: mailSender(env) };
   if (notificationAllowed) return notifications(path, method, input, url, current, db, notifier.sender.configured);
+  if (professionalAllowed) return professional(path, method, input, url, current, db);
   if (/^\/api\/(taxonomy|vocabularies|terms)(\/|$)/.test(path)) return taxonomy(path, method, input, current, db);
   if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions)(\/|$)/.test(path)) return classroom(path, method, input, current, db, url.searchParams, notifier);
   if (/^\/api\/courses\/[a-z0-9-]+\/duplicate$/.test(path)) return duplicateCourse(path.split("/")[3], current, db, env.COURSE_FILES);
