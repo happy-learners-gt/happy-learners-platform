@@ -6,13 +6,15 @@
  * Password columns never leave the store. Staff e-mail addresses (users.email) are copied: the backup is
  * administration's and already holds the organization's personal data.
  * Onboarding state (ST-122, table onboarding) is copied like any other table.
+ * Account settings (ST-158): e-mail changes (they hold link hashes) and the sign-in history (a security log of the
+ * store that issued the sessions) are not copied; closure requests (ST-159) are, like departures.
  * A restore keeps the credentials the target already has, so a restored account signs in as it did there; whether
  * the password is a temporary one (ST-093) belongs to those credentials and stays with them.
  */
 declare global { interface Env { RESTORE_ENABLED?: string } }
 
 export const BACKUP_FORMAT = "happy-learners-backup/1";
-const SKIPPED = new Set(["sessions", "group_access_sessions", "login_limits", "calendar_feeds", "invitations", "mail_outbox", "schema_migrations"]);
+const SKIPPED = new Set(["sessions", "group_access_sessions", "login_limits", "calendar_feeds", "invitations", "mail_outbox", "email_changes", "sign_in_events", "schema_migrations"]);
 const SECRET: Record<string, string[]> = { users: ["password_salt", "password_hash", "must_change_password"] };
 
 type Cell = string | number | null | { b64: string };
@@ -82,6 +84,8 @@ export function importStore(sql: SqlStorage, scope: string, backup: Backup) {
   for (const trigger of triggers) sql.exec(trigger.sql);
   sql.exec("DELETE FROM sessions WHERE user_id NOT IN (SELECT id FROM users)");
   sql.exec("DELETE FROM calendar_feeds WHERE user_id NOT IN (SELECT id FROM users)");
+  sql.exec("DELETE FROM sign_in_events WHERE user_id NOT IN (SELECT id FROM users)");
+  sql.exec("DELETE FROM email_changes WHERE user_id NOT IN (SELECT id FROM users)");
   sql.exec("DELETE FROM invitations WHERE invited_by NOT IN (SELECT id FROM users) OR (accepted_user_id IS NOT NULL AND accepted_user_id NOT IN (SELECT id FROM users))");
   sql.exec("DELETE FROM group_access_sessions WHERE group_id NOT IN (SELECT id FROM course_groups) OR (learner_id IS NOT NULL AND learner_id NOT IN (SELECT id FROM group_learners))");
   for (const name of names) if (canonical(read(sql, name, backup.tables[name].columns)) !== canonical(backup.tables[name])) throw new RestoreError(`La tabla ${name} no quedó igual a la copia.`);

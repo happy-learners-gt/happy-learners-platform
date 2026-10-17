@@ -25,6 +25,7 @@ import { ConsentGate, PrivacyPage } from "./pages/legal";
 import { MyProfile } from "./pages/profile";
 import { HoursPage } from "./pages/hours";
 import { OnboardingWizard } from "./pages/onboarding";
+import { AccountPage, ConfirmEmail } from "./pages/account";
 const StudentLesson = lazy(() => import("./pages/StudentLesson").then(module => ({ default: module.StudentLesson })));
 const StudentSpace = lazy(() => import("./pages/StudentSpace").then(module => ({ default: module.StudentSpace })));
 
@@ -39,6 +40,9 @@ function Application() {
   // ST-121: the invitation link opens without a session.
   const invitation = /^\/invitacion\/([a-z]_[a-f0-9]{64})\/?$/.exec(url.pathname)?.[1];
   if (invitation || url.pathname.startsWith("/invitacion/")) return <AcceptInvitation key={invitation || "invalid"} token={invitation || "invalid"}/>;
+  // ST-158: the link that confirms a new sign-in e-mail opens with or without a session.
+  const emailChange = /^\/cuenta\/correo\/([a-z]_[a-f0-9]{64})\/?$/.exec(url.pathname)?.[1];
+  if (emailChange || url.pathname.startsWith("/cuenta/correo/")) return <ConfirmEmail key={emailChange || "invalid"} token={emailChange || "invalid"}/>;
   if (url.pathname.replace(/\/+$/, "") === "/estudiante") return <Suspense fallback={<main className="splash"><p role="status">Abriendo tu sección…</p></main>}><StudentSpace/></Suspense>;
   return <AuthenticatedApp/>;
 }
@@ -146,6 +150,7 @@ function page(first: string, second?: string) {
     case "organizacion": return <OrganizationSettings/>;
     case "educadores": return <Members/>;
     case "perfil": return <MyProfile/>;
+    case "cuenta": return <AccountPage/>;
     case "horas": return <HoursPage/>;
     case "configuracion-academica": return <AcademicSettings/>;
     case "roles-y-accesos": return <AccessPage/>;

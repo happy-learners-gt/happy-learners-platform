@@ -96,7 +96,8 @@ export async function onboarding(path: string, method: string, current: Member, 
   // Finishing the introduction completes the onboarding: every step before it is done (checked above).
   const completes = step === "tour";
   await db.batch([
-    db.prepare(`UPDATE onboarding SET ${column}=COALESCE(${column},?)${completes ? ",completed_at=COALESCE(completed_at,?)" : ""} WHERE user_id=? AND organization_id=? AND completed_at IS NULL`)
+    // Never before the start: the Worker's clock may read a few milliseconds behind the one that started it.
+    db.prepare(`UPDATE onboarding SET ${column}=COALESCE(${column},max(?,started_at))${completes ? ",completed_at=COALESCE(completed_at,max(?,started_at))" : ""} WHERE user_id=? AND organization_id=? AND completed_at IS NULL`)
       .bind(now, ...(completes ? [now] : []), current.id, current.organizationId),
     ...(completes ? [event(db, current, { action: "updated", targetType: "account", targetId: current.id, summary: "Completó su incorporación" })] : []),
   ]);

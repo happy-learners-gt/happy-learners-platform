@@ -25,6 +25,8 @@ responden 404, los métodos no permitidos 405 y las rutas heredadas retiradas 41
 | `profiles.ts` | Perfil de cada persona (ST-149) y expediente laboral con documentos privados en R2 y vencimientos (ST-150). |
 | `hours.ts` | Horas efectivas impartiendo clases: consulta por periodo, curso, sección y persona, exportación CSV y correcciones con motivo (ST-152). |
 | `onboarding.ts` | Incorporación guiada del primer ingreso: pasos derivados y declarados, estado propio y vista de administración (ST-122). |
+| `account.ts`, `account-notices.ts` | Configuración de la cuenta bajo `/api/me/account`: cambio de correo verificado por enlace de un solo uso (24 h, solo el hash, aviso al correo anterior; confirmación pública en `/api/account/email/<token>`), sesiones activas con dispositivo y país (cerrar una o las demás) e historial de accesos; avisos de seguridad obligatorios (`mail_outbox.kind = 'account'`) (ST-158). |
+| `personal-data.ts`, `closures.ts` | «Exportar mis datos» (`/api/me/export`, JSON solo con registros propios) y solicitudes de cierre de la cuenta (`/api/me/closure`; administración en `/api/closures`), que se completan al registrar la salida (ST-159, ST-123). |
 | `storage.ts` | Almacenamiento SQLite de cada organización en su Durable Object. |
 
 El correo transaccional usa el puerto `MailSender` del dominio. Con el secreto `BREVO_API_KEY` y la variable

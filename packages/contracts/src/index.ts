@@ -397,3 +397,29 @@ export interface OnboardingPerson {
   userId: string; name: string; username: string; role: "admin" | "educator"; active: boolean;
   status: OnboardingPersonStatus; startedAt: string | null; completedAt: string | null; steps: OnboardingStepState[]; missing: OnboardingStep[];
 }
+/**
+ * ST-158: account settings. The sign-in e-mail changes only after the link sent to the new address is confirmed;
+ * sessions show a device summary (never the User-Agent), the country from CF-IPCountry, and when they started and were
+ * last used. The sign-in history keeps the last 30 attempts, successful or not, of the person's own account.
+ */
+export type EmailChangeStatus = "pending" | "verified" | "expired" | "cancelled";
+export interface EmailChange { id: string; newEmail: string; status: EmailChangeStatus; requestedAt: string; expiresAt: string; verifiedAt: string | null; delivery: NotificationDelivery | null }
+export interface AccountOverview {
+  username: string; displayName: string; role: "admin" | "educator"; organization: string;
+  email: string | null; pendingEmail: EmailChange | null; mailConfigured: boolean; sessions: number;
+}
+/** The answer to a change request: the link is only returned when the message could not leave (DEC-042 fallback). */
+export interface EmailChangeIssued { change: EmailChange; delivery: NotificationDelivery; link?: string }
+/** GET /api/account/email/<token>: what the public confirmation page shows before confirming. */
+export interface EmailChangePreview { organization: string; username: string; newEmail: string; expiresAt: string }
+export type SignInMethod = "password" | "invitation";
+export interface AccountSession { id: string; device: string; country: string | null; method: SignInMethod; createdAt: string; lastUsedAt: string; expiresAt: string; current: boolean }
+export interface SignInRecord { id: string; outcome: "succeeded" | "failed"; method: SignInMethod; device: string; country: string | null; occurredAt: string }
+/** ST-159: closing the account, linked to the departure (ST-123) that completes it. */
+export type ClosureStatus = "requested" | "in_progress" | "completed" | "cancelled";
+export interface ClosureRequest {
+  id: string; userId: string; personName: string; username: string; status: ClosureStatus; reason: string;
+  requestedAt: string; startedAt: string | null; startedBy: string | null; completedAt: string | null; cancelledAt: string | null; departedOn: string | null;
+}
+/** GET /api/me/closure: the person's latest request and whether a new one can be made. */
+export interface MyClosure { closure: ClosureRequest | null; history: ClosureRequest[]; blocked: string | null }

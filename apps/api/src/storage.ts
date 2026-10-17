@@ -40,6 +40,8 @@ import signaturesMigration from "../../../database/migrations/0038_signatures_an
 import notificationsMigration from "../../../database/migrations/0039_notifications.sql";
 import effectiveHoursMigration from "../../../database/migrations/0040_effective_hours.sql";
 import onboardingMigration from "../../../database/migrations/0041_onboarding.sql";
+// 0042 (ST-154 to ST-157, profile) is delivered by its own branch and goes between these two.
+import accountSettingsMigration from "../../../database/migrations/0043_account_settings.sql";
 import { organizationIds } from "@happy-learners/domain";
 import { exportStore, importStore, RestoreError, type Backup } from "./backup";
 
@@ -138,6 +140,7 @@ export class OrganizationStore extends DurableObject<Env> {
       if (!applied.length || applied[0].version < 39) { this.ctx.storage.sql.exec(notificationsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (39,?)", scope); }
       if (!applied.length || applied[0].version < 40) { this.ctx.storage.sql.exec(effectiveHoursMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (40,?)", scope); }
       if (!applied.length || applied[0].version < 41) { this.ctx.storage.sql.exec(onboardingMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (41,?)", scope); }
+      if (!applied.length || applied[0].version < 43) { this.ctx.storage.sql.exec(accountSettingsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (43,?)", scope); }
       // Compare-and-write plus dependent writes belong to one SQLite transaction.
       if (guard && !this.ctx.storage.sql.exec(guard.sql, ...guard.values).toArray().length) return [];
       return statements.map(statement => this.ctx.storage.sql.exec(statement.sql, ...statement.values).toArray());
