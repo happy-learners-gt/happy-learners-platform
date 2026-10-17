@@ -277,8 +277,12 @@ describe("ST-158 ST-159 on the built Worker", () => {
     expect(exported.security.emailChanges.map(item => item.status)).toEqual(["cancelled", "verified", "cancelled"]);
     // Changing the password also sends a security notice now that there is an address.
     await read(await as(me, "/account/password", "POST", { currentPassword: person.password, newPassword: "Otra frase segura para 2026" }));
-    const after = await (await as(me, "/me/export")).json() as { security: { notices: { reason: string }[] } };
+    const after = await (await as(me, "/me/export")).json() as { security: { notices: { kind: string; type: string | null; reason: string }[] } };
     expect(after.security.notices.map(item => item.reason)).toContain("Aviso de seguridad: cambió la contraseña de @correo.prueba");
+    // v1.1.1 (ST-161): one e-mail only, the account notice; the bell shows the mandatory account_security notice.
+    expect(after.security.notices.filter(item => item.kind === "notification" && item.type === "account_security")).toEqual([]);
+    const bell = await read<{ items: { type: string; mandatory: boolean; path: string }[] }>(await as(me, "/me/inbox"));
+    expect(bell.items.filter(item => item.type === "account_security")).toEqual([expect.objectContaining({ mandatory: true, path: "/cuenta" })]);
   });
 
   it("CA1 ST-159 exportar mis datos descarga un JSON con lo propio, sin secretos ni datos de terceros, y queda en la actividad", async () => {
@@ -294,6 +298,10 @@ describe("ST-158 ST-159 on the built Worker", () => {
     expect(data.account).toMatchObject({ id: person.id, username: "datos.prueba", role: "educator", active: true });
     expect(data.profile).toMatchObject({ phone: "+502 5555-0159", contactEmail: "datos@ejemplo.test", specialties: ["Biología"], hasPhoto: false });
     for (const key of ["credentials", "preferences", "consents", "signatures", "hours", "activity", "security", "closures"]) expect(data).toHaveProperty(key);
+    // v1.1.1: the professional profile (ST-154, ST-156), the credentials (ST-155) and the preferences (ST-160, ST-161) join the export.
+    expect(data.profile).toMatchObject({ status: "draft", draft: expect.any(Object), visibility: expect.any(Object), versions: [] });
+    expect(data.credentials).toMatchObject({ staffDocuments: [], credentials: [] });
+    for (const key of ["regional", "delivery", "notifications", "inbox"]) expect(data.preferences).toHaveProperty(key);
     expect(data.security.sessions[0]).toMatchObject({ current: true, device: "Firefox en Windows" });
     for (const secret of ["password_hash", "passwordHash", "password_salt", "token_hash", "tokenHash", "salt", "photo_key", "object_key", "admin-demo"]) expect(text, secret).not.toContain(secret);
     expect(await summaries(admin, person.id)).toContain("Descargó una copia de sus datos");
