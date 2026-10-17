@@ -127,3 +127,11 @@ export type { NotificationDefinition, NotificationDetails, NotificationFacts, No
 export { csvCell, decimalHours, effectiveDuration, hoursAdjustmentInput, hoursCsv, hoursCsvHeader, hoursDay, hoursFilterInput, hoursStateLabels, hoursTotals, inHoursFilter, localDateTime, maxAdjustedMinutes, maxAdjustmentReason, minAdjustmentReason, reviewAfterMinutes } from "./hours";
 export { declaredSteps, declareStep, missingSteps, nextStep, onboardingStatus, onboardingStatusLabels, onboardingStepLabels, onboardingSteps, onboardingStepStates, profileComplete, profileGaps } from "./onboarding";
 export type { OnboardingFacts, ProfileFacts, StepRefusal } from "./onboarding";
+export {
+  areasFromSpecialties, audienceLabel, audienceView, countryCodes, countryName, credentialInput, credentialStatus, credentialStatusLabels, credentialTransition, credentialTypeLabel,
+  credentialTypes, decisionNote, defaultVisibility, emptyProfessionalProfile, fieldLabel, formatLabel, httpsUrl, isCountry, iscedFields, iscedLevels, languageName, languageTag,
+  learnerAudiences, levelLabel, linkKindLabel, modalityLabel, professionalProfileInput, proficiencyLabel, proficiencyLevels, profileChanges, profileCompleteness, profileLimits,
+  profileLinkInput, profileLinkKinds, profileSections, profileStatusLabels, profileTransition, reaches, sameProfile, sectionLabel, storedProfile, storedVisibility, submissionGaps,
+  teachingFormats, teachingModalities, validOrcid, videoUrlInput, visibilityInput, visibilityLabels,
+} from "./professional";
+export type { CredentialAction, CredentialInput, ProfileAction, ProfileActor, ProfileState } from "./professional";
