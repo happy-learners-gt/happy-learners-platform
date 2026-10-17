@@ -10,6 +10,7 @@ import { Avatar } from "../ui/progress";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, Section, StatusBadge } from "../ui/primitives";
 import type { Tone } from "../ui/primitives";
 import { departureDay } from "./departure";
+import { formatInstantDate } from "../regional";
 
 /**
  * ST-149: the profile form of the welcome (ST-122) and the profile administration consults; «Mi perfil» is in professional.tsx (ST-154).
@@ -140,7 +141,7 @@ function ProfileSummary({ userId }: { userId: string }) {
       <dt>Especialidades</dt><dd>{profile.specialties.length ? <ul className="chips">{profile.specialties.map(item => <li key={item}><span className="chip-button">{item}</span></li>)}</ul> : none}</dd>
       <dt>Disponibilidad</dt><dd>{profile.availability.length ? <ul className="plain-list">{profile.availability.map(slot => <li key={`${slot.day}-${slot.start}`}>{slotText(slot)}</li>)}</ul> : none}</dd>
     </dl>
-    {profile.updatedAt && <p className="muted small">Actualizado el {new Date(profile.updatedAt).toLocaleDateString("es-GT", { day: "numeric", month: "long", year: "numeric" })}.</p>}
+    {profile.updatedAt && <p className="muted small">Actualizado el {formatInstantDate(profile.updatedAt, "long")}.</p>}
     <p><Link href={`/equipo/${profile.userId}`}>Ver su perfil profesional</Link> <span className="muted small">(si lo publicó). Lo que envía a revisión está en «Revisión de perfiles».</span></p>
   </div>;
 }

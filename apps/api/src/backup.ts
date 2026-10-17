@@ -14,7 +14,7 @@
 declare global { interface Env { RESTORE_ENABLED?: string } }
 
 export const BACKUP_FORMAT = "happy-learners-backup/1";
-const SKIPPED = new Set(["sessions", "group_access_sessions", "login_limits", "calendar_feeds", "invitations", "mail_outbox", "email_changes", "sign_in_events", "schema_migrations"]);
+const SKIPPED = new Set(["sessions", "group_access_sessions", "login_limits", "calendar_feeds", "invitations", "mail_outbox", "email_changes", "sign_in_events", "mail_schedule_runs", "schema_migrations"]);
 const SECRET: Record<string, string[]> = { users: ["password_salt", "password_hash", "must_change_password"] };
 
 type Cell = string | number | null | { b64: string };

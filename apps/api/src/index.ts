@@ -26,6 +26,8 @@ import { LessonCollaborationRoom } from "./collaboration";
 import { encodeLessonDraft } from "./rich-text";
 import { accessMatrix, permissionColumns, withPermissions } from "./permissions";
 import { notificationMethods, notifications } from "./notifications";
+import { deliverScheduled } from "./notify";
+import { me, meMethods, preferencesFor } from "./preferences";
 import { hours } from "./hours";
 import { onboarding, onboardingPending } from "./onboarding";
 import { professional, professionalMethods } from "./professional";
@@ -80,7 +82,7 @@ async function organizationOf(env: Env, username: string) {
   const found = await Promise.all(organizationIds.map(id => database(env, id).prepare("SELECT 1 AS found FROM users u JOIN memberships m ON m.user_id=u.id WHERE u.username=? AND m.active=1").bind(username).first()));
   return organizationIds[found.findIndex(Boolean)] || organizationIds[0];
 }
-async function route(request: Request, env: Env): Promise<Response> {
+async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "waitUntil">): Promise<Response> {
   const url = new URL(request.url); const path = url.pathname; const method = request.method;
   if (!path.startsWith("/api/")) {
     const asset = await env.ASSETS.fetch(request); const result = new Response(asset.body, asset);
@@ -100,6 +102,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (professionalAllowed && ["POST", "PUT"].includes(method) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   // ST-158, ST-159: a change of e-mail and a closure request.
   if (accountBody(path, method)) input = await body(request);
+  // ST-160, ST-161: the person's own preferences and the bell; marking every notice as read needs no body.
+  if (["PUT", "POST"].includes(method) && meMethods(path) && (method === "PUT" || request.headers.get("content-type")?.startsWith("application/json"))) input = await body(request);
   let scope: string = scopeOfToken(sessionToken(request));
   if (path.startsWith("/api/share/")) scope = scopeOfShare(path.split("/")[3]);
   const feedToken = feedPath.exec(path)?.[1];
@@ -200,6 +204,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   // ST-158, ST-159: account settings, my data and closing the account.
   const accountAllowed = accountMethods(path);
   if (accountAllowed) methods[path] = accountAllowed;
+  const meAllowed = meMethods(path);
+  if (meAllowed) methods[path] = meAllowed;
   const allowed = methods[path] || (path === "/api/members" ? ["GET", "POST"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/members\/[a-z0-9-]+\/password$/.test(path) ? ["POST"] : /^\/api\/members\/[a-z0-9-]+\/departure$/.test(path) ? ["GET", "POST"] : /^\/api\/lessons\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/(publish|duplicate|review|review\/return)$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+\/files\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
   if (!allowed) return json({ error: "Not found" }, 404);
   if (!allowed.includes(method)) return json({ error: "Method not allowed" }, 405, { Allow: allowed.join(", ") });
@@ -266,12 +272,21 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (!current) return json({ error: "Inicia sesión para continuar." }, 401);
   // Until the person accepts the terms and consents to the privacy policy in force, only those and the session answer.
   const pending = await pendingFor(db, current);
-  // ST-122: `onboarding` is true while the person still has to go through the welcome.
-  if (path === "/api/session") return json({ member: current, pending, ...(await onboardingPending(db, current) ? { onboarding: true } : {}) });
-  if (path === "/api/account/password") return changePassword(input, current, sessionToken(request)!, db, mailSender(env));
+  // ST-124: endpoints that change something tell the people affected, after their write.
+  const notifier = { origin: url.origin, sender: mailSender(env) };
+  // ST-161: e-mail waiting for a digest or the end of the quiet hours leaves on a later access (there is no cron
+  // trigger in this Worker); the response never waits for it.
+  const deliverDue = () => { const run = deliverScheduled(db, notifier, current.organizationId); if (ctx) ctx.waitUntil(run); else void run; };
+  // ST-122: `onboarding` is true while the person still has to go through the welcome. ST-160: the preferences in
+  // force come with the session, so the screen applies the theme, size and formats before showing anything.
+  if (path === "/api/session") {
+    deliverDue();
+    return json({ member: current, pending, preferences: await preferencesFor(db, current.id, current.organizationId), ...(await onboardingPending(db, current) ? { onboarding: true } : {}) });
+  }
+  if (path === "/api/account/password") return changePassword(input, current, sessionToken(request)!, db, notifier);
   // A temporary password opens nothing else until the person chooses their own (ST-093); the terms come after it.
   if (current.mustChangePassword) return json({ error: "Cambia tu contraseña temporal para continuar.", code: "PASSWORD_CHANGE_REQUIRED" }, 403);
-  if (path.startsWith("/api/legal")) return legal(path, method, input, current, db);
+  if (path.startsWith("/api/legal")) return legal(path, method, input, current, db, notifier);
   if (pending.length && !(path === "/api/organization" && method === "GET")) return json({ error: "Acepta los términos y la política de privacidad vigentes para continuar.", pending }, 403);
   if (/^\/api\/courses\/[a-z0-9-]+\/files(?:\/|$)/.test(path)) return courseFiles(path, method, request, current, db, env.COURSE_FILES);
   const collaborationMatch = path.match(/^\/api\/courses\/([a-z0-9-]+)\/lessons\/([a-z0-9-]+)\/collaborate$/);
@@ -296,9 +311,11 @@ async function route(request: Request, env: Env): Promise<Response> {
     internalHeaders.set("X-HL-Session", await digest(token));
     return room.fetch(new Request(request, { headers: internalHeaders }));
   }
-  // ST-124: endpoints that change something tell the people affected by e-mail, after their write.
-  const notifier = { origin: url.origin, sender: mailSender(env) };
   if (accountAllowed) return account(path, method, input, current, db, { request, origin: url.origin, sender: notifier.sender, token: sessionToken(request)! });
+  if (meAllowed) {
+    if (path === "/api/me/inbox") deliverDue();
+    return me(path, method, input, current, db);
+  }
   if (notificationAllowed) return notifications(path, method, input, url, current, db, notifier.sender.configured);
   if (professionalAllowed) return professional(path, method, input, url, current, db);
   if (/^\/api\/(taxonomy|vocabularies|terms)(\/|$)/.test(path)) return taxonomy(path, method, input, current, db);
@@ -319,7 +336,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path.startsWith("/api/invitations")) return invitations(path, method, input, url.origin, current, db, mailSender(env));
   if (staffAllowed) return staff(path, method, request, current, db, env.COURSE_FILES);
   if (path.startsWith("/api/access/")) return accessMatrix(path, method, input, current, db);
-  if (path.startsWith("/api/members")) return roles(path, method, input, current, db, username => usernameTaken(env, username));
+  if (path.startsWith("/api/members")) return roles(path, method, input, current, db, username => usernameTaken(env, username), notifier);
   if (path === "/api/organization/backup" || path === "/api/organization/restore") {
     if (current.role !== "admin") return json({ error: "Solo administración respalda o restaura la organización." }, 403);
     if (path.endsWith("/backup")) {
@@ -339,10 +356,11 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (method === "PUT") {
       if (current.role !== "admin") return json({ error: "Solo administración puede configurar la organización." }, 403);
       const settings = organizationInput(input);
-      if (!settings) return json({ error: "Usa un nombre de 3 a 80 caracteres y una zona horaria válida." }, 400);
-      await db.prepare("UPDATE organizations SET name=?,timezone=?,configured=1 WHERE id=?").bind(settings.name, settings.timezone, current.organizationId).run();
+      if (!settings) return json({ error: "Usa un nombre de 3 a 80 caracteres, una zona horaria válida y un formato regional válido." }, 400);
+      // ST-160: the regional format is optional, so a client that only sends the name and the zone keeps the current one.
+      await db.prepare("UPDATE organizations SET name=?,timezone=?,locale=COALESCE(?,locale),configured=1 WHERE id=?").bind(settings.name, settings.timezone, settings.locale || null, current.organizationId).run();
     }
-    const organization = await db.prepare("SELECT id,name,timezone,configured FROM organizations WHERE id=?").bind(current.organizationId).first<Organization>();
+    const organization = await db.prepare("SELECT id,name,timezone,locale,configured FROM organizations WHERE id=?").bind(current.organizationId).first<Organization>();
     if (!organization) return json({ error: "Organización no disponible." }, 404);
     return json({ organization: { ...organization, configured: !!organization.configured } });
   }
@@ -363,8 +381,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   return content(url, method, input, current, db, notifier);
 }
 export default {
-    async fetch(request, env): Promise<Response> {
-    try { const response = await route(request, env); if (response.status === 101) return response; for (const [key, value] of Object.entries(headers)) response.headers.set(key, value); if (response.headers.get("Content-Type")?.startsWith("text/calendar")) response.headers.set("Cache-Control", "private, max-age=900"); if (response.headers.has("X-File-SHA256")) response.headers.set("Content-Security-Policy", "sandbox; default-src 'none'; frame-ancestors 'none'"); return response; }
+    async fetch(request, env, ctx): Promise<Response> {
+    try { const response = await route(request, env, ctx); if (response.status === 101) return response; for (const [key, value] of Object.entries(headers)) response.headers.set(key, value); if (response.headers.get("Content-Type")?.startsWith("text/calendar")) response.headers.set("Cache-Control", "private, max-age=900"); if (response.headers.has("X-File-SHA256")) response.headers.set("Content-Security-Policy", "sandbox; default-src 'none'; frame-ancestors 'none'"); return response; }
     catch (error) {
       if (error instanceof Error && error.message === "INPUT") return json({ error: "Revisa los datos del formulario." }, 400);
       const cause = error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 240) : "Unknown error";

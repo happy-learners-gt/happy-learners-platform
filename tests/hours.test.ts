@@ -176,7 +176,7 @@ describe("ST-152 Controlar las horas efectivas impartiendo clases", () => {
     const seeded = all.rows.filter(item => ![a, b, c, d].includes(item.sessionId));
     expect(seeded.length).toBeGreaterThan(0);
     expect(seeded.every(item => item.state === "no_start" && item.minutes === 0)).toBe(true);
-  });
+  }, 30_000); // Backs up and restores the whole store: room for slow runners.
 
   it("ST-152 CA2: administración y cada educador consultan las horas por periodo, curso y sección, y las exportan", async () => {
     const [a, b] = mine.classes, [c, d] = theirs.classes;

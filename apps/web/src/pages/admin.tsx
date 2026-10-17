@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import type { AcademicProfile, CourseFormat, CourseSettings, EducationLevel, EducationType, Member, Modality, ModuleLabel, Organization, Pacing, SequenceTemplate, StudyProgram, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
-import { accountInput, areaLabel, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, moduleLabels, moduleNoun, pacings, sequenceOf, sequenceTemplates, settingDefinitions, timezoneGroups, utcOffset } from "@happy-learners/domain";
+import type { AcademicProfile, CourseFormat, EffectivePreferences, CourseSettings, EducationLevel, EducationType, Member, Modality, ModuleLabel, Organization, Pacing, SequenceTemplate, StudyProgram, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
+import { accountInput, areaLabel, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, moduleLabels, moduleNoun, pacings, sequenceOf, sequenceTemplates, settingDefinitions, suggestedLocales, timezoneGroups, utcOffset } from "@happy-learners/domain";
 import type { SettingKey } from "@happy-learners/domain";
 import { plural, timeAgo } from "../model";
 import { ActivityFeed, Avatar, CourseProgressList, useProgress } from "../ui/progress";
@@ -22,6 +22,8 @@ import { ExpiringDocuments, PersonDetail } from "./profile";
 import { CoordinationBadge, CoordinationDialog } from "./access";
 import { OnboardingBadge, OnboardingFilter, useOnboardingPeople } from "./onboarding";
 import type { OnboardingPersonStatus } from "@happy-learners/contracts";
+import { currentRegional } from "../regional";
+import { localeLabel } from "./preferences";
 
 function AdminOnly({ title, children }: { title: string; children: ReactNode }) {
   const { member } = useSession();
@@ -33,7 +35,7 @@ export function OrganizationSettings() {
   return <AdminOnly title="Organización"><OrganizationForm/></AdminOnly>;
 }
 function OrganizationForm() {
-  const { organization, setOrganization } = useSession();
+  const { organization, setOrganization, setPreferences } = useSession();
   const { guard } = useNavigation();
   const { toast } = useFeedback();
   const [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -42,19 +44,29 @@ function OrganizationForm() {
   useUnsavedChanges(dirty);
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
-    try { const result = await api<{ organization: Organization }>("/organization", "PUT", Object.fromEntries(new FormData(event.currentTarget))); setDirty(false); guard(false); setOrganization(result.organization); toast({ message: "Organización guardada." }); }
+    try {
+      const result = await api<{ organization: Organization }>("/organization", "PUT", Object.fromEntries(new FormData(event.currentTarget))); setDirty(false); guard(false); setOrganization(result.organization);
+      // ST-160: whoever follows the organization's zone or format sees the change at once, starting with this person.
+      setPreferences((await api<{ preferences: EffectivePreferences }>("/me/preferences")).preferences);
+      toast({ message: "Organización guardada." });
+    }
     catch (cause) { setError(message(cause)); }
     finally { setBusy(false); }
   }
   return <>
-    <PageHeader title="Organización" description="Nombre, zona horaria y calendario de días sin clase del espacio compartido."/>
+    <PageHeader title="Organización" description="Nombre, zona horaria, formato regional y calendario de días sin clase del espacio compartido."/>
     <form className="form-card reading" onSubmit={save} onChange={() => setDirty(true)}>
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
       <fieldset disabled={busy} className="stack">
         <Field label="Nombre de la organización" hint="En la demostración usa un nombre ficticio."><input name="name" required minLength={3} maxLength={80} defaultValue={organization?.name || ""}/></Field>
-        <Field label="Zona horaria" hint={`Hora local: ${new Intl.DateTimeFormat("es-GT", { timeZone: zone, hour: "2-digit", minute: "2-digit" }).format(new Date())} (${utcOffset(zone)}). El día de hoy y las fechas de las clases se calculan en esta zona.`}>
+        <Field label="Zona horaria" hint={`Hora local: ${new Intl.DateTimeFormat(currentRegional().locale, { timeZone: zone, hour: "numeric", minute: "2-digit", hourCycle: currentRegional().hourCycle }).format(new Date())} (${utcOffset(zone)}). El día de hoy y las fechas de las clases se calculan en esta zona; es también la zona de quien no elige otra en sus preferencias.`}>
           <select name="timezone" value={zone} onChange={event => setZone(event.target.value)}>
             {zones.map(group => <optgroup key={group.region} label={group.region}>{group.zones.map(item => <option key={item.id} value={item.id}>{item.id} ({item.offset})</option>)}</optgroup>)}
+          </select>
+        </Field>
+        <Field label="Formato regional" hint="Cómo se escriben fechas, horas y números para quien no elige otro formato en sus preferencias.">
+          <select name="locale" defaultValue={organization?.locale || "es"}>
+            {[...new Set([organization?.locale || "es", ...suggestedLocales])].filter(tag => { try { return Intl.DateTimeFormat.supportedLocalesOf([tag]).length > 0; } catch { return false; } }).map(tag => <option key={tag} value={tag}>{localeLabel(tag)}</option>)}
           </select>
         </Field>
         <div className="form-actions"><button className="button primary">{busy ? "Guardando…" : "Guardar organización"}</button></div>

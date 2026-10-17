@@ -5,6 +5,7 @@ import { Link } from "../navigation";
 import { useSession } from "../session";
 import { courseStats, lessonNames, lessonState, newest, plural, sessionDay, timeAgo } from "../model";
 import type { CourseStats } from "../model";
+import { classMoment, formatDay, personalToday } from "../regional";
 import { CourseCard } from "../ui/cards";
 import { Icon } from "../ui/icons";
 import type { IconName } from "../ui/icons";
@@ -41,11 +42,11 @@ export function Home() {
     } catch (cause) { setError(message(cause)); }
   }
   useEffect(() => { void load(); }, []);
-  const todayLabel = new Date().toLocaleDateString("es-GT", { weekday: "long", day: "numeric", month: "long" });
+  const todayLabel = formatDay(personalToday(), "long");
   // One primary action, inside the welcome banner.
   const banner = (summary?: string) => <header className="welcome-banner">
     <div className="welcome-text">
-      <span className="welcome-date">{todayLabel.charAt(0).toUpperCase() + todayLabel.slice(1)}{organization?.name ? ` · ${organization.name}` : ""}</span>
+      <span className="welcome-date">{todayLabel}{organization?.name ? ` · ${organization.name}` : ""}</span>
       <h1>Inicio</h1>
       <p>Hola, {member.displayName || member.username}. {summary || "Esto es lo que sigue en tu espacio."}</p>
     </div>
@@ -68,7 +69,9 @@ export function Home() {
     ...data.courses.map(course => ({ id: course.id, title: course.title, detail: "Curso", href: `/cursos/${course.id}`, updatedAt: course.updatedAt, icon: "courses" as IconName })),
   ]).slice(0, 6);
   const continueLesson = pending[0];
-  const classesToday = data.upcoming.filter(session => session.sessionDate === data.today).length;
+  // ST-160: classes read in the person's zone and format; «today» is the person's.
+  const today = personalToday(), moments = new Map(data.upcoming.map(session => [session.id, classMoment(session.sessionDate, session.startsAt)]));
+  const classesToday = data.upcoming.filter(session => moments.get(session.id)!.day === today).length;
   const summary = [data.toReview.length ? plural(data.toReview.length, "lección por revisar", "lecciones por revisar") : "", pending.length ? plural(pending.length, "lección espera publicación", "lecciones esperan publicación") : "Todo está publicado", classesToday ? plural(classesToday, "clase hoy", "clases hoy") : ""].filter(Boolean).join(" · ") + ".";
   return <>
     {banner(educator ? summary : undefined)}
@@ -114,11 +117,11 @@ export function Home() {
       </div>
       <div className="dashboard-side">
         {(educator || data.upcoming.length > 0) && <Section title="Próximas clases" className="order-2">
-          {data.upcoming.length ? <ul className="session-list">{data.upcoming.map(session => <li key={session.id}>
-            <span className="date-chip" aria-hidden="true"><strong>{session.sessionDate.slice(8)}</strong>{sessionDay(session.sessionDate, "short").replace(/^\d+\s*/, "")}</span>
-            <div><Link href={`${sectionPath(session.groupId)}/clases/${session.id}`}>{session.groupName || "Sección"}{session.startsAt ? ` · ${session.startsAt}` : ""}</Link><span>{session.courseTitle} · {lessonNames(session) || sessionDay(session.sessionDate)}</span></div>
+          {data.upcoming.length ? <ul className="session-list">{data.upcoming.map(session => { const when = moments.get(session.id)!; return <li key={session.id}>
+            <span className="date-chip" aria-hidden="true"><strong>{Number(when.day.slice(8))}</strong>{formatDay(when.day, "month")}</span>
+            <div><Link href={`${sectionPath(session.groupId)}/clases/${session.id}`}>{session.groupName || "Sección"}{when.clock ? ` · ${when.clock}` : ""}</Link><span>{session.courseTitle} · {lessonNames(session) || sessionDay(when.day)}</span></div>
             {(session.status === "in_progress" || session.sessionDate <= data.today) && classBadge(session, data.today)}
-          </li>)}</ul> : <EmptyState compact icon="calendar" title="Sin clases próximas">Aquí aparecen las clases de las secciones que impartes. Administración configura su horario.</EmptyState>}
+          </li>; })}</ul> : <EmptyState compact icon="calendar" title="Sin clases próximas">Aquí aparecen las clases de las secciones que impartes. Administración configura su horario.</EmptyState>}
         </Section>}
         <Section title="Estado de las lecciones" className="order-3">
           <StatTiles className="stack-tiles" items={[

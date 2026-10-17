@@ -3,6 +3,7 @@ import { documentCanonical, isLegalKind, legalDraftInput, legalLabels, organizat
 import { digest, verifyPassword } from "./auth";
 import type { Database } from "./storage";
 import { event } from "./team";
+import { notify, type Notifier } from "./notify";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
 const columns = "id,kind,status,version,title,body,consent,updated_at AS updatedAt,published_at AS publishedAt,(SELECT COALESCE(u.display_name,u.username) FROM users u WHERE u.id=d.published_by) AS publishedBy";
@@ -55,7 +56,7 @@ async function allDocuments(db: Database, organizationId: string) {
  * /api/legal…: every person reads the versions in force and accepts them or withdraws a privacy consent; administration
  * writes drafts, publishes them and reads who accepted what. A published version and an acceptance are never rewritten.
  */
-export async function legal(path: string, method: string, input: unknown, current: Member, db: Database): Promise<Response> {
+export async function legal(path: string, method: string, input: unknown, current: Member, db: Database, notifier?: Notifier): Promise<Response> {
   const now = new Date().toISOString();
   if (path === "/api/legal") return reply(await mine(db, current));
   if (path === "/api/legal/accept") {
@@ -128,6 +129,14 @@ export async function legal(path: string, method: string, input: unknown, curren
       .bind(current.organizationId, kind, current.id, now, draft.id).run();
     const published = await db.prepare("SELECT version FROM legal_documents WHERE id=?").bind(draft.id).first<{ version: number }>();
     await event(db, current, { action: "published", targetType: "legal", targetId: draft.id, summary: `Publicó ${named(kind, published?.version ?? null)}` }).run();
+    // ST-161: everyone hears of a new version by a mandatory notice (bell and e-mail), except who published it.
+    const [title, people] = await Promise.all([
+      db.prepare("SELECT title FROM legal_documents WHERE id=?").bind(draft.id).first<{ title: string }>(),
+      db.prepare("SELECT user_id AS id FROM memberships WHERE organization_id=? AND active=1").bind(current.organizationId).all<{ id: string }>(),
+    ]);
+    const document = kind === "terms" ? "los términos" : kind === "privacy" ? "la política de privacidad" : "el acuerdo de voluntariado";
+    await notify(db, notifier, current, people.results.filter(person => person.id !== current.id).map(person => ({ userId: person.id, targetId: draft.id, path: "/inicio",
+      facts: { type: "terms_updated" as const, document, title: title?.title || legalLabels[kind], version: published?.version || 1 } })));
     return reply({ documents: await allDocuments(db, current.organizationId) });
   }
   const value = legalDraftInput(kind, input);

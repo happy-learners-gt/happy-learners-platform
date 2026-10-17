@@ -1,5 +1,10 @@
 # Changelog
 
+## Sin publicar
+
+- ST-160: **Preferencias** (menú con tu nombre), pestaña **Región e idioma**: idioma de la interfaz (solo español; lista extensible), formato regional BCP 47, zona horaria IANA, primer día de la semana, reloj de 12 o 24 horas y página de inicio; lo que queda en automático sigue a la organización (formato y zona) o al formato regional. La agenda, Inicio, el horario, las horas (y su CSV) y el calendario iCal usan la zona y el formato de la persona. **Apariencia y accesibilidad**: tema claro, oscuro o del sistema (tokens Fluent oscuros generados), tamaño del texto de 100 % a 150 %, alto contraste, reducir movimiento (o seguir al sistema) y densidad cómoda o compacta, aplicados al instante y guardados en la cuenta. **Organización** agrega el formato regional por omisión. `GET, PUT /api/me/preferences`; `GET /api/session` incluye las preferencias vigentes.
+- ST-161 (extiende ST-124): **Preferencias → Notificaciones** con la matriz aviso × canal (en la aplicación y correo), frecuencia del correo (inmediato, resumen diario, resumen semanal, nunca) con hora del resumen, horario de silencio y los correos que esperan. Los avisos de seguridad de la cuenta, cambio de correo y términos son obligatorios y no se pueden apagar; cambiar la contraseña, restablecerla y publicar términos los emiten. La **campana** de la barra superior lista los avisos en la aplicación. `GET, PUT /api/me/notification-preferences`, `GET /api/me/inbox`, `POST /api/me/inbox/read`; `/api/notifications/preferences` sigue funcionando como la columna de correo. `0044_preferences.sql`: `organizations.locale`, `user_preferences`, `notification_settings`, `notification_inbox`, `mail_schedule_runs`; reconstruye `notification_preferences` (cada elección anterior pasa al canal correo) y `mail_outbox` (copia cada fila; agrega `scheduled`, `digested`, `kind = 'digest'`, `deliver_after`, `path`, `digest_id`).
+
 ## 1.1.0 — 2026-10-16
 
 Ciclo de vida del educador de REL-005 (SPR-003; DEC-036, DEC-041 a DEC-044). Migraciones 0031 a 0041, acumulativas.
