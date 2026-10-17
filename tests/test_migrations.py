@@ -971,3 +971,80 @@ class PreferencesMigrationTests(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             db.execute("INSERT INTO mail_schedule_runs VALUES ('org-missing','t')")
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class ReleaseOutboxMigrationTests(unittest.TestCase):
+    """v1.1.1 releases 0042, 0043 and 0044 together. 0043 and 0044 both rebuild mail_outbox: after both, the outbox
+    must admit the account's security notices of 0043 and the scheduled e-mail and digests of 0044, keep the rule of
+    each, and keep every earlier row byte for byte. 0042 rebuilds activity_events, which neither 0043 nor 0044 touch."""
+
+    columns = "id,organization_id,kind,reference_id,recipient,subject,status,attempts,last_error,created_at,sent_at,provider_id,user_id,notification_type,reason,mandatory"
+
+    def migrations(self):
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        return migrations, [path.name[:4] for path in migrations]
+
+    def test_account_notices_and_scheduled_digests_coexist_after_0042_0043_0044(self):
+        migrations, numbers = self.migrations()
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        db.isolation_level = None
+        for path in migrations[:numbers.index("0042")]:
+            db.executescript(path.read_text())
+        user = db.execute("SELECT user_id FROM memberships WHERE organization_id='org-demo' AND active=1 ORDER BY user_id LIMIT 1").fetchone()[0]
+        insert = f"INSERT INTO mail_outbox({self.columns}) VALUES (?,'org-demo',?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        # Rows written by v1.1.0 (0034 and 0039), before any of the three migrations.
+        db.execute(insert, ("mail-i", "invitation", "invitation-1", "ñandú@example.test", "Te invitaron «ñ»", "sent", 2, None, "2026-10-01T00:00:00.000Z", "2026-10-01T00:00:01.000Z", "<id@brevo>", None, None, None, 0))
+        db.execute(insert, ("mail-n", "notification", "class_changed:c", "", "Cambió la clase", "no_address", 0, "Sin correo", "2026-10-02T00:00:00.000Z", None, None, user, "class_changed", "Cambió la clase", 1))
+        db.executescript("BEGIN;\n" + migrations[numbers.index("0042")].read_text() + "\nCOMMIT;")
+        db.executescript("BEGIN;\n" + migrations[numbers.index("0043")].read_text() + "\nCOMMIT;")
+        # A mandatory account notice written between 0043 and 0044 (a v1.1.1 store migrates all three at once, but an
+        # account notice must survive 0044 either way).
+        db.execute(insert, ("mail-a", "account", "email-change-1", "nueva@example.test", "Confirma tu correo", "not_configured", 0, "El envío de correo no está configurado.", "2026-10-03T00:00:00.000Z", None, None, user, None, "Confirmación del nuevo correo", 1))
+        rows = lambda: db.execute(f"SELECT rowid,{self.columns},hex(CAST(recipient AS BLOB)),hex(CAST(subject AS BLOB)) FROM mail_outbox ORDER BY rowid").fetchall()
+        before = rows()
+        self.assertEqual(len(before), 3)
+        db.executescript("BEGIN;\n" + migrations[numbers.index("0044")].read_text() + "\nCOMMIT;")
+        self.assertEqual(rows(), before)
+        self.assertEqual(db.execute("SELECT name FROM sqlite_master WHERE name LIKE 'mail_outbox_v%'").fetchall(), [])
+        self.assertEqual(sorted(row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='mail_outbox' AND sql IS NOT NULL")),
+                         ["mail_outbox_due", "mail_outbox_kind", "mail_outbox_person", "mail_outbox_reference", "mail_outbox_sent"])
+        outbox = [row[1] for row in db.execute("PRAGMA table_info(mail_outbox)")]
+        self.assertEqual(outbox, self.columns.split(",") + ["deliver_after", "path", "digest_id"])
+
+        # After 0044: a new mandatory account notice (0043) and a scheduled notification gathered in a digest (0044).
+        account = "INSERT INTO mail_outbox(id,organization_id,kind,reference_id,recipient,subject,status,created_at,user_id,reason,mandatory) VALUES (?,'org-demo','account','password:x',?,'Tu contraseña cambió',?,'2026-10-04T00:00:00.000Z',?,?,?)"
+        db.execute(account, ("mail-a2", "a@example.test", "sent", user, "Aviso de seguridad: cambió la contraseña de @persona", 1))
+        db.execute(account, ("mail-a3", "", "no_address", user, "Pidió cerrar su cuenta", 1))
+        note = "INSERT INTO mail_outbox(id,organization_id,kind,recipient,subject,status,created_at,user_id,notification_type,reason,mandatory,deliver_after,path,digest_id) VALUES (?,'org-demo',?,'a@example.test','S',?,'2026-10-04T00:00:00.000Z',?,?,?,0,?,?,?)"
+        db.execute(note, ("mail-s", "notification", "scheduled", user, "class_changed", "Cambió la clase", "2026-10-05T13:00:00.000Z", "/agenda", None))
+        db.execute(note, ("mail-d", "digest", "sent", user, None, "Resumen diario con 2 avisos", None, None, None))
+        db.execute(note, ("mail-g", "notification", "digested", user, "review_returned", "Devolvieron la lección", None, "/cursos/x", "mail-d"))
+        self.assertEqual(db.execute("SELECT kind,status,mandatory FROM mail_outbox ORDER BY rowid").fetchall(), [
+            ("invitation", "sent", 0), ("notification", "no_address", 1), ("account", "not_configured", 1), ("account", "sent", 1), ("account", "no_address", 1),
+            ("notification", "scheduled", 0), ("digest", "sent", 0), ("notification", "digested", 0)])
+        self.assertEqual(db.execute("SELECT id FROM mail_outbox WHERE organization_id='org-demo' AND status='scheduled' AND deliver_after<='2026-10-06'").fetchall(), [("mail-s",)])
+
+        # The rule of 0043 holds after 0044: an account notice names the person and the reason and is mandatory.
+        for values in [("x1", "a@example.test", "sent", None, "R", 1), ("x2", "a@example.test", "sent", user, None, 1), ("x3", "a@example.test", "sent", user, "R", 0), ("x4", "", "sent", user, "R", 1)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(values)):
+                db.execute(account, values)
+        # And the rules of 0044: only notifications wait or join a digest; a digest is optional and names the person; the
+        # kinds are the four the code writes.
+        any_note = "INSERT INTO mail_outbox(id,organization_id,kind,recipient,subject,status,created_at,user_id,notification_type,reason,mandatory,deliver_after,digest_id) VALUES (?,'org-demo',?,'a@example.test','S',?,'t',?,?,?,?,?,?)"
+        for values in [("y1", "account", "scheduled", user, None, "R", 1, "2026-10-05T13:00:00.000Z", None), ("y2", "digest", "sent", user, None, "R", 1, None, None),
+                       ("y3", "notification", "digested", user, "class_changed", "R", 0, None, None), ("y4", "letter", "sent", user, None, "R", 0, None, None),
+                       ("y5", "notification", "scheduled", user, "class_changed", "R", 0, None, None)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(values)):
+                db.execute(any_note, values)
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO mail_outbox(id,organization_id,kind,recipient,subject,status,created_at,user_id,reason,mandatory) VALUES ('y6','org-demo','invitation','a@example.test','S','sent','t',?,NULL,0)", (user,))
+
+        # The other tables these migrations rebuild keep their own additions: activity of 0042, sessions of 0043,
+        # channels of 0044.
+        db.execute("INSERT INTO activity_events(id,organization_id,actor_id,action,target_type,target_id,summary,occurred_at) VALUES ('e1','org-demo',?,'verified','credential','c1','Verificó una credencial','t')", (user,))
+        db.execute("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES (?,?,1)", ("a" * 64, user))
+        self.assertRegex(db.execute("SELECT id FROM sessions").fetchone()[0], r"^session-[0-9a-f]{32}$")
+        db.execute("INSERT INTO notification_preferences(user_id,organization_id,type,channel,enabled,updated_at) VALUES (?,'org-demo','class_changed','in_app',0,'t')", (user,))
+        self.assertEqual([row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name GLOB '*_v[0-9]*'")], [])
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])

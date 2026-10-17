@@ -78,10 +78,14 @@ CREATE TABLE mail_schedule_runs (
 -- names that digest. Types follow the domain catalog (including the mandatory account and terms notices), so the
 -- column checks their shape. SQLite cannot change a CHECK in place: the table is rebuilt, every existing row copied
 -- unchanged and in its order, and the indexes recreated. The body is still never stored.
-CREATE TABLE mail_outbox_v3 (
+-- Released with 0043 (v1.1.1): this rebuild is the union of both. It keeps the kinds of 0034, 0039 and 0043
+-- ('invitation', 'notification', 'account') and adds 'digest'; it keeps the rule of 0043 for the account's security
+-- notices (they name the person and the reason and are mandatory) and adds the scheduled states and their columns.
+-- The temporary table is named mail_outbox_v4 so it never meets the mail_outbox_v3 of 0043.
+CREATE TABLE mail_outbox_v4 (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL REFERENCES organizations(id),
-  kind TEXT NOT NULL CHECK(length(kind) BETWEEN 3 AND 30 AND kind NOT GLOB '*[^a-z_]*'),
+  kind TEXT NOT NULL CHECK(kind IN ('invitation','notification','account','digest')),
   reference_id TEXT,
   recipient TEXT NOT NULL CHECK(length(recipient) BETWEEN 3 AND 254 OR (status = 'no_address' AND recipient = '')),
   subject TEXT NOT NULL CHECK(length(subject) BETWEEN 1 AND 200),
@@ -100,17 +104,17 @@ CREATE TABLE mail_outbox_v3 (
   digest_id TEXT,
   CHECK(CASE kind
     WHEN 'notification' THEN notification_type IS NOT NULL AND reason IS NOT NULL AND user_id IS NOT NULL
+    WHEN 'account' THEN notification_type IS NULL AND reason IS NOT NULL AND user_id IS NOT NULL AND mandatory = 1
     WHEN 'digest' THEN user_id IS NOT NULL AND reason IS NOT NULL AND notification_type IS NULL AND mandatory = 0
-    WHEN 'invitation' THEN notification_type IS NULL AND reason IS NULL AND user_id IS NULL AND mandatory = 0
-    ELSE notification_type IS NULL END),
+    ELSE notification_type IS NULL AND reason IS NULL AND user_id IS NULL AND mandatory = 0 END),
   CHECK(status NOT IN ('scheduled','digested') OR kind = 'notification'),
   CHECK(status <> 'scheduled' OR deliver_after IS NOT NULL),
   CHECK(status <> 'digested' OR digest_id IS NOT NULL)
 );
-INSERT INTO mail_outbox_v3(id,organization_id,kind,reference_id,recipient,subject,status,attempts,last_error,created_at,sent_at,provider_id,user_id,notification_type,reason,mandatory)
+INSERT INTO mail_outbox_v4(id,organization_id,kind,reference_id,recipient,subject,status,attempts,last_error,created_at,sent_at,provider_id,user_id,notification_type,reason,mandatory)
   SELECT id,organization_id,kind,reference_id,recipient,subject,status,attempts,last_error,created_at,sent_at,provider_id,user_id,notification_type,reason,mandatory FROM mail_outbox ORDER BY rowid;
 DROP TABLE mail_outbox;
-ALTER TABLE mail_outbox_v3 RENAME TO mail_outbox;
+ALTER TABLE mail_outbox_v4 RENAME TO mail_outbox;
 CREATE INDEX mail_outbox_reference ON mail_outbox(reference_id,created_at DESC);
 CREATE INDEX mail_outbox_sent ON mail_outbox(organization_id,status,sent_at);
 CREATE INDEX mail_outbox_kind ON mail_outbox(organization_id,kind,created_at DESC);
