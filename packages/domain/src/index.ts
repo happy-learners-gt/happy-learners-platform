@@ -135,3 +135,7 @@ export {
   teachingFormats, teachingModalities, validOrcid, videoUrlInput, visibilityInput, visibilityLabels,
 } from "./professional";
 export type { CredentialAction, CredentialInput, ProfileAction, ProfileActor, ProfileState } from "./professional";
+export { accountMessage, accountNoticeReason, countryCode, deviceLabel, emailChangeHours, emailChangeInput, emailChangeLifetimeMs, emailChangeState, maskEmail, sessionTouchMs, signInHistoryLimit, signInRetentionDays } from "./account-settings";
+export type { AccountNotice, AccountNoticeDetails, AccountNoticeKind, EmailChangeStatus } from "./account-settings";
+export { closureLabels, closureOpen, closureReasonInput, closureStatuses, closureTransition, maxClosureReason, personalDataFile, personalDataFormat, personalDataSections } from "./closures";
+export type { ClosureAction, ClosureStatus, PersonalDataSection } from "./closures";
