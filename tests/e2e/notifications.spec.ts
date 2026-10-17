@@ -22,15 +22,16 @@ test("HL-170 ST-124: an educator turns off one notice, administration marks anot
     const pending = (await (await diego.get("/api/session")).json()).pending as { id: string }[];
     if (pending.length) expect((await diego.post("/api/legal/accept", { data: { documentIds: pending.map(item => item.id) } })).status()).toBe(200);
 
-    // Criterion 2: the educator turns off one notice in «Mi perfil».
-    await signIn(page, "diego.ramirez", "/perfil");
-    const notices = page.getByRole("region", { name: "Notificaciones por correo" });
-    const returned = notices.getByRole("checkbox", { name: /Revisión devuelta/ });
+    // Criterion 2: the educator turns off one notice by e-mail in «Preferencias» (ST-161 moved it from «Mi perfil»).
+    await signIn(page, "diego.ramirez", "/perfil#notificaciones");
+    await expect(page).toHaveURL(/\/preferencias#notificaciones$/);
+    const notices = page.getByRole("region", { name: "Avisos por canal" });
+    const returned = notices.getByRole("switch", { name: "Revisión devuelta: Correo" });
     await expect(returned).toBeChecked();
     await returned.uncheck();
-    await expect(toast(page)).toContainText("Ya no recibirás avisos de «Revisión devuelta»");
+    await expect(toast(page)).toContainText("Ya no recibirás «Revisión devuelta» por correo");
     await expect(returned).not.toBeChecked();
-    await audit(page, "mi perfil · notificaciones");
+    await audit(page, "preferencias · notificaciones");
 
     // Criterion 2: administration marks another one mandatory; the educator sees it locked.
     await signIn(page, "admin-demo", "/notificaciones");

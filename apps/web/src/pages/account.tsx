@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import type { AccountOverview, AccountSession, ClosureRequest, EmailChangeIssued, EmailChangePreview, MyClosure, NotificationDelivery, SignInRecord } from "@happy-learners/contracts";
+import type { AccountNoticeDelivery, AccountOverview, AccountSession, ClosureRequest, EmailChangeIssued, EmailChangePreview, MyClosure, SignInRecord } from "@happy-learners/contracts";
 import { acceptablePassword, closureLabels, emailChangeHours, maxClosureReason, maxPasswordLength, minPasswordLength, normalizeEmail, personalDataSections } from "@happy-learners/domain";
 import { api, ApiError, message } from "../api";
 import { fullDate, timeAgo } from "../model";
@@ -15,7 +15,7 @@ import type { Tone } from "../ui/primitives";
  * Sesiones activas (close one or all the others), Historial de accesos, Mis datos (JSON download) and Cerrar la cuenta
  * (a request administration attends by recording the departure, ST-123). Security notices are always sent.
  */
-const deliveryNote: Record<NotificationDelivery, string> = {
+const deliveryNote: Record<AccountNoticeDelivery, string> = {
   sent: "Te enviamos un enlace a la nueva dirección. Ábrelo para confirmarla.",
   queued: "El correo está en cola. Si no llega, vuelve a pedir el cambio.",
   failed: "No pudimos enviar el correo. Abre el enlace de abajo desde un navegador donde puedas consultar esa dirección.",

@@ -6,11 +6,11 @@ import { api, ApiError, message } from "../api";
 import { Modal } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import { ErrorState, Field, Loading } from "../ui/primitives";
+import { formatDay } from "../regional";
 
 /** A calendar day (AAAA-MM-DD) in words, without a timezone shift: «15 de octubre de 2026». */
 export function departureDay(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
-  return new Date(year, month - 1, day).toLocaleDateString("es-GT", { day: "numeric", month: "long", year: "numeric" });
+  return formatDay(value, "full");
 }
 
 /** The people to choose from, the course team first: they already know the course. */

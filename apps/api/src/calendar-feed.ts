@@ -4,6 +4,7 @@ import type { FeedClass } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { digest, newToken } from "./auth";
 import { taughtClasses, timezoneOf } from "./classes";
+import { preferencesFor } from "./preferences";
 
 /**
  * Calendar subscription (ST-125). The link carries a 256-bit secret whose first letter names the organization's store,
@@ -33,10 +34,12 @@ export async function feed(token: string, url: URL, scope: string, db: Database)
   const owner = await db.prepare("SELECT f.user_id AS userId,f.organization_id AS organizationId,o.name FROM calendar_feeds f JOIN memberships m ON m.user_id=f.user_id AND m.organization_id=f.organization_id AND m.active=1 JOIN organizations o ON o.id=f.organization_id WHERE f.token_hash=? AND f.organization_id=?")
     .bind(await digest(token), scope).first<{ userId: string; organizationId: string; name: string | null }>();
   if (!owner) return missing();
-  const timezone = await timezoneOf(db, owner.organizationId), window = feedWindow(localDay(timezone));
+  // ST-160: the window follows the owner's day and the calendar announces their zone; classes keep the organization's.
+  const [timezone, own] = await Promise.all([timezoneOf(db, owner.organizationId), preferencesFor(db, owner.userId, owner.organizationId)]);
+  const window = feedWindow(localDay(own.timezone));
   const classes = (await db.prepare(`SELECT s.id,s.group_id AS groupId,s.session_date AS sessionDate,s.starts_at AS startsAt,s.duration_minutes AS durationMinutes,s.status,s.version,s.updated_at AS updatedAt,c.title AS courseTitle,g.name AS groupName
     FROM class_sessions s JOIN course_groups g ON g.id=s.group_id ${taughtClasses} AND s.session_date BETWEEN ? AND ? ORDER BY s.session_date,s.starts_at,s.id LIMIT 2000`)
     .bind(owner.userId, owner.organizationId, window.from, window.until).all<FeedClass>()).results;
-  const body = calendarFeed({ name: `Mis clases · ${owner.name || "Happy Learners"}`, timezone, origin: url.origin, classes });
+  const body = calendarFeed({ name: `Mis clases · ${owner.name || "Happy Learners"}`, timezone, displayTimezone: own.timezone, origin: url.origin, classes });
   return new Response(body, { headers: { "Content-Type": "text/calendar; charset=utf-8", "Content-Disposition": 'inline; filename="mis-clases.ics"' } });
 }

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { Member, Organization, PendingDocument } from "@happy-learners/contracts";
+import type { EffectivePreferences, Member, Organization, PendingDocument } from "@happy-learners/contracts";
+import { homePages } from "@happy-learners/domain";
 import { api, ApiError, consentRequired, message, sessionExpired, sessionRestored } from "./api";
 import { NavigationProvider, useNavigation } from "./navigation";
 import { SessionContext } from "./session";
@@ -26,6 +27,9 @@ import { MyProfilePage, ProfileReviewsPage, TeamDirectory, TeamProfilePage } fro
 import { HoursPage } from "./pages/hours";
 import { OnboardingWizard } from "./pages/onboarding";
 import { AccountPage, ConfirmEmail } from "./pages/account";
+import { PreferencesPage } from "./pages/preferences";
+import { applyAppearance, appearanceOf } from "./appearance";
+import { setRegional } from "./regional";
 const StudentLesson = lazy(() => import("./pages/StudentLesson").then(module => ({ default: module.StudentLesson })));
 const StudentSpace = lazy(() => import("./pages/StudentSpace").then(module => ({ default: module.StudentSpace })));
 
@@ -80,13 +84,18 @@ function AuthenticatedApp() {
   const [member, setMember] = useState<Member | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [pending, setPending] = useState<PendingDocument[]>([]);
+  const [preferences, setPreferenceState] = useState<EffectivePreferences | null>(null);
+  // ST-160: formats first (the screens read them while rendering), then the appearance of the whole document.
+  const applyPreferences = useCallback((next: EffectivePreferences) => { setRegional(next); applyAppearance(appearanceOf(next)); setPreferenceState(next); }, []);
+  const landed = useRef(false);
   // ST-122: a new account goes through the welcome after its password and the terms.
   const [onboarding, setOnboarding] = useState(false);
   const [status, setStatus] = useState<"loading" | "ready" | "offline">("loading");
   const [expired, setExpired] = useState(false);
   const refresh = useCallback(async () => {
     // Sequential on purpose: a 401 from the session check means "show the login", not "offline".
-    const session = await api<{ member: Member; pending?: PendingDocument[]; onboarding?: true }>("/session");
+    const session = await api<{ member: Member; pending?: PendingDocument[]; onboarding?: true; preferences?: EffectivePreferences }>("/session");
+    if (session.preferences) applyPreferences(session.preferences);
     // With a temporary password, nothing else opens until the person chooses their own (ST-093).
     const org = session.member.mustChangePassword ? null : await api<{ organization: Organization }>("/organization");
     setMember(session.member); setOrganization(org?.organization || null); setPending(session.pending || []); setOnboarding(!!session.onboarding);
@@ -105,6 +114,13 @@ function AuthenticatedApp() {
   }, []);
   // Locations from v0.2.2 keep working.
   useEffect(() => { if (url.pathname.startsWith("/contenido") || url.searchParams.has("biblioteca")) navigate("/cursos", true); }, [url]);
+  // ST-160: opening the bare address lands on the person's home page, once; the menu's «Inicio» still opens Inicio.
+  useEffect(() => {
+    if (!preferences || landed.current) return;
+    landed.current = true;
+    const home = homePages.find(page => page.value === preferences.homePage);
+    if (url.pathname === "/" && home && home.path !== "/inicio") navigate(home.path, true);
+  }, [preferences]);
   if (status === "loading") return <main className="splash"><span className="brand-mark" aria-hidden="true">hl</span><p role="status">Abriendo tu espacio…</p></main>;
   if (status === "offline") return <main className="splash"><span className="brand-mark" aria-hidden="true">hl</span><h1>No pudimos conectar</h1><p>Comprueba tu conexión y vuelve a intentar.</p><button type="button" className="button primary" onClick={start}>Volver a intentar</button></main>;
   if (!member) return <Login onSignedIn={async () => { await refresh(); setExpired(false); }}/>;
@@ -113,7 +129,7 @@ function AuthenticatedApp() {
   const logout = () => api("/logout", "POST").catch(() => undefined).finally(() => { setMember(null); setOrganization(null); setPending([]); toast({ tone: "info", message: "Sesión cerrada de forma segura." }); });
   if (pending.length) return <ConsentGate pending={pending} organizationId={member.organizationId} onAccepted={refresh} onLogout={() => void logout()}/>;
   const session: Session = {
-    member, organization, setOrganization,
+    member, organization, setOrganization, preferences, setPreferences: applyPreferences,
     logout: () => {
       if (!navigate("/inicio")) return;
       void logout();
@@ -149,10 +165,12 @@ function page(first: string, second?: string) {
     case "guia-de-estilo": return <StyleGuide/>;
     case "organizacion": return <OrganizationSettings/>;
     case "educadores": return <Members/>;
-    case "perfil": return <MyProfilePage/>;
+    // ST-161: notifications moved to Preferencias; links from earlier e-mails still arrive.
+    case "perfil": return location.hash === "#notificaciones" ? <Redirect to="/preferencias#notificaciones"/> : <MyProfilePage/>;
     case "equipo": return second ? <TeamProfilePage key={second} id={second}/> : <TeamDirectory/>;
     case "perfiles": return <ProfileReviewsPage/>;
     case "cuenta": return <AccountPage/>;
+    case "preferencias": return <PreferencesPage/>;
     case "horas": return <HoursPage/>;
     case "configuracion-academica": return <AcademicSettings/>;
     case "roles-y-accesos": return <AccessPage/>;

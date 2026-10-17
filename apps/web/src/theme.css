@@ -3,7 +3,9 @@
    Layer 2 — this file: the app's semantic tokens, each one pointing at a Fluent token. Components in
    style.css read only these semantic tokens, so a component never hard-codes a colour, radius, shadow or curve.
    Breakpoints (media queries cannot read custom properties): sm 640px · md 1024px · lg 1280px.
-   Contrast: text tokens ≥ 4.5:1 on surface, canvas and their own soft tint; *-vivid tokens are decorative only. */
+   Contrast: text tokens ≥ 4.5:1 on surface, canvas and their own soft tint; *-vivid tokens are decorative only.
+   ST-160: the root element carries the person's appearance — data-theme (light/dark, Fluent's dark tokens in
+   fluent/tokens.css), data-contrast, data-motion, data-density and --text-scale (1 to 1.5) — set by appearance.ts. */
 @import "./fluent/tokens.css";
 
 :root {
@@ -27,8 +29,8 @@
   --violet-vivid: var(--brand-100); --violet-ink: var(--brand-60); --violet-soft: var(--brand-160); --violet-solid: var(--brand-80);
   --coral-vivid: var(--colorPaletteDarkOrangeBorderActive); --coral-ink: var(--colorPaletteDarkOrangeForeground1); --coral-soft: var(--colorPaletteDarkOrangeBackground1); --coral-solid: var(--colorPaletteDarkOrangeForeground1);
   --amber-vivid: var(--colorPaletteMarigoldBorderActive); --amber-ink: var(--colorPaletteMarigoldForeground2); --amber-soft: var(--colorPaletteMarigoldBackground1); --amber-solid: var(--colorPaletteMarigoldForeground2);
-  --teal-vivid: var(--colorPaletteTealBorderActive); --teal-ink: var(--colorPaletteTealForeground2); --teal-soft: color-mix(in srgb, var(--colorPaletteTealBorderActive) 10%, white); --teal-solid: color-mix(in srgb, var(--colorPaletteTealBorderActive) 78%, black);
-  --sky-vivid: var(--colorPaletteBlueBorderActive); --sky-ink: var(--colorPaletteBlueForeground2); --sky-soft: color-mix(in srgb, var(--colorPaletteBlueBorderActive) 10%, white); --sky-solid: color-mix(in srgb, var(--colorPaletteBlueBorderActive) 78%, black);
+  --teal-vivid: var(--colorPaletteTealBorderActive); --teal-ink: var(--colorPaletteTealForeground2); --teal-soft: color-mix(in srgb, var(--colorPaletteTealBorderActive) 10%, var(--colorNeutralBackground1)); --teal-solid: color-mix(in srgb, var(--colorPaletteTealBorderActive) 78%, black);
+  --sky-vivid: var(--colorPaletteBlueBorderActive); --sky-ink: var(--colorPaletteBlueForeground2); --sky-soft: color-mix(in srgb, var(--colorPaletteBlueBorderActive) 10%, var(--colorNeutralBackground1)); --sky-solid: color-mix(in srgb, var(--colorPaletteBlueBorderActive) 78%, black);
   --pink-vivid: var(--colorPaletteBerryBorderActive); --pink-ink: var(--colorPaletteBerryForeground1); --pink-soft: var(--colorPaletteBerryBackground1); --pink-solid: var(--colorPaletteBerryForeground1);
   --green-vivid: var(--colorPaletteGreenBorderActive); --green-ink: var(--colorPaletteGreenForeground1); --green-soft: var(--colorPaletteGreenBackground1); --green-solid: var(--colorPaletteGreenForeground1);
 
@@ -65,14 +67,16 @@
   --font-sans: "Segoe UI Variable Text", var(--fontFamilyBase);
   --font-display: "Segoe UI Variable Display", var(--fontFamilyBase);
   --font-mono: var(--fontFamilyMonospace);
-  --text-xs: var(--fontSizeBase200);   /* caption 1 · 12/16 */
-  --text-sm: var(--fontSizeBase300);   /* body 1 · 14/20 */
-  --text-base: var(--fontSizeBase300); /* body 1 · 14/20 */
-  --text-md: var(--fontSizeBase400);   /* subtitle 2 · 16/22 */
-  --text-lg: var(--fontSizeBase500);   /* subtitle 1 · 20/28 */
-  --text-xl: var(--fontSizeBase600);   /* title 3 · 24/32 */
-  --text-2xl: var(--fontSizeHero700);  /* title 2 · 28/36 */
-  --text-3xl: var(--fontSizeHero800);  /* title 1 · 32/40 */
+  /* The person's text size (ST-160) multiplies the whole ramp; line heights are relative, so they follow. */
+  --text-scale: 1;
+  --text-xs: calc(var(--fontSizeBase200) * var(--text-scale));   /* caption 1 · 12/16 */
+  --text-sm: calc(var(--fontSizeBase300) * var(--text-scale));   /* body 1 · 14/20 */
+  --text-base: calc(var(--fontSizeBase300) * var(--text-scale)); /* body 1 · 14/20 */
+  --text-md: calc(var(--fontSizeBase400) * var(--text-scale));   /* subtitle 2 · 16/22 */
+  --text-lg: calc(var(--fontSizeBase500) * var(--text-scale));   /* subtitle 1 · 20/28 */
+  --text-xl: calc(var(--fontSizeBase600) * var(--text-scale));   /* title 3 · 24/32 */
+  --text-2xl: calc(var(--fontSizeHero700) * var(--text-scale));  /* title 2 · 28/36 */
+  --text-3xl: calc(var(--fontSizeHero800) * var(--text-scale));  /* title 1 · 32/40 */
   --leading: 1.43; --leading-tight: 1.25; --leading-reading: 1.6;
   --weight-regular: var(--fontWeightRegular); --weight-medium: var(--fontWeightMedium); --weight-bold: var(--fontWeightSemibold); --weight-heavy: var(--fontWeightBold);
   --tracking-tight: 0; --word-display: normal; --tracking-caps: .04em;
@@ -91,12 +95,36 @@
   /* Layout */
   --topbar-h: 56px; --sidebar-w: 264px; --content-max: 1480px; --page-gutter: 24px; --reading-max: 44rem; --touch: 44px; --control-h: 36px;
 
-  color: var(--color-ink); background: var(--color-canvas); font-family: var(--font-sans); font-size: var(--fontSizeBase300); line-height: var(--leading);
+  color: var(--color-ink); background: var(--color-canvas); font-family: var(--font-sans); font-size: calc(var(--fontSizeBase300) * var(--text-scale)); line-height: var(--leading);
   font-weight: var(--weight-regular); font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
 }
+/* Dark theme (ST-160): Fluent's dark tokens arrive by name; only what points at a fixed brand step changes here. */
+:root[data-theme="dark"] {
+  --violet-ink: var(--brand-130); --violet-soft: var(--brand-20); --violet-vivid: var(--brand-110);
+  /* Fluent's dark brand foreground (step 100) is under 4.5:1 on dark surfaces with this ramp; step 130 passes. */
+  --color-primary-ink: var(--brand-130); --color-info: var(--brand-130);
+  --color-primary-line: var(--brand-60);
+  --gradient-brand-soft: linear-gradient(135deg, var(--brand-30) 0%, var(--colorNeutralBackground1) 100%);
+  --mica: radial-gradient(1200px 480px at 0% -10%, color-mix(in srgb, var(--brand-30) 60%, transparent), transparent 70%), var(--colorNeutralBackground2);
+  color-scheme: dark;
+}
+/* High contrast (ST-160): secondary text reads like primary text, every border is the accessible stroke, links are
+   underlined and the focus ring is thicker. Works on light and dark alike. */
+:root[data-contrast="high"] {
+  --color-ink-soft: var(--colorNeutralForeground1); --color-muted: var(--colorNeutralForeground2); --color-placeholder: var(--colorNeutralForeground2);
+  --color-border: var(--colorNeutralStrokeAccessible); --color-border-control: var(--colorNeutralStrokeAccessible); --color-border-strong: var(--colorNeutralForeground1);
+  --acrylic-background: var(--colorNeutralBackground1); --acrylic-background-strong: var(--colorNeutralBackground1); --acrylic-filter: none; --acrylic-stroke: var(--colorNeutralStrokeAccessible);
+}
+:root[data-contrast="high"] a:not(.button):not(.icon-button) { text-decoration: underline; text-underline-offset: 3px; }
+:root[data-contrast="high"] :focus-visible { outline-width: 3px !important; }
+/* Compact density (ST-160): tighter spacing and controls; touch screens keep 44 px targets. */
+:root[data-density="compact"] { --control-h: 30px; --space-3: 8px; --space-4: 12px; --space-5: 16px; --space-6: 20px; --space-8: 24px; --page-gutter: 16px; --topbar-h: 48px; }
 /* Touch: Fluent's large control size, so every target reaches 44 px. */
-@media (pointer: coarse) { :root { --control-h: 44px; } }
+@media (pointer: coarse) { :root, :root[data-density="compact"] { --control-h: 44px; } }
+/* Reduced motion: when the system asks for it, or the person did (ST-160). */
 @media (prefers-reduced-motion: reduce) { :root { --motion-fast: 0ms; --motion-base: 0ms; --motion-slow: 0ms; } *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
+:root[data-motion="reduce"] { --motion-fast: 0ms; --motion-base: 0ms; --motion-slow: 0ms; }
+:root[data-motion="reduce"] *, :root[data-motion="reduce"] *::before, :root[data-motion="reduce"] *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
 /* Without blur support, or when the system asks for less transparency, acrylic becomes solid. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { :root { --acrylic-background: var(--colorNeutralBackground1); --acrylic-background-strong: var(--colorNeutralBackground1); } }
 @media (prefers-reduced-transparency: reduce) { :root { --acrylic-background: var(--colorNeutralBackground1); --acrylic-background-strong: var(--colorNeutralBackground1); --acrylic-filter: none; } }

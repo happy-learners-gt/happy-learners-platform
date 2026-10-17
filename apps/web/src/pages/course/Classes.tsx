@@ -19,6 +19,7 @@ import type { SectionView } from "./Sections";
 import { sectionCrumbs, sectionPath, useSection } from "../sections/context";
 import { useSession } from "../../session";
 import { useWorkspace } from "../../workspace";
+import { formatClock } from "../../regional";
 
 type Mark = "unmarked" | "present" | "late" | "absent" | "excused";
 type Row = { learnerId: string; displayName: string; status: Mark };
@@ -187,7 +188,7 @@ function ScheduleRow({ session, minutesOf, place, extra, plans, today, page, edi
   const load = classLoad(session.durationMinutes, session.lessons.map(lesson => minutesOf(lesson.id)));
   return <tr className={session.sessionDate === today ? "is-today" : session.status === "cancelled" ? "is-cancelled" : undefined}>
     <th scope="row" data-label="Fecha"><div className="cell-date">
-      <Link href={`${page}/${session.id}`} className="class-row-title">{sessionDay(session.sessionDate, "short")}{session.startsAt ? `, ${session.startsAt}` : ""}</Link>
+      <Link href={`${page}/${session.id}`} className="class-row-title">{sessionDay(session.sessionDate, "short")}{session.startsAt ? `, ${formatClock(session.startsAt)}` : ""}</Link>
       <span className="muted small">{place?.number ? `Clase ${place.number} · ` : ""}Semana {place?.week ?? 1}{extra ? " · adicional" : ""}</span>
     </div></th>
     <td data-label={noun.One}>{modules.length ? modules.join(" · ") : none}</td>
@@ -320,7 +321,7 @@ function AddDialog({ groups, initialGroup, onClose, onSaved }: { groups: Pick<Se
         <p className="muted">Las clases del horario ya están en el cronograma. Agrega aquí una clase adicional, como una recuperación o un repaso.</p>
         <div className="field-row">
           {groups.length > 1 && <Field label="Sección"><select value={values.groupId} onChange={event => set({ groupId: event.target.value })} required>{groups.map(group => <option key={group.id} value={group.id}>{group.name} · {plural(group.learnerCount, "estudiante", "estudiantes")}</option>)}</select></Field>}
-          <Field label="Fecha" hint={schedule ? `Toma la hora del horario: ${schedule.startsAt}, ${schedule.durationMinutes} min.` : "La sección no tiene horario: indica la hora si la conoces."}><input type="date" value={values.sessionDate} onChange={event => set({ sessionDate: event.target.value })} required/></Field>
+          <Field label="Fecha" hint={schedule ? `Toma la hora del horario: ${formatClock(schedule.startsAt)}, ${schedule.durationMinutes} min.` : "La sección no tiene horario: indica la hora si la conoces."}><input type="date" value={values.sessionDate} onChange={event => set({ sessionDate: event.target.value })} required/></Field>
         </div>
         <details className="disclosure" open={!schedule}>
           <summary>{schedule ? "Otra hora o duración" : "Hora y duración"}</summary>
@@ -392,7 +393,7 @@ function ClassDetail({ id }: { id: string }) {
     : editable && session.status === "completed" && lessons.length ? [{ label: "Corregir lo trabajado", icon: "edit", onSelect: () => setCorrecting(true) }] : [];
   const modules = [...new Set(lessons.map(lesson => lesson.unitTitle).filter(Boolean))];
   return <>
-    <PageHeader crumbs={[...crumbs, { label: sessionDay(session.sessionDate) }]} title={`${sessionDay(session.sessionDate)}${session.startsAt ? `, ${session.startsAt}` : ""}`}
+    <PageHeader crumbs={[...crumbs, { label: sessionDay(session.sessionDate) }]} title={`${sessionDay(session.sessionDate)}${session.startsAt ? `, ${formatClock(session.startsAt)}` : ""}`}
       description={<>{session.groupName}{session.durationMinutes ? ` · ${session.durationMinutes} min` : ""}{modules.length ? ` · ${noun.One}: ${modules.join(", ")}` : ""}{session.taughtByName ? ` · impartió ${session.taughtByName}` : ""}</>}
       meta={classBadge(session, today)}
       actions={<>{editable && session.status !== "cancelled" && <Button icon="edit" onClick={() => setEditing(true)}>{session.status === "completed" ? "Editar comentarios" : "Planificar"}</Button>}{menu.length > 0 && <Menu label="Más acciones de la clase" items={menu}/>}</>}
