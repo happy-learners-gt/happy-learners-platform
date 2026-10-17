@@ -37,9 +37,9 @@ export function closureReasonInput(value: unknown): string | null {
  */
 export const personalDataSections = [
   { key: "account", label: "Cuenta", description: "Usuario, nombre, rol, correo de acceso y organización." },
-  { key: "profile", label: "Perfil", description: "Contacto, formación, especialidades y disponibilidad." },
-  { key: "credentials", label: "Credenciales y expediente", description: "Los documentos de tu expediente (sus datos, no los archivos)." },
-  { key: "preferences", label: "Preferencias", description: "Los avisos por correo que elegiste recibir." },
+  { key: "profile", label: "Perfil", description: "Contacto, formación, especialidades, disponibilidad y tu perfil profesional con sus versiones." },
+  { key: "credentials", label: "Credenciales y expediente", description: "Tus credenciales y su verificación, y los documentos de tu expediente (sus datos, no los archivos)." },
+  { key: "preferences", label: "Preferencias", description: "Región, apariencia, cómo recibes los avisos y los de tu campana." },
   { key: "consents", label: "Consentimientos", description: "Las versiones de los términos y la privacidad que aceptaste o retiraste." },
   { key: "signatures", label: "Firmas", description: "Los comprobantes de los documentos que firmaste." },
   { key: "hours", label: "Horas", description: "Las clases que impartiste con sus horas efectivas." },
