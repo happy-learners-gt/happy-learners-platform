@@ -10,6 +10,7 @@ import { Icon } from "./icons";
 import type { IconName } from "./icons";
 import type { Hue } from "../model";
 import { Menu } from "./Menu";
+import { Bell } from "./Bell";
 import { Modal, useFeedback } from "./feedback";
 import { Field } from "./primitives";
 import { courseConfiguration } from "../pages/course/context";
@@ -67,10 +68,12 @@ function TopBar({ menuButton }: { menuButton: ReactNode }) {
       <kbd aria-hidden="true">/</kbd>
     </form>
     <div className="topbar-actions">
+      <Bell/>
       <Link href="/ayuda" className="icon-button" aria-label="Ayuda"><Icon name="help"/></Link>
       <Menu label={`Perfil de ${member.displayName || member.username}`} icon="user" text={member.displayName || member.username} items={[
         { label: `${roleLabel(member)}${organization?.name ? ` · ${organization.name}` : ""}`, icon: "shield", onSelect: () => {}, disabled: true },
         { label: "Mi perfil", icon: "user", onSelect: () => navigate("/perfil") },
+        { label: "Preferencias", icon: "options", onSelect: () => navigate("/preferencias") },
         "separator",
         { label: "Cerrar sesión", icon: "logout", onSelect: logout },
       ]}/>

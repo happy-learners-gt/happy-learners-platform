@@ -746,3 +746,78 @@ class OnboardingMigrationTests(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             db.execute("UPDATE onboarding SET completed_at='2000-01-01T00:00:00Z' WHERE user_id='user-0'")
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class PreferencesMigrationTests(unittest.TestCase):
+    """0044 (ST-160, ST-161, DEC-045). The position is looked up by name, so it holds with or without 0042 and 0043."""
+
+    def before_0044(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        position = [path.name[:4] for path in migrations].index("0044")
+        for path in migrations[:position]:
+            db.executescript(path.read_text())
+        return db, migrations[position]
+
+    def test_existing_choices_become_the_email_channel_and_the_outbox_keeps_every_row(self):
+        db, migration = self.before_0044()
+        db.isolation_level = None
+        users = [row[0] for row in db.execute("SELECT user_id FROM memberships WHERE organization_id='org-demo' AND active=1 ORDER BY user_id LIMIT 2")]
+        prefs = "INSERT INTO notification_preferences(user_id,organization_id,type,enabled,updated_at) VALUES (?,?,?,?,?)"
+        db.execute(prefs, (users[0], "org-demo", "review_returned", 0, "2026-10-01T00:00:00.000Z"))
+        db.execute(prefs, (users[1], "org-demo", "class_changed", 1, "2026-10-02T00:00:00.000Z"))
+        db.execute(prefs, (users[0], "org-demo", "class_cancelled", 0, "2026-10-03T00:00:00.000Z"))
+        before_prefs = db.execute("SELECT rowid,user_id,organization_id,type,enabled,updated_at FROM notification_preferences ORDER BY rowid").fetchall()
+        db.execute("INSERT INTO mail_outbox(id,organization_id,kind,reference_id,recipient,subject,status,attempts,last_error,created_at,sent_at,provider_id) VALUES ('mail-i','org-demo','invitation','invitation-1','ñandú@example.test','Asunto «ñ»','sent',2,NULL,'2026-10-01T00:00:00.000Z','2026-10-01T00:00:01.000Z','<id@brevo>')")
+        db.execute("INSERT INTO mail_outbox(id,organization_id,kind,reference_id,recipient,subject,status,created_at,user_id,notification_type,reason,mandatory) VALUES ('mail-n','org-demo','notification','class_changed:c','','Asunto','no_address','2026-10-02T00:00:00.000Z',?,'class_changed','Cambió la clase',1)", (users[0],))
+        old = "id,organization_id,kind,reference_id,recipient,subject,status,attempts,last_error,created_at,sent_at,provider_id,user_id,notification_type,reason,mandatory"
+        outbox = lambda: db.execute(f"SELECT rowid,{old},hex(CAST(recipient AS BLOB)),hex(CAST(subject AS BLOB)) FROM mail_outbox ORDER BY rowid").fetchall()
+        before_outbox = outbox()
+        db.executescript("BEGIN;\n" + migration.read_text() + "\nCOMMIT;")
+        self.assertEqual(db.execute("SELECT rowid,user_id,organization_id,type,enabled,updated_at FROM notification_preferences ORDER BY rowid").fetchall(), before_prefs)
+        self.assertEqual(db.execute("SELECT DISTINCT channel FROM notification_preferences").fetchall(), [("email",)])
+        self.assertEqual(outbox(), before_outbox)
+        self.assertEqual(db.execute("SELECT count(*) FROM mail_outbox WHERE deliver_after IS NULL AND path IS NULL AND digest_id IS NULL").fetchone()[0], 2)
+        self.assertEqual(sorted(row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='mail_outbox' AND name LIKE 'mail_outbox_%'")),
+                         ["mail_outbox_due", "mail_outbox_kind", "mail_outbox_person", "mail_outbox_reference", "mail_outbox_sent"])
+        self.assertEqual(set(row[0] for row in db.execute("SELECT locale FROM organizations")), {"es"})
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+        # The same type may now carry one choice per channel.
+        db.execute("INSERT INTO notification_preferences(user_id,organization_id,type,channel,enabled,updated_at) VALUES (?,'org-demo','review_returned','in_app',1,'t')", (users[0],))
+        for values in [(users[0], "review_returned", "email"), (users[0], "review_returned", "sms"), (users[0], "account_security", "email")]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(values)):
+                db.execute("INSERT INTO notification_preferences(user_id,organization_id,type,channel,enabled,updated_at) VALUES (?,'org-demo',?,?,0,'t')", values)
+
+    def test_preferences_settings_inbox_and_scheduled_mail_keep_their_rules(self):
+        db, migration = self.before_0044()
+        db.executescript(migration.read_text())
+        user = db.execute("SELECT user_id FROM memberships WHERE organization_id='org-demo' AND active=1 LIMIT 1").fetchone()[0]
+        db.execute("INSERT INTO user_preferences(user_id,organization_id,locale,timezone,week_start,hour_cycle,theme,text_scale,high_contrast,motion,density,home_page,updated_at) VALUES (?,'org-demo','es-MX','America/Mexico_City',7,'h12','dark',150,1,'reduce','compact','agenda','t')", (user,))
+        self.assertEqual(db.execute("SELECT language,text_scale FROM user_preferences").fetchall(), [("es", 150)])
+        for column, value in [("text_scale", 99), ("text_scale", 151), ("theme", "sepia"), ("week_start", 0), ("hour_cycle", "h24"), ("motion", "auto"), ("density", "tiny"), ("home_page", "admin"), ("locale", "es_MX"), ("language", "ES")]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=column):
+                db.execute(f"UPDATE user_preferences SET {column}=? WHERE user_id=?", (value, user))
+        settings = "INSERT INTO notification_settings(user_id,organization_id,email_frequency,digest_time,quiet_start,quiet_end,updated_at) VALUES (?,'org-demo',?,?,?,?,'t')"
+        db.execute(settings, (user, "weekly", "18:30", "22:00", "07:00"))
+        for values in [("hourly", "07:00", None, None), ("daily", "24:00", None, None), ("daily", "07:00", "22:00", None), ("daily", "07:00", "22:00", "22:00"), ("daily", "7:00", None, None)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(values)):
+                db.execute("UPDATE notification_settings SET email_frequency=?,digest_time=?,quiet_start=?,quiet_end=? WHERE user_id=?", (*values, user))
+        inbox = "INSERT INTO notification_inbox(id,organization_id,user_id,type,reason,path,mandatory,created_at) VALUES (?,'org-demo',?,?,?,?,0,'t')"
+        db.execute(inbox, ("inbox-1", user, "account_security", "Se cambió tu contraseña", "/perfil"))
+        for values in [("inbox-2", user, "Class", "R", "/x"), ("inbox-3", user, "class_changed", "", "/x"), ("inbox-4", user, "class_changed", "R", "https://x"), ("inbox-5", "user-missing", "class_changed", "R", "/x")]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(values)):
+                db.execute(inbox, values)
+        note = "INSERT INTO mail_outbox(id,organization_id,kind,recipient,subject,status,created_at,user_id,notification_type,reason,mandatory,deliver_after,digest_id) VALUES (?,'org-demo',?,'a@example.test','S',?,'t',?,?,?,0,?,?)"
+        db.execute(note, ("n1", "notification", "scheduled", user, "class_changed", "Motivo", "2026-10-17T13:00:00.000Z", None))
+        db.execute(note, ("d1", "digest", "sent", user, None, "Resumen diario con 2 avisos", None, None))
+        db.execute(note, ("n2", "notification", "digested", user, "terms_updated", "Motivo", None, "d1"))
+        for values in [("x1", "notification", "scheduled", user, "class_changed", "Motivo", None, None), ("x2", "notification", "digested", user, "class_changed", "Motivo", None, None),
+                       ("x3", "digest", "sent", None, None, "Resumen", None, None), ("x4", "digest", "sent", user, "class_changed", "Resumen", None, None),
+                       ("x5", "invitation", "scheduled", None, None, None, "2026-10-17T13:00:00.000Z", None), ("x6", "notification", "sent", user, "Class-Changed", "Motivo", None, None),
+                       ("x7", "notification", "postponed", user, "class_changed", "Motivo", None, None)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(values)):
+                db.execute(note, values)
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO mail_schedule_runs VALUES ('org-missing','t')")
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])

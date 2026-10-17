@@ -18,6 +18,7 @@ import { Timetable } from "../course/Timetable";
 import { SectionProvider, sectionCrumbs, sectionPath, useSection } from "./context";
 import { SectionProgressPage } from "./Progress";
 import { SectionWorkGroupsPage } from "./WorkGroups";
+import { classMoment } from "../../regional";
 
 const areas = ["", "clases", "estudiantes", "grupos", "horario", "avance"];
 type State = { status: "loading" } | { status: "error"; error: string; code: number } | { status: "ready"; section: SectionSummary; today: string };
@@ -164,7 +165,7 @@ function SectionOverview() {
       </div>
       <div className="dashboard-side">
         <Section title="Próxima clase" className="order-1" action={<Link href={`${base}/clases`} className="section-link">Ver cronograma</Link>}>
-          {next ? <p><Link href={`${base}/clases/${next.id}`}>{sessionDay(next.sessionDate)}{next.startsAt ? `, ${next.startsAt}` : ""}</Link>{next.status === "in_progress" && <> <StatusBadge tone="warning">En curso</StatusBadge></>}</p>
+          {next ? <p><Link href={`${base}/clases/${next.id}`}>{(() => { const when = classMoment(next.sessionDate, next.startsAt); return `${sessionDay(when.day)}${when.clock ? `, ${when.clock}` : ""}`; })()}</Link>{next.status === "in_progress" && <> <StatusBadge tone="warning">En curso</StatusBadge></>}</p>
             : <EmptyState compact icon="calendar" title="Sin clases próximas" action={editable && <Link className="button secondary small" href={`${base}/horario`}>{section.schedule ? "Revisar el horario" : "Configurar horario"}</Link>}>{section.schedule ? "El periodo del horario terminó o todas sus clases están registradas." : "El cronograma se genera cuando administración configura el horario de la sección."}</EmptyState>}
           {stats.upcoming > 1 && <p className="muted small">{plural(stats.upcoming, "clase pendiente", "clases pendientes")} en el periodo.</p>}
         </Section>

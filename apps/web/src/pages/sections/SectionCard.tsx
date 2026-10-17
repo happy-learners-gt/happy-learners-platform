@@ -4,6 +4,7 @@ import { Link } from "../../navigation";
 import { hueFor, plural, sessionDay } from "../../model";
 import { StatusBadge } from "../../ui/primitives";
 import { sectionPath } from "./context";
+import { classMoment, formatClock, personalToday } from "../../regional";
 
 function Bar({ label, value, max, text }: { label: string; value: number; max: number; text: string }) {
   const percent = max ? Math.round(100 * value / max) : 0;
@@ -14,6 +15,7 @@ function Bar({ label, value, max, text }: { label: string; value: number; max: n
 export function SectionCard({ section, today, showCourse = true }: { section: SectionSummary; today: string; showCourse?: boolean }) {
   const { indicators: stats, next } = section;
   const closed = section.status === "archived" || section.course.status === "archived";
+  const when = next && classMoment(next.sessionDate, next.startsAt);
   return <li className={`progress-item section-card tone-${hueFor(section.courseId)}`}>
     <div className="progress-head">
       <div>
@@ -32,8 +34,8 @@ export function SectionCard({ section, today, showCourse = true }: { section: Se
       <Bar label="Asistencia" value={stats.attendanceRate || 0} max={100} text={stats.attendanceRate === null ? "Sin registrar" : `${stats.attendanceRate} %`}/>
     </div>}
     <p className="muted small">
-      {plural(stats.learners, "estudiante", "estudiantes")} · {section.pacing === "self-paced" ? "a tu ritmo" : section.schedule ? scheduleSummary(section.schedule) : "sin horario"}
-      {next && !closed ? <> · {next.status === "in_progress" ? "clase en curso" : next.sessionDate === today ? "clase hoy" : "próxima clase"}: <Link href={`${sectionPath(section.id)}/clases/${next.id}`}>{sessionDay(next.sessionDate, "short")}{next.startsAt ? `, ${next.startsAt}` : ""}</Link></> : null}
+      {plural(stats.learners, "estudiante", "estudiantes")} · {section.pacing === "self-paced" ? "a tu ritmo" : section.schedule ? scheduleSummary({ ...section.schedule, startsAt: formatClock(section.schedule.startsAt) }) : "sin horario"}
+      {next && when && !closed ? <> · {next.status === "in_progress" ? "clase en curso" : when.day === personalToday() ? "clase hoy" : "próxima clase"}: <Link href={`${sectionPath(section.id)}/clases/${next.id}`}>{sessionDay(when.day, "short")}{when.clock ? `, ${when.clock}` : ""}</Link></> : null}
     </p>
   </li>;
 }

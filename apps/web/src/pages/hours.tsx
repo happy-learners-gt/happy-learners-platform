@@ -10,11 +10,12 @@ import { Modal, useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, Section, StatTiles, StatusBadge } from "../ui/primitives";
 import type { Tone } from "../ui/primitives";
+import { formatInstantTime } from "../regional";
 
 /** The filters live in the address, in Spanish, and map to the API's parameters. */
 const keys = { desde: "from", hasta: "to", curso: "course", seccion: "section", persona: "person" } as const;
 const stateTone: Record<HoursState, Tone> = { counted: "success", no_start: "neutral", review: "warning", adjusted: "info" };
-const time = (value: string | null) => value ? new Date(value).toLocaleTimeString("es-GT", { hour: "2-digit", minute: "2-digit" }) : "—";
+const time = (value: string | null) => value ? formatInstantTime(value) : "—";
 
 /**
  * ST-152: «Horas efectivas» (administration: every person) and «Mis horas» (anyone else: their own classes). The

@@ -1,7 +1,8 @@
 import { createContext, useContext } from "react";
-import type { Member, Organization } from "@happy-learners/contracts";
+import type { EffectivePreferences, Member, Organization } from "@happy-learners/contracts";
 
-export type Session = { member: Member; organization: Organization | null; setOrganization: (organization: Organization) => void; logout: () => void };
+/** ST-160: `preferences` are the ones in force; `setPreferences` applies a saved change (appearance and formats) at once. */
+export type Session = { member: Member; organization: Organization | null; setOrganization: (organization: Organization) => void; logout: () => void; preferences: EffectivePreferences | null; setPreferences: (preferences: EffectivePreferences) => void };
 export const SessionContext = createContext<Session | null>(null);
 export function useSession() {
   const session = useContext(SessionContext);

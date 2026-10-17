@@ -1,5 +1,6 @@
 import type { Activity, ActivityBlock, Course, LearningUnit, Lesson, Material, RichTextDocument, RichTextNode, SequenceTemplate } from "@happy-learners/contracts";
 import { blocksOf, lessonMinutes, phaseOf, resourceIdsOf, sequenceOf } from "@happy-learners/domain";
+import { formatDay, formatInstant, formatInstantDate } from "./regional";
 
 export type LessonState = "draft" | "published" | "changes" | "archived";
 export function lessonState(lesson: Pick<Lesson, "status" | "revision" | "hasDraft">): LessonState {
@@ -28,6 +29,7 @@ export const blockHue: Record<ActivityBlock["kind"], Hue> = { text: "sky", resou
 export const phaseHue = (index: number): Hue => (["violet", "sky", "teal", "coral", "green"] as const)[index % 5];
 export const resourceHue: Record<Material["kind"], Hue> = { text: "sky", link: "coral", file: "amber" };
 
+// The wording follows the interface language (Spanish); dates follow the person's regional format (ST-160).
 const relative = new Intl.RelativeTimeFormat("es", { numeric: "auto" });
 /** "hace 5 minutos", "ayer", "el 12 sept 2026". */
 export function timeAgo(value?: string, now = Date.now()) {
@@ -42,15 +44,11 @@ export function timeAgo(value?: string, now = Date.now()) {
   if (Math.abs(hours) < 24) return relative.format(hours, "hour");
   const days = Math.round(hours / 24);
   if (Math.abs(days) < 7) return relative.format(days, "day");
-  return `el ${new Date(value).toLocaleDateString("es-GT", { day: "numeric", month: "short", year: "numeric" })}`;
+  return `el ${formatInstantDate(value)}`;
 }
-export function fullDate(value?: string) { return value ? new Date(value).toLocaleString("es-GT", { dateStyle: "long", timeStyle: "short" }) : ""; }
+export function fullDate(value?: string) { return formatInstant(value, "long"); }
 /** Session dates are calendar days (YYYY-MM-DD); format them without a timezone shift. */
-export function sessionDay(value: string, style: "long" | "short" = "long") {
-  const [year, month, day] = value.split("-").map(Number);
-  const text = new Date(year, month - 1, day).toLocaleDateString("es-GT", style === "long" ? { weekday: "long", day: "numeric", month: "long" } : { day: "numeric", month: "short" });
-  return text.charAt(0).toLocaleUpperCase("es") + text.slice(1);
-}
+export function sessionDay(value: string, style: "long" | "short" = "long") { return formatDay(value, style); }
 
 export const normalize = (value: string) => value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLocaleLowerCase("es").trim();
 export const matches = (query: string, ...values: (string | undefined)[]) => !query.trim() || normalize(values.filter(Boolean).join(" ")).includes(normalize(query));

@@ -15,7 +15,11 @@ export interface FeedClass {
   courseTitle: string;
   groupName: string;
 }
-export interface FeedInput { name: string; timezone: string; origin: string; classes: FeedClass[]; now?: Date }
+/**
+ * `timezone` is the organization's, where classes are stored (DEC-035); `displayTimezone` is the person's (ST-160),
+ * announced to the calendar as its default zone. Events are in UTC either way.
+ */
+export interface FeedInput { name: string; timezone: string; displayTimezone?: string; origin: string; classes: FeedClass[]; now?: Date }
 
 /** From 30 days ago to 180 days ahead: what a calendar needs to plan the week and look back at the month. */
 export const feedDaysBack = 30, feedDaysAhead = 180;
@@ -60,10 +64,10 @@ const statusOf: Record<FeedClass["status"], string> = { planned: "CONFIRMED", in
 const host = (origin: string) => /^[a-z][a-z0-9+.-]*:\/\/([^/:?#]+)/i.exec(origin)?.[1]?.toLowerCase() || "happy-learners";
 
 /** The whole feed: one VEVENT per class, with a UID that never changes and a SEQUENCE that grows with each change. */
-export function calendarFeed({ name, timezone, origin, classes, now = new Date() }: FeedInput): string {
+export function calendarFeed({ name, timezone, displayTimezone, origin, classes, now = new Date() }: FeedInput): string {
   const lines = [
     "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Happy Learners//Mis clases//ES", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
-    `X-WR-CALNAME:${escapeText(name)}`, `X-WR-TIMEZONE:${timezone}`, "REFRESH-INTERVAL;VALUE=DURATION:PT1H", "X-PUBLISHED-TTL:PT1H",
+    `X-WR-CALNAME:${escapeText(name)}`, `X-WR-TIMEZONE:${displayTimezone || timezone}`, "REFRESH-INTERVAL;VALUE=DURATION:PT1H", "X-PUBLISHED-TTL:PT1H",
   ];
   const dtstamp = stamp(now), domain = host(origin);
   for (const item of classes) {

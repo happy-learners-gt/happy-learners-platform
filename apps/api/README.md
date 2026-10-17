@@ -25,12 +25,21 @@ responden 404, los métodos no permitidos 405 y las rutas heredadas retiradas 41
 | `profiles.ts` | Perfil de cada persona (ST-149) y expediente laboral con documentos privados en R2 y vencimientos (ST-150). |
 | `hours.ts` | Horas efectivas impartiendo clases: consulta por periodo, curso, sección y persona, exportación CSV y correcciones con motivo (ST-152). |
 | `onboarding.ts` | Incorporación guiada del primer ingreso: pasos derivados y declarados, estado propio y vista de administración (ST-122). |
+| `preferences.ts` | Preferencias propias bajo `/api/me`: región, idioma y apariencia (ST-160), matriz de avisos por canal, frecuencia y horario de silencio (ST-161) y la campana (`/api/me/inbox`). |
+| `notify.ts` | Envío de avisos (ST-124, ST-161): campana, correo inmediato o programado (`scheduled`) y `deliverScheduled`, que envía lo vencido como aviso o como resumen. |
 | `storage.ts` | Almacenamiento SQLite de cada organización en su Durable Object. |
 
 El correo transaccional usa el puerto `MailSender` del dominio. Con el secreto `BREVO_API_KEY` y la variable
 `MAIL_FROM` (dirección verificada como remitente en Brevo) se usa `BrevoMailSender`; sin ellos, `DisabledMailSender` deja
 cada mensaje en `mail_outbox` como `not_configured` y administración comparte el enlace. Ambos son opcionales: el
 desarrollo local, las pruebas y el dry-run no los necesitan. Cómo configurarlos: `infrastructure/README.md`.
+
+Resúmenes y horario de silencio (ST-161, DEC-045): `infrastructure/wrangler.jsonc` no declara ningún cron trigger, así
+que no hay disparador programado. El correo que espera un resumen o el fin del horario de silencio queda en `mail_outbox`
+como `scheduled` con `deliver_after`; `deliverScheduled` lo envía en el siguiente acceso (`GET /api/session` o
+`GET /api/me/inbox`, con `waitUntil`, sin demorar la respuesta), como máximo cada 5 minutos por organización
+(`mail_schedule_runs`), con el tope de DEC-042 (un resumen cuenta como un correo opcional; lo que no cabe espera al
+siguiente acceso). Si en el futuro se agrega un cron gratuito de Workers, basta con llamar a `deliverScheduled` desde él.
 
 El contrato de cada ruta está en `docs/api.md`; la arquitectura, los datos y la seguridad, en el Manual técnico
 (`happy-learners-ops/docs/deliverables/manuals/technical-manual.md`).
