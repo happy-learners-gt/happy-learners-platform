@@ -75,7 +75,7 @@ export interface CourseProgress {
   courseId: string; title: string; team: CourseMember[]; lessons: number; published: number; changes: number;
   outcomes: number; taught: number; assessed: number; sessions: number; attendanceRate: number | null; learners: number; lastActivity: string | null;
 }
-export interface Organization { id: string; name: string | null; timezone: string; configured: boolean }
+export interface Organization { id: string; name: string | null; timezone: string; configured: boolean; locale?: string }
 export interface Level { id: string; name: string; description: string; position: number; status: "draft" | "active" | "archived"; updatedAt: string }
 export interface Unit { id: string; levelId: string; name: string; objective: string; position: number; status: "active" | "archived"; updatedAt: string }
 export interface RichTextNode { type: string; text?: string; attrs?: Record<string, string | number | boolean | null>; marks?: { type: string; attrs?: Record<string, string | number | boolean | null> }[]; content?: RichTextNode[] }
@@ -345,12 +345,45 @@ export interface ExpiringDocuments { today: string; people: { id: string; name: 
  * ST-124: e-mail notifications. Each person chooses which types they receive; administration marks the mandatory ones.
  * Every message is recorded in the outbox with its recipient, its reason (motivo) and its status.
  */
-export type NotificationKind = "course_assignment" | "section_assignment" | "review_submitted" | "review_returned" | "review_approved" | "class_changed" | "class_cancelled";
-export type NotificationDelivery = DeliveryStatus | "no_address";
-export interface NotificationSetting { type: NotificationKind; label: string; description: string; audience: string; mandatory: boolean; enabled: boolean }
+export type NotificationKind = "course_assignment" | "section_assignment" | "review_submitted" | "review_returned" | "review_approved" | "class_changed" | "class_cancelled"
+  | "account_security" | "account_email" | "terms_updated";
+/** ST-161: `scheduled` waits for its digest or the end of the quiet hours; `digested` left inside a digest. */
+export type NotificationDelivery = DeliveryStatus | "no_address" | "scheduled" | "digested";
+export interface NotificationSetting { type: NotificationKind; label: string; description: string; audience: string; mandatory: boolean; enabled: boolean; system?: boolean }
 export interface NotificationRecord {
   id: string; type: NotificationKind; userId: string; personName: string; recipient: string | null; reason: string; targetId: string | null;
-  status: NotificationDelivery; mandatory: boolean; attempts: number; error: string | null; createdAt: string; sentAt: string | null;
+  status: NotificationDelivery; mandatory: boolean; attempts: number; error: string | null; createdAt: string; sentAt: string | null; deliverAfter?: string | null;
+}
+/**
+ * ST-161 (extends ST-124): the event × channel matrix. `locked` says why a row cannot be turned off: `system` (account
+ * security, e-mail change, terms) or `policy` (administration made it mandatory).
+ */
+export type NotificationChannel = "in_app" | "email";
+export type EmailFrequency = "immediate" | "daily" | "weekly" | "never";
+export interface NotificationMatrixRow { type: NotificationKind; label: string; description: string; audience: string; locked: "system" | "policy" | null; channels: Record<NotificationChannel, boolean> }
+export interface NotificationDeliverySettings { frequency: EmailFrequency; digestTime: string; quietHours: { start: string; end: string } | null }
+export interface NotificationPreferences {
+  events: NotificationMatrixRow[]; delivery: NotificationDeliverySettings; timezone: string; hasAddress: boolean;
+  /** E-mails waiting for their digest or the end of the quiet hours, and when the next one leaves. */
+  scheduled: number; nextDelivery: string | null; history: NotificationRecord[];
+}
+/** A notice of the bell (in the application). */
+export interface InboxItem { id: string; type: NotificationKind; reason: string; path: string; mandatory: boolean; createdAt: string; readAt: string | null }
+export interface Inbox { items: InboxItem[]; unread: number }
+/**
+ * ST-160: regional, appearance and accessibility preferences. Empty regional values follow the organization (locale,
+ * zone) or the regional format (first day, hour cycle); `chosen` keeps what the person picked.
+ */
+export type ThemePreference = "system" | "light" | "dark";
+export type HomePage = "inicio" | "agenda" | "cursos" | "biblioteca" | "horas";
+export interface UserPreferences {
+  language: "es"; locale: string | null; timezone: string | null; weekStart: number | null; hourCycle: "h12" | "h23" | null; homePage: HomePage;
+  theme: ThemePreference; textScale: number; highContrast: boolean; motion: "system" | "reduce"; density: "comfortable" | "compact";
+}
+export interface EffectivePreferences extends Omit<UserPreferences, "locale" | "timezone" | "weekStart" | "hourCycle"> {
+  locale: string; timezone: string; weekStart: number; hourCycle: "h12" | "h23";
+  chosen: Pick<UserPreferences, "locale" | "timezone" | "weekStart" | "hourCycle">;
+  organization: { locale: string; timezone: string };
 }
 /**
  * ST-152 (DEC-043): effective hours teaching classes, as recognition of the volunteer work (not payroll). A completed

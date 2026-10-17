@@ -11,7 +11,7 @@ import { Avatar } from "../ui/progress";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, Section, StatusBadge } from "../ui/primitives";
 import type { Tone } from "../ui/primitives";
 import { departureDay } from "./departure";
-import { MyNotifications } from "./notifications";
+import { formatInstantDate } from "../regional";
 
 /**
  * ST-149: «Mi perfil» for every person of the team, and the profile administration consults.
@@ -34,7 +34,6 @@ export function MyProfile() {
   return <>
     <PageHeader title="Mi perfil" description="Quién eres, qué enseñas y cómo contactarte. Tu teléfono y tu correo de contacto solo los ven administración y tú; los estudiantes nunca los ven."/>
     {error ? <ErrorState error={error} retry={load}/> : !profile ? <Loading label="Cargando tu perfil…"/> : <ProfileForm profile={profile} onSaved={setProfile}/>}
-    <div className="reading"><MyNotifications/></div>
     <div className="reading"><StaffFileSection userId={member.id} title="Mi expediente" admin={false}/></div>
   </>;
 }
@@ -155,7 +154,7 @@ function ProfileSummary({ userId }: { userId: string }) {
       <dt>Especialidades</dt><dd>{profile.specialties.length ? <ul className="chips">{profile.specialties.map(item => <li key={item}><span className="chip-button">{item}</span></li>)}</ul> : none}</dd>
       <dt>Disponibilidad</dt><dd>{profile.availability.length ? <ul className="plain-list">{profile.availability.map(slot => <li key={`${slot.day}-${slot.start}`}>{slotText(slot)}</li>)}</ul> : none}</dd>
     </dl>
-    {profile.updatedAt && <p className="muted small">Actualizado el {new Date(profile.updatedAt).toLocaleDateString("es-GT", { day: "numeric", month: "long", year: "numeric" })}.</p>}
+    {profile.updatedAt && <p className="muted small">Actualizado el {formatInstantDate(profile.updatedAt, "long")}.</p>}
   </div>;
 }
 

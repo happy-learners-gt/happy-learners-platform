@@ -10,13 +10,14 @@ import { ErrorState, Loading, StatusBadge } from "../ui/primitives";
 import type { Tone } from "../ui/primitives";
 import { ProfileForm } from "./profile";
 import { SignDialog } from "./legal";
+import { formatInstantDate } from "../regional";
 
 /**
  * ST-122: «Bienvenida», the guided onboarding of a new account. It opens after the own password (ST-093) and the terms
  * and privacy (ST-126, ST-127, ST-153), and its state lives on the server, so closing the tab resumes it where it was.
  */
 const scopeText = (scope: ProgramScope) => "all" in scope ? "todos los programas" : `${scope.programs.length} ${scope.programs.length === 1 ? "programa" : "programas"}`;
-const day = (value: string) => new Date(value).toLocaleDateString("es-GT", { day: "numeric", month: "short", year: "numeric" });
+const day = (value: string) => formatInstantDate(value);
 const wizardSteps: OnboardingStep[] = ["welcome", "profile", "agreement", "tour"];
 const titles: Partial<Record<OnboardingStep, string>> = { welcome: "Qué puedes hacer", profile: "Completa tu perfil", agreement: "Firma tu acuerdo de voluntariado", tour: "Tus cursos y secciones" };
 
