@@ -90,8 +90,11 @@ export async function hours(path: string, method: string, input: unknown, url: U
   const now = new Date().toISOString(), moved = educator.id !== before.educatorId;
   const summary = `Corrigió las horas efectivas de la clase del ${stored.sessionDate} en «${stored.sectionName}»: ${formatMinutes(before.minutes)} → ${formatMinutes(value.minutes)}${moved ? `, atribuidas a ${educator.name}` : ""}. Motivo: ${value.reason}`;
   await db.batch([
-    db.prepare("INSERT INTO class_hour_adjustments(id,organization_id,session_id,minutes_before,minutes_after,educator_before,educator_after,reason,adjusted_by,adjusted_at) VALUES (?,?,?,?,?,?,?,?,?,?)")
-      .bind(`hours-${crypto.randomUUID()}`, current.organizationId, sessionId, before.minutes, value.minutes, before.educatorId, educator.id, value.reason, current.id, now),
+    // Never before the correction it replaces: the Worker's clock may read a few milliseconds behind the previous
+    // request, and the latest correction (by time, then by insertion) is the one in force.
+    db.prepare(`INSERT INTO class_hour_adjustments(id,organization_id,session_id,minutes_before,minutes_after,educator_before,educator_after,reason,adjusted_by,adjusted_at)
+      VALUES (?,?,?,?,?,?,?,?,?,max(?,COALESCE((SELECT max(adjusted_at) FROM class_hour_adjustments WHERE session_id=?),'')))`)
+      .bind(`hours-${crypto.randomUUID()}`, current.organizationId, sessionId, before.minutes, value.minutes, before.educatorId, educator.id, value.reason, current.id, now, sessionId),
     event(db, current, { action: "updated", targetType: "session", targetId: sessionId, courseId: stored.courseId, groupId: stored.sectionId, summary }),
   ]);
   const after = (await storedRows(db, current.organizationId, null, sessionId))[0];
