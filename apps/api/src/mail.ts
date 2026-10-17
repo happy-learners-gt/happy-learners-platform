@@ -67,18 +67,23 @@ export async function attempt(sender: MailSender, message: MailMessage, tries = 
 type Bound = { first<T>(): Promise<T | null>; run(): Promise<unknown> };
 export interface OutboxStore { prepare(sql: string): { bind(...values: (string | number | null)[]): Bound } }
 
-export interface Delivery { status: MailStatus; error: string | null; sentAt: string | null }
+export interface Delivery { status: MailStatus | "no_address"; error: string | null; sentAt: string | null }
+/** A security notice of an account (ST-158, ST-159): whose account it is and the reason recorded with it. */
+export interface AccountMeta { userId: string; reason: string }
 
 /**
  * One message through the organization's outbox: queued, then sent, failed, deferred (over today's cap) or
- * not_configured. The body is not stored (it carries the link's secret).
+ * not_configured. The body is not stored (it carries the link's secret). Account notices (kind 'account') are
+ * mandatory: they name the person and the reason, and a person without an address leaves a 'no_address' record.
  */
-export async function deliver(db: OutboxStore, sender: MailSender, organizationId: string, kind: "invitation", referenceId: string, message: MailMessage): Promise<Delivery> {
+export async function deliver(db: OutboxStore, sender: MailSender, organizationId: string, kind: "invitation" | "account", referenceId: string, message: MailMessage, meta?: AccountMeta): Promise<Delivery> {
   const id = `mail-${crypto.randomUUID()}`, now = new Date(), day = now.toISOString().slice(0, 10);
+  const account = kind === "account" && meta ? [meta.userId, meta.reason.slice(0, 240), 1] as const : [null, null, 0] as const;
+  const insert = (status: MailStatus | "no_address", error: string | null) => db.prepare("INSERT INTO mail_outbox(id,organization_id,kind,reference_id,recipient,subject,status,attempts,last_error,created_at,user_id,reason,mandatory) VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?)")
+    .bind(id, organizationId, kind, referenceId, message.to, message.subject.slice(0, 200), status, error, now.toISOString(), ...account);
+  if (!message.to) { await insert("no_address", "La persona no tiene correo de acceso ni de contacto.").run(); return { status: "no_address", error: null, sentAt: null }; }
   const today = await db.prepare("SELECT count(*) AS sent FROM mail_outbox WHERE organization_id=? AND status='sent' AND sent_at>=?").bind(organizationId, `${day}T00:00:00.000Z`).first<{ sent: number }>();
   const decision = mailDecision(sender.configured, today?.sent || 0, dailyMailCap);
-  const insert = (status: MailStatus, error: string | null) => db.prepare("INSERT INTO mail_outbox(id,organization_id,kind,reference_id,recipient,subject,status,attempts,last_error,created_at) VALUES (?,?,?,?,?,?,?,0,?,?)")
-    .bind(id, organizationId, kind, referenceId, message.to, message.subject, status, error, now.toISOString());
   if (decision === "not_configured") { await insert("not_configured", "El envío de correo no está configurado.").run(); return { status: "not_configured", error: null, sentAt: null }; }
   if (decision === "deferred") { await insert("deferred", `Se alcanzó el tope diario de ${dailyMailCap} correos.`).run(); return { status: "deferred", error: null, sentAt: null }; }
   await insert("queued", null).run();

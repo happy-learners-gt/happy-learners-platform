@@ -5,6 +5,7 @@ import { todayFor } from "./classes";
 import { profileOnLeave } from "./professional";
 import { educatorConflicts } from "./conflicts";
 import { event } from "./team";
+import { completeClosure } from "./closures";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
 const maxTeam = 20;
@@ -119,7 +120,7 @@ export async function recordDeparture(id: string, input: unknown, current: Membe
   }
   if (conflicts.length && (rawConflict.length < 3 || rawConflict.length > 300 || /[<>\x00-\x1f]/.test(rawConflict))) return reply({ error: "Escribe en 3 a 300 caracteres por qué se acepta el choque de horario." }, 400);
 
-  const now = new Date().toISOString(), org = current.organizationId;
+  const now = new Date().toISOString(), org = current.organizationId, departureId = `departure-${crypto.randomUUID()}`;
   const role = (await db.prepare("SELECT CASE role WHEN 'instructor' THEN 'educator' ELSE role END AS role FROM memberships WHERE user_id=? AND organization_id=?").bind(id, org).first<{ role: string }>())!.role;
   const counts = await db.prepare("SELECT (SELECT count(*) FROM course_members WHERE user_id=? AND organization_id=?) AS teams,(SELECT count(*) FROM section_educators WHERE user_id=? AND organization_id=?) AS sections").bind(id, org, id, org).first<{ teams: number; sections: number }>();
   const active = "SELECT id FROM courses WHERE organization_id=? AND status='active'";
@@ -167,7 +168,9 @@ export async function recordDeparture(id: string, input: unknown, current: Membe
     db.prepare("DELETE FROM coordination_scopes WHERE user_id=? AND organization_id=?").bind(id, org),
     db.prepare("DELETE FROM security_group_members WHERE user_id=? AND organization_id=?").bind(id, org),
     db.prepare("INSERT INTO role_events VALUES (?,?,?,?,?,?)").bind(crypto.randomUUID(), current.id, id, role, 0, now),
-    db.prepare("INSERT INTO departures(id,organization_id,user_id,departed_on,reason,recorded_by,recorded_at) VALUES (?,?,?,?,?,?,?)").bind(`departure-${crypto.randomUUID()}`, org, id, date, reason, current.id, now),
+    db.prepare("INSERT INTO departures(id,organization_id,user_id,departed_on,reason,recorded_by,recorded_at) VALUES (?,?,?,?,?,?,?)").bind(departureId, org, id, date, reason, current.id, now),
+    // ST-159: an open request to close the account is completed by this departure.
+    ...completeClosure(db, current, id, member.name, departureId, now),
     // The reason stays out of the activity: it is administration's note.
     event(db, current, { action: "archived", targetType: "account", targetId: id, summary: `Registró la salida de ${member.name} el ${date}` }),
   ];

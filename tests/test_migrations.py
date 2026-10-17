@@ -803,3 +803,97 @@ class OnboardingMigrationTests(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             db.execute("UPDATE onboarding SET completed_at='2000-01-01T00:00:00Z' WHERE user_id='user-0'")
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class AccountSettingsMigrationTests(unittest.TestCase):
+    """0043 (ST-158, ST-159). Positions are looked up by number, so the tests hold with or without 0042 before it."""
+
+    def before_and_script(self):
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        position = [path.name[:4] for path in migrations].index("0043")
+        db = UpgradeTests.scoped(None, "org-demo", until=position)
+        db.isolation_level = None
+        return db, migrations[position].read_text()
+
+    def test_sessions_and_outbox_are_rebuilt_row_for_row_and_old_inserts_keep_working(self):
+        db, script = self.before_and_script()
+        db.execute("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES (?,?,?)", ("a" * 64, "user-0", 1792200000000))
+        db.execute("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES (?,?,?)", ("b" * 64, "user-0", 1792200001000))
+        insert = "INSERT INTO mail_outbox(id,organization_id,kind,reference_id,recipient,subject,status,attempts,last_error,created_at,sent_at,provider_id,user_id,notification_type,reason,mandatory) VALUES (?,'org-demo',?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        db.execute(insert, ("mail-b", "invitation", "invitation-1", "paula@example.test", "Te invitaron", "sent", 2, None, "2026-10-01T00:00:00.000Z", "2026-10-01T00:00:01.000Z", "<id>", None, None, None, 0))
+        db.execute(insert, ("mail-a", "notification", "class_changed:c", "", "Cambió «ñ»", "no_address", 0, "Sin correo", "2026-10-01T00:00:02.000Z", None, None, "user-0", "class_changed", "Cambió la clase", 1))
+        columns = "id,organization_id,kind,reference_id,recipient,subject,status,attempts,last_error,created_at,sent_at,provider_id,user_id,notification_type,reason,mandatory"
+        rows = lambda: db.execute(f"SELECT rowid,{columns},hex(CAST(subject AS BLOB)) FROM mail_outbox ORDER BY rowid").fetchall()
+        before = rows()
+        db.executescript("BEGIN;\n" + script + "\nCOMMIT;")
+        self.assertEqual(rows(), before)
+        sessions = db.execute("SELECT token_hash,user_id,expires_at,id,created_at,last_used_at,method,device,country FROM sessions ORDER BY expires_at").fetchall()
+        self.assertEqual([row[:3] for row in sessions], [("a" * 64, "user-0", 1792200000000), ("b" * 64, "user-0", 1792200001000)])
+        self.assertTrue(all(row[3].startswith("session-") and len(row[3]) == 40 for row in sessions))
+        self.assertEqual(len({row[3] for row in sessions}), 2)
+        self.assertEqual([(row[4], row[5], row[6], row[7], row[8]) for row in sessions], [(1792200000000 - 28800000,) * 2 + ("password", None, None), (1792200001000 - 28800000,) * 2 + ("password", None, None)])
+        # An insert written before 0043 still opens a session, with an id and its start.
+        db.execute("INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,?)", ("c" * 64, "user-0", 1))
+        self.assertRegex(db.execute("SELECT id FROM sessions WHERE token_hash=?", ("c" * 64,)).fetchone()[0], r"^session-[0-9a-f]{32}$")
+        for statement in ["INSERT INTO sessions(token_hash,user_id,expires_at,country) VALUES ('d','user-0',1,'gt')", "INSERT INTO sessions(token_hash,user_id,expires_at,method) VALUES ('e','user-0',1,'sso')",
+                          "INSERT INTO sessions(token_hash,user_id,expires_at,created_at,last_used_at) VALUES ('f','user-0',1,10,5)", "INSERT INTO sessions(token_hash,user_id,expires_at) VALUES ('g','user-missing',1)"]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=statement):
+                db.execute(statement)
+        self.assertEqual(sorted(row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name IN ('sessions','mail_outbox') AND sql IS NOT NULL")),
+                         ["mail_outbox_kind", "mail_outbox_person", "mail_outbox_reference", "mail_outbox_sent", "sessions_expiry", "sessions_user"])
+        account = "INSERT INTO mail_outbox(id,organization_id,kind,reference_id,recipient,subject,status,created_at,user_id,reason,mandatory) VALUES (?,'org-demo','account','email-change-1',?,'Confirma',?,'t',?,?,?)"
+        db.execute(account, ("m1", "nueva@example.test", "not_configured", "user-0", "Confirmación del nuevo correo", 1))
+        db.execute(account, ("m2", "", "no_address", "user-0", "Pidió cerrar su cuenta", 1))
+        for values in [("m3", "a@example.test", "sent", None, "R", 1), ("m4", "a@example.test", "sent", "user-0", None, 1), ("m5", "a@example.test", "sent", "user-0", "R", 0), ("m6", "", "sent", "user-0", "R", 1)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(values)):
+                db.execute(account, values)
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_email_changes_keep_one_pending_change_and_never_move_once_settled(self):
+        db, script = self.before_and_script()
+        db.executescript(script)
+        insert = "INSERT INTO email_changes(id,organization_id,user_id,previous_email,new_email,token_hash,status,requested_at,expires_at) VALUES (?,'org-demo','user-0',?,?,?,'pending','2026-10-16T00:00:00Z','2026-10-17T00:00:00Z')"
+        db.execute(insert, ("c1", None, "nueva@example.test", "a" * 64))
+        # A second pending change, an address not in lowercase, the same address again, a token that is not a hash.
+        for values in [("c2", None, "otra@example.test", "b" * 64), ("c3", None, "Mayus@example.test", "c" * 64), ("c4", "igual@example.test", "igual@example.test", "d" * 64), ("c5", None, "x@example.test", "d_" + "e" * 64)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(values)):
+                db.execute(insert, values)
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE email_changes SET status='verified' WHERE id='c1'")
+        db.execute("UPDATE email_changes SET status='verified',verified_at='2026-10-16T01:00:00Z' WHERE id='c1'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE email_changes SET status='cancelled',verified_at=NULL,cancelled_at='2026-10-16T02:00:00Z' WHERE id='c1'")
+        # Once the first one settled, a new pending change for the same person is accepted.
+        db.execute(insert, ("c6", "nueva@example.test", "otra@example.test", "f" * 64))
+        self.assertEqual(db.execute("SELECT count(*) FROM email_changes").fetchone()[0], 2)
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_closure_requests_only_move_forward_and_completion_names_the_departure(self):
+        db, script = self.before_and_script()
+        db.executescript(script)
+        insert = "INSERT INTO account_closures(id,organization_id,user_id,status,reason,requested_at) VALUES (?,'org-demo',?,'requested','','2026-10-16T00:00:00Z')"
+        db.execute(insert, ("r1", "user-1"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(insert, ("r2", "user-1"))
+        for statement in ["UPDATE account_closures SET status='in_progress' WHERE id='r1'", "UPDATE account_closures SET status='completed',completed_at='2026-10-16T01:00:00Z' WHERE id='r1'",
+                          "UPDATE account_closures SET reason='otro' WHERE id='r1'", "DELETE FROM account_closures WHERE id='r1'"]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=statement):
+                db.execute(statement)
+        db.execute("UPDATE account_closures SET status='in_progress',started_at='2026-10-16T01:00:00Z',started_by='user-0' WHERE id='r1'")
+        # Started requests are no longer cancelled, nor sent back.
+        for statement in ["UPDATE account_closures SET status='cancelled',cancelled_at='2026-10-16T02:00:00Z' WHERE id='r1'", "UPDATE account_closures SET status='requested' WHERE id='r1'"]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=statement):
+                db.execute(statement)
+        db.execute("INSERT INTO departures(id,organization_id,user_id,departed_on,reason,recorded_by,recorded_at) VALUES ('departure-1','org-demo','user-1','2026-10-16','','user-0','2026-10-16T02:00:00Z')")
+        db.execute("UPDATE account_closures SET status='completed',completed_at='2026-10-16T02:00:00Z',departure_id='departure-1' WHERE id='r1'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE account_closures SET status='requested' WHERE id='r1'")
+        # A new request after a completed one, cancelled before it starts.
+        db.execute(insert, ("r3", "user-1"))
+        db.execute("UPDATE account_closures SET status='cancelled',cancelled_at='2026-10-16T03:00:00Z' WHERE id='r3'")
+        self.assertEqual(db.execute("SELECT id,status FROM account_closures ORDER BY id").fetchall(), [("r1", "completed"), ("r3", "cancelled")])
+        db.execute("INSERT INTO sign_in_events(id,organization_id,user_id,outcome,method,device,country,occurred_at) VALUES ('s1','org-demo','user-0','failed','password','Chrome en Windows','GT','t')")
+        for values in [("s2", "blocked", "password", "Chrome", "GT"), ("s3", "failed", "password", "", "GT"), ("s4", "failed", "password", "Chrome", "gt"), ("s5", "failed", "sso", "Chrome", None)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(values)):
+                db.execute("INSERT INTO sign_in_events(id,organization_id,user_id,outcome,method,device,country,occurred_at) VALUES (?,'org-demo','user-0',?,?,?,?,'t')", values)
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
