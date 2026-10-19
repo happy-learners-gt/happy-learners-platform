@@ -1,7 +1,7 @@
 import type { HoursReport, HoursRow, Member } from "@happy-learners/contracts";
 import { effectiveDuration, formatMinutes, hoursAdjustmentInput, hoursCsv, hoursDay, hoursFilterInput, hoursTotals, inHoursFilter } from "@happy-learners/domain";
 import type { Database } from "./storage";
-import { timezoneOf } from "./classes";
+import { personalZone } from "./preferences";
 import { event } from "./team";
 
 const reply = (data: unknown, status = 200, headers: Record<string, string> = {}) => Response.json(data, { status, headers });
@@ -45,7 +45,7 @@ const byName = <T extends { name: string }>(a: T, b: T) => a.name.localeCompare(
 async function report(url: URL, current: Member, db: Database): Promise<HoursReport | { error: string }> {
   const filter = hoursFilterInput(url.searchParams);
   if ("error" in filter) return filter;
-  const timezone = await timezoneOf(db, current.organizationId), admin = current.role === "admin";
+  const timezone = await personalZone(db, current), admin = current.role === "admin";
   const visible = (await storedRows(db, current.organizationId, admin ? null : current.id)).map(row => hoursRow(row, timezone));
   const rows = visible.filter(row => inHoursFilter(row, filter)).sort((a, b) => b.day.localeCompare(a.day) || (b.startedAt || b.completedAt).localeCompare(a.startedAt || a.completedAt));
   const unique = <T extends { id: string }>(items: T[]) => [...new Map(items.map(item => [item.id, item])).values()];
@@ -81,7 +81,7 @@ export async function hours(path: string, method: string, input: unknown, url: U
     const exists = await db.prepare("SELECT status FROM class_sessions WHERE id=? AND organization_id=?").bind(sessionId, current.organizationId).first<{ status: string }>();
     return exists ? reply({ error: "Solo una clase finalizada tiene horas efectivas: una clase cancelada o sin finalizar no suma horas." }, 409) : reply({ error: "La clase no está disponible." }, 404);
   }
-  const timezone = await timezoneOf(db, current.organizationId), before = hoursRow(stored, timezone);
+  const timezone = await personalZone(db, current), before = hoursRow(stored, timezone);
   const educatorId = value.educatorId || before.educatorId;
   if (!educatorId) return reply({ error: "Elige a la persona que impartió la clase." }, 400);
   const educator = await db.prepare("SELECT u.id,COALESCE(u.display_name,u.username) AS name FROM users u JOIN memberships m ON m.user_id=u.id WHERE u.id=? AND m.organization_id=?").bind(educatorId, current.organizationId).first<{ id: string; name: string }>();
@@ -90,10 +90,20 @@ export async function hours(path: string, method: string, input: unknown, url: U
   const now = new Date().toISOString(), moved = educator.id !== before.educatorId;
   const summary = `Corrigió las horas efectivas de la clase del ${stored.sessionDate} en «${stored.sectionName}»: ${formatMinutes(before.minutes)} → ${formatMinutes(value.minutes)}${moved ? `, atribuidas a ${educator.name}` : ""}. Motivo: ${value.reason}`;
   await db.batch([
-    db.prepare("INSERT INTO class_hour_adjustments(id,organization_id,session_id,minutes_before,minutes_after,educator_before,educator_after,reason,adjusted_by,adjusted_at) VALUES (?,?,?,?,?,?,?,?,?,?)")
-      .bind(`hours-${crypto.randomUUID()}`, current.organizationId, sessionId, before.minutes, value.minutes, before.educatorId, educator.id, value.reason, current.id, now),
+    // Never before the correction it replaces: the Worker's clock may read a few milliseconds behind the previous
+    // request, and the latest correction (by time, then by insertion) is the one in force.
+    db.prepare(`INSERT INTO class_hour_adjustments(id,organization_id,session_id,minutes_before,minutes_after,educator_before,educator_after,reason,adjusted_by,adjusted_at)
+      VALUES (?,?,?,?,?,?,?,?,?,max(?,COALESCE((SELECT max(adjusted_at) FROM class_hour_adjustments WHERE session_id=?),'')))`)
+      .bind(`hours-${crypto.randomUUID()}`, current.organizationId, sessionId, before.minutes, value.minutes, before.educatorId, educator.id, value.reason, current.id, now, sessionId),
     event(db, current, { action: "updated", targetType: "session", targetId: sessionId, courseId: stored.courseId, groupId: stored.sectionId, summary }),
   ]);
   const after = (await storedRows(db, current.organizationId, null, sessionId))[0];
   return reply({ row: hoursRow(after, timezone) });
+}
+
+/** ST-159: the classes attributed to the person, with their effective hours, for «Exportar mis datos». */
+export async function ownHours(db: Database, current: Member): Promise<{ timezone: string; rows: HoursRow[] }> {
+  // ST-160: in the person's own zone, like «Horas».
+  const timezone = await personalZone(db, current);
+  return { timezone, rows: (await storedRows(db, current.organizationId, current.id)).map(row => hoursRow(row, timezone)) };
 }

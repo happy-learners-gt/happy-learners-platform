@@ -10,6 +10,7 @@ import { Icon } from "./icons";
 import type { IconName } from "./icons";
 import type { Hue } from "../model";
 import { Menu } from "./Menu";
+import { Bell } from "./Bell";
 import { Modal, useFeedback } from "./feedback";
 import { Field } from "./primitives";
 import { courseConfiguration } from "../pages/course/context";
@@ -67,10 +68,14 @@ function TopBar({ menuButton }: { menuButton: ReactNode }) {
       <kbd aria-hidden="true">/</kbd>
     </form>
     <div className="topbar-actions">
+      <Bell/>
       <Link href="/ayuda" className="icon-button" aria-label="Ayuda"><Icon name="help"/></Link>
       <Menu label={`Perfil de ${member.displayName || member.username}`} icon="user" text={member.displayName || member.username} items={[
         { label: `${roleLabel(member)}${organization?.name ? ` · ${organization.name}` : ""}`, icon: "shield", onSelect: () => {}, disabled: true },
         { label: "Mi perfil", icon: "user", onSelect: () => navigate("/perfil") },
+        { label: "Perfil público", icon: "eye", onSelect: () => navigate(`/equipo/${member.id}`) },
+        { label: "Cuenta", icon: "settings", onSelect: () => navigate("/cuenta") },
+        { label: "Preferencias", icon: "options", onSelect: () => navigate("/preferencias") },
         "separator",
         { label: "Cerrar sesión", icon: "logout", onSelect: logout },
       ]}/>
@@ -180,11 +185,13 @@ function Sidebar() {
         }) : <li className="nav-empty">{admin ? "Aún no hay cursos activos." : "Aún no tienes cursos asignados."}</li>}
       </Node>
       {page({ href: "/biblioteca", label: "Biblioteca", icon: "library", hue: "teal", active: path === "/biblioteca" })}
+      {page({ href: "/equipo", label: "Equipo", icon: "team", hue: "pink", active: path === "/equipo" || path.startsWith("/equipo/") })}
       {page({ href: "/ayuda", label: "Ayuda", icon: "help", hue: "amber", active: path === "/ayuda" })}
     </ul></nav>
     {admin && <nav aria-label="Administración" className="sidebar-secondary"><span className="sidebar-eyebrow">Administración</span><ul className="nav-tree">
       {page({ href: "/organizacion", label: "Organización", icon: "settings", hue: "coral", active: path === "/organizacion" })}
       {page({ href: "/educadores", label: "Educadores", icon: "users", hue: "pink", active: path === "/educadores" })}
+      {page({ href: "/perfiles", label: "Revisión de perfiles", icon: "check", hue: "sky", active: path === "/perfiles" })}
       {page({ href: "/configuracion-academica", label: "Configuración académica", icon: "grid", hue: "green", active: path === "/configuracion-academica" })}
       {page({ href: "/roles-y-accesos", label: "Roles y accesos", icon: "shield", hue: "violet", active: path === "/roles-y-accesos" })}
       {page({ href: "/notificaciones", label: "Notificaciones", icon: "send", hue: "teal", active: path === "/notificaciones" })}

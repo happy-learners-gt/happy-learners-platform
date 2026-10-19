@@ -1,13 +1,14 @@
 /**
  * Fluent "light": a soft highlight follows the pointer across interactive surfaces (Fluent's reveal),
  * so the element under the pointer feels lit. One delegated listener, at most one update per frame.
- * Disabled for touch-only devices and when the system asks for reduced motion.
+ * Disabled for touch-only devices, and while the person or the system asks for reduced motion (ST-160).
  */
 export const litSurfaces = ".course-card, .resource-card, .panel, .stat-tile, .canvas-card, .competency-card, .program-list > li, .preset, .lit";
 
 export function installLight(root: Document = document) {
   const view = root.defaultView;
-  if (!view || view.matchMedia("(prefers-reduced-motion: reduce)").matches || !view.matchMedia("(hover: hover)").matches) return () => {};
+  if (!view || !view.matchMedia("(hover: hover)").matches) return () => {};
+  const still = () => root.documentElement.dataset.motion === "reduce" || view.matchMedia("(prefers-reduced-motion: reduce)").matches;
   let frame = 0, current: HTMLElement | null = null, x = 0, y = 0;
   const clear = (element: HTMLElement | null) => { element?.style.removeProperty("--light-x"); element?.style.removeProperty("--light-y"); };
   function paint() {
@@ -19,6 +20,7 @@ export function installLight(root: Document = document) {
   }
   function move(event: PointerEvent) {
     if (event.pointerType !== "mouse" && event.pointerType !== "pen") return;
+    if (still()) { leave(); return; }
     const target = (event.target as Element | null)?.closest<HTMLElement>(litSurfaces) || null;
     if (target !== current) { clear(current); current = target; }
     x = event.clientX; y = event.clientY;

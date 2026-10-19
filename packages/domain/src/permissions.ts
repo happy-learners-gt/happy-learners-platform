@@ -27,6 +27,7 @@ export const permissionCatalog: PermissionDefinition[] = [
   { key: "access.manage", area: "administration", grantable: false, label: "Gestionar roles y accesos", description: "La matriz de accesos, los grupos de seguridad y los perfiles de coordinación." },
   { key: "backup.manage", area: "administration", grantable: false, label: "Respaldar y restaurar", description: "Descargar el respaldo de la organización y restaurarlo." },
   { key: "legal.manage", area: "administration", grantable: false, label: "Editar términos y privacidad", description: "Redactar y publicar los términos de uso y la política de privacidad." },
+  { key: "profiles.review", area: "administration", grantable: false, label: "Revisar perfiles y verificar credenciales", description: "Aprobar o pedir cambios en los perfiles profesionales, ocultarlos y verificar o rechazar credenciales (ST-155, ST-156)." },
 ];
 export const permissionKeys = permissionCatalog.map(item => item.key);
 export const grantablePermissions = permissionCatalog.filter(item => item.grantable).map(item => item.key) as GrantablePermission[];
@@ -43,7 +44,7 @@ export type BuiltInRole = "admin" | "educator" | "coordination";
  * leads the course, as before.
  */
 export const builtInRoles: { key: BuiltInRole; label: string; description: string; reach: Partial<Record<PermissionKey, Reach>> }[] = [
-  { key: "admin", label: "Administración", description: "Configura la organización y su equipo.", reach: { "courses.view": "all", "lessons.review": "lead", "teams.assign": "all", "sections.assign": "all", "classes.view": "all", "activity.view": "all", "organization.configure": "all", "accounts.manage": "all", "access.manage": "all", "backup.manage": "all", "legal.manage": "all" } },
+  { key: "admin", label: "Administración", description: "Configura la organización y su equipo.", reach: { "courses.view": "all", "lessons.review": "lead", "teams.assign": "all", "sections.assign": "all", "classes.view": "all", "activity.view": "all", "organization.configure": "all", "accounts.manage": "all", "access.manage": "all", "backup.manage": "all", "legal.manage": "all", "profiles.review": "all" } },
   { key: "educator", label: "Educador", description: "Prepara e imparte los cursos de su equipo.", reach: { "courses.view": "team", "lessons.review": "lead", "classes.view": "assigned", "activity.view": "team" } },
   { key: "coordination", label: "Coordinación académica", description: "Perfil adicional de un educador, con alcance de programas (DEC-041).", reach: { "courses.view": "scope", "lessons.review": "scope", "teams.assign": "scope", "sections.assign": "scope", "classes.view": "scope" } },
 ];

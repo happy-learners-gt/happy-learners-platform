@@ -16,7 +16,7 @@ async function audit(page: Page, label: string) {
 
 test("main routes have no WCAG 2.2 A/AA violations detectable by axe", async ({ page }) => {
   // Many routes are audited one after another; give the whole tour room on slow runners.
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   await page.goto("/inicio");
   await audit(page, "login");
   await signIn(page, "educador-demo", "/inicio");
@@ -28,7 +28,7 @@ test("main routes have no WCAG 2.2 A/AA violations detectable by axe", async ({ 
     ["contenido", "/cursos/course-exploradores/contenido"], ["editor", "/cursos/course-exploradores/lecciones/greetings-and-introductions"],
     ["vista previa", "/cursos/course-exploradores/lecciones/greetings-and-introductions?vista=previa"], ["biblioteca del curso", "/cursos/course-exploradores/biblioteca"],
     ["secciones del curso", "/cursos/course-exploradores/secciones"], ["horario", `/secciones/${section}/horario`], ["cronograma", `/secciones/${section}/clases`], ["clase", `/secciones/${section}/clases/${active!.next!.id}`], ["configuración", "/cursos/course-exploradores/configuracion"],
-    ["biblioteca", "/biblioteca"], ["buscar", "/buscar?q=greet"], ["ayuda", "/ayuda"], ["guía de estilo", "/guia-de-estilo"], ["mi perfil", "/perfil"],
+    ["biblioteca", "/biblioteca"], ["buscar", "/buscar?q=greet"], ["ayuda", "/ayuda"], ["guía de estilo", "/guia-de-estilo"], ["mi perfil", "/perfil"], ["preferencias", "/preferencias"], ["preferencias · apariencia", "/preferencias#apariencia"], ["preferencias · notificaciones", "/preferencias#notificaciones"],
   ]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1 }).first()).toBeAttached();

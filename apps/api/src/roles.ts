@@ -1,12 +1,14 @@
 import type { Member } from "@happy-learners/contracts";
 import type { Database } from "./storage";
 import { createAccount, resetPassword } from "./accounts";
+import type { Notifier } from "./notify";
 import { departurePreview, recordDeparture } from "./departures";
 import { event } from "./team";
 import { setCoordination } from "./permissions";
+import { profileOnLeave } from "./professional";
 
 /** /api/members: administration lists people, creates accounts (ST-093), changes roles and access, resets passwords. */
-export async function roles(path: string, method: string, input: unknown, current: Member, db: Database, taken: (username: string) => Promise<boolean>) {
+export async function roles(path: string, method: string, input: unknown, current: Member, db: Database, taken: (username: string) => Promise<boolean>, notifier?: Notifier) {
   if (current.role !== "admin") return Response.json({ error: "Solo administración puede administrar educadores." }, { status: 403 });
   // ST-123: a departure, with its reassignments, at /api/members/:id/departure.
   // ST-128: the academic coordination profile, at /api/members/:id/coordination.
@@ -29,7 +31,7 @@ export async function roles(path: string, method: string, input: unknown, curren
       coordination: m.role === "educator" && m.coordinationScopes ? String(m.coordinationScopes).split(",").includes("*") ? { all: true } : { programs: String(m.coordinationScopes).split(",").sort() } : null, coordinationScopes: undefined })) });
   }
   if (method === "POST" && path === "/api/members") return createAccount(input, current, db, taken);
-  if (method === "POST") return resetPassword(path.split("/")[3], current, db);
+  if (method === "POST") return resetPassword(path.split("/")[3], current, db, notifier);
   if (!input || typeof input !== "object") return Response.json({ error: "Revisa el rol y estado." }, { status: 400 });
   const value = input as Record<string, unknown>;
   const id = path.split("/")[3];
@@ -46,6 +48,8 @@ export async function roles(path: string, method: string, input: unknown, curren
     db.prepare("UPDATE memberships SET role=?,active=? WHERE user_id=? AND organization_id=?").bind(role, value.active ? 1 : 0, id, current.organizationId),
     db.prepare("DELETE FROM sessions WHERE user_id=?").bind(id),
     ...(value.active ? [] : [db.prepare("DELETE FROM calendar_feeds WHERE user_id=?").bind(id)]),
+    // ST-156: losing access hides a published profile.
+    ...(target.active && !value.active ? profileOnLeave(db, current, id, target.name, "deactivation") : []),
     db.prepare("INSERT INTO role_events VALUES (?,?,?,?,?,?)").bind(crypto.randomUUID(), current.id, id, String(value.role), value.active ? 1 : 0, new Date().toISOString()),
     ...changes,
   ]);
