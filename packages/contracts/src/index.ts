@@ -9,7 +9,7 @@ export interface Member { id: string; username: string; displayName?: string; ro
  * administration ones belong to the administration role only.
  */
 export type GrantablePermission = "courses.view" | "lessons.review" | "teams.assign" | "sections.assign" | "classes.view" | "activity.view";
-export type AdministrationPermission = "organization.configure" | "accounts.manage" | "access.manage" | "backup.manage" | "legal.manage";
+export type AdministrationPermission = "organization.configure" | "accounts.manage" | "access.manage" | "backup.manage" | "legal.manage" | "profiles.review";
 export type PermissionKey = GrantablePermission | AdministrationPermission;
 export type PermissionArea = "content" | "team" | "classes" | "reports" | "administration";
 /** Every program of the organization, or a list of them; courses without a program are only in `all`. */
@@ -67,15 +67,15 @@ export interface LessonReview {
 export interface ReviewItem extends LessonReview { lessonId: string; lessonTitle: string; courseId: string; courseTitle: string }
 /** An audited operation: who did what, on which course, and when. */
 export interface ActivityEvent {
-  id: string; actorId: string; actorName: string; action: "created" | "updated" | "published" | "archived" | "restored" | "planned" | "recorded" | "uploaded" | "assigned" | "reset" | "accepted" | "withdrawn" | "resent" | "revoked";
-  targetType: "course" | "program" | "module" | "lesson" | "resource" | "competency" | "outcome" | "group" | "session" | "team" | "account" | "legal" | "invitation"; targetId: string; courseId?: string | null; summary: string; occurredAt: string;
+  id: string; actorId: string; actorName: string; action: "created" | "updated" | "published" | "archived" | "restored" | "planned" | "recorded" | "uploaded" | "assigned" | "reset" | "accepted" | "withdrawn" | "resent" | "revoked" | "submitted" | "approved" | "returned" | "hidden" | "verified" | "rejected";
+  targetType: "course" | "program" | "module" | "lesson" | "resource" | "competency" | "outcome" | "group" | "session" | "team" | "account" | "legal" | "invitation" | "profile" | "credential"; targetId: string; courseId?: string | null; summary: string; occurredAt: string;
 }
 /** How far a course has come: content, curriculum coverage and attendance. */
 export interface CourseProgress {
   courseId: string; title: string; team: CourseMember[]; lessons: number; published: number; changes: number;
   outcomes: number; taught: number; assessed: number; sessions: number; attendanceRate: number | null; learners: number; lastActivity: string | null;
 }
-export interface Organization { id: string; name: string | null; timezone: string; configured: boolean }
+export interface Organization { id: string; name: string | null; timezone: string; configured: boolean; locale?: string }
 export interface Level { id: string; name: string; description: string; position: number; status: "draft" | "active" | "archived"; updatedAt: string }
 export interface Unit { id: string; levelId: string; name: string; objective: string; position: number; status: "active" | "archived"; updatedAt: string }
 export interface RichTextNode { type: string; text?: string; attrs?: Record<string, string | number | boolean | null>; marks?: { type: string; attrs?: Record<string, string | number | boolean | null> }[]; content?: RichTextNode[] }
@@ -247,6 +247,8 @@ export interface StudentSpace {
   learner: { id: string; name: string } | null;
   roster: { id: string; name: string }[];
   path: StudentPathModule[];
+  /** ST-157: «Tu educador»: the published profiles of the section's educators, with the sections they show to students. */
+  educators: PublicProfile[];
 }
 export interface StudentPathModule { id: string; name: string; lessons: StudentPathLesson[] }
 export interface StudentPathLesson { title: string; shareCode: string; opened: boolean; completed: boolean }
@@ -331,6 +333,88 @@ export interface StaffProfile {
   contact?: { phone: string | null; contactEmail: string | null; loginEmail: string | null };
   updatedAt: string | null;
 }
+/**
+ * ST-154: the professional profile of an educator, agnostic to subject, level and country. Levels follow ISCED 2011
+ * (plus adult and vocational education), languages are BCP 47 tags with a CEFR-like scale (a descriptor applies to
+ * languages without CEFR), countries are ISO 3166-1 alpha-2 codes, time zones are IANA names and teaching areas are an
+ * open taxonomy with an optional ISCED-F 2013 broad field ("00" to "10").
+ */
+export type IscedLevel = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "adult" | "vocational";
+export type LanguageProficiency = "native" | "C2" | "C1" | "B2" | "B1" | "A2" | "A1";
+export type TeachingModality = "in_person" | "online" | "hybrid";
+export type TeachingFormat = "one_to_one" | "group" | "self_paced";
+export type LearnerAudience = "children" | "adolescents" | "adults" | "special_needs";
+export type ProfileLinkKind = "website" | "linkedin" | "orcid" | "other";
+export interface ProfileLanguage { code: string; proficiency: LanguageProficiency; teaches: boolean }
+export interface TeachingArea { label: string; field: string | null }
+/** A position held; `to` is null while it is the current one. Months are YYYY-MM. */
+export interface ProfileExperience { role: string; institution: string; country: string | null; from: string; to: string | null; description: string }
+export interface ProfileEducation { degree: string; institution: string; country: string | null; year: number | null; field: string }
+export interface ProfileLink { kind: ProfileLinkKind; url: string }
+export interface ProfessionalProfile {
+  preferredName: string; pronouns: string; headline: string; country: string | null; city: string; timezone: string | null;
+  bio: string; approach: string; videoUrl: string | null;
+  languages: ProfileLanguage[];
+  areas: TeachingArea[]; levels: IscedLevel[]; modalities: TeachingModality[]; formats: TeachingFormat[]; audiences: LearnerAudience[]; experienceYears: number | null;
+  experience: ProfileExperience[]; education: ProfileEducation[];
+  links: ProfileLink[];
+}
+/** Who sees each section: the person and administration only, the team of the organization, or also the students of their sections. */
+export type ProfileVisibilityLevel = "private" | "organization" | "learners";
+export type ProfileSection = "identity" | "about" | "languages" | "teaching" | "career" | "links" | "credentials" | "availability" | "contact";
+export type ProfileVisibility = Record<ProfileSection, ProfileVisibilityLevel>;
+/** ST-156: draft → in_review → published; in_review → changes_requested → in_review; published ⇄ hidden. */
+export type ProfileStatus = "draft" | "in_review" | "changes_requested" | "published" | "hidden";
+export type ProfileVersionStatus = "in_review" | "returned" | "published" | "superseded" | "withdrawn";
+export interface ProfileVersionSummary { version: number; status: ProfileVersionStatus; submittedAt: string; decidedAt: string | null; decidedBy: string | null; note: string | null; publishedAt: string | null }
+export interface CompletenessStep { key: string; label: string; section: ProfileSection | "photo"; done: boolean }
+export interface ProfileCompleteness { percent: number; steps: CompletenessStep[] }
+/** ST-155: credentials. `expired` is never stored: a verified credential counts as expired after its expiry date. */
+export type CredentialType = "degree" | "certification" | "teaching_license" | "language_certificate" | "other";
+export type CredentialState = "draft" | "submitted" | "verified" | "rejected" | "withdrawn";
+export type CredentialStatus = CredentialState | "expired";
+export interface Credential {
+  id: string; userId: string; type: CredentialType; name: string; issuer: string; country: string | null; issuedOn: string; expiresOn: string | null;
+  credentialCode: string | null; verificationUrl: string | null; documentId: string | null; documentTitle: string | null;
+  status: CredentialStatus; rejectionReason: string | null; submittedAt: string | null; decidedAt: string | null; decidedBy: string | null; version: number; updatedAt: string;
+}
+/** What the team and the students see of a verified credential: never the code, the link or the supporting document. */
+export interface PublicCredential { id: string; type: CredentialType; name: string; issuer: string; country: string | null; issuedOn: string; expiresOn: string | null; status: "verified" | "expired" }
+/** «Mi perfil»: the working copy, its publication, the open review and how complete it is. */
+export interface MyProfessionalProfile {
+  userId: string; username: string; displayName: string; role: "admin" | "educator"; photoVersion: string | null;
+  contact: { phone: string | null; contactEmail: string | null; loginEmail: string | null }; availability: StaffAvailabilitySlot[]; education: string;
+  draft: ProfessionalProfile; draftVersion: number; visibility: ProfileVisibility;
+  status: ProfileStatus; hiddenBy: "self" | "admin" | "system" | null; reviewRequired: boolean;
+  publication: { version: number; publishedAt: string; content: ProfessionalProfile } | null;
+  /** The latest version sent for review while it is open or returned with changes to make. */
+  submission: ProfileVersionSummary | null;
+  /** Whether the working copy differs from what is published (or sent for review). */
+  hasChanges: boolean;
+  history: ProfileVersionSummary[];
+  completeness: ProfileCompleteness; missing: string[];
+  credentials: Credential[];
+}
+/**
+ * ST-157: a published profile as the team (`organization`) or the students of the person's sections (`learners`) see it.
+ * Sections the person keeps for a narrower audience come empty and are not listed in `sections`.
+ */
+export interface PublicProfile {
+  userId: string; displayName: string; photoUrl: string | null; role: "admin" | "educator"; audience: "organization" | "learners";
+  sections: ProfileSection[]; content: ProfessionalProfile; credentials: PublicCredential[];
+  availability?: StaffAvailabilitySlot[]; contact?: { phone: string | null; contactEmail: string | null };
+  version: number; publishedAt: string;
+}
+export interface DirectoryEntry {
+  userId: string; displayName: string; photoUrl: string | null; headline: string; country: string | null;
+  areas: TeachingArea[]; levels: IscedLevel[]; languages: ProfileLanguage[]; modalities: TeachingModality[]; verifiedCredentials: number;
+}
+export interface ProfileReviewItem {
+  userId: string; name: string; photoUrl: string | null; version: number; submittedAt: string; firstPublication: boolean;
+  changes: string[]; content: ProfessionalProfile; published: ProfessionalProfile | null; missing: string[];
+}
+export interface CredentialReviewItem { userId: string; name: string; credential: Credential }
+export interface ProfileReviewQueue { reviewRequired: boolean; profiles: ProfileReviewItem[]; credentials: CredentialReviewItem[] }
 /** ST-150: one document of a person's staff file. Withdrawn documents keep their metadata; only administration sees them. */
 export type StaffDocumentKind = "dpi" | "cv" | "criminal-record" | "police-record" | "studies" | "certificate" | "other";
 export interface StaffDocument {
@@ -345,12 +429,47 @@ export interface ExpiringDocuments { today: string; people: { id: string; name: 
  * ST-124: e-mail notifications. Each person chooses which types they receive; administration marks the mandatory ones.
  * Every message is recorded in the outbox with its recipient, its reason (motivo) and its status.
  */
-export type NotificationKind = "course_assignment" | "section_assignment" | "review_submitted" | "review_returned" | "review_approved" | "class_changed" | "class_cancelled";
-export type NotificationDelivery = DeliveryStatus | "no_address";
-export interface NotificationSetting { type: NotificationKind; label: string; description: string; audience: string; mandatory: boolean; enabled: boolean }
+export type NotificationKind = "course_assignment" | "section_assignment" | "review_submitted" | "review_returned" | "review_approved" | "class_changed" | "class_cancelled"
+  | "account_security" | "account_email" | "terms_updated";
+/** ST-161: `scheduled` waits for its digest or the end of the quiet hours; `digested` left inside a digest. */
+export type NotificationDelivery = DeliveryStatus | "no_address" | "scheduled" | "digested";
+/** How an account notice left (ST-158): sent at once, never scheduled for a digest or the quiet hours (ST-161). */
+export type AccountNoticeDelivery = Exclude<NotificationDelivery, "scheduled" | "digested">;
+export interface NotificationSetting { type: NotificationKind; label: string; description: string; audience: string; mandatory: boolean; enabled: boolean; system?: boolean }
 export interface NotificationRecord {
   id: string; type: NotificationKind; userId: string; personName: string; recipient: string | null; reason: string; targetId: string | null;
-  status: NotificationDelivery; mandatory: boolean; attempts: number; error: string | null; createdAt: string; sentAt: string | null;
+  status: NotificationDelivery; mandatory: boolean; attempts: number; error: string | null; createdAt: string; sentAt: string | null; deliverAfter?: string | null;
+}
+/**
+ * ST-161 (extends ST-124): the event × channel matrix. `locked` says why a row cannot be turned off: `system` (account
+ * security, e-mail change, terms) or `policy` (administration made it mandatory).
+ */
+export type NotificationChannel = "in_app" | "email";
+export type EmailFrequency = "immediate" | "daily" | "weekly" | "never";
+export interface NotificationMatrixRow { type: NotificationKind; label: string; description: string; audience: string; locked: "system" | "policy" | null; channels: Record<NotificationChannel, boolean> }
+export interface NotificationDeliverySettings { frequency: EmailFrequency; digestTime: string; quietHours: { start: string; end: string } | null }
+export interface NotificationPreferences {
+  events: NotificationMatrixRow[]; delivery: NotificationDeliverySettings; timezone: string; hasAddress: boolean;
+  /** E-mails waiting for their digest or the end of the quiet hours, and when the next one leaves. */
+  scheduled: number; nextDelivery: string | null; history: NotificationRecord[];
+}
+/** A notice of the bell (in the application). */
+export interface InboxItem { id: string; type: NotificationKind; reason: string; path: string; mandatory: boolean; createdAt: string; readAt: string | null }
+export interface Inbox { items: InboxItem[]; unread: number }
+/**
+ * ST-160: regional, appearance and accessibility preferences. Empty regional values follow the organization (locale,
+ * zone) or the regional format (first day, hour cycle); `chosen` keeps what the person picked.
+ */
+export type ThemePreference = "system" | "light" | "dark";
+export type HomePage = "inicio" | "agenda" | "cursos" | "biblioteca" | "horas";
+export interface UserPreferences {
+  language: "es"; locale: string | null; timezone: string | null; weekStart: number | null; hourCycle: "h12" | "h23" | null; homePage: HomePage;
+  theme: ThemePreference; textScale: number; highContrast: boolean; motion: "system" | "reduce"; density: "comfortable" | "compact";
+}
+export interface EffectivePreferences extends Omit<UserPreferences, "locale" | "timezone" | "weekStart" | "hourCycle"> {
+  locale: string; timezone: string; weekStart: number; hourCycle: "h12" | "h23";
+  chosen: Pick<UserPreferences, "locale" | "timezone" | "weekStart" | "hourCycle">;
+  organization: { locale: string; timezone: string };
 }
 /**
  * ST-152 (DEC-043): effective hours teaching classes, as recognition of the volunteer work (not payroll). A completed
@@ -397,3 +516,29 @@ export interface OnboardingPerson {
   userId: string; name: string; username: string; role: "admin" | "educator"; active: boolean;
   status: OnboardingPersonStatus; startedAt: string | null; completedAt: string | null; steps: OnboardingStepState[]; missing: OnboardingStep[];
 }
+/**
+ * ST-158: account settings. The sign-in e-mail changes only after the link sent to the new address is confirmed;
+ * sessions show a device summary (never the User-Agent), the country from CF-IPCountry, and when they started and were
+ * last used. The sign-in history keeps the last 30 attempts, successful or not, of the person's own account.
+ */
+export type EmailChangeStatus = "pending" | "verified" | "expired" | "cancelled";
+export interface EmailChange { id: string; newEmail: string; status: EmailChangeStatus; requestedAt: string; expiresAt: string; verifiedAt: string | null; delivery: AccountNoticeDelivery | null }
+export interface AccountOverview {
+  username: string; displayName: string; role: "admin" | "educator"; organization: string;
+  email: string | null; pendingEmail: EmailChange | null; mailConfigured: boolean; sessions: number;
+}
+/** The answer to a change request: the link is only returned when the message could not leave (DEC-042 fallback). */
+export interface EmailChangeIssued { change: EmailChange; delivery: AccountNoticeDelivery; link?: string }
+/** GET /api/account/email/<token>: what the public confirmation page shows before confirming. */
+export interface EmailChangePreview { organization: string; username: string; newEmail: string; expiresAt: string }
+export type SignInMethod = "password" | "invitation";
+export interface AccountSession { id: string; device: string; country: string | null; method: SignInMethod; createdAt: string; lastUsedAt: string; expiresAt: string; current: boolean }
+export interface SignInRecord { id: string; outcome: "succeeded" | "failed"; method: SignInMethod; device: string; country: string | null; occurredAt: string }
+/** ST-159: closing the account, linked to the departure (ST-123) that completes it. */
+export type ClosureStatus = "requested" | "in_progress" | "completed" | "cancelled";
+export interface ClosureRequest {
+  id: string; userId: string; personName: string; username: string; status: ClosureStatus; reason: string;
+  requestedAt: string; startedAt: string | null; startedBy: string | null; completedAt: string | null; cancelledAt: string | null; departedOn: string | null;
+}
+/** GET /api/me/closure: the person's latest request and whether a new one can be made. */
+export interface MyClosure { closure: ClosureRequest | null; history: ClosureRequest[]; blocked: string | null }

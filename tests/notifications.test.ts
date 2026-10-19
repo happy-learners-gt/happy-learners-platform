@@ -15,7 +15,8 @@ import type { NotifyStore as Database } from "../apps/api/src/notify";
 describe("HL-170 notification rules and message", () => {
   it("CA1 the catalog covers assignments, the three review steps and class changes and cancellations", () => {
     expect([...notificationTypes]).toEqual(["course_assignment", "section_assignment", "review_submitted", "review_returned", "review_approved", "class_changed", "class_cancelled"]);
-    expect(notificationCatalog.map(item => item.type)).toEqual([...notificationTypes]);
+    // ST-161 adds the account and terms notices after them, always mandatory.
+    expect(notificationCatalog.map(item => item.type)).toEqual([...notificationTypes, "account_security", "account_email", "terms_updated"]);
     for (const item of notificationCatalog) { expect(item.label.length).toBeGreaterThan(3); expect(item.description).toBeTruthy(); expect(item.audience).toBeTruthy(); }
   });
   it("CA2 every type is on by default, a person can turn one off, and a mandatory type cannot be turned off", () => {
@@ -69,8 +70,10 @@ describe("HL-170 notify on a fake store", () => {
       async all() { return { results: sql.includes("FROM users u JOIN memberships") ? people : sql.includes("notification_policies") ? mandatory.map(type => ({ type })) : sql.includes("notification_preferences") ? off.map(item => ({ ...item, enabled: 0 })) : [] }; },
       async first() { return sql.includes("count(*)") ? { sent: sentToday } : sql.includes("organizations") ? { name: "Colegio" } : null; },
       async run() { if (sql.startsWith("UPDATE")) updates.push(this.values); } });
-    const db = { prepare: statement, async batch(list: { values: unknown[] }[]) { for (const item of list) inserts.push(item.values); return []; } } as unknown as Database;
-    return { db, inserts, updates };
+    // Only the outbox rows: since ST-161 the same batch also writes the in-app notices (inbox), checked below.
+    const inbox: unknown[][] = [];
+    const db = { prepare: statement, async batch(list: { sql: string; values: unknown[] }[]) { for (const item of list) (item.sql.includes("notification_inbox") ? inbox : inserts).push(item.values); return []; } } as unknown as Database;
+    return { db, inserts, updates, inbox };
   }
   const notice = (userId: string, type: NotificationType = "class_changed") => ({ userId, targetId: "class-1", path: "/secciones/g/clases/class-1", facts: { type, course: "Arte", section: "B", date: "2026-10-20" } as never });
   const ok: MailSender & { sent: string[] } = { configured: true, sent: [], async send(message) { this.sent.push(message.to); return { ok: true, id: "m" }; } };
@@ -82,6 +85,8 @@ describe("HL-170 notify on a fake store", () => {
     expect(ok.sent).toEqual(["uno@example.test"]);
     expect(fake.inserts.map(values => values[5])).toEqual(["queued", "no_address"]);
     expect(fake.updates[0]).toContain("sent");
+    // The bell gets the notice too, address or not.
+    expect(fake.inbox.map(values => values[2])).toEqual(["u-1", "u-2"]);
   });
   it("CA2 DEC-042 over the optional cap optional notices are deferred while mandatory ones still go; a turned-off type leaves no record", async () => {
     const people = [{ id: "u-1", name: "Uno", email: "uno@example.test" }, { id: "u-2", name: "Dos", email: "dos@example.test" }];
@@ -96,6 +101,8 @@ describe("HL-170 notify on a fake store", () => {
     const quiet = store(0, people, [], [{ userId: "u-1", type: "class_changed" }]);
     expect(await notify(quiet.db, { origin: "https://hl.test", sender: ok }, actor, [notice("u-1")])).toBe(0);
     expect(quiet.inserts).toEqual([]);
+    // Turning off the e-mail leaves the bell on.
+    expect(quiet.inbox.map(values => values[3])).toEqual(["class_changed"]);
   });
   it("never throws: a failing store leaves the triggering change alone", async () => {
     const broken = { prepare: () => { throw new Error("down"); } } as unknown as Database;

@@ -1,3 +1,4 @@
+import json
 import pathlib
 import sqlite3
 import unittest
@@ -730,6 +731,62 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual(demo.execute("SELECT count(*) FROM class_hour_adjustments").fetchone()[0], 1)
         self.assertEqual(demo.execute("PRAGMA foreign_key_check").fetchall(), [])
 
+    def test_professional_profile_keeps_profiles_and_activity_and_checks_publication_and_credentials(self):
+        """0042 (ST-154 to ST-157): specialties become open teaching areas, the activity is rebuilt row for row inside one
+        transaction with foreign keys on and admits profile and credential events; versions and credentials keep their rules."""
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        position = [path.name[:4] for path in migrations].index("0042")
+        self.assertEqual(migrations[position].name, "0042_professional_profile.sql")
+        db = self.scoped("org-demo", until=position)
+        db.isolation_level = None
+        db.execute("INSERT INTO staff_profiles(user_id,organization_id,phone,specialties,availability,updated_at) VALUES ('seed-user-carlos','org-demo','+502 5555-0149','[\"Álgebra\",\"Robótica «educativa»\"]','[]','t')")
+        db.execute("INSERT INTO staff_profiles(user_id,organization_id,updated_at) VALUES ('seed-user-ana','org-demo','t')")
+        events = lambda: db.execute("SELECT id,organization_id,actor_id,action,target_type,target_id,course_id,summary,occurred_at,group_id FROM activity_events ORDER BY id").fetchall()
+        before, profiles = events(), db.execute("SELECT user_id,phone,specialties,availability,updated_at FROM staff_profiles ORDER BY user_id").fetchall()
+        self.assertGreater(len(before), 0)
+        db.executescript("BEGIN;\n" + migrations[position].read_text() + "\nCOMMIT;")
+        self.assertEqual(events(), before)
+        self.assertEqual(db.execute("SELECT user_id,phone,specialties,availability,updated_at FROM staff_profiles ORDER BY user_id").fetchall(), profiles)
+        self.assertEqual(json.loads(db.execute("SELECT draft FROM staff_profiles WHERE user_id='seed-user-carlos'").fetchone()[0]), {"areas": [{"label": "Álgebra", "field": None}, {"label": "Robótica «educativa»", "field": None}]})
+        self.assertEqual(db.execute("SELECT draft,visibility,status,draft_version,hidden_by FROM staff_profiles WHERE user_id='seed-user-ana'").fetchone(), ("{}", "{}", "draft", 0, None))
+        self.assertEqual(db.execute("SELECT profile_review_required FROM organizations").fetchall(), [(1,)])
+        self.assertEqual(sorted(row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='activity_events' AND sql IS NOT NULL")),
+                         ["activity_events_actor", "activity_events_course", "activity_events_group", "activity_events_organization"])
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+        for action, target in [("submitted", "profile"), ("approved", "profile"), ("returned", "profile"), ("hidden", "profile"), ("verified", "credential"), ("rejected", "credential"), ("reset", "account"), ("revoked", "invitation")]:
+            db.execute("INSERT INTO activity_events(id,organization_id,actor_id,action,target_type,target_id,summary,occurred_at) VALUES (?,'org-demo','user-0',?,?,'x','Resumen','t')", (f"e-{action}", action, target))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO activity_events(id,organization_id,actor_id,action,target_type,target_id,summary,occurred_at) VALUES ('e-x','org-demo','user-0','liked','profile','x','Resumen','t')")
+        for statement in ["UPDATE staff_profiles SET status='archived' WHERE user_id='seed-user-ana'", "UPDATE staff_profiles SET draft='[]' WHERE user_id='seed-user-ana'",
+                          "UPDATE staff_profiles SET hidden_by='nobody' WHERE user_id='seed-user-ana'", "UPDATE organizations SET profile_review_required=2"]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=statement):
+                db.execute(statement)
+        version = "INSERT INTO staff_profile_versions(id,organization_id,user_id,version,draft_version,content,status,submitted_by,submitted_at,decided_by,decided_at,decision_note,published_at) VALUES (?,'org-demo','seed-user-carlos',?,1,'{}',?,'seed-user-carlos','t',?,?,?,?)"
+        db.execute(version, ("v1", 1, "returned", "user-0", "t", "Agrega tu enfoque.", None))
+        db.execute(version, ("v2", 2, "published", "user-0", "t", None, "t"))
+        db.execute(version, ("v3", 3, "in_review", None, None, None, None))
+        for values in [("v4", 4, "in_review", None, None, None, None), ("v5", 5, "published", "user-0", "t", None, "t"), ("v6", 6, "returned", "user-0", "t", None, None),
+                       ("v7", 7, "published", "user-0", "t", None, None), ("v8", 3, "withdrawn", None, None, None, None), ("v9", 9, "draft", None, None, None, None), ("v10", 10, "returned", None, None, "Agrega tu enfoque.", None)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=values[0]):
+                db.execute(version, values)
+        db.execute("UPDATE staff_profile_versions SET status='superseded' WHERE id='v2'")
+        db.execute("UPDATE staff_profile_versions SET status='published',decided_by='user-0',decided_at='t',published_at='t' WHERE id='v3'")
+        db.execute("INSERT INTO staff_documents(id,organization_id,user_id,type,title,issued_on,object_key,media_type,size_bytes,sha256,uploaded_by,uploaded_at) VALUES ('d-carlos','org-demo','seed-user-carlos','studies','T','2013-01-01','k1','application/pdf',10,?,'user-0','t')", ("a" * 64,))
+        db.execute("INSERT INTO staff_documents(id,organization_id,user_id,type,title,issued_on,object_key,media_type,size_bytes,sha256,uploaded_by,uploaded_at) VALUES ('d-ana','org-demo','seed-user-ana','studies','T','2013-01-01','k2','application/pdf',10,?,'user-0','t')", ("a" * 64,))
+        credential = "INSERT INTO staff_credentials(id,organization_id,user_id,type,name,issuer,country,issued_on,expires_on,verification_url,document_id,status,rejection_reason,submitted_at,decided_by,decided_at,created_at,updated_at) VALUES (?,'org-demo','seed-user-carlos',?,'Profesorado','Universidad',?,'2013-11-30',?,?,?,?,?,?,?,?,'t','t')"
+        db.execute(credential, ("c1", "degree", "GT", None, "https://registro.example.edu/v", "d-carlos", "verified", None, "t", "user-0", "t"))
+        db.execute(credential, ("c2", "teaching_license", None, "2030-01-01", None, None, "rejected", "El enlace no abre.", "t", "user-0", "t"))
+        db.execute(credential, ("c3", "other", None, None, None, None, "draft", None, None, None, None))
+        for values in [("c4", "passport", None, None, None, None, "draft", None, None, None, None), ("c5", "degree", "gt", None, None, None, "draft", None, None, None, None),
+                       ("c6", "degree", None, "2012-01-01", None, None, "draft", None, None, None, None), ("c7", "degree", None, None, "http://x.org", None, "draft", None, None, None, None),
+                       ("c8", "degree", None, None, None, "d-ana", "draft", None, None, None, None), ("c9", "degree", None, None, None, None, "rejected", None, "t", "user-0", "t"),
+                       ("c10", "degree", None, None, None, None, "verified", None, "t", None, None), ("c11", "degree", None, None, None, None, "submitted", None, None, None, None),
+                       ("c12", "degree", None, None, None, None, "expired", None, "t", "user-0", "t"), ("c13", "degree", None, None, None, None, "draft", "Motivo largo", None, None, None)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=values[0]):
+                db.execute(credential, values)
+        self.assertEqual(db.execute("SELECT count(*) FROM staff_credentials").fetchone()[0], 3)
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
 class OnboardingMigrationTests(unittest.TestCase):
     def test_existing_accounts_count_as_onboarded_and_new_ones_start_pending(self):
         """0041 (ST-122): every account that exists when it runs is backfilled as onboarded; later accounts start empty."""
@@ -745,4 +802,249 @@ class OnboardingMigrationTests(unittest.TestCase):
             db.execute("INSERT INTO onboarding(user_id,organization_id,started_at) VALUES ('nobody','org-demo','2026-10-15T00:00:00Z')")
         with self.assertRaises(sqlite3.IntegrityError):
             db.execute("UPDATE onboarding SET completed_at='2000-01-01T00:00:00Z' WHERE user_id='user-0'")
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class AccountSettingsMigrationTests(unittest.TestCase):
+    """0043 (ST-158, ST-159). Positions are looked up by number, so the tests hold with or without 0042 before it."""
+
+    def before_and_script(self):
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        position = [path.name[:4] for path in migrations].index("0043")
+        db = UpgradeTests.scoped(None, "org-demo", until=position)
+        db.isolation_level = None
+        return db, migrations[position].read_text()
+
+    def test_sessions_and_outbox_are_rebuilt_row_for_row_and_old_inserts_keep_working(self):
+        db, script = self.before_and_script()
+        db.execute("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES (?,?,?)", ("a" * 64, "user-0", 1792200000000))
+        db.execute("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES (?,?,?)", ("b" * 64, "user-0", 1792200001000))
+        insert = "INSERT INTO mail_outbox(id,organization_id,kind,reference_id,recipient,subject,status,attempts,last_error,created_at,sent_at,provider_id,user_id,notification_type,reason,mandatory) VALUES (?,'org-demo',?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        db.execute(insert, ("mail-b", "invitation", "invitation-1", "paula@example.test", "Te invitaron", "sent", 2, None, "2026-10-01T00:00:00.000Z", "2026-10-01T00:00:01.000Z", "<id>", None, None, None, 0))
+        db.execute(insert, ("mail-a", "notification", "class_changed:c", "", "Cambió «ñ»", "no_address", 0, "Sin correo", "2026-10-01T00:00:02.000Z", None, None, "user-0", "class_changed", "Cambió la clase", 1))
+        columns = "id,organization_id,kind,reference_id,recipient,subject,status,attempts,last_error,created_at,sent_at,provider_id,user_id,notification_type,reason,mandatory"
+        rows = lambda: db.execute(f"SELECT rowid,{columns},hex(CAST(subject AS BLOB)) FROM mail_outbox ORDER BY rowid").fetchall()
+        before = rows()
+        db.executescript("BEGIN;\n" + script + "\nCOMMIT;")
+        self.assertEqual(rows(), before)
+        sessions = db.execute("SELECT token_hash,user_id,expires_at,id,created_at,last_used_at,method,device,country FROM sessions ORDER BY expires_at").fetchall()
+        self.assertEqual([row[:3] for row in sessions], [("a" * 64, "user-0", 1792200000000), ("b" * 64, "user-0", 1792200001000)])
+        self.assertTrue(all(row[3].startswith("session-") and len(row[3]) == 40 for row in sessions))
+        self.assertEqual(len({row[3] for row in sessions}), 2)
+        self.assertEqual([(row[4], row[5], row[6], row[7], row[8]) for row in sessions], [(1792200000000 - 28800000,) * 2 + ("password", None, None), (1792200001000 - 28800000,) * 2 + ("password", None, None)])
+        # An insert written before 0043 still opens a session, with an id and its start.
+        db.execute("INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,?)", ("c" * 64, "user-0", 1))
+        self.assertRegex(db.execute("SELECT id FROM sessions WHERE token_hash=?", ("c" * 64,)).fetchone()[0], r"^session-[0-9a-f]{32}$")
+        for statement in ["INSERT INTO sessions(token_hash,user_id,expires_at,country) VALUES ('d','user-0',1,'gt')", "INSERT INTO sessions(token_hash,user_id,expires_at,method) VALUES ('e','user-0',1,'sso')",
+                          "INSERT INTO sessions(token_hash,user_id,expires_at,created_at,last_used_at) VALUES ('f','user-0',1,10,5)", "INSERT INTO sessions(token_hash,user_id,expires_at) VALUES ('g','user-missing',1)"]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=statement):
+                db.execute(statement)
+        self.assertEqual(sorted(row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name IN ('sessions','mail_outbox') AND sql IS NOT NULL")),
+                         ["mail_outbox_kind", "mail_outbox_person", "mail_outbox_reference", "mail_outbox_sent", "sessions_expiry", "sessions_user"])
+        account = "INSERT INTO mail_outbox(id,organization_id,kind,reference_id,recipient,subject,status,created_at,user_id,reason,mandatory) VALUES (?,'org-demo','account','email-change-1',?,'Confirma',?,'t',?,?,?)"
+        db.execute(account, ("m1", "nueva@example.test", "not_configured", "user-0", "Confirmación del nuevo correo", 1))
+        db.execute(account, ("m2", "", "no_address", "user-0", "Pidió cerrar su cuenta", 1))
+        for values in [("m3", "a@example.test", "sent", None, "R", 1), ("m4", "a@example.test", "sent", "user-0", None, 1), ("m5", "a@example.test", "sent", "user-0", "R", 0), ("m6", "", "sent", "user-0", "R", 1)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(values)):
+                db.execute(account, values)
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_email_changes_keep_one_pending_change_and_never_move_once_settled(self):
+        db, script = self.before_and_script()
+        db.executescript(script)
+        insert = "INSERT INTO email_changes(id,organization_id,user_id,previous_email,new_email,token_hash,status,requested_at,expires_at) VALUES (?,'org-demo','user-0',?,?,?,'pending','2026-10-16T00:00:00Z','2026-10-17T00:00:00Z')"
+        db.execute(insert, ("c1", None, "nueva@example.test", "a" * 64))
+        # A second pending change, an address not in lowercase, the same address again, a token that is not a hash.
+        for values in [("c2", None, "otra@example.test", "b" * 64), ("c3", None, "Mayus@example.test", "c" * 64), ("c4", "igual@example.test", "igual@example.test", "d" * 64), ("c5", None, "x@example.test", "d_" + "e" * 64)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(values)):
+                db.execute(insert, values)
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE email_changes SET status='verified' WHERE id='c1'")
+        db.execute("UPDATE email_changes SET status='verified',verified_at='2026-10-16T01:00:00Z' WHERE id='c1'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE email_changes SET status='cancelled',verified_at=NULL,cancelled_at='2026-10-16T02:00:00Z' WHERE id='c1'")
+        # Once the first one settled, a new pending change for the same person is accepted.
+        db.execute(insert, ("c6", "nueva@example.test", "otra@example.test", "f" * 64))
+        self.assertEqual(db.execute("SELECT count(*) FROM email_changes").fetchone()[0], 2)
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_closure_requests_only_move_forward_and_completion_names_the_departure(self):
+        db, script = self.before_and_script()
+        db.executescript(script)
+        insert = "INSERT INTO account_closures(id,organization_id,user_id,status,reason,requested_at) VALUES (?,'org-demo',?,'requested','','2026-10-16T00:00:00Z')"
+        db.execute(insert, ("r1", "user-1"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(insert, ("r2", "user-1"))
+        for statement in ["UPDATE account_closures SET status='in_progress' WHERE id='r1'", "UPDATE account_closures SET status='completed',completed_at='2026-10-16T01:00:00Z' WHERE id='r1'",
+                          "UPDATE account_closures SET reason='otro' WHERE id='r1'", "DELETE FROM account_closures WHERE id='r1'"]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=statement):
+                db.execute(statement)
+        db.execute("UPDATE account_closures SET status='in_progress',started_at='2026-10-16T01:00:00Z',started_by='user-0' WHERE id='r1'")
+        # Started requests are no longer cancelled, nor sent back.
+        for statement in ["UPDATE account_closures SET status='cancelled',cancelled_at='2026-10-16T02:00:00Z' WHERE id='r1'", "UPDATE account_closures SET status='requested' WHERE id='r1'"]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=statement):
+                db.execute(statement)
+        db.execute("INSERT INTO departures(id,organization_id,user_id,departed_on,reason,recorded_by,recorded_at) VALUES ('departure-1','org-demo','user-1','2026-10-16','','user-0','2026-10-16T02:00:00Z')")
+        db.execute("UPDATE account_closures SET status='completed',completed_at='2026-10-16T02:00:00Z',departure_id='departure-1' WHERE id='r1'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE account_closures SET status='requested' WHERE id='r1'")
+        # A new request after a completed one, cancelled before it starts.
+        db.execute(insert, ("r3", "user-1"))
+        db.execute("UPDATE account_closures SET status='cancelled',cancelled_at='2026-10-16T03:00:00Z' WHERE id='r3'")
+        self.assertEqual(db.execute("SELECT id,status FROM account_closures ORDER BY id").fetchall(), [("r1", "completed"), ("r3", "cancelled")])
+        db.execute("INSERT INTO sign_in_events(id,organization_id,user_id,outcome,method,device,country,occurred_at) VALUES ('s1','org-demo','user-0','failed','password','Chrome en Windows','GT','t')")
+        for values in [("s2", "blocked", "password", "Chrome", "GT"), ("s3", "failed", "password", "", "GT"), ("s4", "failed", "password", "Chrome", "gt"), ("s5", "failed", "sso", "Chrome", None)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(values)):
+                db.execute("INSERT INTO sign_in_events(id,organization_id,user_id,outcome,method,device,country,occurred_at) VALUES (?,'org-demo','user-0',?,?,?,?,'t')", values)
+
+
+class PreferencesMigrationTests(unittest.TestCase):
+    """0044 (ST-160, ST-161, DEC-045). The position is looked up by name, so it holds with or without 0042 and 0043."""
+
+    def before_0044(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        position = [path.name[:4] for path in migrations].index("0044")
+        for path in migrations[:position]:
+            db.executescript(path.read_text())
+        return db, migrations[position]
+
+    def test_existing_choices_become_the_email_channel_and_the_outbox_keeps_every_row(self):
+        db, migration = self.before_0044()
+        db.isolation_level = None
+        users = [row[0] for row in db.execute("SELECT user_id FROM memberships WHERE organization_id='org-demo' AND active=1 ORDER BY user_id LIMIT 2")]
+        prefs = "INSERT INTO notification_preferences(user_id,organization_id,type,enabled,updated_at) VALUES (?,?,?,?,?)"
+        db.execute(prefs, (users[0], "org-demo", "review_returned", 0, "2026-10-01T00:00:00.000Z"))
+        db.execute(prefs, (users[1], "org-demo", "class_changed", 1, "2026-10-02T00:00:00.000Z"))
+        db.execute(prefs, (users[0], "org-demo", "class_cancelled", 0, "2026-10-03T00:00:00.000Z"))
+        before_prefs = db.execute("SELECT rowid,user_id,organization_id,type,enabled,updated_at FROM notification_preferences ORDER BY rowid").fetchall()
+        db.execute("INSERT INTO mail_outbox(id,organization_id,kind,reference_id,recipient,subject,status,attempts,last_error,created_at,sent_at,provider_id) VALUES ('mail-i','org-demo','invitation','invitation-1','ñandú@example.test','Asunto «ñ»','sent',2,NULL,'2026-10-01T00:00:00.000Z','2026-10-01T00:00:01.000Z','<id@brevo>')")
+        db.execute("INSERT INTO mail_outbox(id,organization_id,kind,reference_id,recipient,subject,status,created_at,user_id,notification_type,reason,mandatory) VALUES ('mail-n','org-demo','notification','class_changed:c','','Asunto','no_address','2026-10-02T00:00:00.000Z',?,'class_changed','Cambió la clase',1)", (users[0],))
+        old = "id,organization_id,kind,reference_id,recipient,subject,status,attempts,last_error,created_at,sent_at,provider_id,user_id,notification_type,reason,mandatory"
+        outbox = lambda: db.execute(f"SELECT rowid,{old},hex(CAST(recipient AS BLOB)),hex(CAST(subject AS BLOB)) FROM mail_outbox ORDER BY rowid").fetchall()
+        before_outbox = outbox()
+        db.executescript("BEGIN;\n" + migration.read_text() + "\nCOMMIT;")
+        self.assertEqual(db.execute("SELECT rowid,user_id,organization_id,type,enabled,updated_at FROM notification_preferences ORDER BY rowid").fetchall(), before_prefs)
+        self.assertEqual(db.execute("SELECT DISTINCT channel FROM notification_preferences").fetchall(), [("email",)])
+        self.assertEqual(outbox(), before_outbox)
+        self.assertEqual(db.execute("SELECT count(*) FROM mail_outbox WHERE deliver_after IS NULL AND path IS NULL AND digest_id IS NULL").fetchone()[0], 2)
+        self.assertEqual(sorted(row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='mail_outbox' AND name LIKE 'mail_outbox_%'")),
+                         ["mail_outbox_due", "mail_outbox_kind", "mail_outbox_person", "mail_outbox_reference", "mail_outbox_sent"])
+        self.assertEqual(set(row[0] for row in db.execute("SELECT locale FROM organizations")), {"es"})
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+        # The same type may now carry one choice per channel.
+        db.execute("INSERT INTO notification_preferences(user_id,organization_id,type,channel,enabled,updated_at) VALUES (?,'org-demo','review_returned','in_app',1,'t')", (users[0],))
+        for values in [(users[0], "review_returned", "email"), (users[0], "review_returned", "sms"), (users[0], "account_security", "email")]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(values)):
+                db.execute("INSERT INTO notification_preferences(user_id,organization_id,type,channel,enabled,updated_at) VALUES (?,'org-demo',?,?,0,'t')", values)
+
+    def test_preferences_settings_inbox_and_scheduled_mail_keep_their_rules(self):
+        db, migration = self.before_0044()
+        db.executescript(migration.read_text())
+        user = db.execute("SELECT user_id FROM memberships WHERE organization_id='org-demo' AND active=1 LIMIT 1").fetchone()[0]
+        db.execute("INSERT INTO user_preferences(user_id,organization_id,locale,timezone,week_start,hour_cycle,theme,text_scale,high_contrast,motion,density,home_page,updated_at) VALUES (?,'org-demo','es-MX','America/Mexico_City',7,'h12','dark',150,1,'reduce','compact','agenda','t')", (user,))
+        self.assertEqual(db.execute("SELECT language,text_scale FROM user_preferences").fetchall(), [("es", 150)])
+        for column, value in [("text_scale", 99), ("text_scale", 151), ("theme", "sepia"), ("week_start", 0), ("hour_cycle", "h24"), ("motion", "auto"), ("density", "tiny"), ("home_page", "admin"), ("locale", "es_MX"), ("language", "ES")]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=column):
+                db.execute(f"UPDATE user_preferences SET {column}=? WHERE user_id=?", (value, user))
+        settings = "INSERT INTO notification_settings(user_id,organization_id,email_frequency,digest_time,quiet_start,quiet_end,updated_at) VALUES (?,'org-demo',?,?,?,?,'t')"
+        db.execute(settings, (user, "weekly", "18:30", "22:00", "07:00"))
+        for values in [("hourly", "07:00", None, None), ("daily", "24:00", None, None), ("daily", "07:00", "22:00", None), ("daily", "07:00", "22:00", "22:00"), ("daily", "7:00", None, None)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(values)):
+                db.execute("UPDATE notification_settings SET email_frequency=?,digest_time=?,quiet_start=?,quiet_end=? WHERE user_id=?", (*values, user))
+        inbox = "INSERT INTO notification_inbox(id,organization_id,user_id,type,reason,path,mandatory,created_at) VALUES (?,'org-demo',?,?,?,?,0,'t')"
+        db.execute(inbox, ("inbox-1", user, "account_security", "Se cambió tu contraseña", "/perfil"))
+        for values in [("inbox-2", user, "Class", "R", "/x"), ("inbox-3", user, "class_changed", "", "/x"), ("inbox-4", user, "class_changed", "R", "https://x"), ("inbox-5", "user-missing", "class_changed", "R", "/x")]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(values)):
+                db.execute(inbox, values)
+        note = "INSERT INTO mail_outbox(id,organization_id,kind,recipient,subject,status,created_at,user_id,notification_type,reason,mandatory,deliver_after,digest_id) VALUES (?,'org-demo',?,'a@example.test','S',?,'t',?,?,?,0,?,?)"
+        db.execute(note, ("n1", "notification", "scheduled", user, "class_changed", "Motivo", "2026-10-17T13:00:00.000Z", None))
+        db.execute(note, ("d1", "digest", "sent", user, None, "Resumen diario con 2 avisos", None, None))
+        db.execute(note, ("n2", "notification", "digested", user, "terms_updated", "Motivo", None, "d1"))
+        for values in [("x1", "notification", "scheduled", user, "class_changed", "Motivo", None, None), ("x2", "notification", "digested", user, "class_changed", "Motivo", None, None),
+                       ("x3", "digest", "sent", None, None, "Resumen", None, None), ("x4", "digest", "sent", user, "class_changed", "Resumen", None, None),
+                       ("x5", "invitation", "scheduled", None, None, None, "2026-10-17T13:00:00.000Z", None), ("x6", "notification", "sent", user, "Class-Changed", "Motivo", None, None),
+                       ("x7", "notification", "postponed", user, "class_changed", "Motivo", None, None)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(values)):
+                db.execute(note, values)
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO mail_schedule_runs VALUES ('org-missing','t')")
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class ReleaseOutboxMigrationTests(unittest.TestCase):
+    """v1.1.1 releases 0042, 0043 and 0044 together. 0043 and 0044 both rebuild mail_outbox: after both, the outbox
+    must admit the account's security notices of 0043 and the scheduled e-mail and digests of 0044, keep the rule of
+    each, and keep every earlier row byte for byte. 0042 rebuilds activity_events, which neither 0043 nor 0044 touch."""
+
+    columns = "id,organization_id,kind,reference_id,recipient,subject,status,attempts,last_error,created_at,sent_at,provider_id,user_id,notification_type,reason,mandatory"
+
+    def migrations(self):
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        return migrations, [path.name[:4] for path in migrations]
+
+    def test_account_notices_and_scheduled_digests_coexist_after_0042_0043_0044(self):
+        migrations, numbers = self.migrations()
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        db.isolation_level = None
+        for path in migrations[:numbers.index("0042")]:
+            db.executescript(path.read_text())
+        user = db.execute("SELECT user_id FROM memberships WHERE organization_id='org-demo' AND active=1 ORDER BY user_id LIMIT 1").fetchone()[0]
+        insert = f"INSERT INTO mail_outbox({self.columns}) VALUES (?,'org-demo',?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        # Rows written by v1.1.0 (0034 and 0039), before any of the three migrations.
+        db.execute(insert, ("mail-i", "invitation", "invitation-1", "ñandú@example.test", "Te invitaron «ñ»", "sent", 2, None, "2026-10-01T00:00:00.000Z", "2026-10-01T00:00:01.000Z", "<id@brevo>", None, None, None, 0))
+        db.execute(insert, ("mail-n", "notification", "class_changed:c", "", "Cambió la clase", "no_address", 0, "Sin correo", "2026-10-02T00:00:00.000Z", None, None, user, "class_changed", "Cambió la clase", 1))
+        db.executescript("BEGIN;\n" + migrations[numbers.index("0042")].read_text() + "\nCOMMIT;")
+        db.executescript("BEGIN;\n" + migrations[numbers.index("0043")].read_text() + "\nCOMMIT;")
+        # A mandatory account notice written between 0043 and 0044 (a v1.1.1 store migrates all three at once, but an
+        # account notice must survive 0044 either way).
+        db.execute(insert, ("mail-a", "account", "email-change-1", "nueva@example.test", "Confirma tu correo", "not_configured", 0, "El envío de correo no está configurado.", "2026-10-03T00:00:00.000Z", None, None, user, None, "Confirmación del nuevo correo", 1))
+        rows = lambda: db.execute(f"SELECT rowid,{self.columns},hex(CAST(recipient AS BLOB)),hex(CAST(subject AS BLOB)) FROM mail_outbox ORDER BY rowid").fetchall()
+        before = rows()
+        self.assertEqual(len(before), 3)
+        db.executescript("BEGIN;\n" + migrations[numbers.index("0044")].read_text() + "\nCOMMIT;")
+        self.assertEqual(rows(), before)
+        self.assertEqual(db.execute("SELECT name FROM sqlite_master WHERE name LIKE 'mail_outbox_v%'").fetchall(), [])
+        self.assertEqual(sorted(row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='mail_outbox' AND sql IS NOT NULL")),
+                         ["mail_outbox_due", "mail_outbox_kind", "mail_outbox_person", "mail_outbox_reference", "mail_outbox_sent"])
+        outbox = [row[1] for row in db.execute("PRAGMA table_info(mail_outbox)")]
+        self.assertEqual(outbox, self.columns.split(",") + ["deliver_after", "path", "digest_id"])
+
+        # After 0044: a new mandatory account notice (0043) and a scheduled notification gathered in a digest (0044).
+        account = "INSERT INTO mail_outbox(id,organization_id,kind,reference_id,recipient,subject,status,created_at,user_id,reason,mandatory) VALUES (?,'org-demo','account','password:x',?,'Tu contraseña cambió',?,'2026-10-04T00:00:00.000Z',?,?,?)"
+        db.execute(account, ("mail-a2", "a@example.test", "sent", user, "Aviso de seguridad: cambió la contraseña de @persona", 1))
+        db.execute(account, ("mail-a3", "", "no_address", user, "Pidió cerrar su cuenta", 1))
+        note = "INSERT INTO mail_outbox(id,organization_id,kind,recipient,subject,status,created_at,user_id,notification_type,reason,mandatory,deliver_after,path,digest_id) VALUES (?,'org-demo',?,'a@example.test','S',?,'2026-10-04T00:00:00.000Z',?,?,?,0,?,?,?)"
+        db.execute(note, ("mail-s", "notification", "scheduled", user, "class_changed", "Cambió la clase", "2026-10-05T13:00:00.000Z", "/agenda", None))
+        db.execute(note, ("mail-d", "digest", "sent", user, None, "Resumen diario con 2 avisos", None, None, None))
+        db.execute(note, ("mail-g", "notification", "digested", user, "review_returned", "Devolvieron la lección", None, "/cursos/x", "mail-d"))
+        self.assertEqual(db.execute("SELECT kind,status,mandatory FROM mail_outbox ORDER BY rowid").fetchall(), [
+            ("invitation", "sent", 0), ("notification", "no_address", 1), ("account", "not_configured", 1), ("account", "sent", 1), ("account", "no_address", 1),
+            ("notification", "scheduled", 0), ("digest", "sent", 0), ("notification", "digested", 0)])
+        self.assertEqual(db.execute("SELECT id FROM mail_outbox WHERE organization_id='org-demo' AND status='scheduled' AND deliver_after<='2026-10-06'").fetchall(), [("mail-s",)])
+
+        # The rule of 0043 holds after 0044: an account notice names the person and the reason and is mandatory.
+        for values in [("x1", "a@example.test", "sent", None, "R", 1), ("x2", "a@example.test", "sent", user, None, 1), ("x3", "a@example.test", "sent", user, "R", 0), ("x4", "", "sent", user, "R", 1)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(values)):
+                db.execute(account, values)
+        # And the rules of 0044: only notifications wait or join a digest; a digest is optional and names the person; the
+        # kinds are the four the code writes.
+        any_note = "INSERT INTO mail_outbox(id,organization_id,kind,recipient,subject,status,created_at,user_id,notification_type,reason,mandatory,deliver_after,digest_id) VALUES (?,'org-demo',?,'a@example.test','S',?,'t',?,?,?,?,?,?)"
+        for values in [("y1", "account", "scheduled", user, None, "R", 1, "2026-10-05T13:00:00.000Z", None), ("y2", "digest", "sent", user, None, "R", 1, None, None),
+                       ("y3", "notification", "digested", user, "class_changed", "R", 0, None, None), ("y4", "letter", "sent", user, None, "R", 0, None, None),
+                       ("y5", "notification", "scheduled", user, "class_changed", "R", 0, None, None)]:
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(values)):
+                db.execute(any_note, values)
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO mail_outbox(id,organization_id,kind,recipient,subject,status,created_at,user_id,reason,mandatory) VALUES ('y6','org-demo','invitation','a@example.test','S','sent','t',?,NULL,0)", (user,))
+
+        # The other tables these migrations rebuild keep their own additions: activity of 0042, sessions of 0043,
+        # channels of 0044.
+        db.execute("INSERT INTO activity_events(id,organization_id,actor_id,action,target_type,target_id,summary,occurred_at) VALUES ('e1','org-demo',?,'verified','credential','c1','Verificó una credencial','t')", (user,))
+        db.execute("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES (?,?,1)", ("a" * 64, user))
+        self.assertRegex(db.execute("SELECT id FROM sessions").fetchone()[0], r"^session-[0-9a-f]{32}$")
+        db.execute("INSERT INTO notification_preferences(user_id,organization_id,type,channel,enabled,updated_at) VALUES (?,'org-demo','class_changed','in_app',0,'t')", (user,))
+        self.assertEqual([row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name GLOB '*_v[0-9]*'")], [])
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])

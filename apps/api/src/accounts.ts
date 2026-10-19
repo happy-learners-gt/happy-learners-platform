@@ -4,6 +4,8 @@ import type { Database } from "./storage";
 import { digest, hashPassword, newTemporaryPassword, verifyPassword } from "./auth";
 import { event } from "./team";
 import { startOnboarding } from "./onboarding";
+import { sendNotice } from "./account-notices";
+import { notify, type Notifier } from "./notify";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
 const roleName = (role: string) => role === "admin" ? "Administración" : "Educador";
@@ -32,7 +34,7 @@ export async function createAccount(input: unknown, current: Member, db: Databas
 }
 
 /** POST /api/members/:id/password — a new temporary password, shown once; the person's open sessions close. */
-export async function resetPassword(id: string, current: Member, db: Database) {
+export async function resetPassword(id: string, current: Member, db: Database, notifier?: Notifier) {
   if (id === current.id) return reply({ error: "Tu propia contraseña no se restablece desde aquí." }, 409);
   if (id === "user-0") return reply({ error: "La cuenta administradora inicial conserva su acceso." }, 409);
   const target = await db.prepare("SELECT COALESCE(u.display_name,u.username) AS name FROM users u JOIN memberships m ON m.user_id=u.id WHERE u.id=? AND m.organization_id=?").bind(id, current.organizationId).first<{ name: string }>();
@@ -43,14 +45,17 @@ export async function resetPassword(id: string, current: Member, db: Database) {
     db.prepare("DELETE FROM sessions WHERE user_id=?").bind(id),
     event(db, current, { action: "reset", targetType: "account", targetId: id, summary: `Restableció la contraseña de ${target.name}` }),
   ]);
+  // ST-161: an account notice, mandatory on every channel.
+  await notify(db, notifier, current, [{ userId: id, facts: { type: "account_security", change: "password_reset" }, targetId: id, path: "/inicio" }]);
   return reply({ temporaryPassword });
 }
 
 /**
  * POST /api/account/password — the signed-in person replaces their password; required after a temporary one.
- * Their other sessions close; this one stays open.
+ * Their other sessions close; this one stays open. ST-158: the sign-in e-mail, when there is one, gets a mandatory
+ * security notice (not for the first change of a temporary password: that one was given by administration).
  */
-export async function changePassword(input: unknown, current: Member, token: string, db: Database) {
+export async function changePassword(input: unknown, current: Member, token: string, db: Database, notifier?: Notifier) {
   const value = input as Record<string, unknown> | null;
   if (!value || typeof value.currentPassword !== "string" || value.currentPassword.length > maxPasswordLength) return reply({ error: "Escribe tu contraseña actual." }, 400);
   const user = await db.prepare("SELECT password_salt AS salt,password_hash AS hash FROM users WHERE id=?").bind(current.id).first<{ salt: string; hash: string }>();
@@ -63,5 +68,14 @@ export async function changePassword(input: unknown, current: Member, token: str
     db.prepare("DELETE FROM sessions WHERE user_id=? AND token_hash<>?").bind(current.id, await digest(token)),
     event(db, current, { action: "updated", targetType: "account", targetId: current.id, summary: "Cambió su contraseña" }),
   ]);
+  // ST-158 and ST-161: the owner hears of every change of their own password, except when replacing a temporary one.
+  // The bell always shows it (account_security, mandatory). The e-mail goes once: as the account's security notice
+  // (kind 'account') to the sign-in address when there is one; otherwise through `notify`, to the contact address or
+  // recorded as 'no_address'.
+  if (!current.mustChangePassword) {
+    const address = notifier ? await db.prepare("SELECT email FROM users WHERE id=?").bind(current.id).first<{ email: string | null }>() : null;
+    if (notifier && address?.email) await sendNotice(db, notifier.sender, current.organizationId, { id: current.id, name: current.displayName || current.username, email: address.email }, `password:${current.id}`, { kind: "password_changed", username: current.username });
+    await notify(db, notifier, current, [{ userId: current.id, facts: { type: "account_security", change: "password_changed" }, targetId: current.id, path: "/cuenta", ...(address?.email ? { email: false as const } : {}) }]);
+  }
   return reply({ ok: true });
 }

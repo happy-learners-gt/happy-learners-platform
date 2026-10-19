@@ -10,6 +10,7 @@ import { WeekGrid } from "../course/Timetable";
 import { SectionCards } from "./SectionCard";
 import { CalendarSync } from "./CalendarSync";
 import { sectionPath } from "./context";
+import { classMoment, differentZone, personalToday, zoneName } from "../../regional";
 
 /**
  * /agenda — what is taught and when (DEC-031): the next classes, the week, and the sections behind them with their own
@@ -35,9 +36,12 @@ export function Agenda() {
   const courses = [...new Map(live.map(item => [item.courseId, item.course.title])).entries()].sort((a, b) => a[1].localeCompare(b[1], "es"));
   const visible = live.filter(item => (!course || item.courseId === course) && matches(query, item.name, item.course.title));
   const closed = (sections || []).filter(item => !live.includes(item) && (!course || item.courseId === course));
+  // ST-160: each class reads in the person's zone and hour format; «Hoy» is the person's today.
+  const mine = personalToday(), first = upcoming[0] && classMoment(upcoming[0].next!.sessionDate, upcoming[0].next!.startsAt);
+  const zoneNote = differentZone() ? ` Horas en tu zona: ${zoneName()}.` : "";
   const header = <PageHeader title="Agenda"
-    description={sections ? admin ? `Las próximas clases y la semana de toda la organización: ${plural(live.length, "sección activa", "secciones activas")} en ${plural(courses.length, "curso", "cursos")}.` : `Tus próximas clases, tu semana y las ${plural(live.length, "sección que impartes", "secciones que impartes")}.` : undefined}
-    primary={upcoming[0] && <PrimaryAction href={`${sectionPath(upcoming[0].id)}/clases/${upcoming[0].next!.id}`} icon={upcoming[0].next!.status === "in_progress" ? "play" : "calendar"}>{upcoming[0].next!.status === "in_progress" ? "Continuar la clase en curso" : upcoming[0].next!.sessionDate === today ? "Abrir la clase de hoy" : "Ver la próxima clase"}</PrimaryAction>}/>;
+    description={sections ? (admin ? `Las próximas clases y la semana de toda la organización: ${plural(live.length, "sección activa", "secciones activas")} en ${plural(courses.length, "curso", "cursos")}.` : `Tus próximas clases, tu semana y las ${plural(live.length, "sección que impartes", "secciones que impartes")}.`) + zoneNote : undefined}
+    primary={upcoming[0] && <PrimaryAction href={`${sectionPath(upcoming[0].id)}/clases/${upcoming[0].next!.id}`} icon={upcoming[0].next!.status === "in_progress" ? "play" : "calendar"}>{upcoming[0].next!.status === "in_progress" ? "Continuar la clase en curso" : first?.day === mine ? "Abrir la clase de hoy" : "Ver la próxima clase"}</PrimaryAction>}/>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
   if (!sections) return <>{header}<Loading label="Cargando la agenda…" lines={6}/></>;
   if (!sections.length) return <>{header}{admin
@@ -48,9 +52,9 @@ export function Agenda() {
     <div className="agenda-layout">
       <Section title="Próximas clases" className="agenda-next">
         {upcoming.length ? <ol className="agenda-list">{upcoming.slice(0, 8).map(item => {
-          const next = item.next!;
+          const next = item.next!, when = classMoment(next.sessionDate, next.startsAt);
           return <li key={item.id}><Link href={`${sectionPath(item.id)}/clases/${next.id}`}>
-            <span className="agenda-when"><strong>{next.sessionDate === today ? "Hoy" : sessionDay(next.sessionDate, "short")}</strong>{next.startsAt && <span>{next.startsAt}</span>}</span>
+            <span className="agenda-when"><strong>{when.day === mine ? "Hoy" : sessionDay(when.day, "short")}</strong>{when.clock && <span>{when.clock}</span>}</span>
             <span className="agenda-what"><strong>{item.name}</strong><span className="muted small">{item.course.title}</span></span>
             {next.status === "in_progress" ? <StatusBadge tone="warning">En curso</StatusBadge> : <Icon name="chevronRight" size={16}/>}
           </Link></li>;

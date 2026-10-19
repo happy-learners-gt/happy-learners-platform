@@ -3,6 +3,7 @@ export { classLoad, formatMinutes, lessonMinutes } from "./time";
 export type { ClassLoad } from "./time";
 export type { TimezoneOption } from "./timezones";
 import { isTimezone } from "./timezones";
+import { canonicalLocale } from "./preferences";
 export { courseAccess, seesSection, teachesSection, maxSectionEducators } from "./access";
 export { createsCycle, dependents, maxPrerequisites, prerequisiteInput, prerequisiteStages } from "./prerequisites";
 export type { Requirement } from "./prerequisites";
@@ -31,14 +32,17 @@ export type { Phase } from "./sequences";
 export { cognitiveLevels, competencyInput, outcomeInput, validOutcomeIds, outcomeCodes, activityOutcomes, assesses, lessonOutcomes, coverage, suggestedResources, publishChecklist, outcomeLimit, competencyLimit } from "./outcomes";
 export type { Gap, OutcomeCoverage, UnitCoverage, CheckItem } from "./outcomes";
 import { validOutcomeIds } from "./outcomes";
-export function organizationInput(value: unknown): { name: string; timezone: string } | null {
+/** Name, zone and, optionally (ST-160), the regional format every person follows until they choose their own. */
+export function organizationInput(value: unknown): { name: string; timezone: string; locale?: string } | null {
   if (!value || typeof value !== "object") return null;
-  const { name, timezone } = value as Record<string, unknown>;
+  const { name, timezone, locale } = value as Record<string, unknown>;
   if (typeof name !== "string" || typeof timezone !== "string") return null;
   const clean = name.trim().normalize("NFC");
   if (clean.length < 3 || clean.length > 80 || /[<>\x00-\x1f]/.test(clean)) return null;
   if (!isTimezone(timezone)) return null;
-  return { name: clean, timezone };
+  if (locale === undefined) return { name: clean, timezone };
+  const tag = canonicalLocale(locale);
+  return tag ? { name: clean, timezone, locale: tag } : null;
 }
 const purposeValues = new Set(["explain", "explore", "practice", "assess", "reflect"]);
 const groupingValues = new Set(["individual", "pairs", "teams", "whole-class"]);
@@ -122,8 +126,22 @@ export type { BuiltInRole, GroupGrant, PermissionDefinition, Reach } from "./per
 export { departureDate, departureReason, maxDepartureReason } from "./departures";
 export { availabilityDays, availabilityInput, calendarDate, contactEmailInput, documentStatus, expiringWindowDays, maxAvailabilitySlots, maxEducationLength, maxSpecialties, maxSpecialtyLength, phoneInput, specialtiesInput, staffDocumentInput, staffDocumentLabel, staffDocumentTypes, staffProfileInput } from "./profiles";
 export type { AvailabilitySlot, ProfileInput, StaffDocumentStatus, StaffDocumentType, Weekday } from "./profiles";
-export { isNotificationType, maxNotificationsPerRequest, notificationCatalog, notificationDecision, notificationLabel, notificationMessage, notificationReason, notificationReserve, notificationTypes, optionalNotificationCap, policyInput, preferencesInput, receives } from "./notifications";
-export type { NotificationDefinition, NotificationDetails, NotificationFacts, NotificationStatus, NotificationType } from "./notifications";
+export { allNotificationTypes, channelLabels, defaultDeliverySettings, digestMessage, digestReason, emailFrequencies, emailFrequencyLabels, emailPlan, inQuietHours, isConfigurableType, isNotificationType, isSystemType, lockedBy, maxNotificationsPerRequest, nextDigestAt, notificationCatalog, notificationChannels, notificationDecision, notificationLabel, notificationMessage, notificationPreferencesInput, notificationReason, notificationReserve, notificationTypes, optionalNotificationCap, policyInput, preferencesInput, quietHoursEnd, receives, receivesOn, systemNotificationTypes } from "./notifications";
+export type { ChannelPreferences, ConfigurableNotificationType, DeliverySettings, DigestDetails, DigestItem, EmailFrequency, EmailPlan, NotificationChannel, NotificationDefinition, NotificationDetails, NotificationFacts, NotificationPreferencesChange, NotificationStatus, NotificationType, SystemNotificationType } from "./notifications";
+export { canonicalLocale, defaultPreferences, densities, effectivePreferences, homePages, hourCycles, interfaceLanguages, localeHourCycle, localeWeekStart, maxTextScale, minTextScale, motions, orderedWeekdays, organizationLocaleInput, suggestedLocales, textScaleStep, themes, userPreferencesInput, wallClock, wallTimeIn } from "./preferences";
+export type { EffectivePreferences, HomePage, HourCycle, InterfaceLanguage, Theme, UserPreferences } from "./preferences";
 export { csvCell, decimalHours, effectiveDuration, hoursAdjustmentInput, hoursCsv, hoursCsvHeader, hoursDay, hoursFilterInput, hoursStateLabels, hoursTotals, inHoursFilter, localDateTime, maxAdjustedMinutes, maxAdjustmentReason, minAdjustmentReason, reviewAfterMinutes } from "./hours";
 export { declaredSteps, declareStep, missingSteps, nextStep, onboardingStatus, onboardingStatusLabels, onboardingStepLabels, onboardingSteps, onboardingStepStates, profileComplete, profileGaps } from "./onboarding";
 export type { OnboardingFacts, ProfileFacts, StepRefusal } from "./onboarding";
+export {
+  areasFromSpecialties, audienceLabel, audienceView, countryCodes, countryName, credentialInput, credentialStatus, credentialStatusLabels, credentialTransition, credentialTypeLabel,
+  credentialTypes, decisionNote, defaultVisibility, emptyProfessionalProfile, fieldLabel, formatLabel, httpsUrl, isCountry, iscedFields, iscedLevels, languageName, languageTag,
+  learnerAudiences, levelLabel, linkKindLabel, modalityLabel, professionalProfileInput, proficiencyLabel, proficiencyLevels, profileChanges, profileCompleteness, profileLimits,
+  profileLinkInput, profileLinkKinds, profileSections, profileStatusLabels, profileTransition, reaches, sameProfile, sectionLabel, storedProfile, storedVisibility, submissionGaps,
+  teachingFormats, teachingModalities, validOrcid, videoUrlInput, visibilityInput, visibilityLabels,
+} from "./professional";
+export type { CredentialAction, CredentialInput, ProfileAction, ProfileActor, ProfileState } from "./professional";
+export { accountMessage, accountNoticeReason, countryCode, deviceLabel, emailChangeHours, emailChangeInput, emailChangeLifetimeMs, emailChangeState, maskEmail, sessionTouchMs, signInHistoryLimit, signInRetentionDays } from "./account-settings";
+export type { AccountNotice, AccountNoticeDetails, AccountNoticeKind, EmailChangeStatus } from "./account-settings";
+export { closureLabels, closureOpen, closureReasonInput, closureStatuses, closureTransition, maxClosureReason, personalDataFile, personalDataFormat, personalDataSections } from "./closures";
+export type { ClosureAction, ClosureStatus, PersonalDataSection } from "./closures";

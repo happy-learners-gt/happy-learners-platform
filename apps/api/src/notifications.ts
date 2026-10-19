@@ -1,12 +1,15 @@
 import type { Member, NotificationRecord, NotificationSetting } from "@happy-learners/contracts";
 import type { NotificationType } from "@happy-learners/domain";
-import { isNotificationType, notificationCatalog, notificationTypes, policyInput, preferencesInput, receives } from "@happy-learners/domain";
+import { isConfigurableType, isNotificationType, lockedBy, notificationCatalog, notificationTypes, policyInput, preferencesInput, receivesOn } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { event } from "./team";
 import { mandatoryTypes, preferencesOf } from "./notify";
 export { notify, type Notice, type Notifier } from "./notify";
 
-/** E-mail notifications (ST-124, DEC-042): recipients of reviews, preferences, mandatory policy and the sent log. */
+/**
+ * E-mail notifications (ST-124, DEC-042): recipients of reviews, preferences, mandatory policy and the sent log. Since
+ * ST-161 the choices of /api/notifications/preferences are the e-mail column of the matrix at /api/me/notification-preferences.
+ */
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
 /** Who reviews a course's lessons: its lead, and coordination or a security group granting the review in its program. */
 export async function reviewersOf(db: Database, organizationId: string, courseId: string): Promise<string[]> {
@@ -18,14 +21,24 @@ export async function reviewersOf(db: Database, organizationId: string, courseId
 }
 
 const columns = `SELECT o.id,o.notification_type AS type,o.user_id AS userId,COALESCE(u.display_name,u.username,'Cuenta eliminada') AS personName,NULLIF(o.recipient,'') AS recipient,o.reason,
-  substr(o.reference_id,instr(o.reference_id,':')+1) AS targetId,o.status,o.mandatory,o.attempts,o.last_error AS error,o.created_at AS createdAt,o.sent_at AS sentAt
+  substr(o.reference_id,instr(o.reference_id,':')+1) AS targetId,o.status,o.mandatory,o.attempts,o.last_error AS error,o.created_at AS createdAt,o.sent_at AS sentAt,o.deliver_after AS deliverAfter
   FROM mail_outbox o LEFT JOIN users u ON u.id=o.user_id WHERE o.organization_id=? AND o.kind='notification'`;
 const record = (row: Omit<NotificationRecord, "mandatory"> & { mandatory: number }): NotificationRecord => ({ ...row, mandatory: !!row.mandatory });
+export const deliveryStatuses = ["queued", "sent", "failed", "not_configured", "deferred", "no_address", "scheduled", "digested"];
+/** The person's last 20 e-mail notices, newest first. */
+export async function historyOf(db: Database, current: Member) {
+  return (await db.prepare(`${columns} AND o.user_id=? ORDER BY o.created_at DESC,o.rowid DESC LIMIT 20`).bind(current.organizationId, current.id).all<Parameters<typeof record>[0]>()).results.map(record);
+}
+/** Whether the person has somewhere to receive e-mail: their sign-in address or their contact address. */
+export async function hasAddress(db: Database, current: Member) {
+  return !!(await db.prepare("SELECT COALESCE(u.email,p.contact_email) AS email FROM users u LEFT JOIN staff_profiles p ON p.user_id=u.id WHERE u.id=?").bind(current.id).first<{ email: string | null }>())?.email;
+}
 
+/** The e-mail column of the person's matrix; account and terms notices are listed as mandatory and always on. */
 async function settingsOf(db: Database, current: Member): Promise<NotificationSetting[]> {
   const [mandatory, preferences] = await Promise.all([mandatoryTypes(db, current.organizationId), preferencesOf(db, current.organizationId, [current.id])]);
   const mine = preferences.get(current.id) || {};
-  return notificationCatalog.map(item => ({ ...item, mandatory: mandatory.has(item.type), enabled: receives(item.type, mine, mandatory) }));
+  return notificationCatalog.map(({ system, ...item }) => ({ ...item, ...(system ? { system: true } : {}), mandatory: !!lockedBy(item.type, mandatory), enabled: receivesOn(item.type, "email", mine, mandatory) }));
 }
 
 export function notificationMethods(path: string): string[] | null {
@@ -45,17 +58,14 @@ export async function notifications(path: string, method: string, input: unknown
       const chosen = preferencesInput(input);
       if (!chosen) return reply({ error: "Indica, para cada tipo de aviso, si quieres recibirlo." }, 400);
       const mandatory = await mandatoryTypes(db, current.organizationId);
-      const locked = Object.entries(chosen).filter(([type, enabled]) => !enabled && mandatory.has(type as NotificationType));
-      if (locked.length) return reply({ error: "Administración marcó ese aviso como obligatorio: no se puede desactivar." }, 409);
-      await db.batch(Object.entries(chosen).map(([type, enabled]) => db.prepare("INSERT INTO notification_preferences(user_id,organization_id,type,enabled,updated_at) VALUES (?,?,?,?,?) ON CONFLICT(user_id,type) DO UPDATE SET enabled=excluded.enabled,updated_at=excluded.updated_at")
+      const locked = Object.entries(chosen).filter(([type, enabled]) => !enabled && lockedBy(type as NotificationType, mandatory));
+      if (locked.length) return reply({ error: locked.some(([type]) => lockedBy(type as NotificationType, mandatory) === "system") ? "Los avisos de la cuenta y de los términos son obligatorios: no se pueden desactivar." : "Administración marcó ese aviso como obligatorio: no se puede desactivar." }, 409);
+      const changes = Object.entries(chosen).filter(([type]) => isConfigurableType(type));
+      if (changes.length) await db.batch(changes.map(([type, enabled]) => db.prepare("INSERT INTO notification_preferences(user_id,organization_id,type,channel,enabled,updated_at) VALUES (?,?,?,'email',?,?) ON CONFLICT(user_id,type,channel) DO UPDATE SET enabled=excluded.enabled,updated_at=excluded.updated_at")
         .bind(current.id, current.organizationId, type, enabled ? 1 : 0, now)));
     }
-    const [settings, history, address] = await Promise.all([
-      settingsOf(db, current),
-      db.prepare(`${columns} AND o.user_id=? ORDER BY o.created_at DESC,o.rowid DESC LIMIT 20`).bind(current.organizationId, current.id).all<Parameters<typeof record>[0]>(),
-      db.prepare("SELECT COALESCE(u.email,p.contact_email) AS email FROM users u LEFT JOIN staff_profiles p ON p.user_id=u.id WHERE u.id=?").bind(current.id).first<{ email: string | null }>(),
-    ]);
-    return reply({ settings, history: history.results.map(record), hasAddress: !!address?.email });
+    const [settings, history, address] = await Promise.all([settingsOf(db, current), historyOf(db, current), hasAddress(db, current)]);
+    return reply({ settings, history, hasAddress: address });
   }
   if (current.role !== "admin") return reply({ error: "Solo administración define los avisos obligatorios y consulta los envíos." }, 403);
   if (path === "/api/notifications/policy") {
@@ -73,11 +83,12 @@ export async function notifications(path: string, method: string, input: unknown
         ]);
       }
     }
-    return reply({ settings: (await settingsOf(db, current)).map(({ enabled: _, ...item }) => item) });
+    // The policy covers the configurable types; account and terms notices are mandatory for everyone already.
+    return reply({ settings: (await settingsOf(db, current)).filter(item => isConfigurableType(item.type)).map(({ enabled: _, ...item }) => item) });
   }
   const person = url.searchParams.get("person"), type = url.searchParams.get("type"), status = url.searchParams.get("status");
   if (type && !isNotificationType(type)) return reply({ error: "Tipo de aviso desconocido." }, 400);
-  if (status && !["queued", "sent", "failed", "not_configured", "deferred", "no_address"].includes(status)) return reply({ error: "Estado desconocido." }, 400);
+  if (status && !deliveryStatuses.includes(status)) return reply({ error: "Estado desconocido." }, 400);
   const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit")) || 100));
   const filters = [person && ["o.user_id=?", person], type && ["o.notification_type=?", type], status && ["o.status=?", status]].filter(Boolean) as [string, string][];
   const rows = (await db.prepare(`${columns}${filters.map(([clause]) => ` AND ${clause}`).join("")} ORDER BY o.created_at DESC,o.rowid DESC LIMIT ?`).bind(current.organizationId, ...filters.map(([, value]) => value), limit).all<Parameters<typeof record>[0]>()).results;

@@ -1,5 +1,5 @@
 import type { Activity, Lesson, Member, Organization, Resource } from "@happy-learners/contracts";
-import { hasText, organizationIds, organizationInput, richTextFieldsOf, scopeOfSection, scopeOfShare, scopeOfToken, tokenPrefix } from "@happy-learners/domain";
+import { hasText, organizationIds, organizationInput, richTextFieldsOf, scopeOfSection, scopeOfShare, scopeOfToken, sessionTouchMs, tokenPrefix } from "@happy-learners/domain";
 import { sha } from "./generated/version";
 import { database } from "./storage";
 import type { Database } from "./storage";
@@ -26,8 +26,12 @@ import { LessonCollaborationRoom } from "./collaboration";
 import { encodeLessonDraft } from "./rich-text";
 import { accessMatrix, permissionColumns, withPermissions } from "./permissions";
 import { notificationMethods, notifications } from "./notifications";
+import { deliverScheduled } from "./notify";
+import { me, meMethods, preferencesFor } from "./preferences";
 import { hours } from "./hours";
 import { onboarding, onboardingPending } from "./onboarding";
+import { professional, professionalMethods } from "./professional";
+import { account, accountBody, accountMethods, clientOf, confirmEmail, emailConfirmPath, failedSignIn, openSession } from "./account";
 export { LessonCollaborationRoom };
 
 const headers = {
@@ -58,11 +62,14 @@ async function body(request: Request): Promise<unknown> {
 async function member(request: Request, db: Database): Promise<Member | null> {
   const token = sessionToken(request);
   if (!token) return null;
-  const row = await db.prepare(`SELECT u.id, u.username, COALESCE(u.display_name,u.username) AS displayName, CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END AS role, m.organization_id AS organizationId, u.must_change_password AS mustChange, ${permissionColumns} FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND m.active=1`)
-    .bind(await digest(token), Date.now()).first<Member & { mustChange: number }>();
+  const tokenHash = await digest(token), now = Date.now();
+  const row = await db.prepare(`SELECT s.id AS sessionId, s.last_used_at AS lastUsed, u.id, u.username, COALESCE(u.display_name,u.username) AS displayName, CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END AS role, m.organization_id AS organizationId, u.must_change_password AS mustChange, ${permissionColumns} FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND m.active=1`)
+    .bind(tokenHash, now).first<Member & { mustChange: number; sessionId: string; lastUsed: number }>();
   if (!row) return null;
+  // ST-158: the session's last use, written at most once a minute so it costs nothing on most requests.
+  if (now - row.lastUsed >= sessionTouchMs) await db.prepare("UPDATE sessions SET last_used_at=? WHERE token_hash=? AND last_used_at<?").bind(now, tokenHash, now).run();
   // ST-128, ST-135: effective permissions are computed on every request, from the same query.
-  const { mustChange, ...current } = row;
+  const { mustChange, sessionId: _, lastUsed: __, ...current } = row;
   return withPermissions(mustChange ? { ...current, mustChangePassword: true } : current);
 }
 /** Whether a username exists in any organization, active or not: it decides where its owner signs in (ST-093). */
@@ -75,14 +82,16 @@ async function organizationOf(env: Env, username: string) {
   const found = await Promise.all(organizationIds.map(id => database(env, id).prepare("SELECT 1 AS found FROM users u JOIN memberships m ON m.user_id=u.id WHERE u.username=? AND m.active=1").bind(username).first()));
   return organizationIds[found.findIndex(Boolean)] || organizationIds[0];
 }
-async function route(request: Request, env: Env): Promise<Response> {
+async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "waitUntil">): Promise<Response> {
   const url = new URL(request.url); const path = url.pathname; const method = request.method;
   if (!path.startsWith("/api/")) {
     const asset = await env.ASSETS.fetch(request); const result = new Response(asset.body, asset);
     for (const [name, value] of Object.entries(headers)) result.headers.set(name, value);
     return result;
   }
-  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|account|organization|calendar|members|access|levels|units|resources|lessons|courses|programs|vocabularies|terms|student|legal|hours)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files") && !/^\/api\/members\/[a-z0-9-]+\/password$/.test(path))
+  // ST-154 to ST-157: the professional profile reads an optional JSON body (sending, hiding and approving carry none).
+  const professionalAllowed = professionalMethods(path);
+  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|account|organization|calendar|members|access|levels|units|resources|lessons|courses|programs|vocabularies|terms|student|legal|hours)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files") && !/^\/api\/members\/[a-z0-9-]+\/password$/.test(path) && !professionalAllowed)
     || (method === "POST" && path === "/api/organization/restore" && env.RESTORE_ENABLED === "true")
     || (method === "POST" && (path === "/api/invitations" || acceptPath.test(path)))
     ? await body(request) : undefined;
@@ -90,6 +99,11 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === "POST" && /^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/(complete|cancel)$/.test(path) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   // ST-124: notification preferences and policy.
   if (method === "PUT" && notificationMethods(path)) input = await body(request);
+  if (professionalAllowed && ["POST", "PUT"].includes(method) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
+  // ST-158, ST-159: a change of e-mail and a closure request.
+  if (accountBody(path, method)) input = await body(request);
+  // ST-160, ST-161: the person's own preferences and the bell; marking every notice as read needs no body.
+  if (["PUT", "POST"].includes(method) && meMethods(path) && (method === "PUT" || request.headers.get("content-type")?.startsWith("application/json"))) input = await body(request);
   let scope: string = scopeOfToken(sessionToken(request));
   if (path.startsWith("/api/share/")) scope = scopeOfShare(path.split("/")[3]);
   const feedToken = feedPath.exec(path)?.[1];
@@ -97,6 +111,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   // ST-121: an invitation link names its organization like a session token does.
   const invitationToken = acceptPath.exec(path)?.[1];
   if (invitationToken) scope = scopeOfToken(invitationToken);
+  // ST-158: so does the link that confirms a new sign-in e-mail.
+  const emailToken = emailConfirmPath.exec(path)?.[1];
+  if (emailToken) scope = scopeOfToken(emailToken);
   if (path.startsWith("/api/student/")) scope = path === "/api/student/login" ? scopeOfSection(String((input as Record<string, unknown> | null)?.code || "").trim().toUpperCase()) : scopeOfToken(studentToken(request));
   if (path === "/api/login" && method === "POST") {
     const credentials = input as Record<string, unknown> | null;
@@ -145,7 +162,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (/^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/outcomes$/.test(path)) methods[path] = ["PUT"];
   if (path === "/api/calendar") methods[path] = ["GET", "POST"];
   if (/^\/api\/calendar\/[a-z0-9-]+$/.test(path)) methods[path] = ["DELETE"];
-  if (path === "/api/classes" || path === "/api/student/space" || /^\/api\/student\/files\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET"];
+  if (path === "/api/classes" || path === "/api/student/space" || /^\/api\/student\/files\/[a-z0-9-]+$/.test(path) || /^\/api\/student\/educators\/[a-z0-9-]+\/photo$/.test(path)) methods[path] = ["GET"];
   if (["/api/student/login", "/api/student/logout", "/api/student/identity", "/api/student/progress"].includes(path)) methods[path] = ["POST"];
   if (path === "/api/taxonomy") methods[path] = ["GET"];
   // ST-125: the calendar link (signed in) and the feed calendars fetch without a session; GET only.
@@ -183,6 +200,12 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (staffAllowed) methods[path] = staffAllowed;
   const notificationAllowed = notificationMethods(path);
   if (notificationAllowed) methods[path] = notificationAllowed;
+  if (professionalAllowed) methods[path] = professionalAllowed;
+  // ST-158, ST-159: account settings, my data and closing the account.
+  const accountAllowed = accountMethods(path);
+  if (accountAllowed) methods[path] = accountAllowed;
+  const meAllowed = meMethods(path);
+  if (meAllowed) methods[path] = meAllowed;
   const allowed = methods[path] || (path === "/api/members" ? ["GET", "POST"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/members\/[a-z0-9-]+\/password$/.test(path) ? ["POST"] : /^\/api\/members\/[a-z0-9-]+\/departure$/.test(path) ? ["GET", "POST"] : /^\/api\/lessons\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/(publish|duplicate|review|review\/return)$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+\/files\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
   if (!allowed) return json({ error: "Not found" }, 404);
   if (!allowed.includes(method)) return json({ error: "Method not allowed" }, 405, { Allow: allowed.join(", ") });
@@ -200,12 +223,15 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (!limit || limit.attempts > 30) return json({ error: "Demasiados intentos. Espera 15 minutos y vuelve a intentar." }, 429, { "Retry-After": "900" });
     const user = await db.prepare("SELECT u.id, u.password_salt, u.password_hash FROM users u JOIN memberships m ON m.user_id=u.id WHERE u.username=? AND m.active=1").bind(value.username.trim().toLowerCase()).first<{ id: string; password_salt: string; password_hash: string }>();
     const valid = await verifyPassword(value.password, user?.password_salt || "synthetic-dummy-salt", user?.password_hash || "0".repeat(64));
+    // ST-158: each attempt on an existing account joins its owner's sign-in history, with a device summary and country.
+    const client = clientOf(request);
+    if (user && !valid) await failedSignIn(db, user.id, scope, client).run();
     if (!user || !valid) return json({ error: "Usuario o contraseña incorrectos." }, 401);
     const token = tokenPrefix(scope) + newToken();
     await db.batch([
       db.prepare("DELETE FROM sessions WHERE expires_at<=?").bind(now),
       db.prepare("DELETE FROM login_limits WHERE expires_at<=?").bind(now),
-      db.prepare("INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,?)").bind(await digest(token), user.id, now + 28800000),
+      ...openSession(db, await digest(token), user.id, scope, "password", client, now),
     ]);
     return json({ ok: true }, 200, { "Set-Cookie": cookie(token, request) });
   }
@@ -222,8 +248,18 @@ async function route(request: Request, env: Env): Promise<Response> {
     const limit = await db.prepare("INSERT INTO login_limits (bucket, attempts, expires_at) VALUES (?,1,?) ON CONFLICT(bucket) DO UPDATE SET attempts=CASE WHEN expires_at<? THEN 1 ELSE attempts+1 END, expires_at=CASE WHEN expires_at<? THEN excluded.expires_at ELSE expires_at END RETURNING attempts")
       .bind(bucket, now + 900000, now, now).first<{ attempts: number }>();
     if (!limit || limit.attempts > 30) return json({ error: "Demasiados intentos. Espera 15 minutos y vuelve a intentar." }, 429, { "Retry-After": "900" });
-    const accepted = await acceptInvitation(invitationToken, input, scope, db, username => usernameTaken(env, username));
+    const accepted = await acceptInvitation(invitationToken, input, scope, db, username => usernameTaken(env, username), clientOf(request));
     return accepted.session ? json(await accepted.response.json(), accepted.response.status, { "Set-Cookie": cookie(accepted.session, request) }) : accepted.response;
+  }
+  if (emailToken) {
+    if (method === "POST") {
+      // Confirming is limited like signing in, with its own bucket.
+      const bucket = await digest(`email:${new Date().toISOString().slice(0, 10)}:${request.headers.get("CF-Connecting-IP") || "local"}`), now = Date.now();
+      const limit = await db.prepare("INSERT INTO login_limits (bucket, attempts, expires_at) VALUES (?,1,?) ON CONFLICT(bucket) DO UPDATE SET attempts=CASE WHEN expires_at<? THEN 1 ELSE attempts+1 END, expires_at=CASE WHEN expires_at<? THEN excluded.expires_at ELSE expires_at END RETURNING attempts")
+        .bind(bucket, now + 900000, now, now).first<{ attempts: number }>();
+      if (!limit || limit.attempts > 30) return json({ error: "Demasiados intentos. Espera 15 minutos y vuelve a intentar." }, 429, { "Retry-After": "900" });
+    }
+    return confirmEmail(emailToken, method, scope, db, mailSender(env));
   }
   if (path.startsWith("/api/student/")) return student(path, method, input, request, scope, db, env.COURSE_FILES);
   if (path === "/api/logout") {
@@ -236,12 +272,21 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (!current) return json({ error: "Inicia sesión para continuar." }, 401);
   // Until the person accepts the terms and consents to the privacy policy in force, only those and the session answer.
   const pending = await pendingFor(db, current);
-  // ST-122: `onboarding` is true while the person still has to go through the welcome.
-  if (path === "/api/session") return json({ member: current, pending, ...(await onboardingPending(db, current) ? { onboarding: true } : {}) });
-  if (path === "/api/account/password") return changePassword(input, current, sessionToken(request)!, db);
+  // ST-124: endpoints that change something tell the people affected, after their write.
+  const notifier = { origin: url.origin, sender: mailSender(env) };
+  // ST-161: e-mail waiting for a digest or the end of the quiet hours leaves on a later access (there is no cron
+  // trigger in this Worker); the response never waits for it.
+  const deliverDue = () => { const run = deliverScheduled(db, notifier, current.organizationId); if (ctx) ctx.waitUntil(run); else void run; };
+  // ST-122: `onboarding` is true while the person still has to go through the welcome. ST-160: the preferences in
+  // force come with the session, so the screen applies the theme, size and formats before showing anything.
+  if (path === "/api/session") {
+    deliverDue();
+    return json({ member: current, pending, preferences: await preferencesFor(db, current.id, current.organizationId), ...(await onboardingPending(db, current) ? { onboarding: true } : {}) });
+  }
+  if (path === "/api/account/password") return changePassword(input, current, sessionToken(request)!, db, notifier);
   // A temporary password opens nothing else until the person chooses their own (ST-093); the terms come after it.
   if (current.mustChangePassword) return json({ error: "Cambia tu contraseña temporal para continuar.", code: "PASSWORD_CHANGE_REQUIRED" }, 403);
-  if (path.startsWith("/api/legal")) return legal(path, method, input, current, db);
+  if (path.startsWith("/api/legal")) return legal(path, method, input, current, db, notifier);
   if (pending.length && !(path === "/api/organization" && method === "GET")) return json({ error: "Acepta los términos y la política de privacidad vigentes para continuar.", pending }, 403);
   if (/^\/api\/courses\/[a-z0-9-]+\/files(?:\/|$)/.test(path)) return courseFiles(path, method, request, current, db, env.COURSE_FILES);
   const collaborationMatch = path.match(/^\/api\/courses\/([a-z0-9-]+)\/lessons\/([a-z0-9-]+)\/collaborate$/);
@@ -266,9 +311,13 @@ async function route(request: Request, env: Env): Promise<Response> {
     internalHeaders.set("X-HL-Session", await digest(token));
     return room.fetch(new Request(request, { headers: internalHeaders }));
   }
-  // ST-124: endpoints that change something tell the people affected by e-mail, after their write.
-  const notifier = { origin: url.origin, sender: mailSender(env) };
+  if (accountAllowed) return account(path, method, input, current, db, { request, origin: url.origin, sender: notifier.sender, token: sessionToken(request)! });
+  if (meAllowed) {
+    if (path === "/api/me/inbox") deliverDue();
+    return me(path, method, input, current, db);
+  }
   if (notificationAllowed) return notifications(path, method, input, url, current, db, notifier.sender.configured);
+  if (professionalAllowed) return professional(path, method, input, url, current, db);
   if (/^\/api\/(taxonomy|vocabularies|terms)(\/|$)/.test(path)) return taxonomy(path, method, input, current, db);
   if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions)(\/|$)/.test(path)) return classroom(path, method, input, current, db, url.searchParams, notifier);
   if (/^\/api\/courses\/[a-z0-9-]+\/duplicate$/.test(path)) return duplicateCourse(path.split("/")[3], current, db, env.COURSE_FILES);
@@ -287,7 +336,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path.startsWith("/api/invitations")) return invitations(path, method, input, url.origin, current, db, mailSender(env));
   if (staffAllowed) return staff(path, method, request, current, db, env.COURSE_FILES);
   if (path.startsWith("/api/access/")) return accessMatrix(path, method, input, current, db);
-  if (path.startsWith("/api/members")) return roles(path, method, input, current, db, username => usernameTaken(env, username));
+  if (path.startsWith("/api/members")) return roles(path, method, input, current, db, username => usernameTaken(env, username), notifier);
   if (path === "/api/organization/backup" || path === "/api/organization/restore") {
     if (current.role !== "admin") return json({ error: "Solo administración respalda o restaura la organización." }, 403);
     if (path.endsWith("/backup")) {
@@ -307,10 +356,11 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (method === "PUT") {
       if (current.role !== "admin") return json({ error: "Solo administración puede configurar la organización." }, 403);
       const settings = organizationInput(input);
-      if (!settings) return json({ error: "Usa un nombre de 3 a 80 caracteres y una zona horaria válida." }, 400);
-      await db.prepare("UPDATE organizations SET name=?,timezone=?,configured=1 WHERE id=?").bind(settings.name, settings.timezone, current.organizationId).run();
+      if (!settings) return json({ error: "Usa un nombre de 3 a 80 caracteres, una zona horaria válida y un formato regional válido." }, 400);
+      // ST-160: the regional format is optional, so a client that only sends the name and the zone keeps the current one.
+      await db.prepare("UPDATE organizations SET name=?,timezone=?,locale=COALESCE(?,locale),configured=1 WHERE id=?").bind(settings.name, settings.timezone, settings.locale || null, current.organizationId).run();
     }
-    const organization = await db.prepare("SELECT id,name,timezone,configured FROM organizations WHERE id=?").bind(current.organizationId).first<Organization>();
+    const organization = await db.prepare("SELECT id,name,timezone,locale,configured FROM organizations WHERE id=?").bind(current.organizationId).first<Organization>();
     if (!organization) return json({ error: "Organización no disponible." }, 404);
     return json({ organization: { ...organization, configured: !!organization.configured } });
   }
@@ -331,8 +381,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   return content(url, method, input, current, db, notifier);
 }
 export default {
-    async fetch(request, env): Promise<Response> {
-    try { const response = await route(request, env); if (response.status === 101) return response; for (const [key, value] of Object.entries(headers)) response.headers.set(key, value); if (response.headers.get("Content-Type")?.startsWith("text/calendar")) response.headers.set("Cache-Control", "private, max-age=900"); if (response.headers.has("X-File-SHA256")) response.headers.set("Content-Security-Policy", "sandbox; default-src 'none'; frame-ancestors 'none'"); return response; }
+    async fetch(request, env, ctx): Promise<Response> {
+    try { const response = await route(request, env, ctx); if (response.status === 101) return response; for (const [key, value] of Object.entries(headers)) response.headers.set(key, value); if (response.headers.get("Content-Type")?.startsWith("text/calendar")) response.headers.set("Cache-Control", "private, max-age=900"); if (response.headers.has("X-File-SHA256")) response.headers.set("Content-Security-Policy", "sandbox; default-src 'none'; frame-ancestors 'none'"); return response; }
     catch (error) {
       if (error instanceof Error && error.message === "INPUT") return json({ error: "Revisa los datos del formulario." }, 400);
       const cause = error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 240) : "Unknown error";
