@@ -49,7 +49,7 @@ test("main routes have no WCAG 2.2 A/AA violations detectable by axe", async ({ 
   await page.getByRole("button", { name: "Siguiente" }).click();
   await audit(page, "estudiante pregunta");
   await signIn(page, "admin-demo", "/inicio");
-  for (const [label, path] of [["organización", "/organizacion"], ["educadores", "/educadores"]]) {
+  for (const [label, path] of [["organización", "/organizacion"], ["educadores", "/educadores"], ["contratos", "/contratos"]]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1 }).first()).toBeAttached();
     await audit(page, label);

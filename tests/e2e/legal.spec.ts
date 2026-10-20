@@ -31,7 +31,7 @@ async function acceptAll(page: Page, fullName: string) {
 async function publish(page: Page, kind: "Términos y condiciones" | "Política de privacidad", title: string, body: string) {
   const editor = page.getByRole("form", { name: `Borrador de ${kind.toLowerCase()}` });
   await editor.getByLabel(`Título de ${kind.toLowerCase()}`).fill(title);
-  await editor.getByLabel(`Texto de ${kind.toLowerCase()}`).fill(body);
+  await editor.getByRole("textbox", { name: `Texto de ${kind.toLowerCase()}` }).fill(body);
   await editor.getByRole("button", { name: "Guardar borrador" }).click();
   await expect(toast(page)).toContainText("Borrador guardado");
   await editor.getByRole("button", { name: "Publicar nueva versión" }).click();
@@ -42,7 +42,7 @@ test("ST-126 ST-127: administration publishes terms and privacy, the next sign-i
   test.setTimeout(120_000);
   const stamp = `${info.project.name} ${Date.now()}`;
   // Administration publishes the terms; publishing asks its own account to accept them before continuing.
-  await signIn(page, "admin-externo", "/organizacion");
+  await signIn(page, "admin-externo", "/contratos#politicas");
   await expect(page.getByRole("heading", { name: "Términos y privacidad" })).toBeVisible();
   await publish(page, "Términos y condiciones", `Términos ficticios ${stamp}`, "Texto ficticio de los términos de la demostración.\n\nNo contiene datos reales.");
   await acceptAll(page, "Administración Externa Ficticia");

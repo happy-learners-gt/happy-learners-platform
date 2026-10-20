@@ -18,7 +18,6 @@ import { ProgramPathDialog } from "./programPath";
 import { DepartureDialog, departureDay } from "./departure";
 import { Invitations } from "./invitations";
 import { ClosureRequests } from "./account";
-import { LegalSettings } from "./legal";
 import { ExpiringDocuments, PersonDetail } from "./profile";
 import { CoordinationBadge, CoordinationDialog } from "./access";
 import { OnboardingBadge, OnboardingFilter, useOnboardingPeople } from "./onboarding";
@@ -79,7 +78,6 @@ function OrganizationForm() {
         <p className="muted">Una copia en JSON de los cursos, las lecciones, las secciones, el calendario y los registros de la organización. No incluye contraseñas, sesiones ni el contenido de los documentos subidos. Guárdala en un lugar privado: contiene los nombres de los estudiantes.</p>
       </Section>
     </div>
-    <LegalSettings/>
   </>;
 }
 
@@ -90,7 +88,7 @@ type MemberStats = Member & { leads: number; coTeaches: number; sections: number
 const educatorTabs = [
   { id: "personas", label: "Personas", href: "/educadores" },
   { id: "invitaciones", label: "Invitaciones", href: "/educadores#invitaciones" },
-  { id: "contratos", label: "Contratos", href: "/contratos" },
+  { id: "contratos", label: "Contratos", href: "/contratos#contratos" },
   { id: "incorporacion", label: "Incorporación", href: "/educadores#incorporacion" },
   { id: "cierres", label: "Cierres de cuenta", href: "/educadores#cierres" },
   { id: "documentos", label: "Documentos por vencer", href: "/educadores#documentos" },
