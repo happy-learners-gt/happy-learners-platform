@@ -26,7 +26,7 @@ const deliveryNote: Record<AccountNoticeDelivery, string> = {
 const countries = (() => { try { return new Intl.DisplayNames(["es"], { type: "region" }); } catch { return null; } })();
 const countryName = (code: string | null) => !code ? "Desconocido" : countries?.of(code) || code;
 const shortDate = (value: string) => new Date(value).toLocaleString("es-GT", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-const sections: [string, string][] = [["correo", "Correo"], ["contrasena", "Contraseña"], ["sesiones", "Sesiones activas"], ["accesos", "Historial de accesos"], ["datos", "Mis datos"], ["cierre", "Cerrar la cuenta"]];
+const historyPageSize = 10;
 
 export function AccountPage() {
   const { member } = useSession();
@@ -35,9 +35,8 @@ export function AccountPage() {
   useEffect(load, [revision]);
   const refresh = () => setRevision(value => value + 1);
   return <>
-    <PageHeader title="Cuenta" description="Cómo entras a Happy Learners y qué guardamos de tu acceso: tu correo, tu contraseña, dónde está abierta tu sesión y tus datos."/>
-    <div className="reading stack account-page">
-      <nav className="account-toc" aria-label="Secciones de la cuenta"><ul>{sections.map(([id, label]) => <li key={id}><a href={`#${id}`}>{label}</a></li>)}</ul></nav>
+    <PageHeader title="Cuenta" description="Tu correo, tu contraseña, las sesiones abiertas y una copia de tus datos."/>
+    <div className="form-sheet account-cards">
       {error ? <ErrorState error={error} retry={load}/> : !overview ? <Loading label="Cargando tu cuenta…" lines={3}/> : <EmailSection overview={overview} onChanged={refresh}/>}
       <PasswordSection username={member.username} onChanged={refresh}/>
       <SessionsSection revision={revision} onChanged={refresh}/>
@@ -121,6 +120,14 @@ function EmailIssued({ issued, onClose }: { issued: EmailChangeIssued; onClose: 
 }
 
 function PasswordSection({ username, onChanged }: { username: string; onChanged: () => void }) {
+  const [open, setOpen] = useState(false);
+  return <Anchored id="contrasena" title="Contraseña" action={<button type="button" className="button secondary small" onClick={() => setOpen(true)}><Icon name="edit" size={16}/>Cambiar contraseña</button>}>
+    <p className="muted small">Al cambiarla se cierran tus sesiones en otros dispositivos; esta sigue abierta. Si tienes correo de acceso, te avisamos del cambio.</p>
+    {open && <PasswordDialog username={username} onClose={() => setOpen(false)} onChanged={() => { setOpen(false); onChanged(); }}/>}
+  </Anchored>;
+}
+
+function PasswordDialog({ username, onClose, onChanged }: { username: string; onClose: () => void; onChanged: () => void }) {
   const { toast } = useFeedback();
   const [current, setCurrent] = useState(""), [next, setNext] = useState(""), [repeat, setRepeat] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
   async function submit(event: FormEvent) {
@@ -128,22 +135,18 @@ function PasswordSection({ username, onChanged }: { username: string; onChanged:
     if (next !== repeat) { setError("Las contraseñas nuevas no coinciden."); return; }
     if (!acceptablePassword(next, username, current)) { setError(`Usa de ${minPasswordLength} a ${maxPasswordLength} caracteres variados, distintos de tu usuario y de tu contraseña actual.`); return; }
     setBusy(true);
-    try { await api("/account/password", "POST", { currentPassword: current, newPassword: next }); setCurrent(""); setNext(""); setRepeat(""); toast({ message: "Contraseña cambiada. Se cerraron tus otras sesiones." }); onChanged(); }
-    catch (cause) { setError(message(cause)); }
-    finally { setBusy(false); }
+    try { await api("/account/password", "POST", { currentPassword: current, newPassword: next }); toast({ message: "Contraseña cambiada. Se cerraron tus otras sesiones." }); onChanged(); }
+    catch (cause) { setError(message(cause)); setBusy(false); }
   }
-  return <Anchored id="contrasena" title="Contraseña">
-    <p className="muted small">Al cambiarla se cierran tus sesiones en otros dispositivos; esta sigue abierta. Si tienes correo de acceso, te avisamos del cambio.</p>
+  return <Modal title="Cambiar contraseña" onClose={onClose}>
     <form className="stack" onSubmit={submit} aria-label="Cambiar contraseña"><fieldset className="stack" disabled={busy}>
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
       <Field label="Contraseña actual"><input type="password" value={current} onChange={event => setCurrent(event.target.value)} required maxLength={maxPasswordLength} autoComplete="current-password"/></Field>
-      <div className="field-grid">
-        <Field label="Nueva contraseña" hint={`Al menos ${minPasswordLength} caracteres. Una frase que recuerdes funciona bien.`}><input type="password" value={next} onChange={event => setNext(event.target.value)} required minLength={minPasswordLength} maxLength={maxPasswordLength} autoComplete="new-password"/></Field>
-        <Field label="Repite la nueva contraseña"><input type="password" value={repeat} onChange={event => setRepeat(event.target.value)} required maxLength={maxPasswordLength} autoComplete="new-password"/></Field>
-      </div>
-      <div className="form-actions"><button className="button primary">{busy ? "Guardando…" : "Cambiar contraseña"}</button></div>
+      <Field label="Nueva contraseña" hint={`Al menos ${minPasswordLength} caracteres. Una frase que recuerdes funciona bien.`}><input type="password" value={next} onChange={event => setNext(event.target.value)} required minLength={minPasswordLength} maxLength={maxPasswordLength} autoComplete="new-password"/></Field>
+      <Field label="Repite la nueva contraseña"><input type="password" value={repeat} onChange={event => setRepeat(event.target.value)} required maxLength={maxPasswordLength} autoComplete="new-password"/></Field>
+      <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">{busy ? "Guardando…" : "Cambiar contraseña"}</button></div>
     </fieldset></form>
-  </Anchored>;
+  </Modal>;
 }
 
 function SessionsSection({ revision, onChanged }: { revision: number; onChanged: () => void }) {
@@ -185,25 +188,34 @@ function SessionsSection({ revision, onChanged }: { revision: number; onChanged:
 
 const outcomeLabel: Record<SignInRecord["outcome"], [string, Tone]> = { succeeded: ["Correcto", "success"], failed: ["Contraseña incorrecta", "danger"] };
 function SignInHistory({ revision }: { revision: number }) {
-  const [logins, setLogins] = useState<SignInRecord[] | null>(null), [limit, setLimit] = useState(30), [error, setError] = useState("");
-  const load = () => { setError(""); api<{ logins: SignInRecord[]; limit: number }>("/me/account/logins").then(result => { setLogins(result.logins); setLimit(result.limit); }).catch(cause => setError(message(cause))); };
+  const [logins, setLogins] = useState<SignInRecord[] | null>(null), [limit, setLimit] = useState(30), [page, setPage] = useState(0), [error, setError] = useState("");
+  const load = () => { setError(""); api<{ logins: SignInRecord[]; limit: number }>("/me/account/logins").then(result => { setLogins(result.logins); setLimit(result.limit); setPage(0); }).catch(cause => setError(message(cause))); };
   useEffect(load, [revision]);
   const failed = logins?.filter(item => item.outcome === "failed").length || 0;
+  const pages = logins ? Math.max(1, Math.ceil(logins.length / historyPageSize)) : 1;
+  const visible = (logins || []).slice(page * historyPageSize, (page + 1) * historyPageSize);
   return <Anchored id="accesos" title="Historial de accesos">
     <p className="muted small">Los últimos {limit} intentos de entrar con tu usuario, correctos o no. No guardamos tu dirección IP: solo el dispositivo y el país aproximado.</p>
     {failed > 0 && <div className="notice warning" role="status"><Icon name="alert" size={18}/><p>{failed === 1 ? "Hay 1 intento" : `Hay ${failed} intentos`} con contraseña incorrecta. Si no fuiste tú, cambia tu contraseña y cierra las sesiones que no reconozcas.</p></div>}
     {error ? <ErrorState error={error} retry={load}/> : !logins ? <Loading label="Cargando historial…" lines={2}/> : !logins.length
       ? <EmptyState compact icon="shield" title="Sin accesos registrados">Aquí aparecerán tus próximos inicios de sesión.</EmptyState>
-      : <div className="table-card" role="region" aria-label="Lista de accesos recientes" tabIndex={0}><table className="members-table account-table">
-        <caption className="sr-only">Tus inicios de sesión recientes: fecha, resultado, dispositivo y país</caption>
-        <thead><tr><th scope="col">Fecha</th><th scope="col">Resultado</th><th scope="col">Dispositivo</th><th scope="col">País</th></tr></thead>
-        <tbody>{logins.map(item => <tr key={item.id}>
-          <th scope="row"><time dateTime={item.occurredAt}>{shortDate(item.occurredAt)}</time></th>
-          <td><StatusBadge tone={outcomeLabel[item.outcome][1]}>{outcomeLabel[item.outcome][0]}</StatusBadge>{item.method === "invitation" && <span className="muted small"> · invitación</span>}</td>
-          <td>{item.device}</td>
-          <td>{countryName(item.country)}</td>
-        </tr>)}</tbody>
-      </table></div>}
+      : <>
+        <div className="table-card" role="region" aria-label="Lista de accesos recientes" tabIndex={0}><table className="members-table account-table">
+          <caption className="sr-only">Tus inicios de sesión recientes: fecha, resultado, dispositivo y país</caption>
+          <thead><tr><th scope="col">Fecha</th><th scope="col">Resultado</th><th scope="col">Dispositivo</th><th scope="col">País</th></tr></thead>
+          <tbody>{visible.map(item => <tr key={item.id}>
+            <th scope="row"><time dateTime={item.occurredAt}>{shortDate(item.occurredAt)}</time></th>
+            <td><StatusBadge tone={outcomeLabel[item.outcome][1]}>{outcomeLabel[item.outcome][0]}</StatusBadge>{item.method === "invitation" && <span className="muted small"> · invitación</span>}</td>
+            <td>{item.device}</td>
+            <td>{countryName(item.country)}</td>
+          </tr>)}</tbody>
+        </table></div>
+        {logins.length > historyPageSize && <div className="form-actions">
+          <button type="button" className="button ghost small" disabled={page === 0} onClick={() => setPage(value => value - 1)}>Anterior</button>
+          <span className="muted small">Página {page + 1} de {pages}</span>
+          <button type="button" className="button ghost small" disabled={page + 1 >= pages} onClick={() => setPage(value => value + 1)}>Siguiente</button>
+        </div>}
+      </>}
   </Anchored>;
 }
 
