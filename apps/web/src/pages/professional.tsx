@@ -102,13 +102,28 @@ function ProfileEditor({ initial, reload }: { initial: MyProfessionalProfile; re
   const { toast, confirm } = useFeedback();
   const [profile, setProfile] = useState(initial);
   const [draft, setDraft] = useState<ProfessionalProfile>(initial.draft), [visibility, setVisibility] = useState<ProfileVisibility>(initial.visibility), [account, setAccount] = useState<Account>(accountOf(initial));
-  const [tab, setTab] = useState<Tab>("identity"), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [errors, setErrors] = useState<Record<string, string>>({}), [alert, setAlert] = useState("");
+  const [visible, setVisible] = useState<Tab>("identity"), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [errors, setErrors] = useState<Record<string, string>>({}), [alert, setAlert] = useState("");
   const [preview, setPreview] = useState(false), [photo, setPhoto] = useState(initial.photoVersion);
   useUnsavedChanges(dirty);
+  useEffect(() => {
+    const nodes = tabs.map(item => document.getElementById(`profile-${item.value}`)).filter((node): node is HTMLElement => !!node);
+    if (!nodes.length) return;
+    const observer = new IntersectionObserver(entries => {
+      const seen = entries.filter(entry => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      const id = seen?.target.id.replace("profile-", "") as Tab | undefined;
+      if (id) setVisible(id);
+    }, { rootMargin: "-25% 0px -55% 0px", threshold: [0.15, 0.4, 0.7] });
+    for (const node of nodes) observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
   const accept = (next: MyProfessionalProfile) => { setProfile(next); setDraft(next.draft); setVisibility(next.visibility); setAccount(accountOf(next)); setDirty(false); setErrors({}); setAlert(""); };
   const patch = (value: Partial<ProfessionalProfile>) => { setDraft(current => ({ ...current, ...value })); setDirty(true); };
   const patchAccount = (value: Partial<Account>) => { setAccount(current => ({ ...current, ...value })); setDirty(true); };
   const err = (path: string) => errors[path];
+  const go = (section: Tab) => {
+    setVisible(section);
+    document.getElementById(`profile-${section}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   // Credentials save on their own: refresh the status, completeness and list without touching unsaved edits.
   const refresh = () => { api<{ profile: MyProfessionalProfile }>("/me/profile").then(result => setProfile(result.profile)).catch(() => reload()); };
 
@@ -123,7 +138,7 @@ function ProfileEditor({ initial, reload }: { initial: MyProfessionalProfile; re
       return true;
     } catch (cause) {
       const detail = cause instanceof ApiError ? cause.detail.errors as Record<string, string> | undefined : undefined;
-      if (detail) { setErrors(detail); setTab(tabOf(Object.keys(detail)[0])); }
+      if (detail) { setErrors(detail); go(tabOf(Object.keys(detail)[0])); }
       setAlert(message(cause));
       return false;
     } finally { setBusy(false); }
@@ -150,8 +165,7 @@ function ProfileEditor({ initial, reload }: { initial: MyProfessionalProfile; re
   const submitLabel = !profile.reviewRequired ? (published ? "Publicar cambios" : "Publicar perfil") : profile.submission?.status === "in_review" ? "Reenviar a revisión" : published ? "Enviar cambios a revisión" : "Enviar a revisión";
   const errorCount = Object.keys(errors).length;
   const tabErrors = (value: Tab) => Object.keys(errors).filter(key => tabOf(key) === value).length;
-
-  const go = (section: Tab) => setTab(section);
+  const jump = (section: ProfileSection | "photo") => go(section === "photo" ? "identity" : section === "availability" || section === "contact" ? "contact" : section as Tab);
   return <>
     <PageHeader title="Mi perfil" description="Lo que el equipo y los estudiantes de tus secciones conocen de ti."
       meta={<span className="profile-status-line"><StatusBadge tone={statusTone[status]}>{profileStatusLabels[status]}</StatusBadge>
@@ -160,6 +174,8 @@ function ProfileEditor({ initial, reload }: { initial: MyProfessionalProfile; re
       actions={<>
         <button type="button" className="button secondary" onClick={() => setPreview(true)}><Icon name="eye" size={18}/>Vista previa</button>
         {profile.publication && <Link className="button ghost" href={`/equipo/${profile.userId}`}><Icon name="users" size={18}/>Ver publicado</Link>}
+        {status === "published" && <button type="button" className="button ghost" onClick={() => void visibilityAction("hide")}><Icon name="archive" size={16}/>Ocultar perfil</button>}
+        {status === "hidden" && profile.hiddenBy !== "admin" && <button type="button" className="button ghost" onClick={() => void visibilityAction("show")}><Icon name="eye" size={16}/>Mostrar perfil</button>}
       </>}
       primary={<button type="button" className="button primary" disabled={busy || !canSubmit} onClick={() => void submit()}><Icon name="send" size={18}/>{submitLabel}</button>}/>
     {profile.submission?.status === "returned" && <div className="message-bar warning" role="status">
@@ -167,93 +183,95 @@ function ProfileEditor({ initial, reload }: { initial: MyProfessionalProfile; re
       <div><strong>Administración te pidió cambios</strong><p className="pre-line">{profile.submission.note}</p>
         <button type="button" className="button secondary small" onClick={() => go("about")}>Ir a Sobre mí</button></div>
     </div>}
+    {profile.submission?.status === "in_review" && <div className="message-bar info" role="status">
+      <Icon name="info" size={18}/>
+      <div><strong>Administración está revisando tu perfil</strong>
+        <p>{profile.publication ? `La versión ${profile.submission.version} está en revisión desde ${timeAgo(profile.submission.submittedAt)}; mientras tanto se ve la versión ${profile.publication.version}.` : "Puedes seguir editando; si quieres incluir los cambios, reenvíalo."}</p></div>
+    </div>}
     <StatusSteps label="Estado del perfil" steps={profileSteps(status)}/>
-    <div className="profile-workspace">
-      <nav className="profile-section-nav" aria-label="Secciones del perfil">
-        <ul>{tabs.map(item => <li key={item.value}>
-          <button type="button" aria-current={tab === item.value || undefined} onClick={() => go(item.value)}>
-            <span>{item.label}{tabErrors(item.value) > 0 && <span className="sr-only">, con errores</span>}</span>
-            <span className={`profile-section-mark${tabErrors(item.value) ? " is-error" : sectionDone(item.value, profile) ? " is-done" : ""}`} aria-hidden="true"/>
-          </button>
-        </li>)}</ul>
-      </nav>
-      <div className="profile-layout">
-        <div className="profile-main">
-          <Completeness profile={profile} onGo={section => go(section === "photo" ? "identity" : section === "availability" || section === "contact" ? "contact" : section as Tab)}/>
-          <Publication profile={profile} onHide={() => void visibilityAction("hide")} onShow={() => void visibilityAction("show")}/>
-          {(alert || errorCount > 0) && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{alert || "Revisa los campos marcados."}{errorCount > 0 && ` (${errorCount === 1 ? "1 campo" : `${errorCount} campos`})`}</p>}
-          {tab === "credentials" ? <CredentialsTab profile={profile} onChange={refresh}/> : <fieldset className="stack" disabled={busy}>
-            {tab === "identity" && <IdentityTab draft={draft} patch={patch} account={account} patchAccount={patchAccount} err={err} profile={profile} photo={photo} setPhoto={setPhoto}/>}
-            {tab === "about" && <AboutTab draft={draft} patch={patch} err={err}/>}
-            {tab === "languages" && <LanguagesTab draft={draft} patch={patch} err={err}/>}
-            {tab === "teaching" && <TeachingTab draft={draft} patch={patch} err={err}/>}
-            {tab === "career" && <CareerTab draft={draft} patch={patch} err={err} education={account.education} setEducation={education => patchAccount({ education })}/>}
-            {tab === "links" && <LinksTab draft={draft} patch={patch} err={err}/>}
-            {tab === "contact" && <>
-              <ContactTab account={account} patchAccount={patchAccount} err={err}/>
-              <PrivacyTab visibility={visibility} onChange={value => { setVisibility(value); setDirty(true); }}/>
-            </>}
-          </fieldset>}
-          {tab !== "credentials" && dirty && <div className="save-bar">
-            <span className="muted small" role="status">Tienes cambios sin guardar.</span>
-            <button type="button" className="button primary" disabled={busy} onClick={() => void save()}>{busy ? "Guardando…" : "Guardar perfil"}</button>
-          </div>}
-        </div>
-      </div>
+    <nav className="profile-anchors" aria-label="Secciones del perfil">
+      {tabs.map(item => <button key={item.value} type="button" aria-current={visible === item.value || undefined} onClick={() => go(item.value)}>
+        <span>{item.label}{tabErrors(item.value) > 0 && <span className="sr-only">, con errores</span>}</span>
+        <span className={`profile-section-mark${tabErrors(item.value) ? " is-error" : sectionDone(item.value, profile) ? " is-done" : ""}`} aria-hidden="true"/>
+      </button>)}
+    </nav>
+    <div className="profile-form">
+      <Completeness profile={profile} onGo={jump}/>
+      {(alert || errorCount > 0) && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{alert || "Revisa los campos marcados."}{errorCount > 0 && ` (${errorCount === 1 ? "1 campo" : `${errorCount} campos`})`}</p>}
+      <fieldset className="profile-sections" disabled={busy}>
+        <section id="profile-identity" className="panel" aria-labelledby="profile-identity-title">
+          <h2 id="profile-identity-title">Identidad</h2>
+          <IdentityTab draft={draft} patch={patch} account={account} patchAccount={patchAccount} err={err} profile={profile} photo={photo} setPhoto={setPhoto}/>
+        </section>
+        <section id="profile-about" className="panel" aria-labelledby="profile-about-title">
+          <h2 id="profile-about-title">Sobre mí</h2>
+          <AboutTab draft={draft} patch={patch} err={err}/>
+        </section>
+        <section id="profile-languages" className="panel" aria-labelledby="profile-languages-title">
+          <h2 id="profile-languages-title">Idiomas</h2>
+          <LanguagesTab draft={draft} patch={patch} err={err}/>
+        </section>
+        <section id="profile-teaching" className="panel" aria-labelledby="profile-teaching-title">
+          <h2 id="profile-teaching-title">Enseñanza</h2>
+          <TeachingTab draft={draft} patch={patch} err={err}/>
+        </section>
+        <section id="profile-career" className="panel" aria-labelledby="profile-career-title">
+          <h2 id="profile-career-title">Trayectoria</h2>
+          <CareerTab draft={draft} patch={patch} err={err} education={account.education} setEducation={education => patchAccount({ education })}/>
+        </section>
+      </fieldset>
+      <section id="profile-credentials" className="panel" aria-labelledby="profile-credentials-title">
+        <h2 id="profile-credentials-title">Credenciales</h2>
+        <CredentialsTab profile={profile} onChange={refresh}/>
+      </section>
+      <fieldset className="profile-sections" disabled={busy}>
+        <section id="profile-links" className="panel" aria-labelledby="profile-links-title">
+          <h2 id="profile-links-title">Enlaces</h2>
+          <LinksTab draft={draft} patch={patch} err={err}/>
+        </section>
+        <section id="profile-contact" className="panel" aria-labelledby="profile-contact-title">
+          <h2 id="profile-contact-title">Contacto</h2>
+          <ContactTab account={account} patchAccount={patchAccount} err={err}/>
+          <PrivacyTab visibility={visibility} onChange={value => { setVisibility(value); setDirty(true); }}/>
+        </section>
+      </fieldset>
+      {profile.history.length > 0 && <details className="history"><summary>Historial de versiones publicadas ({profile.history.length})</summary>
+        <ol className="plain-list small">{profile.history.map(item => <li key={item.version}>Versión {item.version} · {item.publishedAt ? departureDay(item.publishedAt.slice(0, 10)) : ""}{item.decidedBy ? ` · aprobó ${item.decidedBy}` : ""}{item.status === "published" ? " · vigente" : ""}</li>)}</ol>
+      </details>}
+      {dirty && <div className="save-bar">
+        <span className="muted small" role="status">Tienes cambios sin guardar.</span>
+        <button type="button" className="button primary" disabled={busy} onClick={() => void save()}>{busy ? "Guardando…" : "Guardar perfil"}</button>
+      </div>}
     </div>
     {preview && <PreviewDialog profile={profile} draft={draft} visibility={visibility} name={account.displayName} photo={photo} onClose={() => setPreview(false)}/>}
   </>;
 }
 
 function Completeness({ profile, onGo }: { profile: MyProfessionalProfile; onGo: (section: ProfileSection | "photo") => void }) {
-  const { percent, steps } = profile.completeness, missing = steps.filter(step => !step.done), next = missing.slice(0, 3);
-  const [all, setAll] = useState(false);
-  const shown = all ? missing : next;
-  const radius = 28, circ = 2 * Math.PI * radius, dash = (percent / 100) * circ;
-  return <section className="panel completeness" aria-labelledby="completeness-title">
-    <div className="completeness-ring">
-      <svg width="72" height="72" viewBox="0 0 72 72" aria-hidden="true">
-        <circle className="track" cx="36" cy="36" r={radius}/>
-        <circle className="value" cx="36" cy="36" r={radius} strokeDasharray={`${dash} ${circ}`}/>
+  const { percent, steps } = profile.completeness, missing = steps.filter(step => !step.done);
+  const [open, setOpen] = useState(false);
+  const radius = 16, circ = 2 * Math.PI * radius, dash = (percent / 100) * circ;
+  const nextCount = Math.min(3, missing.length);
+  const nextLabel = nextCount === 1 ? "1 paso siguiente" : `${nextCount} pasos siguientes`;
+  return <div className="profile-completeness">
+    <div className="completeness-ring is-compact">
+      <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+        <circle className="track" cx="20" cy="20" r={radius}/>
+        <circle className="value" cx="20" cy="20" r={radius} strokeDasharray={`${dash} ${circ}`}/>
       </svg>
       <div>
-        <h2 id="completeness-title" className="completeness-pct">{percent} %</h2>
-        <p className="muted small" id="completeness-label">Perfil completo al {percent} %</p>
+        <p id="completeness-label">Perfil al {percent} %</p>
+        {missing.length ? <button type="button" className="link-button" aria-expanded={open} onClick={() => setOpen(!open)}>{nextLabel}</button>
+          : <p className="muted small"><Icon name="check" size={16}/> Todo lo recomendado está listo.</p>}
       </div>
     </div>
-    <div className="meter sr-only" role="progressbar" aria-labelledby="completeness-label" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}/>
-    {missing.length ? <>
-      <p className="muted small">{all ? "Todo lo que falta:" : "Tus tres pasos siguientes:"}</p>
-      <ul className="plain-list completeness-steps">{shown.map(step => <li key={step.key}><button type="button" className="link-button" onClick={() => onGo(step.section)}>{step.label}</button></li>)}</ul>
-      {missing.length > 3 && <button type="button" className="button ghost small" onClick={() => setAll(!all)}>{all ? "Ver menos" : "Ver todo"}</button>}
-    </> : <p className="muted small"><Icon name="check" size={16}/> Tu perfil tiene todo lo recomendado.</p>}
-    {profile.missing.length > 0 && <p className="small"><strong>Para enviarlo necesitas</strong> {profile.missing.join(", ")}.</p>}
-  </section>;
-}
-
-function Publication({ profile, onHide, onShow }: { profile: MyProfessionalProfile; onHide: () => void; onShow: () => void }) {
-  const { status, submission, publication } = profile;
-  const text: Record<ProfileStatus, string> = {
-    draft: profile.reviewRequired ? "Aún no lo envías. Cuando esté listo, envíalo a revisión: administración lo aprueba antes de publicarlo." : "Aún no lo publicas. Al enviarlo se publica de inmediato.",
-    in_review: "Administración está revisando tu perfil. Puedes seguir editando; si quieres incluir los cambios, reenvíalo.",
-    changes_requested: "Administración te pidió cambios. Corrige y vuelve a enviarlo.",
-    published: "El equipo y los estudiantes de tus secciones ven la versión publicada, según tu privacidad.",
-    hidden: profile.hiddenBy === "admin" ? "Administración ocultó tu perfil. Pídele que lo vuelva a mostrar." : profile.hiddenBy === "system" ? "Tu perfil se ocultó al cambiar el acceso de tu cuenta." : "Ocultaste tu perfil: nadie más lo ve.",
-  };
-  return <section className="panel" aria-labelledby="publication-title">
-    <div className="panel-header"><h2 id="publication-title">Publicación</h2><StatusBadge tone={statusTone[status]}>{profileStatusLabels[status]}</StatusBadge></div>
-    <p className="small">{text[status]}</p>
-    {submission?.status === "returned" && <div className="message-bar warning" role="note"><Icon name="alert" size={18}/><div><strong>Cambios solicitados por {submission.decidedBy}</strong><p className="pre-line">{submission.note}</p></div></div>}
-    {submission?.status === "in_review" && publication && <p className="small muted">La versión {submission.version} está en revisión desde {timeAgo(submission.submittedAt)}; mientras tanto se ve la versión {publication.version}.</p>}
-    {publication && <p className="small">Versión publicada: <strong>{publication.version}</strong>, {timeAgo(publication.publishedAt)}.</p>}
-    <div className="button-row">
-      {status === "published" && <button type="button" className="button secondary small" onClick={onHide}><Icon name="archive" size={16}/>Ocultar perfil</button>}
-      {status === "hidden" && profile.hiddenBy !== "admin" && <button type="button" className="button secondary small" onClick={onShow}><Icon name="eye" size={16}/>Mostrar perfil</button>}
-    </div>
-    {profile.history.length > 0 && <details className="history"><summary>Historial de versiones publicadas ({profile.history.length})</summary>
-      <ol className="plain-list small">{profile.history.map(item => <li key={item.version}>Versión {item.version} · {item.publishedAt ? departureDay(item.publishedAt.slice(0, 10)) : ""}{item.decidedBy ? ` · aprobó ${item.decidedBy}` : ""}{item.status === "published" ? " · vigente" : ""}</li>)}</ol>
-    </details>}
-  </section>;
+    <div className="meter sr-only" role="progressbar" aria-label={`Perfil completo al ${percent} %`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}/>
+    {open && missing.length > 0 && <div className="completeness-panel">
+      <p className="muted small">Tus siguientes pasos:</p>
+      <ul className="plain-list completeness-steps">{missing.map(step => <li key={step.key}><button type="button" className="link-button" onClick={() => onGo(step.section)}>{step.label}</button></li>)}</ul>
+      {profile.missing.length > 0 && <p className="small"><strong>Para enviarlo necesitas</strong> {profile.missing.join(", ")}.</p>}
+    </div>}
+  </div>;
 }
 
 type TabProps = { draft: ProfessionalProfile; patch: (value: Partial<ProfessionalProfile>) => void; err: (path: string) => string | undefined };
@@ -276,22 +294,20 @@ function IdentityTab({ draft, patch, account, patchAccount, err, profile, photo,
     catch (cause) { toast({ tone: "error", message: message(cause) }); }
     finally { setPhotoBusy(false); }
   }
-  return <>
-    <div className="profile-photo-row">
+  return <div className="identity-block">
+    <div className="identity-photo">
       <PersonPhoto userId={profile.userId} name={account.displayName || profile.username} version={photo} size={72} alt={photo ? "Tu foto de perfil" : ""}/>
-      <div className="stack">
-        <p className="muted small">JPG, PNG o WebP de hasta 2 MB. La ve el equipo y, con tu perfil publicado, los estudiantes de tus secciones. Se aplica de inmediato.</p>
-        <div className="form-actions">
-          <label className="button secondary small file-button"><Icon name="upload" size={16}/>{photoBusy ? "Subiendo…" : photo ? "Cambiar foto" : "Subir foto"}
-            <input ref={fileRef} type="file" className="sr-only" accept="image/jpeg,image/png,image/webp" disabled={photoBusy} onChange={event => void upload(event.target.files?.[0])}/></label>
-          {photo && <button type="button" className="button ghost small" disabled={photoBusy} onClick={() => void remove()}>Quitar foto</button>}
-        </div>
+      <div className="form-actions">
+        <label className="button secondary small file-button"><Icon name="upload" size={16}/>{photoBusy ? "Subiendo…" : photo ? "Cambiar foto" : "Subir foto"}
+          <input ref={fileRef} type="file" className="sr-only" accept="image/jpeg,image/png,image/webp" disabled={photoBusy} onChange={event => void upload(event.target.files?.[0])}/></label>
+        {photo && <button type="button" className="button ghost small" disabled={photoBusy} onClick={() => void remove()}>Quitar foto</button>}
       </div>
+      <p className="muted small">JPG, PNG o WebP de hasta 2 MB. Se aplica de inmediato.</p>
     </div>
     <div className="form-grid-12">
       <div className="form-span-6"><Field label="Nombre" hint="Como aparece en los cursos, las secciones y la actividad. Se aplica de inmediato." error={err("displayName")}><input value={account.displayName} onChange={event => patchAccount({ displayName: event.target.value })} maxLength={80} autoComplete="name" required/></Field></div>
-      <div className="form-span-4"><Field label="Nombre preferido" optional hint="Cómo te gusta que te llamen." error={err("preferredName")}><input value={draft.preferredName} onChange={event => patch({ preferredName: event.target.value })} maxLength={profileLimits.preferredName}/></Field></div>
-      <div className="form-span-4"><Field label="Pronombres" optional hint="Por ejemplo: ella, él, elle." error={err("pronouns")}><input value={draft.pronouns} onChange={event => patch({ pronouns: event.target.value })} maxLength={profileLimits.pronouns}/></Field></div>
+      <div className="form-span-3"><Field label="Nombre preferido" optional hint="Cómo te gusta que te llamen." error={err("preferredName")}><input value={draft.preferredName} onChange={event => patch({ preferredName: event.target.value })} maxLength={profileLimits.preferredName}/></Field></div>
+      <div className="form-span-3"><Field label="Pronombres" optional hint="Por ejemplo: ella, él, elle." error={err("pronouns")}><input value={draft.pronouns} onChange={event => patch({ pronouns: event.target.value })} maxLength={profileLimits.pronouns}/></Field></div>
       <div className="form-span-12"><Field label="Titular" hint={<>Una línea sobre lo que enseñas y a quién. <Counter value={draft.headline} max={profileLimits.headline}/></>} error={err("headline")}>
         <input value={draft.headline} onChange={event => patch({ headline: event.target.value })} maxLength={profileLimits.headline} placeholder="Por ejemplo: Docente de ciencias para secundaria, con enfoque en laboratorio"/></Field></div>
       <div className="form-span-4"><CountrySelect label="País" value={draft.country} onChange={country => patch({ country })} error={err("country")}/></div>
@@ -301,7 +317,7 @@ function IdentityTab({ draft, patch, account, patchAccount, err, profile, photo,
         {zones.map(group => <optgroup key={group.region} label={group.region}>{group.zones.map(zone => <option key={zone.id} value={zone.id}>{zone.city} ({zone.offset})</option>)}</optgroup>)}
       </select></Field></div>
     </div>
-  </>;
+  </div>;
 }
 
 function AboutTab({ draft, patch, err }: TabProps) {
@@ -379,7 +395,7 @@ function CareerTab({ draft, patch, err, education, setEducation }: TabProps & { 
   const emptyStudy = { degree: "", institution: "", country: draft.country, year: null as number | null, field: "" };
   return <>
     <section className="stack" aria-labelledby="experience-title">
-      <div className="panel-title-row"><h2 id="experience-title" className="section-title">Experiencia</h2>
+      <div className="panel-title-row"><h3 id="experience-title" className="section-title">Experiencia</h3>
         {draft.experience.length < profileLimits.experience && <button type="button" className="button secondary small" onClick={() => setEditing({ kind: "experience", index: "new" })}><Icon name="plus" size={16}/>Agregar experiencia</button>}</div>
       {err("experience") && <p className="field-error">{err("experience")}</p>}
       {draft.experience.length ? <ul className="plain-list stack">{draft.experience.map((item, index) => <li key={index} className="entry-card">
@@ -393,7 +409,7 @@ function CareerTab({ draft, patch, err, education, setEducation }: TabProps & { 
       </li>)}</ul> : <EmptyState compact icon="users" title="Sin experiencia">Agrega los cargos que quieres que vean el equipo y los estudiantes.</EmptyState>}
     </section>
     <section className="stack" aria-labelledby="education-title">
-      <div className="panel-title-row"><h2 id="education-title" className="section-title">Formación</h2>
+      <div className="panel-title-row"><h3 id="education-title" className="section-title">Formación</h3>
         {draft.education.length < profileLimits.education && <button type="button" className="button secondary small" onClick={() => setEditing({ kind: "education", index: "new" })}><Icon name="plus" size={16}/>Agregar estudio</button>}</div>
       {err("education") && <p className="field-error">{err("education")}</p>}
       {draft.education.length ? <ul className="plain-list stack">{draft.education.map((item, index) => <li key={index} className="entry-card">

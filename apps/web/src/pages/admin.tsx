@@ -110,12 +110,10 @@ function currentContractOf(contracts: Contract[], userId: string) {
   return contracts.filter(item => item.userId === userId).sort((a, b) => contractRank[a.phase] - contractRank[b.phase] || b.createdAt.localeCompare(a.createdAt))[0];
 }
 function loadLabel(member: Pick<MemberStats, "leads" | "coTeaches" | "sections">) {
-  const parts = [
-    member.leads ? `responsable de ${member.leads}` : "",
-    member.coTeaches ? `colabora en ${member.coTeaches}` : "",
-    member.sections ? member.sections === 1 ? "1 sección" : `${member.sections} secciones` : "",
-  ].filter(Boolean);
-  return parts.join(" · ");
+  const courses = (member.leads || 0) + (member.coTeaches || 0);
+  const summary = `${courses === 1 ? "1 curso" : `${courses} cursos`} · ${member.sections === 1 ? "1 sección" : `${member.sections || 0} secciones`}`;
+  const detail = [member.leads ? `responsable de ${member.leads}` : "", member.coTeaches ? `colabora en ${member.coTeaches}` : ""].filter(Boolean).join(" · ");
+  return { summary: courses || member.sections ? summary : "", detail };
 }
 
 /** People of the organization, split into tabs so the page stays one screen tall. */
@@ -174,16 +172,19 @@ function MemberList() {
         <caption className="sr-only">Personas de la organización, su carga, su contrato y su acceso</caption>
         <thead><tr><th scope="col">Persona</th><th scope="col">Rol</th><th scope="col">Carga</th><th scope="col">Contrato</th><th scope="col">Incorporación</th><th scope="col">Acceso</th><th scope="col"><span className="sr-only">Acciones</span></th></tr></thead>
         <tbody>{visible.map(member => {
-          const owner = member.id === "user-0", name = member.displayName || member.username, loadText = loadLabel(member);
+          const owner = member.id === "user-0", name = member.displayName || member.username, load = loadLabel(member);
           const contract = currentContractOf(contracts, member.id);
           return <tr key={member.id}>
-            <th scope="row"><span className="person-cell"><Avatar name={name} size={30}/><span><button type="button" className="link-button" onClick={() => setDetail({ id: member.id, name })}>{name}</button><span className="muted small">@{member.username}{member.email ? ` · ${member.email}` : ""}</span></span></span></th>
+            <th scope="row" className="cell-person"><span className="person-cell"><Avatar name={name} size={30}/><span>
+              <span className="person-name-line"><button type="button" className="link-button" onClick={() => setDetail({ id: member.id, name })}>{name}</button>{owner && <StatusBadge>Cuenta principal</StatusBadge>}</span>
+              <span className="person-username muted small">@{member.username}{member.email ? ` · ${member.email}` : ""}</span>
+            </span></span></th>
             <td>{member.role === "admin" ? "Administración" : "Educador"}{member.coordination && <><br/><CoordinationBadge scope={member.coordination}/></>}</td>
-            <td>{loadText || <span className="muted">—</span>}</td>
+            <td className="cell-load">{load.summary ? <><span>{load.summary}</span>{load.detail && <span className="muted small">{load.detail}</span>}</> : <span className="muted">—</span>}</td>
             <td>{contract ? <StatusBadge tone={contractTone[contract.phase]}>{contractPhaseLabels[contract.phase]}</StatusBadge> : <span className="muted">—</span>}</td>
             <td>{onboarding ? <OnboardingBadge person={onboarding.get(member.id)} compact/> : <span className="muted">…</span>}</td>
             <td><StatusBadge tone={!member.active ? "neutral" : member.mustChangePassword ? "warning" : "success"}>{!member.active ? "Sin acceso" : member.mustChangePassword ? "Contraseña temporal" : "Activo"}</StatusBadge>{member.departedOn && <span className="muted small departed-on">Salió el {departureDay(member.departedOn)}</span>}</td>
-            <td className="cell-actions">{owner ? <span className="row-actions"><span className="muted small">Cuenta principal</span><Menu label={`Acciones de ${name}`} items={[{ label: "Perfil y expediente", icon: "user", onSelect: () => setDetail({ id: member.id, name }) }]}/></span> : <Menu label={`Acciones de ${name}`} items={[
+            <td className="cell-actions">{owner ? <Menu label={`Acciones de ${name}`} items={[{ label: "Perfil y expediente", icon: "user", onSelect: () => setDetail({ id: member.id, name }) }]}/> : <Menu label={`Acciones de ${name}`} items={[
               { label: "Perfil y expediente", icon: "user", onSelect: () => setDetail({ id: member.id, name }) },
               { label: member.role === "admin" ? "Cambiar a educador" : "Cambiar a administración", icon: "users", disabled: busy === member.id, onSelect: () => void update(member, { role: member.role === "admin" ? "educator" : "admin" }) },
               ...(member.role === "educator" && member.active ? [{ label: member.coordination ? "Cambiar la coordinación académica" : "Asignar coordinación académica", icon: "shield" as const, disabled: busy === member.id, onSelect: () => setCoordinating(member) }] : []),
