@@ -102,7 +102,7 @@ export function ProfileForm({ profile, onSaved }: { profile: StaffProfile; onSav
             <Field label="Nueva especialidad" hint={`Por ejemplo: Matemática, Inglés, Robótica. Hasta ${maxSpecialties}.`}>
               <input value={specialty} maxLength={60} onChange={event => setSpecialty(event.target.value)} onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => { if (event.key === "Enter") { event.preventDefault(); addSpecialty(); } }}/>
             </Field>
-            <button type="button" className="button secondary small" onClick={addSpecialty}><Icon name="plus" size={16}/>Agregar especialidad</button>
+            <button type="button" className="button secondary small field-action" onClick={addSpecialty}><Icon name="plus" size={16}/>Agregar especialidad</button>
           </div>
         </fieldset>
         <fieldset className="config-section">
