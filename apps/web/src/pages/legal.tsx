@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import type { LegalAcceptance, LegalDocument, LegalKind, LegalSignature, PendingDocument, SignatureVerification } from "@happy-learners/contracts";
-import { legalKinds, legalLabels, signedKinds } from "@happy-learners/domain";
+import { legalKinds, legalLabels, richPlainText, signedKinds } from "@happy-learners/domain";
 import { agreementRequired, api, changed, consentRequired, message } from "../api";
 import { useSession } from "../session";
 import { Link, useNavigation, useUnsavedChanges } from "../navigation";
@@ -9,6 +9,8 @@ import { fullDate } from "../model";
 import { Modal, useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import { EmptyState, ErrorState, Field, Loading, StatusBadge } from "../ui/primitives";
+import { RichText } from "../RichText";
+import type { RichTextDocument } from "@happy-learners/contracts";
 
 /** Plain text written by administration, shown as paragraphs; it is never read as markup. */
 function LegalText({ body, label }: { body: string; label: string }) {
@@ -141,17 +143,20 @@ export function MyConsent() {
   </>;
 }
 
-/** Organización › Términos y privacidad: drafts, publication, every version and who accepted which one (ST-126, ST-127). */
+const policyKinds = ["terms", "privacy"] as const;
+const emptyPolicy: RichTextDocument = { type: "doc", content: [{ type: "paragraph" }] };
+
+/** Contratos › Políticas: drafts, publication, every version and who accepted which one (ST-126, ST-127). */
 export function LegalSettings() {
   const [documents, setDocuments] = useState<LegalDocument[] | null>(null), [records, setRecords] = useState<{ acceptances: LegalAcceptance[]; people: Person[] } | null>(null), [error, setError] = useState("");
   const [signatures, setSignatures] = useState<LegalSignature[] | null>(null);
   const load = () => { setError(""); Promise.all([api<{ documents: LegalDocument[] }>("/legal/documents"), api<{ acceptances: LegalAcceptance[]; people: Person[] }>("/legal/acceptances"), api<{ signatures: LegalSignature[] }>("/legal/signatures")]).then(([list, accepted, signed]) => { setDocuments(list.documents); setRecords(accepted); setSignatures(signed.signatures); }).catch(cause => setError(message(cause))); };
   useEffect(load, []);
-  return <section className="panel admin-section reading" aria-labelledby="legal-title">
+  return <section className="stack" aria-labelledby="legal-title">
     <div className="panel-header"><h2 id="legal-title">Términos y privacidad</h2></div>
-    <p className="muted">Redacta un borrador y publícalo como nueva versión. Al publicarla, cada persona debe aceptar los términos y la política en su siguiente ingreso, y cada educador firma el acuerdo de voluntariado ad honorem antes de impartir clases. Los términos y el acuerdo se firman electrónicamente con el nombre completo y la contraseña. Las versiones anteriores se conservan y no se pueden modificar. La política vigente se puede leer sin iniciar sesión en <a href="/privacidad" target="_blank" rel="noopener">/privacidad</a>.</p>
+    <p className="muted">Redacta un borrador en texto enriquecido y publícalo con su fecha de vigencia. Al publicarla, cada persona acepta los términos y la política en su siguiente ingreso. Las versiones anteriores se conservan. La política vigente se lee sin iniciar sesión en <a href="/privacidad" target="_blank" rel="noopener">/privacidad</a>.</p>
     {error ? <ErrorState error={error} retry={load}/> : !documents || !records ? <Loading label="Cargando términos y privacidad…" lines={4}/> : <>
-      {legalKinds.map(kind => <LegalKindEditor key={kind} kind={kind} documents={documents.filter(item => item.kind === kind)} onChange={list => { setDocuments(list); load(); }}/>)}
+      {policyKinds.map(kind => <LegalKindEditor key={kind} kind={kind} documents={documents.filter(item => item.kind === kind)} onChange={list => { setDocuments(list); load(); }}/>)}
       <Acceptances documents={documents} acceptances={records.acceptances} people={records.people}/>
       {signatures && <Signatures signatures={signatures}/>}
     </>}
@@ -161,35 +166,42 @@ export function LegalSettings() {
 function LegalKindEditor({ kind, documents, onChange }: { kind: LegalKind; documents: LegalDocument[]; onChange: (documents: LegalDocument[]) => void }) {
   const { toast } = useFeedback();
   const draft = documents.find(item => item.status === "draft"), published = documents.filter(item => item.status === "published"), current = published[0];
-  const [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(""), [confirming, setConfirming] = useState(false);
   const base = draft || current;
+  const [title, setTitle] = useState(base?.title || legalLabels[kind]);
+  const [body, setBody] = useState<RichTextDocument>(base?.bodyJson || (base?.body ? { type: "doc", content: base.body.split(/\n{2,}/).map(text => ({ type: "paragraph", content: [{ type: "text", text }] })) } : emptyPolicy));
+  const [consent, setConsent] = useState(base?.consent || "Doy mi consentimiento informado para el tratamiento de mis datos según esta política.");
+  const [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(""), [confirming, setConfirming] = useState(false);
+  const [effectiveAt, setEffectiveAt] = useState("");
   useUnsavedChanges(dirty);
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
-    try { const result = await api<{ documents: LegalDocument[] }>(`/legal/documents/${kind}`, "PUT", Object.fromEntries(new FormData(event.currentTarget))); setDirty(false); onChange(result.documents); toast({ message: "Borrador guardado. Publícalo cuando esté listo." }); }
+    try { const result = await api<{ documents: LegalDocument[] }>(`/legal/documents/${kind}`, "PUT", { title, bodyJson: body, consent: kind === "privacy" ? consent : undefined }); setDirty(false); onChange(result.documents); toast({ message: "Borrador guardado. Publícalo cuando esté listo." }); }
     catch (cause) { setError(message(cause)); }
     finally { setBusy(false); }
   }
   async function publish() {
     setBusy(true);
     try {
-      const result = await api<{ documents: LegalDocument[] }>(`/legal/documents/${kind}/publish`, "POST");
+      const result = await api<{ documents: LegalDocument[] }>(`/legal/documents/${kind}/publish`, "POST", { effectiveAt: effectiveAt || undefined });
       setConfirming(false); onChange(result.documents);
-      toast({ message: `${legalLabels[kind]}: versión ${result.documents.find(item => item.kind === kind && item.status === "published")?.version} publicada. ${kind === "volunteer" ? "Cada educador la firmará antes de impartir clases." : "Cada persona la aceptará en su siguiente ingreso."}` });
-      // Administration accepts it too before continuing.
+      toast({ message: `${legalLabels[kind]}: versión ${result.documents.find(item => item.kind === kind && item.status === "published")?.version} publicada. Cada persona la aceptará en su siguiente ingreso.` });
       dispatchEvent(new CustomEvent(consentRequired));
     } catch (cause) { toast({ tone: "error", message: message(cause) }); }
     finally { setBusy(false); }
   }
   const titleId = `legal-${kind}-title`;
   return <section className="legal-kind" aria-labelledby={titleId}>
-    <div className="panel-header"><h3 id={titleId}>{legalLabels[kind]}</h3>{current ? <StatusBadge tone="success">Vigente: versión {current.version}</StatusBadge> : <StatusBadge>Sin publicar</StatusBadge>}</div>
-    <form className="stack" onSubmit={save} onChange={() => setDirty(true)} aria-label={`Borrador de ${legalLabels[kind].toLowerCase()}`}>
+    <div className="panel-header"><h3 id={titleId}>{legalLabels[kind]}</h3>{current ? <StatusBadge tone="success">Vigente: versión {current.version}{current.effectiveAt ? ` · desde ${current.effectiveAt}` : ""}</StatusBadge> : <StatusBadge>Sin publicar</StatusBadge>}</div>
+    <form className="stack" onSubmit={save} aria-label={`Borrador de ${legalLabels[kind].toLowerCase()}`}>
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
       <fieldset disabled={busy} className="stack">
-        <Field label={`Título de ${legalLabels[kind].toLowerCase()}`}><input name="title" required minLength={3} maxLength={120} defaultValue={base?.title || legalLabels[kind]}/></Field>
-        <Field label={`Texto de ${legalLabels[kind].toLowerCase()}`} hint="Texto sin formato. Separa los párrafos con una línea en blanco."><textarea name="body" required minLength={20} maxLength={60000} rows={8} defaultValue={base?.body || ""}/></Field>
-        {kind === "privacy" && <Field label="Texto del consentimiento" hint="Lo que cada persona acepta al marcar la casilla, en una sola línea."><input name="consent" required minLength={10} maxLength={1000} defaultValue={base?.consent || "Doy mi consentimiento informado para el tratamiento de mis datos según esta política."}/></Field>}
+        <Field label={`Título de ${legalLabels[kind].toLowerCase()}`}><input name="title" required minLength={3} maxLength={120} value={title} onChange={event => { setTitle(event.target.value); setDirty(true); }}/></Field>
+        <div className="field">
+          <span className="field-label">Texto de {legalLabels[kind].toLowerCase()}</span>
+          <RichText value={body} onChange={doc => { setBody(doc); setDirty(true); }} label={`Texto de ${legalLabels[kind].toLowerCase()}`} placeholder="Escribe las cláusulas. Separa los párrafos con Enter."/>
+          <small className="hint">{richPlainText(body).length} caracteres. Se publica como texto enriquecido.</small>
+        </div>
+        {kind === "privacy" && <Field label="Texto del consentimiento" hint="Lo que cada persona acepta al marcar la casilla, en una sola línea."><input name="consent" required minLength={10} maxLength={1000} value={consent} onChange={event => { setConsent(event.target.value); setDirty(true); }}/></Field>}
         <div className="form-actions">
           {draft && <span className="muted small">Borrador guardado el {fullDate(draft.updatedAt)}</span>}
           <button className="button secondary">{busy ? "Guardando…" : "Guardar borrador"}</button>
@@ -198,12 +210,14 @@ function LegalKindEditor({ kind, documents, onChange }: { kind: LegalKind; docum
       </fieldset>
     </form>
     {published.length > 0 && <details className="reference"><summary>Versiones publicadas ({published.length})</summary>
-      <ul className="legal-versions">{published.map(item => <li key={item.id}><details><summary>Versión {item.version} · {item.title} · {fullDate(item.publishedAt || "")}{item.publishedBy ? ` · ${item.publishedBy}` : ""}</summary>
-        <LegalText body={item.body} label={`Texto de la versión ${item.version}`}/>{item.consent && <p className="legal-consent"><strong>Consentimiento:</strong> {item.consent}</p>}
+      <ul className="legal-versions">{published.map(item => <li key={item.id}><details><summary>Versión {item.version} · {item.title} · {item.effectiveAt ? `vigente desde ${item.effectiveAt}` : fullDate(item.publishedAt || "")}{item.publishedBy ? ` · ${item.publishedBy}` : ""}</summary>
+        {item.bodyJson ? <RichText value={item.bodyJson} editable={false} toolbar={false} label={`Texto de la versión ${item.version}`}/> : <LegalText body={item.body} label={`Texto de la versión ${item.version}`}/>}
+        {item.consent && <p className="legal-consent"><strong>Consentimiento:</strong> {item.consent}</p>}
       </details></li>)}</ul>
     </details>}
     {confirming && draft && <Modal title={`Publicar ${legalLabels[kind].toLowerCase()}`} onClose={() => setConfirming(false)} footer={<><button type="button" className="button ghost" onClick={() => setConfirming(false)}>Cancelar</button><button type="button" className="button primary" disabled={busy} onClick={() => void publish()}>{busy ? "Publicando…" : `Publicar versión ${(current?.version || 0) + 1}`}</button></>}>
-      <p>«{draft.title}» será la versión {(current?.version || 0) + 1}. {kind === "volunteer" ? "Cada educador deberá firmarla antes de impartir su próxima clase." : "Cada persona, incluida tu cuenta, deberá aceptarla en su siguiente ingreso."} Después de publicarla no se puede modificar.</p>
+      <p>«{draft.title}» será la versión {(current?.version || 0) + 1}. Cada persona, incluida tu cuenta, deberá aceptarla en su siguiente ingreso. Después de publicarla no se puede modificar.</p>
+      <Field label="Vigente desde" hint="Hoy o una fecha posterior. Hasta entonces sigue la versión anterior."><input type="date" value={effectiveAt} onChange={event => setEffectiveAt(event.target.value)}/></Field>
     </Modal>}
   </section>;
 }

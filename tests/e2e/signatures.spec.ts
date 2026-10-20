@@ -4,8 +4,8 @@ import type { Page } from "@playwright/test";
 import { test, expect } from "./local-test";
 import { signIn, signInWithForm, toast } from "./helpers";
 
-// ST-151, ST-153: the volunteer agreement is published in the fictional external organization, so no other suite
-// waits for it; it only blocks teaching, and that organization has no classes. Its educator signs every run's version.
+// DEC-046: the volunteer agreement is a contract template. This suite uses the fictional external organization
+// so no other suite waits for the contract it sends; it only blocks teaching, and that organization has no classes.
 const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 async function audit(page: Page, label: string) {
   await page.waitForLoadState("networkidle");
@@ -26,65 +26,81 @@ async function passGate(page: Page, fullName: string) {
   await page.getByRole("button", { name: /^(Aceptar|Firmar) y continuar$/ }).click();
   await expect(gate).toBeHidden();
 }
+const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Guatemala" });
 
-test("ST-151 ST-153: administration publishes the volunteer agreement, the educator signs it with name and password and downloads the receipt, and administration verifies it", async ({ page, browser }, info) => {
+test("ST-151 ST-153: administration publishes a contract template, the educator signs it with name and password and downloads the receipt, and administration verifies it", async ({ page, browser }, info) => {
   test.setTimeout(120_000);
   const stamp = `${info.project.name} ${Date.now()}`;
-  await signIn(page, "admin-externo", "/organizacion");
+  const title = `Acuerdo ficticio ${stamp}`;
+  await signIn(page, "admin-externo", "/contratos");
   await passGate(page, "Administración Externa Ficticia");
-  const kind = "acuerdo de voluntariado ad honorem";
-  const editor = page.getByRole("form", { name: `Borrador de ${kind}` });
-  await editor.getByLabel(`Título de ${kind}`).fill(`Acuerdo ficticio ${stamp}`);
-  await editor.getByLabel(`Texto de ${kind}`).fill("Texto ficticio del acuerdo de voluntariado ad honorem.\n\nLa actividad es voluntaria y sin remuneración económica.");
-  await editor.getByRole("button", { name: "Guardar borrador" }).click();
-  await expect(toast(page)).toContainText("Borrador guardado");
-  await editor.getByRole("button", { name: "Publicar nueva versión" }).click();
-  await page.getByRole("dialog").getByRole("button", { name: /^Publicar versión \d+$/ }).click();
-  await expect(toast(page)).toContainText("Cada educador la firmará antes de impartir clases");
+  await page.getByRole("button", { name: "Nueva plantilla" }).click();
+  const create = page.getByRole("dialog", { name: "Nueva plantilla" });
+  await create.getByLabel("Nombre").fill(title);
+  await create.getByLabel("Tipo de relación").selectOption("volunteer");
+  await create.getByRole("button", { name: "Crear y editar" }).click();
+  await expect(page.getByRole("heading", { level: 2, name: title })).toBeVisible();
+  await page.getByRole("button", { name: "Publicar" }).click();
+  await page.getByRole("dialog", { name: "Publicar plantilla" }).getByRole("button", { name: "Publicar versión" }).click();
+  await expect(toast(page)).toContainText("Versión publicada");
 
-  // The educator sees why classes wait and signs: a wrong password is refused, then the name and password sign.
+  await page.goto("/contratos#contratos");
+  await page.getByRole("button", { name: "Nuevo contrato" }).click();
+  const draft = page.getByRole("dialog", { name: "Nuevo contrato" });
+  await draft.getByLabel("Persona").selectOption({ label: "Educador externo" });
+  await draft.getByLabel("Plantilla").selectOption({ label: title });
+  await draft.getByLabel("Inicio").fill(today());
+  await draft.getByRole("button", { name: "Crear borrador" }).click();
+  const drawer = page.getByRole("dialog", { name: title });
+  await expect(drawer).toBeVisible();
+  await drawer.getByRole("button", { name: "Enviar" }).click();
+  const send = page.getByRole("dialog", { name: "Firmar y enviar" });
+  await send.getByLabel("Nombre completo").fill("Administración Externa Ficticia");
+  await send.getByLabel("Contraseña de tu cuenta").fill("Aprender-2026!");
+  await send.getByRole("button", { name: "Firmar y enviar" }).click();
+  await expect(toast(page)).toContainText("Contrato actualizado");
+
   const context = await browser.newContext({ baseURL: info.project.use.baseURL, acceptDownloads: true });
   const educator = await context.newPage();
   await signInWithForm(educator, "externo-demo", "/inicio");
   await passGate(educator, "Educador Externo Ficticio");
-  const banner = educator.getByRole("region", { name: "Acuerdo de voluntariado pendiente" });
+  const banner = educator.getByRole("region", { name: "Contrato pendiente de firma" });
   await expect(banner).toBeVisible();
-  await audit(educator, "aviso del acuerdo pendiente");
-  await banner.getByRole("button", { name: "Leer y firmar el acuerdo" }).click();
-  const dialog = educator.getByRole("dialog");
-  await expect(dialog.getByRole("region", { name: `Texto de Acuerdo ficticio ${stamp}` })).toContainText("sin remuneración económica");
-  await expect(dialog.getByRole("group", { name: "Firma electrónica" })).toContainText("Firmo electrónicamente");
-  await audit(educator, "firmar el acuerdo");
+  await audit(educator, "aviso del contrato pendiente");
+  await banner.getByRole("link", { name: "Leer y firmar" }).click();
+  await expect(educator).toHaveURL(/\/mi-cuenta\/contratos/);
+  await educator.getByRole("button", { name: "Firmar", exact: true }).click();
+  const dialog = educator.getByRole("dialog", { name: "Firmar contrato" });
+  await expect(dialog).toContainText("Firmas");
+  await audit(educator, "firmar el contrato");
   await dialog.getByLabel("Nombre completo").fill("Educador Externo Ficticio");
   await dialog.getByLabel("Contraseña de tu cuenta").fill("no-es-la-clave");
   await dialog.getByRole("button", { name: "Firmar", exact: true }).click();
   await expect(dialog.getByRole("alert")).toContainText("La contraseña no es correcta");
   await dialog.getByLabel("Contraseña de tu cuenta").fill("Aprender-2026!");
   await dialog.getByRole("button", { name: "Firmar", exact: true }).click();
-  await expect(dialog.getByRole("heading", { name: "Firma registrada" })).toBeVisible();
-  const [download] = await Promise.all([educator.waitForEvent("download"), dialog.getByRole("link", { name: "Descargar constancia" }).click()]);
-  expect(download.suggestedFilename()).toMatch(/^constancia-signature-[a-z0-9-]+\.html$/);
+  await expect(educator.getByRole("heading", { name: "Firma registrada" })).toBeVisible();
+  const [download] = await Promise.all([educator.waitForEvent("download"), educator.getByRole("dialog").getByRole("link", { name: "Descargar constancia" }).click()]);
+  expect(download.suggestedFilename()).toMatch(/^constancia-contract-[a-z0-9-]+\.html$/);
   const receipt = info.outputPath("constancia.html");
   await download.saveAs(receipt);
   const html = readFileSync(receipt, "utf8");
-  expect(html).toContain("Constancia de firma electrónica");
+  expect(html).toContain("Constancia de contrato");
   expect(html).toContain("Educador Externo Ficticio");
-  await dialog.getByRole("button", { name: "Cerrar" }).last().click();
+  await educator.getByRole("button", { name: "Cerrar" }).last().click();
   await expect(banner).toBeHidden();
   await context.close();
 
-  // Administration sees the signature and verifies the receipt; a changed receipt or another document is detected.
   await page.reload();
-  const records = page.getByRole("region", { name: "Registro de firmas" });
-  await expect(records.getByRole("row").filter({ hasText: "Educador Externo Ficticio" }).filter({ hasText: "Acuerdo de voluntariado ad honorem" })).not.toHaveCount(0);
+  await page.goto("/contratos#contratos");
   const verify = async (path: string) => {
     await page.getByLabel("Archivo de la constancia").setInputFiles(path);
     await page.getByRole("button", { name: "Verificar", exact: true }).click();
   };
   const result = page.locator(".signature-result");
   await verify(receipt);
-  await expect(result).toContainText("Firma válida");
-  await audit(page, "firmas y verificación");
+  await expect(result).toContainText("Contrato válido");
+  await audit(page, "contratos y verificación");
   const renamed = info.outputPath("constancia-modificada.html");
   writeFileSync(renamed, html.replace(/"signedName":"[^"]+"/, '"signedName":"Otra Persona"'));
   await verify(renamed);

@@ -32,10 +32,13 @@ export async function signIn(page: Page, username = "educador-demo", path = "/in
  * complete it through the API with a minimal «perfil completo» (contact e-mail and one specialty); the derived steps
  * cannot be skipped, so this saves a real profile.
  */
-export async function completeOnboarding(session: string, specialty = "Pedagogía") {
+export async function completeOnboarding(session: string, specialty = "Pedagogía", password?: string) {
   const headers = { Origin: origin, "Content-Type": "application/json", Cookie: `hl_session=${session}` };
   const call = (path: string, method = "POST", data?: unknown) => fetch(`${origin}/api${path}`, { method, headers, ...(data ? { body: JSON.stringify(data) } : {}) });
-  const current = await (await call("/session", "GET")).json() as { member: { displayName: string; username: string }; onboarding?: true };
+  const current = await (await call("/session", "GET")).json() as { member: { displayName: string; username: string }; onboarding?: true; pending?: { id: string }[] };
+  if (current.pending?.length && password) {
+    expect((await call("/legal/accept", "POST", { documentIds: current.pending.map(item => item.id), signature: { fullName: current.member.displayName || current.member.username, password } })).status).toBe(200);
+  }
   if (!current.onboarding) return;
   expect((await call("/onboarding/steps/welcome")).status).toBe(200);
   const saved = await call("/profile", "PUT", { displayName: current.member.displayName || current.member.username, contactEmail: `${current.member.username}@ejemplo.test`, specialties: [specialty] });
@@ -63,6 +66,19 @@ export const courseNav = (page: Page) => page.getByRole("navigation", { name: "N
 export const sectionNav = (page: Page) => page.getByRole("navigation", { name: "Navegación de la sección" });
 export const saveStatus = (page: Page) => page.locator(".save-indicator");
 export const toast = (page: Page) => page.locator(".toast-region");
+
+/** The organization activity log, without needing the feed on the current page. */
+export async function expectRecentActivity(page: Page, text: string | RegExp) {
+  const pattern = text instanceof RegExp ? text : new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+  await expect.poll(async () => {
+    const data = await page.evaluate(async () => {
+      const response = await fetch("/api/activity?limit=20");
+      if (!response.ok) return "";
+      return ((await response.json()) as { events: { summary: string }[] }).events.map(item => item.summary).join("\n");
+    });
+    return data;
+  }).toMatch(pattern);
+}
 
 /** Opens the drawer on narrow screens; the sidebar is always visible from 1024 px. */
 export async function openNavigation(page: Page) {

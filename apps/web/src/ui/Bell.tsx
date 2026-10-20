@@ -60,7 +60,7 @@ export function Bell() {
             {!item.readAt && <span className="sr-only">Sin leer.</span>}
           </a>
         </li>)}</ul>}
-      <footer className="bell-footer"><Link href="/preferencias#notificaciones"><Icon name="options" size={16}/>Elegir qué avisos recibo</Link></footer>
+      <footer className="bell-footer"><Link href="/mi-cuenta/notificaciones"><Icon name="options" size={16}/>Elegir qué avisos recibo</Link></footer>
     </section>}
   </div>;
 }

@@ -13,6 +13,7 @@ import {
 } from "../packages/domain/src/index";
 import type { MailSender } from "../packages/domain/src/index";
 import { deliver, type OutboxStore } from "../apps/api/src/mail";
+import { acceptPending } from "./accept-pending";
 
 // ST-158 (account settings) and ST-159 (my data and closing the account). Domain rules first, then the outbox on a
 // real SQLite store with every migration, then the built Worker on a fresh local store (no mail provider).
@@ -173,6 +174,7 @@ async function newEducator(admin: string | null, username: string, displayName: 
   const created = await read<{ member: { id: string }; temporaryPassword: string }>(await as(admin, "/members", "POST", { displayName, username, role: "educator" }), 201);
   const first = await signIn(username, created.temporaryPassword);
   await read(await as(first, "/account/password", "POST", { currentPassword: created.temporaryPassword, newPassword: "Una frase para recordar 2026" }));
+  await acceptPending(origin, first, displayName, "Una frase para recordar 2026");
   return { id: created.member.id, cookie: first, password: "Una frase para recordar 2026" };
 }
 
@@ -323,7 +325,7 @@ describe("ST-158 ST-159 on the built Worker", () => {
     expect((await as(me, "/closures")).status).toBe(403);
     expect((await as(me, `/closures/${again.closure.id}/start`, "POST")).status).toBe(403);
     const list = await read<{ closures: { id: string; status: string; username: string }[] }>(await as(admin, "/closures"));
-    expect(list.closures[0]).toMatchObject({ id: again.closure.id, status: "requested", username: "cierre.prueba" });
+    expect(list.closures.find(item => item.id === again.closure.id)).toMatchObject({ id: again.closure.id, status: "requested", username: "cierre.prueba" });
     const started = await read<{ closure: { status: string; startedBy: string } }>(await as(admin, `/closures/${again.closure.id}/start`, "POST"));
     expect(started.closure).toMatchObject({ status: "in_progress", startedBy: expect.any(String) });
     expect((await as(admin, `/closures/${again.closure.id}/start`, "POST")).status).toBe(409);

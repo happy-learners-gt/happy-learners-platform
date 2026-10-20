@@ -16,7 +16,7 @@ import type { IconName } from "./ui/icons";
 
 const blank: RichTextDocument = { type: "doc", content: [{ type: "paragraph" }] };
 
-export function RichText({ value, fallbackText = "", onChange, onRemoteChange, onEditorFocus, label = "Contenido de la actividad", editable = true, toolbar = true, collaboration, username, placeholder = "Escribe las instrucciones o el contenido de la actividad…" }: { value?: RichTextDocument; fallbackText?: string; onChange?: (doc: RichTextDocument) => void; onRemoteChange?: (doc: RichTextDocument) => void; onEditorFocus?: (editor: Editor) => void; label?: string; editable?: boolean; toolbar?: boolean; collaboration?: { document: Y.Doc; field: string; provider: CollaborationProvider }; username?: string; placeholder?: string }) {
+export function RichText({ value, fallbackText = "", onChange, onRemoteChange, onEditorFocus, onReady, label = "Contenido de la actividad", editable = true, toolbar = true, collaboration, username, placeholder = "Escribe las instrucciones o el contenido de la actividad…" }: { value?: RichTextDocument; fallbackText?: string; onChange?: (doc: RichTextDocument) => void; onRemoteChange?: (doc: RichTextDocument) => void; onEditorFocus?: (editor: Editor) => void; onReady?: (editor: Editor) => void; label?: string; editable?: boolean; toolbar?: boolean; collaboration?: { document: Y.Doc; field: string; provider: CollaborationProvider }; username?: string; placeholder?: string }) {
   const initial = value || (fallbackText.trim() ? { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: fallbackText }] }] } as RichTextDocument : blank);
   const editor = useEditor({
     extensions: [
@@ -32,6 +32,7 @@ export function RichText({ value, fallbackText = "", onChange, onRemoteChange, o
     editable,
     immediatelyRender: false,
     editorProps: { attributes: { role: "textbox", "aria-label": label, "aria-multiline": "true", ...(editable ? {} : { "aria-readonly": "true" }), class: "richtext-content" } },
+    onCreate: ({ editor: current }) => onReady?.(current as Editor),
     // A shared toolbar (lesson canvas) follows whichever editor has focus.
     onFocus: ({ editor: current }) => onEditorFocus?.(current as Editor),
     // Remote collaborative edits refresh local state without marking this editor as the author of a change.

@@ -20,7 +20,7 @@ export interface Notice { userId: string; facts: NotificationFacts; targetId: st
 
 type Person = { id: string; name: string; email: string | null; timezone?: string | null; locale?: string | null; weekStart?: number | null; frequency?: EmailFrequency | null; digestTime?: string | null; quietStart?: string | null; quietEnd?: string | null };
 /** Where the preferences page lives: the e-mails link to it. */
-export const preferencesPath = "/preferencias#notificaciones";
+export const preferencesPath = "/mi-cuenta/notificaciones";
 
 export async function mandatoryTypes(db: Database, organizationId: string) {
   const rows = (await db.prepare("SELECT type FROM notification_policies WHERE organization_id=? AND mandatory=1").bind(organizationId).all<{ type: NotificationType }>()).results;

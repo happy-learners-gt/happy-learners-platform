@@ -40,8 +40,13 @@ export function useFeedback() {
   return value;
 }
 
+/** Side panel for add/edit forms. Same focus and Escape behaviour as a modal; sits on the right from 640 px. */
+export function Drawer({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+  return <Modal title={title} onClose={onClose} size="drawer">{children}</Modal>;
+}
+
 /** Modal built on the native dialog element: focus is contained, Escape cancels and focus returns afterwards. */
-export function Modal({ title, children, onClose, footer, wide, size }: { title: string; children: ReactNode; onClose: () => void; footer?: ReactNode; wide?: boolean; size?: "viewer" }) {
+export function Modal({ title, children, onClose, footer, wide, size }: { title: string; children: ReactNode; onClose: () => void; footer?: ReactNode; wide?: boolean; size?: "viewer" | "drawer" }) {
   const ref = useRef<HTMLDialogElement>(null), titleId = useId();
   useEffect(() => {
     const element = ref.current, previous = document.activeElement as HTMLElement | null;

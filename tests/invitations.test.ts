@@ -10,6 +10,7 @@ import { dailyMailCap, invitationInput, invitationMessage, invitationState, mail
 import type { MailMessage, MailResult, MailSender } from "../packages/domain/src/index";
 import { attempt, BrevoMailSender, brevoEndpoint, deliver, DisabledMailSender, mailSender, sanitize } from "../apps/api/src/mail";
 import type { OutboxStore } from "../apps/api/src/mail";
+import { acceptPending } from "./accept-pending";
 
 // ST-121 (HL-167): invitations by e-mail (DEC-042). Domain and adapters first, then the built Worker on a fresh store.
 const details = { organization: "Colegio Ficticio", displayName: "Paula <Gómez>", role: "educator" as const, inviter: "Marta Ruiz", link: "https://example.test/invitacion/d_" + "a".repeat(64), expiresAt: "2026-10-22T18:00:00.000Z", timezone: "America/Guatemala" };
@@ -157,6 +158,7 @@ describe("HL-167 ST-121 invitations on the built Worker", () => {
   let invitationId = "";
   it("CA1 administración envía una invitación con el rol asignado; sin proveedor queda not_configured y devuelve el enlace", async () => {
     const admin = await signIn("admin-demo");
+    expect((await as(admin, "/contract-settings", "PUT", { required: false })).status).toBe(200);
     expect((await as(await signIn("educador-demo"), "/invitations", "POST", { email: "x@example.test", displayName: "Intrusa", role: "admin" })).status).toBe(403);
     expect((await as(await signIn("educador-demo"), "/invitations")).status).toBe(403);
     expect((await as(admin, "/invitations", "POST", { email: "no-es-correo", displayName: "Paula", role: "educator" })).status).toBe(400);
@@ -223,6 +225,7 @@ describe("HL-167 ST-121 invitations on the built Worker", () => {
     const session = await (await as(cookie.split(";")[0], "/session")).json();
     expect(session.member).toMatchObject({ username: "paula.invitada", displayName: "Paula Invitada", role: "educator" });
     expect(session.member.mustChangePassword).toBeUndefined();
+    await acceptPending(origin, cookie.split(";")[0], "Paula Invitada", "Una frase larga 2026");
     expect((await as(cookie.split(";")[0], "/courses")).status).toBe(200);
     expect(await signIn("paula.invitada", "Una frase larga 2026")).not.toBeNull();
     // A used link no longer works.

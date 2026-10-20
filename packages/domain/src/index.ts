@@ -95,17 +95,18 @@ export function validActivities(input: unknown): boolean {
 const tableParents: Record<string, string[]> = { tableRow: ["table"], tableHeader: ["tableRow"], tableCell: ["tableRow"] };
 const richNodes = new Set(["doc", "paragraph", "heading", "text", "hardBreak", "bulletList", "orderedList", "listItem", "blockquote", "table", "tableRow", "tableHeader", "tableCell"]);
 const richMarks = new Set(["bold", "italic", "underline", "strike", "code", "link"]);
-export function validRichText(value: unknown): boolean {
+/** Lesson blocks allow 12,000 characters; longer documents (contracts, DEC-046) pass larger limits. */
+export function validRichText(value: unknown, limits: { text: number; nodes: number } = { text: 12000, nodes: 1200 }): boolean {
   if (!value || typeof value !== "object") return false;
   let textLength = 0, count = 0;
   function visit(item: unknown, depth: number, parent = "doc"): boolean {
-    if (!item || typeof item !== "object" || depth > 10 || ++count > 1200) return false;
+    if (!item || typeof item !== "object" || depth > 10 || ++count > limits.nodes) return false;
     const n = item as Record<string, unknown>;
     if (typeof n.type !== "string" || !richNodes.has(n.type)) return false;
     if (tableParents[n.type] && !tableParents[n.type].includes(parent)) return false;
     if (n.type === "table" && parent !== "doc") return false;
     if (["table", "tableRow"].includes(n.type) && (!Array.isArray(n.content) || !n.content.length || n.content.length > 30)) return false;
-    if (n.type === "text") { if (typeof n.text !== "string" || n.content !== undefined) return false; textLength += n.text.length; if (textLength > 12000) return false; }
+    if (n.type === "text") { if (typeof n.text !== "string" || n.content !== undefined) return false; textLength += n.text.length; if (textLength > limits.text) return false; }
     if (n.type === "heading" && (!n.attrs || ![2, 3].includes(Number((n.attrs as Record<string, unknown>).level)))) return false;
     if (n.marks !== undefined && (!Array.isArray(n.marks) || n.marks.length > 6 || !n.marks.every(mark => {
       if (!mark || typeof mark !== "object" || !richMarks.has(String((mark as Record<string, unknown>).type))) return false;
@@ -145,3 +146,5 @@ export { accountMessage, accountNoticeReason, countryCode, deviceLabel, emailCha
 export type { AccountNotice, AccountNoticeDetails, AccountNoticeKind, EmailChangeStatus } from "./account-settings";
 export { closureLabels, closureOpen, closureReasonInput, closureStatuses, closureTransition, maxClosureReason, personalDataFile, personalDataFormat, personalDataSections } from "./closures";
 export type { ClosureAction, ClosureStatus, PersonalDataSection } from "./closures";
+export { closeReasonInput, compensationAllowed, compensationKinds, compensationLabels, compensationPeriods, compensationSummary, contractCanonical, contractDatesInput, contractEngagements, contractInForce, contractPhase, contractPhaseLabels, contractSignatureCanonical, contractSignedNameInput, contractStatusLabels, contractTemplateInput, contractTermFields, contractTermsFor, contractTermsInput, contractTextLimits, contractValues, contractVariables, contractVersionInput, engagementLabels, isEngagement, locationLabels, maxCloseReason, mergeContract, periodLabels, richPlainText, workLocations } from "./contracts";
+export type { ContractVariable } from "./contracts";

@@ -28,9 +28,11 @@ export type DeliveryStatus = "queued" | "sent" | "failed" | "not_configured" | "
 export interface Invitation {
   id: string; email: string; displayName: string; role: "admin" | "educator"; status: InvitationStatus; expiresAt: string; createdAt: string;
   invitedBy: string; acceptedAt: string | null; delivery: DeliveryStatus | null; deliveryError: string | null; sentAt: string | null;
+  /** DEC-046: the contract sent with the invitation, if any, and where it stands. */
+  contractId?: string | null; contractTitle?: string | null; contractStatus?: string | null;
 }
 /** What the public acceptance page shows before the person chooses a username and password. */
-export interface InvitationPreview { organization: string; displayName: string; email: string; role: "admin" | "educator"; expiresAt: string }
+export interface InvitationPreview { organization: string; displayName: string; email: string; role: "admin" | "educator"; expiresAt: string; contract?: ContractOffer | null }
 export type CourseRole = "lead" | "co-teacher";
 /** Someone on a course's teaching team: the lead or a co-teacher. */
 export interface CourseMember { userId: string; username: string; name: string; role: CourseRole }
@@ -299,6 +301,8 @@ export type LegalKind = "terms" | "privacy" | "volunteer";
 export interface LegalDocument {
   id: string; kind: LegalKind; status: "draft" | "published"; version: number | null; title: string; body: string; consent: string | null;
   updatedAt: string; publishedAt: string | null; publishedBy: string | null;
+  /** DEC-046: the body in rich text (null for versions written as plain text) and the date from which the version applies. */
+  bodyJson?: RichTextDocument | null; effectiveAt?: string | null;
 }
 /** A version the signed-in person must accept (terms) or consent to (privacy) before using the platform. */
 export type PendingDocument = Pick<LegalDocument, "id" | "kind" | "version" | "title">;
@@ -508,6 +512,8 @@ export interface OnboardingState {
   profileGaps: string[];
   /** The volunteer agreement in force to sign, when the step applies and is not done. */
   agreement: PendingDocument | null;
+  /** DEC-046: where the organization requires a contract, the one sent to the person and waiting for their signature. */
+  contract?: { id: string; title: string } | null;
   courses: { id: string; title: string; role: CourseRole }[];
   sections: { id: string; name: string; courseId: string; courseTitle: string }[];
 }
@@ -542,3 +548,56 @@ export interface ClosureRequest {
 }
 /** GET /api/me/closure: the person's latest request and whether a new one can be made. */
 export interface MyClosure { closure: ClosureRequest | null; history: ClosureRequest[]; blocked: string | null }
+
+/**
+ * DEC-046: contracts. A template describes one kind of engagement with versioned rich-text clauses and default terms;
+ * a contract is one published version agreed with one person, signed by the organization and then by the person.
+ */
+export type ContractEngagement = "employment" | "services" | "volunteer" | "internship" | "other";
+export type CompensationKind = "none" | "fixed" | "hourly" | "per-session";
+export type CompensationPeriod = "month" | "biweekly" | "week";
+export type WorkLocation = "onsite" | "remote" | "hybrid";
+/** What is agreed besides the clauses. Amounts are decimal strings ("1500.00") in an ISO 4217 currency. */
+export interface ContractTerms {
+  role: string;
+  compensation: { kind: CompensationKind; amount?: string; currency?: string; period?: CompensationPeriod };
+  term: { kind: "indefinite" | "fixed"; months?: number };
+  weeklyHours?: number; noticeDays?: number; probationDays?: number; location?: WorkLocation; notes?: string;
+}
+export type ContractTermField = "role" | "compensation" | "term" | "weeklyHours" | "noticeDays" | "probationDays" | "location" | "notes";
+export interface ContractTemplateVersion {
+  id: string; templateId: string; status: "draft" | "published"; version: number | null; title: string; body: RichTextDocument;
+  defaults: ContractTerms; editable: ContractTermField[]; effectiveFrom: string | null; updatedAt: string; publishedAt: string | null; publishedBy: string | null;
+}
+export interface ContractTemplate {
+  id: string; name: string; engagement: ContractEngagement; description: string; status: "active" | "archived";
+  current: ContractTemplateVersion | null; draft: ContractTemplateVersion | null; versions: number; contracts: number; updatedAt: string;
+}
+export type ContractStatus = "draft" | "sent" | "active" | "declined" | "voided" | "terminated" | "superseded";
+/** Where the contract stands today: its stored status read against its dates. */
+export type ContractPhase = "draft" | "awaiting-signature" | "scheduled" | "in-force" | "ending" | "expired" | "declined" | "voided" | "terminated" | "superseded";
+export interface ContractSignature { name: string; signedAt: string; signatureSha256: string }
+export interface Contract {
+  id: string; templateId: string; templateVersionId: string; templateVersion: number; origin: "contract" | "volunteer-agreement";
+  engagement: ContractEngagement; title: string; body: RichTextDocument | null; bodyText: string; terms: ContractTerms;
+  partyName: string; partyEmail: string | null; userId: string | null; invitationId: string | null;
+  startDate: string; endDate: string | null; status: ContractStatus; phase: ContractPhase; supersedesId: string | null;
+  documentSha256: string | null; createdAt: string; sentAt: string | null; createdBy: string;
+  organizationSignature: (ContractSignature & { signerId: string }) | null; memberSignature: ContractSignature | null;
+  closedAt: string | null; closeReason: string | null; terminationDate: string | null;
+}
+/** What a person sees before accepting an invitation that comes with a contract. */
+export type ContractOffer = Pick<Contract, "id" | "engagement" | "title" | "body" | "bodyText" | "terms" | "partyName" | "startDate" | "endDate" | "documentSha256" | "organizationSignature">;
+/** The canonical fields each signature fingerprint covers. */
+export interface ContractSignatureRecord {
+  contractId: string; organizationId: string; party: "organization" | "member"; userId: string; username: string; signedName: string; documentSha256: string; signedAt: string;
+}
+/** The downloadable receipt's data block: the signed document, both signatures and their fingerprints. */
+export interface ContractReceiptRecord {
+  contractId: string; organizationId: string; templateVersionId: string; engagement: ContractEngagement; title: string; bodyText: string;
+  terms: ContractTerms; partyName: string; partyEmail: string; startDate: string; endDate: string; documentSha256: string;
+  organizationSignature: ContractSignatureRecord & { signatureSha256: string };
+  memberSignature: (ContractSignatureRecord & { signatureSha256: string }) | null;
+}
+/** The result of verifying a contract receipt: the same four outcomes as a legal signature. */
+export interface ContractVerification { status: SignatureCheck; message: string; contract?: Contract; mismatches?: string[] }

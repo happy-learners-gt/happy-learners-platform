@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { CalendarBreak, ClassLesson, ClassLessonPlan, ClassResource, ClassSession, ClassStatus, LessonOutcome, SectionWorkGroups } from "@happy-learners/contracts";
 import { classLoad, classSequence, classStatusLabels, formatMinutes, isCalendarDay, lessonMinutes, lessonOutcomeLabels, maxClassLessons, wholeSection } from "@happy-learners/domain";
-import { api, message } from "../../api";
+import { api, ApiError, message } from "../../api";
 import { Link, useNavigation, useUnsavedChanges } from "../../navigation";
 import { plural, sessionDay } from "../../model";
 import { Modal, useFeedback } from "../../ui/feedback";
@@ -20,6 +20,7 @@ import { sectionCrumbs, sectionPath, useSection } from "../sections/context";
 import { useSession } from "../../session";
 import { useWorkspace } from "../../workspace";
 import { formatClock } from "../../regional";
+import { ContractRequiredDialog } from "../my-contracts";
 
 type Mark = "unmarked" | "present" | "late" | "absent" | "excused";
 type Row = { learnerId: string; displayName: string; status: Mark };
@@ -345,6 +346,7 @@ function ClassDetail({ id }: { id: string }) {
   const { toast, confirm } = useFeedback();
   const [detail, setDetail] = useState<Detail | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false), [editing, setEditing] = useState(false);
   const [preview, setPreview] = useState<ClassResource | null>(null), [finishing, setFinishing] = useState(false), [cancelling, setCancelling] = useState(false), [correcting, setCorrecting] = useState(false);
+  const [contractBlock, setContractBlock] = useState<{ message: string; contractId: string | null } | null>(null);
   const path = `/courses/${course.id}/sessions/${id}`, page = `${sectionBase}/clases`;
   async function load() {
     setError("");
@@ -382,7 +384,11 @@ function ClassDetail({ id }: { id: string }) {
         : { start: "Clase en curso. Pasa lista cuando estés listo.", restore: "Clase reprogramada." }[action] });
       setFinishing(false); setCancelling(false);
       await Promise.all([load(), reload()]);
-    } catch (cause) { toast({ tone: "error", message: message(cause) }); }
+    } catch (cause) {
+      if (action === "start" && cause instanceof ApiError && cause.detail.code === "CONTRACT_REQUIRED") {
+        setContractBlock({ message: message(cause), contractId: typeof cause.detail.contractId === "string" ? cause.detail.contractId : null });
+      } else toast({ tone: "error", message: message(cause) });
+    }
     finally { setBusy(false); }
   }
   const primary = !editable ? undefined
@@ -433,6 +439,7 @@ function ClassDetail({ id }: { id: string }) {
         <Notes detail={detail} editable={editable && session.status !== "cancelled"} onSaved={load}/>
       </div>
     </div>
+    {contractBlock && <ContractRequiredDialog message={contractBlock.message} contractId={contractBlock.contractId} onClose={() => setContractBlock(null)}/>}
     {editing && <PlanDialog session={session} onClose={() => setEditing(false)} onSaved={async () => { setEditing(false); await load(); }}/>}
     {finishing && <FinishDialog lessons={lessons} busy={busy} onClose={() => setFinishing(false)} onFinish={data => act("complete", data)}/>}
     {correcting && <FinishDialog lessons={lessons} busy={busy} correcting onClose={() => setCorrecting(false)} onFinish={async data => {

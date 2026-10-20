@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.2 — 2026-10-20
+
+Contratos y experiencia del educador de REL-005 (SPR-003; DEC-046). Migraciones 0045 y 0046, acumulativas.
+
+- DEC-046: **Contratos y políticas** (administración) gestiona **plantillas de contrato** de cualquier tipo de relación (laboral, prestación de servicios, voluntariado ad honorem, prácticas u otro) con cláusulas en texto enriquecido, variables como `{{persona.nombre}}` o `{{contrato.remuneracion}}`, condiciones por omisión (puesto, remuneración en cualquier moneda ISO 4217 fija por periodo, por hora o por clase, plazo indefinido o fijo, horas semanales, preaviso, periodo de prueba y modalidad), los campos que cada contrato puede cambiar, versiones con fecha de vigencia e historial. El voluntariado nunca lleva remuneración; la relación laboral y los servicios siempre.
+- DEC-046: cada **contrato** se prepara desde la versión vigente, la organización lo **firma y envía** (nombre completo y contraseña) y la persona lo **firma o rechaza** con motivo. Al enviarse queda congelado con su huella SHA-256 y ambas firmas; vive como pendiente de firma, vigente, con inicio posterior, por terminar, vencido, terminado, rechazado, anulado o reemplazado por una **enmienda** firmada. Cada contrato tiene su **constancia** descargable y administración la **verifica**.
+- DEC-046: **Invitar por correo** lleva el contrato: se elige la plantilla y sus condiciones, la organización firma y la persona lo lee y lo firma al crear su cuenta; revocar la invitación anula el contrato. Con **Exigir un contrato vigente**, impartir clases (iniciar, pasar lista y finalizar) espera uno, y la incorporación lo pide como su paso de acuerdo.
+- DEC-046: el **acuerdo de voluntariado ad honorem** de ST-151 pasa a ser una plantilla de contrato y cada firma vigente un contrato activo; ya no se redacta como documento legal. Los **términos** y la **política de privacidad** se redactan en texto enriquecido y cada versión rige desde su fecha de vigencia, leída en la zona horaria de la organización.
+- **Mi cuenta** reúne en una sola área con navegación lateral el perfil, el expediente, los contratos, la cuenta y seguridad, las preferencias y las notificaciones; `/perfil`, `/cuenta` y `/preferencias` redirigen. El perfil se organiza en tarjetas con una barra de anclas y completitud compacta, y ya no repite las notificaciones.
+- **Educadores** se divide en Personas, Invitaciones, Contratos, Incorporación, Cierres de cuenta y Documentos por vencer, con la fase del contrato de cada persona. **Organización** queda con sus datos, días sin clase y respaldo. **Equipo** muestra fichas en tres columnas con filtros uniformes.
+- Tema oscuro de bajo deslumbramiento: rampa fría con contraste AA medido, tintes suaves, brillo del puntero tenue y héroe de Inicio menos saturado.
+- Demostración (0046): cada educador tiene perfil profesional publicado (uno en revisión y uno con cambios solicitados), credenciales en varios estados, preferencias, avisos, términos y privacidad aceptados, tres plantillas y contratos en todas sus fases, una invitación con contrato y una solicitud de cierre.
+
 ## 1.1.1 — 2026-10-16
 
 Perfil profesional, cuenta y preferencias de REL-005 (SPR-003; DEC-045). Migraciones 0042 a 0044, acumulativas.
