@@ -553,12 +553,13 @@ class UpgradeTests(unittest.TestCase):
     def test_legal_versions_and_acceptances_are_kept(self):
         """0032 (ST-126, ST-127): published versions never change, acceptances only record their withdrawal, the log keeps its rows."""
         db = self.migrated()
-        self.assertEqual(db.execute("SELECT count(*) FROM legal_documents").fetchone()[0], 0)
+        self.assertGreaterEqual(db.execute("SELECT count(*) FROM legal_documents").fetchone()[0], 2)
+        next_privacy = db.execute("SELECT COALESCE(max(version),0)+1 FROM legal_documents WHERE organization_id='org-demo' AND kind='privacy'").fetchone()[0]
         self.assertGreater(db.execute("SELECT count(*) FROM activity_events").fetchone()[0], 0)
         db.execute("INSERT INTO legal_documents(id,organization_id,kind,status,title,body,consent,updated_by,updated_at) VALUES ('p','org-demo','privacy','draft','Privacidad','Texto ficticio de la política.','Doy mi consentimiento.','user-0','t')")
         with self.assertRaises(sqlite3.IntegrityError):
             db.execute("INSERT INTO legal_acceptances(id,organization_id,document_id,user_id,accepted_at) VALUES ('a0','org-demo','p','user-0','t')")
-        db.execute("UPDATE legal_documents SET status='published',version=1,published_by='user-0',published_at='t' WHERE id='p'")
+        db.execute("UPDATE legal_documents SET status='published',version=?,published_by='user-0',published_at='t' WHERE id='p'", (next_privacy,))
         with self.assertRaises(sqlite3.IntegrityError):
             db.execute("UPDATE legal_documents SET title='Cambiada' WHERE id='p'")
         with self.assertRaises(sqlite3.IntegrityError):
@@ -635,7 +636,7 @@ class UpgradeTests(unittest.TestCase):
         events = before.execute("SELECT id,organization_id,actor_id,action,target_type,target_id,course_id,summary,occurred_at,group_id FROM activity_events ORDER BY id").fetchall()
         demo = self.scoped("org-demo")
         self.assertEqual(demo.execute("SELECT id,organization_id,actor_id,action,target_type,target_id,course_id,summary,occurred_at,group_id FROM activity_events ORDER BY id").fetchall(), events)
-        self.assertEqual(demo.execute("SELECT count(*) FROM users WHERE email IS NOT NULL").fetchone()[0], 0)
+        self.assertGreaterEqual(demo.execute("SELECT count(*) FROM users WHERE email IS NOT NULL").fetchone()[0], 7)
         demo.execute("UPDATE users SET email='ana@example.test' WHERE id='user-0'")
         with self.assertRaises(sqlite3.IntegrityError):
             demo.execute("UPDATE users SET email='ana@example.test' WHERE id='user-1'")
@@ -663,7 +664,7 @@ class UpgradeTests(unittest.TestCase):
     def test_profiles_and_staff_documents_keep_their_rules(self):
         """0037 (ST-149, ST-150): profile fields and staff documents are checked; withdrawing keeps the row."""
         demo = self.scoped("org-demo")
-        demo.execute("INSERT INTO staff_profiles(user_id,organization_id,phone,contact_email,specialties,availability,updated_at) VALUES ('seed-user-carlos','org-demo','+502 5555-0149','c@ejemplo.org','[\"Álgebra\"]','[{\"day\":1,\"start\":\"08:00\",\"end\":\"10:00\"}]','t')")
+        self.assertEqual(demo.execute("SELECT count(*) FROM staff_profiles WHERE user_id='seed-user-carlos'").fetchone()[0], 1)
         for values in [("seed-user-ana", "123", None, "[]", "[]"), ("seed-user-ana", None, "Mayus@Ejemplo.org", "[]", "[]"), ("seed-user-ana", None, None, "{}", "[]"), ("user-missing", None, None, "[]", "[]")]:
             with self.assertRaises(sqlite3.IntegrityError):
                 demo.execute("INSERT INTO staff_profiles(user_id,organization_id,phone,contact_email,specialties,availability,updated_at) VALUES (?,'org-demo',?,?,?,?,'t')", values)
