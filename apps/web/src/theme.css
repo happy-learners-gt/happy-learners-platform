@@ -42,6 +42,11 @@
   --color-primary-soft: var(--colorBrandBackground2);
   --color-primary-line: var(--brand-140);
   --color-on-primary: var(--colorNeutralForegroundOnBrand);
+  --color-disabled: var(--colorNeutralForegroundDisabled);
+  --color-disabled-bg: var(--colorNeutralBackgroundDisabled);
+  --color-disabled-border: var(--colorNeutralStrokeDisabled);
+  --welcome-shape: color-mix(in srgb, var(--color-on-primary) 10%, transparent);
+  --welcome-shape-strong: color-mix(in srgb, var(--color-on-primary) 22%, transparent);
   --color-focus: var(--colorStrokeFocus2);
   --color-focus-inner: var(--colorStrokeFocus1);
   --color-success: var(--colorStatusSuccessForeground1);  --color-success-soft: var(--colorStatusSuccessBackground1);
@@ -107,6 +112,11 @@
   --color-primary-ink: var(--brand-130); --color-info: var(--brand-130);
   --color-primary-line: var(--brand-60);
   --gradient-brand: linear-gradient(135deg, color-mix(in srgb, var(--brand-40) 70%, var(--color-canvas)) 0%, color-mix(in srgb, var(--brand-60) 48%, var(--color-canvas)) 100%);
+  --welcome-shape: color-mix(in srgb, var(--color-on-primary) 6%, transparent);
+  --welcome-shape-strong: color-mix(in srgb, var(--color-on-primary) 12%, transparent);
+  --color-disabled: var(--color-muted);
+  --color-disabled-bg: var(--color-surface-muted);
+  --color-disabled-border: var(--color-border);
   --gradient-brand-soft: linear-gradient(135deg, var(--brand-30) 0%, var(--colorNeutralBackground1) 100%);
   color-scheme: dark;
   /* Fluent's dark ramp is pure grey with white text and #666 borders: maximum contrast everywhere, which tires the
