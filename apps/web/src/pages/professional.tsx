@@ -488,7 +488,7 @@ function ContactTab({ account, patchAccount, err }: { account: Account; patchAcc
     </div>
     <fieldset className="config-section">
       <legend>Disponibilidad</legend>
-      <p className="muted small">Los días y horarios en que puedes impartir clases.</p>
+      <p className="muted small">Los días y horarios en que puedes impartir clases. Al asignarte una sección, administración ve si sus clases caen fuera de ellos y debe confirmarlo con un motivo.</p>
       {err("availability") && <p className="field-error">{err("availability")}</p>}
       {account.availability.length ? <ul className="availability-list">{account.availability.map((slot, index) => <li key={index} className="availability-row">
         <select aria-label={`Día de la franja ${index + 1}`} value={slot.day} onChange={event => setSlot(index, { day: Number(event.target.value) as StaffAvailabilitySlot["day"] })}>{availabilityDays.map(day => <option key={day.value} value={day.value}>{day.label}</option>)}</select>

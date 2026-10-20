@@ -186,13 +186,19 @@ function AddLearners({ learners, path, onAdded, onCancel }: { learners: GroupLea
   </Section>;
 }
 
-const overlapText = (conflict: EducatorConflict) => `${plural(conflict.overlaps, "clase coincide", "clases coinciden")} con «${conflict.otherCourse} · ${conflict.otherGroup}» (${conflict.otherStartsAt}), desde el ${sessionDay(conflict.firstDate)}`;
+// DEC-047: an overlap with another section, or classes outside the availability the educator declared in their profile.
+const overlapText = (conflict: EducatorConflict) => conflict.kind === "availability"
+  ? `${plural(conflict.overlaps, "clase queda", "clases quedan")} fuera de la disponibilidad que declaró en su perfil, desde el ${sessionDay(conflict.firstDate)}`
+  : `${plural(conflict.overlaps, "clase coincide", "clases coinciden")} con «${conflict.otherCourse} · ${conflict.otherGroup}» (${conflict.otherStartsAt}), desde el ${sessionDay(conflict.firstDate)}`;
+const conflictLabel = (conflict: EducatorConflict, confirmed: boolean) => conflict.kind === "availability"
+  ? confirmed ? "Fuera de disponibilidad, confirmado." : "Fuera de su disponibilidad, sin confirmar."
+  : confirmed ? "Choque confirmado." : "Choque de horario sin confirmar.";
 
 /** A schedule conflict of an educator in this section: pending, or confirmed with who allowed it and why. */
 function ConflictNote({ conflict }: { conflict: EducatorConflict }) {
   return conflict.confirmation
-    ? <p className="conflict-note confirmed"><Icon name="check" size={14}/><span><strong>Choque confirmado.</strong> {overlapText(conflict)}. {conflict.confirmation.confirmedBy} lo aceptó {timeAgo(conflict.confirmation.confirmedAt)}: «{conflict.confirmation.reason}»</span></p>
-    : <p className="conflict-note"><Icon name="alert" size={14}/><span><strong>Choque de horario sin confirmar.</strong> {overlapText(conflict)}.</span></p>;
+    ? <p className="conflict-note confirmed"><Icon name="check" size={14}/><span><strong>{conflictLabel(conflict, true)}</strong> {overlapText(conflict)}. {conflict.confirmation.confirmedBy} lo aceptó {timeAgo(conflict.confirmation.confirmedAt)}: «{conflict.confirmation.reason}»</span></p>
+    : <p className="conflict-note"><Icon name="alert" size={14}/><span><strong>{conflictLabel(conflict, false)}</strong> {overlapText(conflict)}.</span></p>;
 }
 
 /**
@@ -202,15 +208,19 @@ function ConflictNote({ conflict }: { conflict: EducatorConflict }) {
 function ConflictDialog({ section, conflicts, busy, onClose, onConfirm }: { section: string; conflicts: EducatorConflict[]; busy: boolean; onClose: () => void; onConfirm: (reason: string) => Promise<void> }) {
   const [reason, setReason] = useState("");
   const names = [...new Set(conflicts.map(conflict => conflict.name))];
-  return <Modal title="Choque de horario" onClose={onClose}>
+  const overlaps = conflicts.some(conflict => conflict.kind !== "availability"), outside = conflicts.some(conflict => conflict.kind === "availability");
+  const headline = overlaps && outside ? "tienen clases que chocan con otra sección o quedan fuera de su disponibilidad."
+    : outside ? `${names.length === 1 ? "tiene" : "tienen"} clases fuera de la disponibilidad que ${names.length === 1 ? "declaró" : "declararon"}.`
+    : `ya ${names.length === 1 ? "imparte" : "imparten"} otra sección a la misma hora.`;
+  return <Modal title={outside && !overlaps ? "Fuera de su disponibilidad" : "Choque de horario"} onClose={onClose}>
     <form className="stack" onSubmit={event => { event.preventDefault(); void onConfirm(reason.trim()); }}>
       <div className="message-bar warning" role="alert">
         <Icon name="alert" size={20}/>
-        <div><strong>{names.join(" y ")} ya {names.length === 1 ? "imparte" : "imparten"} otra sección a la misma hora.</strong>
+        <div><strong>{names.join(" y ")} {headline}</strong>
           <ul>{conflicts.map(conflict => <li key={`${conflict.userId}-${conflict.otherGroupId}`}>{names.length > 1 ? `${conflict.name}: ` : ""}{overlapText(conflict)}. En {section} empieza a las {conflict.startsAt}.</li>)}</ul>
         </div>
       </div>
-      <p className="muted">Normalmente una persona no puede estar en dos clases a la vez. Si es una excepción acordada (por ejemplo, dos secciones que se reúnen en la misma aula), confírmala: quedará registrado quién la aceptó, cuándo y por qué.</p>
+      <p className="muted">{outside && !overlaps ? "La disponibilidad es la que cada educador declaró en su perfil. Si se acordó impartir en otro horario, confírmalo: quedará registrado quién lo aceptó y por qué." : "Normalmente una persona no puede estar en dos clases a la vez. Si es una excepción acordada (por ejemplo, dos secciones que se reúnen en la misma aula), confírmala: quedará registrado quién la aceptó, cuándo y por qué."}</p>
       <Field label="Motivo de la excepción" hint="Entre 3 y 300 caracteres. Lo ve administración en la sección y en la actividad del curso.">
         <textarea rows={3} minLength={3} maxLength={300} required value={reason} onChange={event => setReason(event.target.value)}/>
       </Field>
