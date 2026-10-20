@@ -42,20 +42,20 @@ test("HL-15 ST-154 ST-155 ST-156 ST-157: an educator completes and sends their p
     const meter = page.getByRole("progressbar", { name: /Perfil completo al/ });
     // The specialty given at the welcome already counts as a teaching area.
     await expect(meter).toHaveAttribute("aria-valuenow", "8");
-    const sections = page.getByRole("tablist", { name: "Secciones del perfil" });
+    const sections = page.getByRole("navigation", { name: "Secciones del perfil" });
     await page.getByLabel("Titular").fill("Docente de ciencias para primaria, con experimentos de bajo costo");
     await page.getByRole("combobox", { name: /^País/ }).selectOption("GT");
     await page.getByLabel("Zona horaria").selectOption("America/Guatemala");
-    await sections.getByRole("tab", { name: "Sobre mí" }).click();
+    await sections.getByRole("button", { name: "Sobre mí" }).click();
     await page.getByLabel("Biografía").fill("Acompaño a niñas y niños a preguntar como científicos: observamos, medimos y compartimos lo que descubrimos.");
-    await sections.getByRole("tab", { name: "Idiomas" }).click();
+    await sections.getByRole("button", { name: "Idiomas" }).click();
     await page.getByLabel("Agregar idioma").selectOption("es");
     await expect(page.getByRole("list", { name: "Tus idiomas" })).toContainText("Español");
-    await sections.getByRole("tab", { name: "Enseñanza" }).click();
+    await sections.getByRole("button", { name: "Enseñanza" }).click();
     await expect(page.getByRole("list", { name: "Tus áreas de enseñanza" })).toContainText("Ciencias naturales");
     await page.getByRole("checkbox", { name: "CINE 1 · Educación primaria" }).check();
     await page.getByRole("checkbox", { name: "En línea" }).check();
-    await sections.getByRole("tab", { name: "Contacto y disponibilidad" }).click();
+    await sections.getByRole("button", { name: "Contacto" }).click();
     await page.getByLabel("Teléfono").fill("+502 5555-0157");
     await page.getByRole("button", { name: "Guardar perfil" }).click();
     await expect(toast(page)).toContainText("Perfil guardado.");
@@ -93,7 +93,7 @@ test("HL-15 ST-154 ST-155 ST-156 ST-157: an educator completes and sends their p
     await page.reload();
     const publication = page.getByRole("region", { name: "Publicación" });
     await expect(publication).toContainText("Cuéntanos también cómo trabajas en línea.");
-    await sections.getByRole("tab", { name: "Sobre mí" }).click();
+    await sections.getByRole("button", { name: "Sobre mí" }).click();
     await page.getByLabel("Enfoque de enseñanza").fill("En línea usamos materiales de casa y una bitácora compartida.");
     await page.getByRole("button", { name: "Guardar perfil" }).click();
     await expect(toast(page)).toContainText("Perfil guardado.");
@@ -132,7 +132,7 @@ test("HL-15 ST-154 ST-155 ST-156 ST-157: an educator completes and sends their p
 
     // ST-155: the educator sends a credential; administration verifies it.
     await page.reload();
-    await sections.getByRole("tab", { name: "Credenciales" }).click();
+    await sections.getByRole("button", { name: "Credenciales" }).click();
     await page.getByRole("button", { name: "Agregar credencial" }).click();
     const credential = page.getByRole("dialog", { name: "Agregar credencial" });
     await credential.getByLabel("Tipo").selectOption("teaching_license");
