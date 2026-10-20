@@ -1,5 +1,7 @@
-import type { LegalDocument, LegalKind, PendingDocument, SignatureRecord } from "@happy-learners/contracts";
+import type { LegalDocument, LegalKind, PendingDocument, RichTextDocument, SignatureRecord } from "@happy-learners/contracts";
 import { cleanText, record } from "./courses";
+import { richPlainText } from "./contracts";
+import { validRichText } from "./index";
 
 /**
  * Every kind of legal document: the terms (ST-126) and the privacy policy (ST-127), which each person accepts before
@@ -17,14 +19,17 @@ export const isLegalKind = (value: unknown): value is LegalKind => legalKinds.in
  * A draft as administration writes it: plain text, read as paragraphs, never markup. The privacy policy also needs the
  * consent text each person agrees to; the terms have none.
  */
-export function legalDraftInput(kind: LegalKind, value: unknown): Pick<LegalDocument, "title" | "body" | "consent"> | null {
+export function legalDraftInput(kind: LegalKind, value: unknown): (Pick<LegalDocument, "title" | "body" | "consent"> & { bodyJson: RichTextDocument | null }) | null {
   const v = record(value); if (!v) return null;
-  const title = cleanText(v.title, 120), body = typeof v.body === "string" ? v.body.replace(/\r\n?/g, "\n") : null;
+  // DEC-046: the body may come in rich text; its plain text is what the fingerprint and older readers use.
+  const rich = v.bodyJson === undefined || v.bodyJson === null ? null : validRichText(v.bodyJson, { text: 60000, nodes: 4000 }) ? v.bodyJson as RichTextDocument : undefined;
+  if (rich === undefined) return null;
+  const title = cleanText(v.title, 120), body = rich ? richPlainText(rich) : typeof v.body === "string" ? v.body.replace(/\r\n?/g, "\n") : null;
   const text = body === null ? null : cleanText(body, 60000);
   if (!title || title.length < 3 || /[<>\n\t]/.test(title) || !text || text.length < 20) return null;
-  if (kind !== "privacy") return v.consent === undefined || v.consent === null || v.consent === "" ? { title, body: text, consent: null } : null;
+  if (kind !== "privacy") return v.consent === undefined || v.consent === null || v.consent === "" ? { title, body: text, consent: null, bodyJson: rich } : null;
   const consent = cleanText(v.consent, 1000);
-  return consent && consent.length >= 10 && !/[\n<>]/.test(consent) ? { title, body: text, consent } : null;
+  return consent && consent.length >= 10 && !/[\n<>]/.test(consent) ? { title, body: text, consent, bodyJson: rich } : null;
 }
 
 /**

@@ -31,6 +31,7 @@ import { me, meMethods, preferencesFor } from "./preferences";
 import { hours } from "./hours";
 import { onboarding, onboardingPending } from "./onboarding";
 import { professional, professionalMethods } from "./professional";
+import { contractMethods, contracts } from "./contracts";
 import { account, accountBody, accountMethods, clientOf, confirmEmail, emailConfirmPath, failedSignIn, openSession } from "./account";
 export { LessonCollaborationRoom };
 
@@ -47,7 +48,7 @@ async function body(request: Request): Promise<unknown> {
   if (!request.headers.get("content-type")?.startsWith("application/json")) throw new Error("INPUT");
   const pathname = new URL(request.url).pathname;
   // Lessons carry rich text for every block; other bodies stay small.
-  const limit = pathname === "/api/login" || pathname === "/api/account/password" || acceptPath.test(pathname) ? 2048 : pathname === "/api/organization/restore" ? 33554432 : /^\/api\/(lessons|legal)(\/|$)/.test(pathname) ? 262144 : 65536;
+  const limit = pathname === "/api/login" || pathname === "/api/account/password" || acceptPath.test(pathname) ? 2048 : pathname === "/api/organization/restore" ? 33554432 : /^\/api\/contract-templates(\/|$)/.test(pathname) ? 524288 : /^\/api\/(lessons|legal)(\/|$)/.test(pathname) ? 262144 : 65536;
   const reader = request.body?.getReader();
   if (!reader) throw new Error("INPUT");
   let text = ""; const decoder = new TextDecoder(); let size = 0;
@@ -91,6 +92,8 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   }
   // ST-154 to ST-157: the professional profile reads an optional JSON body (sending, hiding and approving carry none).
   const professionalAllowed = professionalMethods(path);
+  // DEC-046: contract templates and contracts read a JSON body.
+  const contractAllowed = contractMethods(path);
   let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|account|organization|calendar|members|access|levels|units|resources|lessons|courses|programs|vocabularies|terms|student|legal|hours)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout)$/.test(path) && !path.includes("/files") && !/^\/api\/members\/[a-z0-9-]+\/password$/.test(path) && !professionalAllowed)
     || (method === "POST" && path === "/api/organization/restore" && env.RESTORE_ENABLED === "true")
     || (method === "POST" && (path === "/api/invitations" || acceptPath.test(path)))
@@ -100,6 +103,9 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   // ST-124: notification preferences and policy.
   if (method === "PUT" && notificationMethods(path)) input = await body(request);
   if (professionalAllowed && ["POST", "PUT"].includes(method) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
+  if (contractAllowed && ["POST", "PUT"].includes(method) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
+  // DEC-046: publishing a legal document may carry the date from which the version applies.
+  if (method === "POST" && /^\/api\/legal\/documents\/[a-z]+\/publish$/.test(path) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   // ST-158, ST-159: a change of e-mail and a closure request.
   if (accountBody(path, method)) input = await body(request);
   // ST-160, ST-161: the person's own preferences and the bell; marking every notice as read needs no body.
@@ -201,6 +207,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   const notificationAllowed = notificationMethods(path);
   if (notificationAllowed) methods[path] = notificationAllowed;
   if (professionalAllowed) methods[path] = professionalAllowed;
+  if (contractAllowed) methods[path] = contractAllowed;
   // ST-158, ST-159: account settings, my data and closing the account.
   const accountAllowed = accountMethods(path);
   if (accountAllowed) methods[path] = accountAllowed;
@@ -318,6 +325,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   }
   if (notificationAllowed) return notifications(path, method, input, url, current, db, notifier.sender.configured);
   if (professionalAllowed) return professional(path, method, input, url, current, db);
+  if (contractAllowed) return contracts(path, method, input, current, db);
   if (/^\/api\/(taxonomy|vocabularies|terms)(\/|$)/.test(path)) return taxonomy(path, method, input, current, db);
   if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions)(\/|$)/.test(path)) return classroom(path, method, input, current, db, url.searchParams, notifier);
   if (/^\/api\/courses\/[a-z0-9-]+\/duplicate$/.test(path)) return duplicateCourse(path.split("/")[3], current, db, env.COURSE_FILES);

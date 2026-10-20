@@ -187,13 +187,16 @@ describe("HL-168 ST-122 guided onboarding on the built Worker", () => {
     expect(accepted.status).toBe(201);
     const ines = accepted.headers.get("set-cookie")!.split(";")[0];
     expect((await (await as(ines, "/session")).json()).onboarding).toBe(true);
-    expect((await as(admin, "/legal/documents/volunteer", "PUT", { title: "Acuerdo ficticio", body: "Texto ficticio del acuerdo de voluntariado de prueba." })).status).toBe(200);
-    expect((await as(admin, "/legal/documents/volunteer/publish", "POST")).status).toBe(200);
+    // DEC-046: the agreement is a volunteer contract template that the organization requires.
+    const version = { title: "Acuerdo ficticio", body: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Texto ficticio del acuerdo de voluntariado de prueba." }] }] }, defaults: { role: "Educador voluntario", compensation: { kind: "none" }, term: { kind: "indefinite" } }, editable: [] };
+    const created = await (await as(admin, "/contract-templates", "POST", { template: { name: "Acuerdo ficticio", engagement: "volunteer" }, version })).json();
+    expect((await as(admin, `/contract-templates/${created.template.id}/publish`, "POST", {})).status).toBe(200);
+    expect((await as(admin, "/contract-settings", "PUT", { required: true })).status).toBe(200);
     expect((await as(ines, "/onboarding/steps/welcome", "POST")).status).toBe(200);
     expect((await as(ines, "/profile", "PUT", profile("Inés Invitada", { phone: "+502 5555-0123", specialties: ["Inglés"] }))).status).toBe(200);
     const current = await state(ines);
     expect(current.next).toBe("agreement");
-    expect(current.agreement).not.toBeNull();
+    expect(current.agreement).toBeNull();
     expect(current.steps.find(step => step.key === "agreement")).toMatchObject({ optional: true, done: false });
     expect((await as(ines, "/onboarding/steps/agreement", "POST")).status).toBe(200);
     expect((await state(ines)).next).toBe("tour");

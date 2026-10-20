@@ -56,8 +56,12 @@ const privacy = { title: "Política de privacidad ficticia", body: "Texto fictic
 
 describe("legal documents in the domain", () => {
   it("accepts plain-text drafts and requires the consent text only for the privacy policy", () => {
-    expect(legalDraftInput("terms", { ...terms, title: "  Términos  " })).toEqual({ title: "Términos", body: terms.body, consent: null });
-    expect(legalDraftInput("privacy", privacy)).toEqual(privacy);
+    expect(legalDraftInput("terms", { ...terms, title: "  Términos  " })).toEqual({ title: "Términos", body: terms.body, consent: null, bodyJson: null });
+    expect(legalDraftInput("privacy", privacy)).toEqual({ ...privacy, bodyJson: null });
+    // DEC-046: a rich-text body keeps its document and derives the plain text that the fingerprint reads.
+    const rich = { type: "doc", content: [{ type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Uso de la plataforma" }] }, { type: "paragraph", content: [{ type: "text", text: "Texto con ", marks: [{ type: "bold" }] }, { type: "text", text: "formato suficiente." }] }] };
+    expect(legalDraftInput("terms", { title: "Términos", bodyJson: rich })).toEqual({ title: "Términos", body: "Uso de la plataforma\n\nTexto con formato suficiente.", consent: null, bodyJson: rich });
+    expect(legalDraftInput("terms", { title: "Términos", bodyJson: { type: "doc", content: [{ type: "script", text: "x" }] } })).toBeNull();
     expect(legalDraftInput("privacy", { ...privacy, consent: "" })).toBeNull();
     expect(legalDraftInput("terms", { ...terms, consent: "Acepto el tratamiento de datos." })).toBeNull();
     expect(legalDraftInput("terms", { ...terms, title: "<b>T</b>" })).toBeNull();
