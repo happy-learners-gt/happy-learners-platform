@@ -1276,7 +1276,7 @@ ul.cell-list li svg { display: inline-block; vertical-align: -2px; margin-right:
 /* Light — surfaces under the pointer get a soft brand glow at the pointer position (see fluent/light.ts).
    The glow sits on top of the surface colour as a background image, so text contrast is unchanged. */
 .course-card, .resource-card, .panel, .stat-tile, .canvas-card, .competency-card, .program-list > li, .preset, .lit {
-  background-image: radial-gradient(360px circle at var(--light-x, -999px) var(--light-y, -999px), color-mix(in srgb, var(--brand-160) 75%, transparent), transparent 70%);
+  background-image: radial-gradient(360px circle at var(--light-x, -999px) var(--light-y, -999px), var(--light-glow), transparent 70%);
 }
 
 /* Agenda: the next classes beside the week, then the sections behind them. */
