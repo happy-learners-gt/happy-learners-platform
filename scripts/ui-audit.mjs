@@ -7,7 +7,7 @@ import { chromium } from "playwright";
 
 const [base = "http://127.0.0.1:8797", out = "ui-audit", ...only] = process.argv.slice(2);
 const plan = [
-  ["educador-demo", ["/inicio", "/perfil", "/cuenta", "/preferencias", "/equipo", "/horas"]],
+  ["educador-demo", ["/inicio", "/mi-cuenta/perfil", "/mi-cuenta/expediente", "/mi-cuenta/contratos", "/mi-cuenta/cuenta", "/mi-cuenta/preferencias", "/mi-cuenta/notificaciones", "/equipo", "/horas"]],
   ["admin-demo", ["/inicio", "/educadores", "/perfiles", "/organizacion", "/notificaciones", "/contratos"]],
 ];
 const viewports = { desktop: { width: 1365, height: 900 }, mobile: { width: 390, height: 844 } };

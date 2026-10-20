@@ -11,17 +11,15 @@ import { useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import type { IconName } from "../ui/icons";
 import { Field, Loading, PageHeader, Section } from "../ui/primitives";
-import { MyNotifications } from "./notifications";
 
 /**
- * /preferencias (ST-160, ST-161): how the application reads and looks for this person, and what it tells them.
- * Three tabs — Región e idioma, Apariencia y accesibilidad, Notificaciones — whose address is the hash, so a link (or
- * an e-mail) opens the right one. Each choice saves on its own and applies at once; the account keeps it.
+ * «Preferencias» in Mi cuenta (ST-160): how the application reads and looks for this person.
+ * Two tabs — Región e idioma, Apariencia y accesibilidad — whose address is the hash. The notices live in
+ * «Notificaciones». Each choice saves on its own and applies at once; the account keeps it.
  */
-const tabs: { id: "region" | "apariencia" | "notificaciones"; label: string; icon: IconName }[] = [
+const tabs: { id: "region" | "apariencia"; label: string; icon: IconName }[] = [
   { id: "region", label: "Región e idioma", icon: "globe" },
   { id: "apariencia", label: "Apariencia y accesibilidad", icon: "accessibility" },
-  { id: "notificaciones", label: "Notificaciones", icon: "bell" },
 ];
 type Tab = typeof tabs[number]["id"];
 
@@ -29,7 +27,7 @@ export function PreferencesPage() {
   const { url, navigate } = useNavigation();
   const tab: Tab = tabs.find(item => `#${item.id}` === url.hash)?.id || "region";
   const base = useId(), refs = useRef<(HTMLButtonElement | null)[]>([]);
-  const choose = (next: Tab) => navigate(`/preferencias#${next}`, true);
+  const choose = (next: Tab) => navigate(`/mi-cuenta/preferencias#${next}`, true);
   function onKey(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
@@ -44,7 +42,7 @@ export function PreferencesPage() {
         <Icon name={item.icon} size={18} filled={tab === item.id}/><span>{item.label}</span></button>)}
     </div>
     <div role="tabpanel" id={`${base}-panel`} aria-labelledby={`${base}-${tab}`} className="tab-panel reading">
-      {tab === "region" ? <RegionSettings/> : tab === "apariencia" ? <AppearanceSettings/> : <MyNotifications/>}
+      {tab === "region" ? <RegionSettings/> : <AppearanceSettings/>}
     </div>
   </>;
 }

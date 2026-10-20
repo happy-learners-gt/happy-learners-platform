@@ -20,8 +20,7 @@ import { Tabs } from "../ui/Tabs";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, Section, StatusBadge } from "../ui/primitives";
 import type { Tone } from "../ui/primitives";
 import { departureDay } from "./departure";
-import { MyNotifications } from "./notifications";
-import { PersonPhoto, StaffFileSection } from "./profile";
+import { PersonPhoto } from "./profile";
 
 /**
  * ST-154 to ST-157 (DEC-045): «Mi perfil» by sections with its completeness and a preview as a student sees it,
@@ -78,15 +77,12 @@ const accountOf = (profile: MyProfessionalProfile): Account => ({ displayName: p
 
 /** «Mi perfil» (ST-154, ST-156): the working copy by sections, its completeness, its publication and a preview. */
 export function MyProfilePage() {
-  const { member } = useSession();
   const [profile, setProfile] = useState<MyProfessionalProfile | null>(null), [error, setError] = useState("");
   const load = () => { setError(""); api<{ profile: MyProfessionalProfile }>("/me/profile").then(result => setProfile(result.profile)).catch(cause => setError(message(cause))); };
   useEffect(load, []);
-  return <>
-    {error ? <><PageHeader title="Mi perfil"/><ErrorState error={error} retry={load}/></> : !profile ? <><PageHeader title="Mi perfil"/><Loading label="Cargando tu perfil…"/></> : <ProfileEditor key={profile.userId} initial={profile} reload={load}/>}
-    <div className="reading"><MyNotifications/></div>
-    <div className="reading"><StaffFileSection userId={member.id} title="Mi expediente" admin={false}/></div>
-  </>;
+  return error ? <><PageHeader title="Mi perfil"/><ErrorState error={error} retry={load}/></>
+    : !profile ? <><PageHeader title="Mi perfil"/><Loading label="Cargando tu perfil…"/></>
+    : <ProfileEditor key={profile.userId} initial={profile} reload={load}/>;
 }
 
 function ProfileEditor({ initial, reload }: { initial: MyProfessionalProfile; reload: () => void }) {
@@ -633,7 +629,7 @@ export function TeamProfilePage({ id }: { id: string }) {
   if (!state) return <><PageHeader title="Perfil" crumbs={crumbs}/><Loading label="Cargando el perfil…"/></>;
   return <>
     <PageHeader title={state.profile.displayName} crumbs={crumbs} meta={state.status !== "published" || !state.active ? <StatusBadge tone="neutral">{!state.active ? "Sin acceso" : profileStatusLabels[state.status]}</StatusBadge> : undefined}
-      actions={id === member.id ? <Link className="button secondary" href="/perfil"><Icon name="edit" size={18}/>Editar mi perfil</Link> : undefined}/>
+      actions={id === member.id ? <Link className="button secondary" href="/mi-cuenta/perfil"><Icon name="edit" size={18}/>Editar mi perfil</Link> : undefined}/>
     {state.status === "hidden" && <p className="message-bar warning reading"><Icon name="alert" size={18}/>Este perfil está oculto: solo lo ven la persona y administración.</p>}
     <div className="reading"><ProfileCard profile={state.profile} level={2}/></div>
     <p className="muted small reading">Versión {state.profile.version}, publicada {timeAgo(state.profile.publishedAt)}. Así lo ve el equipo; los estudiantes ven solo lo que la persona comparte con ellos.</p>
