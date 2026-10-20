@@ -53,9 +53,16 @@ test("HL-137 ST-093: administration creates an account, its first sign-in requir
   await expect(educator.getByRole("alert")).toContainText("no coinciden");
   await educator.getByLabel("Repite la nueva contraseña").fill("Una frase para recordar 2026");
   await educator.getByRole("button", { name: "Guardar y continuar" }).click();
+  await expect(toast(educator)).toContainText("Contraseña guardada");
+  // ST-126, ST-127: the demonstration publishes terms and privacy (0046), so they come before the welcome.
+  await expect(educator.getByRole("heading", { level: 1 })).toHaveText("Acepta los términos y la política de privacidad");
+  await expect(educator.getByRole("checkbox")).toHaveCount(2);
+  for (const box of await educator.getByRole("checkbox").all()) await box.check();
+  await educator.getByLabel("Nombre completo").fill(name);
+  await educator.getByLabel("Contraseña de tu cuenta").fill("Una frase para recordar 2026");
+  await educator.getByRole("button", { name: "Firmar y continuar" }).click();
   // ST-122: a new account continues to its welcome.
   await expect(educator.getByRole("heading", { level: 1 })).toHaveText("Bienvenida");
-  await expect(toast(educator)).toContainText("Contraseña guardada");
 
   // CA3: a reset closes the session and issues another temporary password; the change is in the activity.
   await row.getByRole("button", { name: `Acciones de ${name}` }).click();

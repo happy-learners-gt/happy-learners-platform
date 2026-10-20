@@ -45,7 +45,8 @@ test("administration reviews each educator's contributions and every course's pr
   await page.goto("/inicio");
   const progress = page.locator("section").filter({ has: page.getByRole("heading", { name: "Avance de los cursos" }) });
   for (const title of ["Matemáticas 3.º primaria", "Ciencias Naturales 4.º primaria", "English Explorers A1", "Taller de robótica educativa", "Arte y expresión creativa"]) await expect(progress.getByRole("link", { name: title })).toBeVisible();
-  await expect(page.locator(".activity-feed.people").first()).toContainText(/Diego Ramírez|Marta Ruiz/);
+  // The feed names who did each thing; which person is newest depends on the specs that ran before.
+  await expect(page.locator(".activity-feed.people").first()).toContainText(/Administración de la demostración|Marta Ruiz|Diego Ramírez|Ana López|Educador de la demostración|Lucía Herrera|Sofía Castillo|Tomás Aguilar|Carlos Mejía/);
   await page.goto("/configuracion-academica");
   await expect(page.locator(".program-list")).toContainText("Primaria bilingüe");
   await expect(page.locator(".program-list")).toContainText("2 cursos");

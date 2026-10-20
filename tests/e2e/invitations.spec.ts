@@ -1,7 +1,16 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { test, expect } from "./local-test";
-import { e2eName, expectRecentActivity, signIn, toast } from "./helpers";
+import { e2eName, expectRecentActivity, origin, sessionToken, signIn, toast } from "./helpers";
+
+// DEC-046: the demonstration requires a contract (0046), which makes the contract step mandatory. ST-121 is about the
+// invitation itself, so this file invites without one; tests/e2e/contracts.spec.ts covers inviting with a contract.
+async function requireContract(required: boolean) {
+  const response = await fetch(`${origin}/api/contract-settings`, { method: "PUT", headers: { Cookie: `hl_session=${await sessionToken("admin-demo")}`, Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ required }) });
+  expect(response.status, await response.text()).toBe(200);
+}
+test.beforeAll(() => requireContract(false));
+test.afterAll(() => requireContract(true));
 
 const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 async function audit(page: Page, label: string) {
@@ -61,6 +70,13 @@ test("HL-167 ST-121: administration invites by e-mail, the person accepts from t
   await expect(guest.getByRole("alert")).toContainText("no coinciden");
   await guest.getByLabel("Repite la contraseña").fill("Una frase para recordar 2026");
   await guest.getByRole("button", { name: "Crear cuenta y entrar" }).click();
+  // ST-126, ST-127: the demonstration's terms and privacy (0046) come first, signed with the new password.
+  await expect(guest.getByRole("heading", { level: 1 })).toHaveText("Acepta los términos y la política de privacidad");
+  await expect(guest.getByRole("checkbox")).toHaveCount(2);
+  for (const box of await guest.getByRole("checkbox").all()) await box.check();
+  await guest.getByLabel("Nombre completo").fill(name);
+  await guest.getByLabel("Contraseña de tu cuenta").fill("Una frase para recordar 2026");
+  await guest.getByRole("button", { name: "Firmar y continuar" }).click();
   // ST-122: a new account lands on its welcome.
   await expect(guest.getByRole("heading", { level: 1 })).toHaveText("Bienvenida");
   expect(await guest.evaluate(async () => (await (await fetch("/api/session")).json()).member.displayName)).toBe(name);
