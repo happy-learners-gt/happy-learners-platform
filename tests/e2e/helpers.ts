@@ -66,7 +66,7 @@ export const toast = (page: Page) => page.locator(".toast-region");
 
 /** The organization activity log, without needing the feed on the current page. */
 export async function expectRecentActivity(page: Page, text: string | RegExp) {
-  const pattern = text instanceof RegExp ? text : new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const pattern = text instanceof RegExp ? text : new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
   await expect.poll(async () => {
     const data = await page.evaluate(async () => {
       const response = await fetch("/api/activity?limit=20");

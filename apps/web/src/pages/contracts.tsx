@@ -53,7 +53,7 @@ const starterBody = (engagement: ContractEngagement): RichTextDocument => ({
     { type: "paragraph", content: [{ type: "text", text: engagement === "volunteer" ? "La actividad es ad honorem: {{contrato.remuneracion}}." : "La remuneración es {{contrato.remuneracion}}." }] },
   ],
 });
-const defaultTerms = (engagement: ContractEngagement): ContractTerms => ({
+export const defaultTerms = (engagement: ContractEngagement): ContractTerms => ({
   role: "Educador",
   compensation: engagement === "volunteer" ? { kind: "none" } : { kind: engagement === "employment" ? "fixed" : "per-session", amount: "150", currency: "GTQ", ...(engagement === "employment" ? { period: "month" as const } : {}) },
   term: engagement === "employment" ? { kind: "fixed", months: 10 } : { kind: "indefinite" },
@@ -210,7 +210,7 @@ function TemplateEditor({ template, onClose }: { template: ContractTemplate; onC
   </div>;
 }
 
-function TermsFields({ engagement, value, onChange, allowed }: { engagement: ContractEngagement; value: ContractTerms; onChange: (value: ContractTerms) => void; allowed?: readonly ContractTermField[] }) {
+export function TermsFields({ engagement, value, onChange, allowed }: { engagement: ContractEngagement; value: ContractTerms; onChange: (value: ContractTerms) => void; allowed?: readonly ContractTermField[] }) {
   const can = (field: ContractTermField) => !allowed || allowed.includes(field);
   const set = (patch: Partial<ContractTerms>) => onChange({ ...value, ...patch });
   const pay = value.compensation;
