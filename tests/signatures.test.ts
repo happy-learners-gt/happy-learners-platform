@@ -93,7 +93,6 @@ const read = async <T = Record<string, unknown>>(response: Response, status = 20
 type Doc = { id: string; kind: string; status: string; version: number; title: string; body: string; publishedAt: string };
 type Mine = { documents: Doc[]; pending: { id: string; kind: string }[]; agreement: { id: string; version: number } | null; mine: { documentId: string; kind: string; signatureId: string | null; signedName: string | null; withdrawnAt: string | null }[]; signatures?: string[] };
 const terms = { title: "Términos de uso ficticios", body: "Texto ficticio de los términos.\n\nSegundo párrafo de la demostración." };
-const agreement = (version: number) => ({ title: `Acuerdo de voluntariado ficticio v${version}`, body: `Texto ficticio del acuerdo de voluntariado ad honorem, versión ${version}. La actividad es voluntaria y sin remuneración económica.` });
 async function publish(admin: string, kind: string, draft: Record<string, string>) {
   await read(await call(admin, `/legal/documents/${kind}`, "PUT", draft));
   return (await read<{ documents: Doc[] }>(await call(admin, `/legal/documents/${kind}/publish`, "POST"))).documents.find(item => item.kind === kind && item.status === "published")!;
@@ -213,60 +212,63 @@ describe("ST-153 firma electrónica de la aceptación de los términos y condici
   });
 });
 
-let lucia = "", agreementV2: Doc;
 type ClassRow = { id: string; courseId: string; status: string };
+type ContractView = { id: string; status: string; phase: string; templateVersion: number; documentSha256: string; memberSignature: { name: string } | null; userId: string };
+const volunteerVersion = (version: number) => ({
+  title: `Acuerdo de voluntariado ficticio v${version}`,
+  body: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: `{{persona.nombre}} colabora como {{contrato.puesto}}. Texto ficticio del acuerdo de voluntariado ad honorem, versión ${version}. La actividad es voluntaria y sin remuneración económica.` }] }] },
+  defaults: { role: "Educador voluntario", compensation: { kind: "none" }, term: { kind: "indefinite" } }, editable: ["role"],
+});
+let lucia: ContractView, volunteerTemplateId = "";
+// DEC-046: the volunteer agreement ad honorem (ST-151) is a contract template of the volunteer engagement; its three
+// criteria hold on contracts: it is published and versioned, each educator signs it before teaching, and the record of
+// who signed which version stays after they leave.
 describe("ST-151 acuerdo de voluntariado ad honorem", () => {
   it("ST-151 CA1: administración publica y versiona el acuerdo de voluntariado ad honorem", async () => {
     const admin = await login("admin-demo"), educator = await login("lucia.herrera");
     await signPending(educator, "Lucía Herrera");
-    // Without a published agreement nothing waits for it, and a class starts.
-    expect((await read<Mine>(await call(educator, "/legal"))).agreement).toBeNull();
+    // Without a required contract nothing waits for it, and a class starts.
     const { classes } = await read<{ classes: ClassRow[] }>(await call(educator, "/classes"));
     const planned = classes.filter(item => item.status === "planned");
     expect(planned.length).toBeGreaterThan(1);
     await read(await call(educator, `/courses/${planned[0].courseId}/sessions/${planned[0].id}/start`, "POST"));
-
-    expect((await call(educator, "/legal/documents/volunteer", "PUT", agreement(1))).status).toBe(403);
-    expect((await call(admin, "/legal/documents/volunteer", "PUT", { ...agreement(1), consent: "Acepto el tratamiento de mis datos." })).status).toBe(400);
-    const first = await publish(admin, "volunteer", agreement(1));
-    expect(first).toMatchObject({ kind: "volunteer", version: 1, title: agreement(1).title });
-    agreementV2 = await publish(admin, "volunteer", agreement(2));
-    const { documents } = await read<{ documents: Doc[] }>(await call(admin, "/legal/documents"));
-    expect(documents.filter(item => item.kind === "volunteer").map(item => [item.version, item.status])).toEqual([[2, "published"], [1, "published"]]);
+    expect((await call(educator, "/contract-templates", "POST", { template: { name: "Acuerdo", engagement: "volunteer" }, version: volunteerVersion(1) })).status).toBe(403);
+    // Volunteer work is never paid.
+    expect((await call(admin, "/contract-templates", "POST", { template: { name: "Acuerdo de voluntariado", engagement: "volunteer" }, version: { ...volunteerVersion(1), defaults: { role: "Educador", compensation: { kind: "hourly", amount: "10", currency: "GTQ" }, term: { kind: "indefinite" } } } })).status).toBe(400);
+    volunteerTemplateId = (await read<{ template: { id: string } }>(await call(admin, "/contract-templates", "POST", { template: { name: "Acuerdo de voluntariado", engagement: "volunteer" }, version: volunteerVersion(1) }), 201)).template.id;
+    await read(await call(admin, `/contract-templates/${volunteerTemplateId}/publish`, "POST", {}));
+    await read(await call(admin, `/contract-templates/${volunteerTemplateId}/draft`, "PUT", volunteerVersion(2)));
+    const { template } = await read<{ template: { versions: number; current: { version: number; title: string } } }>(await call(admin, `/contract-templates/${volunteerTemplateId}/publish`, "POST", {}));
+    expect(template).toMatchObject({ versions: 2, current: { version: 2, title: volunteerVersion(2).title } });
+    expect((await read<{ history: { version: number }[] }>(await call(admin, `/contract-templates/${volunteerTemplateId}`))).history.map(item => item.version)).toEqual([2, 1]);
+    await read(await call(admin, "/contract-settings", "PUT", { required: true }));
     // The agreement does not close the platform: it waits only for teaching.
     expect((await read<{ pending: unknown[] }>(await call(educator, "/session"))).pending).toEqual([]);
     expect((await call(educator, "/courses")).status).toBe(200);
   });
 
-  it("ST-151 CA2: cada educador lo aprueba con su firma digital antes de impartir clases y descarga su constancia", async () => {
-    const educator = await login("lucia.herrera");
+  it("ST-151 CA2: cada educador lo aprueba con su firma digital antes de impartir clases", async () => {
+    const admin = await login("admin-demo"), educator = await login("lucia.herrera");
     const { classes } = await read<{ classes: ClassRow[] }>(await call(educator, "/classes"));
     const planned = classes.find(item => item.status === "planned")!, open = classes.find(item => item.status === "in_progress")!;
     const path = (item: ClassRow, action: string) => `/courses/${item.courseId}/sessions/${item.id}/${action}`;
     for (const [action, method, body] of [["start", "POST", undefined], ["attendance", "PUT", { marks: [] }], ["complete", "POST", undefined]] as const) {
       const blocked = await call(educator, path(action === "start" ? planned : open, action), method, body);
       expect(blocked.status, action).toBe(403);
-      expect(await blocked.json()).toMatchObject({ code: "VOLUNTEER_AGREEMENT_REQUIRED", agreement: { id: agreementV2.id, version: 2 } });
+      expect(await blocked.json()).toMatchObject({ code: "CONTRACT_REQUIRED" });
     }
     // Reading a class is not teaching it.
     expect((await call(educator, `/courses/${planned.courseId}/sessions/${planned.id}`)).status).toBe(200);
-    const mine = await read<Mine>(await call(educator, "/legal"));
-    expect(mine.agreement).toMatchObject({ id: agreementV2.id, version: 2 });
-    // Only the version in force is signed, with the name and the password.
-    const older = (await read<{ documents: Doc[] }>(await call(await login("admin-demo"), "/legal/documents"))).documents.find(item => item.kind === "volunteer" && item.version === 1)!;
-    expect((await call(educator, "/legal/accept", "POST", { documentIds: [older.id], signature: { fullName: "Lucía Herrera", password } })).status).toBe(409);
-    expect((await call(educator, "/legal/accept", "POST", { documentIds: [agreementV2.id] })).status).toBe(400);
-    const signed = await read<Mine>(await call(educator, "/legal/accept", "POST", { documentIds: [agreementV2.id], signature: { fullName: "Lucía Herrera Ficticia", password } }));
-    expect(signed.agreement).toBeNull();
-    lucia = signed.signatures![0];
+    const { members } = await read<{ members: { id: string; username: string }[] }>(await call(admin, "/members"));
+    const userId = members.find(item => item.username === "lucia.herrera")!.id;
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Guatemala", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    const { contract } = await read<{ contract: ContractView }>(await call(admin, "/contracts", "POST", { templateId: volunteerTemplateId, userId, startDate: today }), 201);
+    expect(contract.templateVersion).toBe(2);
+    await read(await call(admin, `/contracts/${contract.id}/send`, "POST", { signature: { fullName: "Administración Demo", password } }));
+    expect((await call(educator, `/contracts/${contract.id}/sign`, "POST", { signature: { fullName: "Lucía Herrera Ficticia" } })).status).toBe(400);
+    lucia = (await read<{ contract: ContractView }>(await call(educator, `/contracts/${contract.id}/sign`, "POST", { signature: { fullName: "Lucía Herrera Ficticia", password } }))).contract;
+    expect(lucia).toMatchObject({ status: "active", phase: "in-force", memberSignature: { name: "Lucía Herrera Ficticia" } });
     await read(await call(educator, path(planned, "start"), "POST"));
-    const receipt = await call(educator, `/legal/signatures/${lucia}/receipt`);
-    expect(receipt.status).toBe(200);
-    const html = await receipt.text();
-    expect(html).toContain("el acuerdo de voluntariado ad honorem");
-    expect(receiptData(html)).toMatchObject({ kind: "volunteer", version: 2, signedName: "Lucía Herrera Ficticia", documentSha256: documentHash(agreementV2) });
-    // The agreement is not withdrawn like a privacy consent.
-    expect((await call(educator, "/legal/withdraw", "POST", { documentId: agreementV2.id })).status).toBe(400);
   });
 
   it("ST-151 CA3: administración ve quién aprobó qué versión y cuándo, y la aprobación se conserva tras la salida", async () => {
@@ -274,11 +276,7 @@ describe("ST-151 acuerdo de voluntariado ad honorem", () => {
     const { members } = await read<{ members: { id: string; username: string }[] }>(await call(admin, "/members"));
     const person = members.find(item => item.username === "lucia.herrera")!;
     await read(await call(admin, `/members/${person.id}`, "PUT", { role: "educator", active: false }));
-    const { signatures } = await read<{ signatures: LegalSignature[] }>(await call(admin, "/legal/signatures"));
-    expect(signatures.find(item => item.signatureId === lucia)).toMatchObject({ userId: person.id, name: expect.any(String), kind: "volunteer", version: 2, signedName: "Lucía Herrera Ficticia", active: false });
-    const { acceptances } = await read<{ acceptances: { userId: string; kind: string; version: number; signatureId: string | null; acceptedAt: string }[] }>(await call(admin, "/legal/acceptances"));
-    expect(acceptances.find(item => item.userId === person.id && item.kind === "volunteer")).toMatchObject({ version: 2, signatureId: lucia });
-    expect((await verified(admin, { signatureId: lucia })).status).toBe("valid");
-    expect((await call(admin, `/legal/signatures/${lucia}/receipt`)).status).toBe(200);
+    const { contracts } = await read<{ contracts: ContractView[] }>(await call(admin, "/contracts"));
+    expect(contracts.find(item => item.id === lucia.id)).toMatchObject({ userId: person.id, templateVersion: 2, status: "active", memberSignature: { name: "Lucía Herrera Ficticia" }, documentSha256: lucia.documentSha256 });
   });
 });

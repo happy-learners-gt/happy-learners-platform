@@ -9,7 +9,7 @@ import { resources } from "./content";
 import { deliverFile, filesFor } from "./files";
 import { event } from "./team";
 import { digest, newToken } from "./auth";
-import { agreementBlock } from "./legal";
+import { contractBlock } from "./contracts";
 import { notify, type Notifier } from "./notify";
 
 const reply = (data: unknown, status = 200, headers: Record<string, string> = {}) => Response.json(data, { status, headers });
@@ -145,8 +145,8 @@ export async function sessions(parts: string[], method: string, input: unknown, 
   const session = withLessons(stored);
   // Planning and teaching a class belong to whoever teaches its section; administration and the rest of the team read it.
   if (method !== "GET" && !teachesSection(access, session.groupId)) return notTeaching();
-  // ST-151: teaching a class (starting it, taking its roll, completing it) waits for the signed volunteer agreement.
-  if (method !== "GET" && (sub === "start" || sub === "attendance" || sub === "complete")) { const blocked = await agreementBlock(db, current); if (blocked) return blocked; }
+  // DEC-046 (ST-151): teaching a class (starting it, taking its roll, completing it) waits for a contract in force.
+  if (method !== "GET" && (sub === "start" || sub === "attendance" || sub === "complete")) { const blocked = await contractBlock(db, current); if (blocked) return blocked; }
   if (!sub) {
     if (method === "GET") {
       const ids = session.lessons.map(lesson => lesson.id);

@@ -1048,3 +1048,64 @@ class ReleaseOutboxMigrationTests(unittest.TestCase):
         db.execute("INSERT INTO notification_preferences(user_id,organization_id,type,channel,enabled,updated_at) VALUES (?,'org-demo','class_changed','in_app',0,'t')", (user,))
         self.assertEqual([row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name GLOB '*_v[0-9]*'")], [])
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class ContractsMigrationTests(unittest.TestCase):
+    """DEC-046 (0045): the published volunteer agreement becomes a contract template and each signed agreement an
+    active contract with the signature it already had; a sent contract is frozen and follows its life cycle."""
+
+    def upgraded(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        target = next(path for path in migrations if path.name.startswith("0045"))
+        for path in migrations[:migrations.index(target)]:
+            db.executescript(path.read_text())
+        return db, target
+
+    def test_volunteer_agreement_becomes_template_and_signed_contracts(self):
+        db, target = self.upgraded()
+        org = db.execute("SELECT id FROM organizations ORDER BY id LIMIT 1").fetchone()[0]
+        admin = db.execute("SELECT u.id FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.role='admin' ORDER BY u.id LIMIT 1").fetchone()[0]
+        educator = db.execute("SELECT u.id FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.role<>'admin' ORDER BY u.id LIMIT 1").fetchone()[0]
+        body = "Primer párrafo del acuerdo.\nContinúa la línea.\n\nSegundo párrafo del acuerdo de voluntariado."
+        db.execute("INSERT INTO legal_documents(id,organization_id,kind,status,version,title,body,consent,updated_by,updated_at,published_by,published_at) VALUES ('legal-v1',?,'volunteer','published',1,'Acuerdo de voluntariado',?,NULL,?,'2026-10-01T00:00:00Z',?,'2026-10-01T00:00:00Z')", (org, body, admin, admin))
+        db.execute("INSERT INTO legal_acceptances VALUES ('acceptance-1',?,'legal-v1',?,'2026-10-02T10:00:00Z',NULL)", (org, educator))
+        db.execute("INSERT INTO legal_signatures VALUES ('signature-1',?,'acceptance-1','legal-v1',?,'edu','Ana Educadora',?,?,'2026-10-02T10:00:00Z')", (org, educator, "a" * 64, "b" * 64))
+        db.executescript(target.read_text())
+
+        version = db.execute("SELECT template_id,version,body_json,body_text,effective_from FROM contract_template_versions WHERE id='ctv-legal-v1'").fetchone()
+        self.assertEqual(version[0], f"ct-volunteer-{org}")
+        self.assertEqual(version[1], 1)
+        self.assertEqual([item["content"][0]["text"] for item in json.loads(version[2])["content"]], ["Primer párrafo del acuerdo. Continúa la línea.", "Segundo párrafo del acuerdo de voluntariado."])
+        self.assertEqual(version[3], body)
+        self.assertEqual(version[4], "2026-10-01")
+        contract = db.execute("SELECT status,origin,user_id,start_date,document_sha256,member_signed_name,member_signature_sha256,org_signature_sha256 FROM contracts WHERE id='contract-signature-1'").fetchone()
+        self.assertEqual(contract, ("active", "volunteer-agreement", educator, "2026-10-02", "a" * 64, "Ana Educadora", "b" * 64, None))
+        self.assertEqual(db.execute("SELECT contract_required FROM organizations WHERE id=?", (org,)).fetchone()[0], 1)
+        # The signature itself is kept as it was.
+        self.assertEqual(db.execute("SELECT count(*) FROM legal_signatures").fetchone()[0], 1)
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "never edited"):
+            db.execute("UPDATE contracts SET terms_json='{}' WHERE id='contract-signature-1'")
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "not allowed"):
+            db.execute("UPDATE contracts SET status='sent' WHERE id='contract-signature-1'")
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "only a draft"):
+            db.execute("DELETE FROM contracts WHERE id='contract-signature-1'")
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "immutable"):
+            db.execute("UPDATE contract_template_versions SET title='Otro' WHERE id='ctv-legal-v1'")
+        db.execute("UPDATE contracts SET status='terminated',termination_date='2026-12-31',closed_at='2026-10-20T00:00:00Z',close_reason='Fin' WHERE id='contract-signature-1'")
+
+    def test_an_organization_without_agreement_requires_nothing(self):
+        db, target = self.upgraded()
+        db.executescript(target.read_text())
+        self.assertEqual(db.execute("SELECT count(*) FROM contract_templates").fetchone()[0], 0)
+        self.assertEqual(db.execute("SELECT sum(contract_required) FROM organizations").fetchone()[0], 0)
+        # A sent contract must carry its fingerprint and the organization's signature.
+        org = db.execute("SELECT id FROM organizations ORDER BY id LIMIT 1").fetchone()[0]
+        admin = db.execute("SELECT u.id FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.role='admin' ORDER BY u.id LIMIT 1").fetchone()[0]
+        db.execute("INSERT INTO contract_templates(id,organization_id,name,engagement,created_by,created_at,updated_at) VALUES ('ct-1',?,'Servicios','services',?,'t','t')", (org, admin))
+        db.execute("INSERT INTO contract_template_versions(id,organization_id,template_id,status,version,title,body_json,body_text,defaults_json,editable_json,effective_from,updated_by,updated_at,published_by,published_at) VALUES ('ctv-1',?,'ct-1','published',1,'Contrato','{\"type\":\"doc\",\"content\":[]}','Texto suficientemente largo del contrato.','{}','[]','2026-10-01',?,'t',?,'t')", (org, admin, admin))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO contracts(id,organization_id,template_version_id,engagement,title,body_text,terms_json,party_name,user_id,start_date,status,created_by,created_at,updated_at,sent_at,document_sha256) VALUES ('c-1',?,'ctv-1','services','Contrato','Texto suficientemente largo del contrato.','{}','Ana',?,'2026-11-01','sent',?,'t','t','t',?)", (org, admin, admin, "c" * 64))
