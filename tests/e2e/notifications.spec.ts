@@ -24,7 +24,7 @@ test("HL-170 ST-124: an educator turns off one notice, administration marks anot
 
     // Criterion 2: the educator turns off one notice by e-mail in «Preferencias» (ST-161 moved it from «Mi perfil»).
     await signIn(page, "diego.ramirez", "/perfil#notificaciones");
-    await expect(page).toHaveURL(/\/preferencias#notificaciones$/);
+    await expect(page).toHaveURL(/\/mi-cuenta\/notificaciones$/);
     const notices = page.getByRole("region", { name: "Avisos por canal" });
     const returned = notices.getByRole("switch", { name: "Revisión devuelta: Correo" });
     await expect(returned).toBeChecked();

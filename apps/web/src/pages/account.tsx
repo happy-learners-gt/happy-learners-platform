@@ -319,11 +319,11 @@ export function ConfirmEmail({ token }: { token: string }) {
         {problem ? <>
           <h1 id="email-title">{problem.title}</h1>
           <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{problem.text}</p>
-          <a className="button secondary full" href="/cuenta">Ir a mi cuenta</a>
+          <a className="button secondary full" href="/mi-cuenta/cuenta">Ir a mi cuenta</a>
         </> : done ? <>
           <h1 id="email-title">Correo confirmado</h1>
           <p role="status"><Icon name="check" size={18}/> Desde ahora tu correo de acceso es <strong>{done}</strong>. Avisamos del cambio a tu dirección anterior.</p>
-          <a className="button primary full" href="/cuenta">Ir a mi cuenta</a>
+          <a className="button primary full" href="/mi-cuenta/cuenta">Ir a mi cuenta</a>
         </> : !preview ? <><h1 id="email-title">Confirmar correo</h1><p role="status">Abriendo el enlace…</p></> : <>
           <h1 id="email-title">Confirma tu nuevo correo</h1>
           <p>La cuenta <strong>@{preview.username}</strong> de {preview.organization} usará <strong>{preview.newEmail}</strong> como correo de acceso (el enlace caduca el {fullDate(preview.expiresAt)}).</p>

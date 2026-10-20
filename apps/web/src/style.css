@@ -1477,6 +1477,23 @@ ul.cell-list li svg { display: inline-block; vertical-align: -2px; margin-right:
   .review-list > li { grid-template-columns: auto minmax(0, 1fr); }
   .review-list > li > .button { grid-column: 1 / -1; justify-self: start; }
 }
+/* «Mi cuenta»: one hub, one nav. Sidebar from 1024 px; a section list on smaller screens. */
+.account-hub { display: grid; grid-template-columns: 15.5rem minmax(0, 1fr); gap: var(--space-6); align-items: start; }
+.account-nav { position: sticky; top: calc(var(--topbar-h) + var(--space-4)); }
+.account-nav-title { margin: 0 0 var(--space-2); padding: 0 var(--space-3); color: var(--color-muted); font-size: var(--text-xs); font-weight: var(--weight-bold); letter-spacing: var(--tracking-caps); text-transform: uppercase; }
+.account-nav ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.account-nav-link { display: flex; align-items: center; gap: var(--space-3); min-height: var(--touch); padding: 0 var(--space-3); border-radius: var(--radius-md); color: var(--color-ink-soft); text-decoration: none; font-size: var(--text-sm); }
+.account-nav-link:hover { background: var(--color-surface-hover); color: var(--color-ink); text-decoration: none; }
+.account-nav-link[aria-current="page"] { background: var(--color-primary-soft); color: var(--color-primary-ink); font-weight: var(--weight-bold); }
+.account-nav-link .icon { flex: none; }
+.account-hub-main { min-width: 0; display: grid; gap: var(--space-5); }
+@media (max-width: 1023px) {
+  .account-hub { grid-template-columns: minmax(0, 1fr); }
+  .account-nav { position: static; }
+  .account-nav ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: var(--space-2); }
+  .account-nav-link { border: 1px solid var(--color-border); background: var(--color-surface); }
+}
+
 /* ST-158, ST-159: «Cuenta» — sections reachable from a short table of contents, sessions and history tables, my data. */
 .account-toc ul { display: flex; flex-wrap: wrap; gap: var(--space-2); list-style: none; margin: 0; padding: 0; }
 .account-toc a { display: inline-flex; align-items: center; min-height: 32px; padding: 0 var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-ink-soft); font-size: var(--text-sm); text-decoration: none; }

@@ -72,10 +72,9 @@ function TopBar({ menuButton }: { menuButton: ReactNode }) {
       <Link href="/ayuda" className="icon-button" aria-label="Ayuda"><Icon name="help"/></Link>
       <Menu label={`Perfil de ${member.displayName || member.username}`} icon="user" text={member.displayName || member.username} items={[
         { label: `${roleLabel(member)}${organization?.name ? ` · ${organization.name}` : ""}`, icon: "shield", onSelect: () => {}, disabled: true },
-        { label: "Mi perfil", icon: "user", onSelect: () => navigate("/perfil") },
-        { label: "Perfil público", icon: "eye", onSelect: () => navigate(`/equipo/${member.id}`) },
-        { label: "Cuenta", icon: "settings", onSelect: () => navigate("/cuenta") },
-        { label: "Preferencias", icon: "options", onSelect: () => navigate("/preferencias") },
+        { label: "Mi cuenta", icon: "user", onSelect: () => navigate("/mi-cuenta/perfil") },
+        { label: "Ver mi perfil público", icon: "eye", onSelect: () => navigate(`/equipo/${member.id}`) },
+        { label: "Ayuda", icon: "help", onSelect: () => navigate("/ayuda") },
         "separator",
         { label: "Cerrar sesión", icon: "logout", onSelect: logout },
       ]}/>

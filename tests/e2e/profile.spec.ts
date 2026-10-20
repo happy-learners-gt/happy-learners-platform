@@ -34,7 +34,7 @@ test("HL-15 ST-149 ST-150: an educator edits their profile with a photo, adminis
     // ST-149 criterion 1: the person edits their profile, photo included.
     await page.goto("/inicio");
     await page.getByRole("button", { name: /^Perfil de / }).click();
-    await page.getByRole("menuitem", { name: "Mi perfil" }).click();
+    await page.getByRole("menuitem", { name: "Mi cuenta" }).click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Mi perfil");
     await page.getByLabel("Subir foto").setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: png });
     await expect(toast(page)).toContainText("Foto actualizada.");

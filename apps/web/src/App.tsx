@@ -23,11 +23,11 @@ import { AcceptInvitation } from "./pages/invitations";
 import { AccessPage } from "./pages/access";
 import { NotificationsAdmin } from "./pages/notifications";
 import { ConsentGate, PrivacyPage } from "./pages/legal";
-import { MyProfilePage, ProfileReviewsPage, TeamDirectory, TeamProfilePage } from "./pages/professional";
+import { ProfileReviewsPage, TeamDirectory, TeamProfilePage } from "./pages/professional";
 import { HoursPage } from "./pages/hours";
 import { OnboardingWizard } from "./pages/onboarding";
-import { AccountPage, ConfirmEmail } from "./pages/account";
-import { PreferencesPage } from "./pages/preferences";
+import { ConfirmEmail } from "./pages/account";
+import { isAccountSection, MyAccountPage } from "./pages/my-account";
 import { applyAppearance, appearanceOf } from "./appearance";
 import { setRegional } from "./regional";
 const StudentLesson = lazy(() => import("./pages/StudentLesson").then(module => ({ default: module.StudentLesson })));
@@ -150,10 +150,10 @@ function Routes() {
   // The shell stays mounted from page to page: only the content changes, and the menu keeps what is open.
   return <AppShell>{first === "cursos" && second && second !== "nuevo" ? <CourseRoute key={second} id={second} area={third || ""} item={fourth}/>
     : first === "secciones" && second ? <SectionRoute key={second} id={second} area={third || ""} item={fourth}/>
-    : page(first || "inicio", second)}</AppShell>;
+    : page(first || "inicio", second, url)}</AppShell>;
 }
 
-function page(first: string, second?: string) {
+function page(first: string, second: string | undefined, url: URL) {
   switch (first) {
     case "inicio": return <Home/>;
     case "cursos": return second === "nuevo" ? <CreateCourse/> : <CourseList/>;
@@ -165,12 +165,12 @@ function page(first: string, second?: string) {
     case "guia-de-estilo": return <StyleGuide/>;
     case "organizacion": return <OrganizationSettings/>;
     case "educadores": return <Members/>;
-    // ST-161: notifications moved to Preferencias; links from earlier e-mails still arrive.
-    case "perfil": return location.hash === "#notificaciones" ? <Redirect to="/preferencias#notificaciones"/> : <MyProfilePage/>;
+    case "mi-cuenta": return isAccountSection(second) ? <MyAccountPage section={second}/> : <Redirect to="/mi-cuenta/perfil"/>;
+    case "perfil": return <Redirect to={url.hash === "#notificaciones" ? "/mi-cuenta/notificaciones" : "/mi-cuenta/perfil"}/>;
     case "equipo": return second ? <TeamProfilePage key={second} id={second}/> : <TeamDirectory/>;
     case "perfiles": return <ProfileReviewsPage/>;
-    case "cuenta": return <AccountPage/>;
-    case "preferencias": return <PreferencesPage/>;
+    case "cuenta": return <Redirect to={`/mi-cuenta/cuenta${url.hash}`}/>;
+    case "preferencias": return <Redirect to={url.hash === "#notificaciones" ? "/mi-cuenta/notificaciones" : `/mi-cuenta/preferencias${url.hash}`}/>;
     case "horas": return <HoursPage/>;
     case "configuracion-academica": return <AcademicSettings/>;
     case "roles-y-accesos": return <AccessPage/>;

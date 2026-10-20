@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import type { EmailFrequency, NotificationChannel, NotificationDelivery, NotificationKind, NotificationMatrixRow, NotificationPreferences, NotificationRecord, NotificationSetting } from "@happy-learners/contracts";
 import { channelLabels, emailFrequencies, emailFrequencyLabels, notificationCatalog, notificationChannels } from "@happy-learners/domain";
 import { api, message } from "../api";
-import { useUnsavedChanges } from "../navigation";
+import { Link, useUnsavedChanges } from "../navigation";
 import { useSession } from "../session";
 import { formatInstant, weekOrder, zoneName } from "../regional";
 import { useFeedback } from "../ui/feedback";
@@ -70,7 +70,7 @@ export function MyNotifications() {
     <section className="panel" aria-labelledby="matrix-title">
       <div className="panel-header"><h2 id="matrix-title">Qué te avisamos y por dónde</h2></div>
       <p className="muted small">«En la aplicación» aparece en la campana de la barra superior. Los avisos obligatorios no se pueden desactivar: los de la cuenta y los términos protegen tu acceso, y administración puede marcar otros como obligatorios.</p>
-      {!data.hasAddress && <p className="form-alert" role="status"><Icon name="alert" size={18}/>No tienes un correo registrado: agrega tu correo de contacto en Mi perfil para recibir los avisos por correo.</p>}
+      {!data.hasAddress && <p className="form-alert" role="status"><Icon name="alert" size={18}/>No tienes un correo registrado: agrégalo en <Link href="/mi-cuenta/cuenta">Cuenta y seguridad</Link> para recibir los avisos por correo.</p>}
       <div className="table-card" role="region" aria-label="Avisos por canal" tabIndex={0}><table className="members-table notification-matrix">
         <caption className="sr-only">Para cada aviso, si lo recibes en la aplicación y por correo</caption>
         <thead><tr><th scope="col">Aviso</th>{notificationChannels.map(channel => <th key={channel} scope="col" className="matrix-channel">{channelLabels[channel]}</th>)}</tr></thead>
