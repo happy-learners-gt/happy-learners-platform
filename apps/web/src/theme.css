@@ -106,6 +106,7 @@
   /* Fluent's dark brand foreground (step 100) is under 4.5:1 on dark surfaces with this ramp; step 130 passes. */
   --color-primary-ink: var(--brand-130); --color-info: var(--brand-130);
   --color-primary-line: var(--brand-60);
+  --gradient-brand: linear-gradient(135deg, color-mix(in srgb, var(--brand-40) 70%, var(--color-canvas)) 0%, color-mix(in srgb, var(--brand-60) 48%, var(--color-canvas)) 100%);
   --gradient-brand-soft: linear-gradient(135deg, var(--brand-30) 0%, var(--colorNeutralBackground1) 100%);
   color-scheme: dark;
   /* Fluent's dark ramp is pure grey with white text and #666 borders: maximum contrast everywhere, which tires the

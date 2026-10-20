@@ -64,31 +64,35 @@ export function ContractsPage() {
   const { member } = useSession();
   const { url } = useNavigation();
   const tab = tabOf(url.hash);
+  const [creatingTemplate, setCreatingTemplate] = useState(false), [creatingContract, setCreatingContract] = useState(false), [editingTemplate, setEditingTemplate] = useState(false);
   if (member.role !== "admin") return <><PageHeader title="Contratos y políticas"/><EmptyState icon="shield" title="Esta sección es para administración">Pide a administración cualquier cambio de plantillas, contratos o políticas.</EmptyState></>;
+  const primary = tab === "plantillas" && !editingTemplate
+    ? <PrimaryAction icon="plus" onClick={() => setCreatingTemplate(true)}>Nueva plantilla</PrimaryAction>
+    : tab === "contratos" ? <PrimaryAction icon="plus" onClick={() => setCreatingContract(true)}>Nuevo contrato</PrimaryAction> : undefined;
   return <>
-    <PageHeader title="Contratos y políticas" description="Plantillas, contratos del equipo, términos y privacidad."/>
+    <PageHeader title="Contratos y políticas" description="Plantillas, contratos del equipo, términos y privacidad." primary={primary}/>
     <nav className="tabs scrollable-tabs" aria-label="Secciones de contratos">
       {tabs.map(item => <Link key={item.id} href={item.href} className="tab" aria-current={tab === item.id ? "page" : undefined}>{item.label}</Link>)}
     </nav>
-    {tab === "plantillas" && <TemplatesTab/>}
-    {tab === "contratos" && <ContractsTab/>}
+    {tab === "plantillas" && <TemplatesTab creating={creatingTemplate} onCreating={setCreatingTemplate} onEditing={setEditingTemplate}/>}
+    {tab === "contratos" && <ContractsTab creating={creatingContract} onCreating={setCreatingContract}/>}
     {tab === "politicas" && <LegalSettings/>}
     {tab === "ajustes" && <SettingsTab/>}
   </>;
 }
 
-function TemplatesTab() {
+function TemplatesTab({ creating, onCreating, onEditing }: { creating: boolean; onCreating: (value: boolean) => void; onEditing: (value: boolean) => void }) {
   const { toast } = useFeedback();
   const [templates, setTemplates] = useState<ContractTemplate[] | null>(null), [error, setError] = useState("");
-  const [creating, setCreating] = useState(false), [editing, setEditing] = useState<ContractTemplate | null>(null);
+  const [editing, setEditing] = useState<ContractTemplate | null>(null);
   const load = () => { setError(""); api<{ templates: ContractTemplate[] }>("/contract-templates").then(result => setTemplates(result.templates)).catch(cause => setError(message(cause))); };
   useEffect(load, []);
+  useEffect(() => { onEditing(!!editing); return () => onEditing(false); }, [editing, onEditing]);
   if (error) return <ErrorState error={error} retry={load}/>;
   if (!templates) return <Loading label="Cargando plantillas…" lines={4}/>;
   if (editing) return <TemplateEditor template={editing} onClose={() => { setEditing(null); load(); }}/>;
   return <>
-    <div className="table-toolbar"><PrimaryAction icon="plus" onClick={() => setCreating(true)}>Nueva plantilla</PrimaryAction></div>
-    {!templates.length ? <EmptyState icon="file" title="Aún no hay plantillas" action={<button type="button" className="button primary" onClick={() => setCreating(true)}>Crear la primera</button>}>Una plantilla fija el tipo de relación, las cláusulas y las condiciones por omisión. Luego la usas en cada contrato.</EmptyState>
+    {!templates.length ? <EmptyState icon="file" title="Aún no hay plantillas" action={<button type="button" className="button primary" onClick={() => onCreating(true)}>Crear la primera</button>}>Una plantilla fija el tipo de relación, las cláusulas y las condiciones por omisión. Luego la usas en cada contrato.</EmptyState>
       : <ul className="template-grid">{templates.map(item => <li key={item.id} className="panel">
         <div className="panel-header"><h2>{item.name}</h2>{item.status === "archived" ? <StatusBadge>Archivada</StatusBadge> : item.current ? <StatusBadge tone="success">Versión {item.current.version}</StatusBadge> : <StatusBadge>Sin publicar</StatusBadge>}</div>
         <p className="muted small">{engagementLabels[item.engagement]}{item.description ? ` · ${item.description}` : ""}</p>
@@ -96,7 +100,7 @@ function TemplatesTab() {
         <div className="form-actions"><button type="button" className="button secondary small" onClick={() => setEditing(item)}>Abrir editor</button>
           <button type="button" className="button ghost small" onClick={() => void api(`/contract-templates/${item.id}`, "PUT", { status: item.status === "archived" ? "active" : "archived" }).then(() => { toast({ message: item.status === "archived" ? "Plantilla restaurada." : "Plantilla archivada." }); load(); }, cause => toast({ tone: "error", message: message(cause) }))}>{item.status === "archived" ? "Restaurar" : "Archivar"}</button></div>
       </li>)}</ul>}
-    {creating && <CreateTemplateDialog onClose={() => setCreating(false)} onCreated={template => { setCreating(false); setEditing(template); }}/>}
+    {creating && <CreateTemplateDialog onClose={() => onCreating(false)} onCreated={template => { onCreating(false); setEditing(template); }}/>}
   </>;
 }
 
@@ -241,12 +245,12 @@ export function TermsFields({ engagement, value, onChange, allowed }: { engageme
   </div>;
 }
 
-function ContractsTab() {
+function ContractsTab({ creating, onCreating }: { creating: boolean; onCreating: (value: boolean) => void }) {
   const { toast, confirm } = useFeedback();
   const [contracts, setContracts] = useState<Contract[] | null>(null), [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [people, setPeople] = useState<Member[]>([]);
   const [error, setError] = useState(""), [phase, setPhase] = useState(""), [person, setPerson] = useState(""), [template, setTemplate] = useState("");
-  const [selected, setSelected] = useState<Contract | null>(null), [creating, setCreating] = useState(false);
+  const [selected, setSelected] = useState<Contract | null>(null);
   const load = () => {
     setError("");
     Promise.all([api<{ contracts: Contract[] }>("/contracts"), api<{ templates: ContractTemplate[] }>("/contract-templates"), api<{ members: Member[] }>("/members")])
@@ -262,7 +266,6 @@ function ContractsTab() {
       <label className="onboarding-filter"><span>Fase</span><select value={phase} onChange={event => setPhase(event.target.value)}><option value="">Todas</option>{filterPhases.map(item => <option key={item} value={item}>{contractPhaseLabels[item]}</option>)}</select></label>
       <label className="onboarding-filter"><span>Persona</span><select value={person} onChange={event => setPerson(event.target.value)}><option value="">Todas</option>{people.map(item => <option key={item.id} value={item.id}>{item.displayName || item.username}</option>)}</select></label>
       <label className="onboarding-filter"><span>Plantilla</span><select value={template} onChange={event => setTemplate(event.target.value)}><option value="">Todas</option>{templates.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-      <PrimaryAction icon="plus" onClick={() => setCreating(true)}>Nuevo contrato</PrimaryAction>
     </div>
     {!rows.length ? <EmptyState compact icon="file" title="Ningún contrato coincide">{contracts.length ? "Prueba otro filtro." : "Prepara un contrato desde una plantilla publicada."}</EmptyState>
       : <div className="table-card" role="region" aria-label="Contratos" tabIndex={0}><table className="members-table">
@@ -278,7 +281,7 @@ function ContractsTab() {
         </tr>)}</tbody>
       </table></div>}
     {selected && <ContractDetail contract={selected} onClose={() => setSelected(null)} onChanged={next => { setSelected(next); load(); }} onGone={() => { setSelected(null); load(); }} toast={toast} confirm={confirm}/>}
-    {creating && <NewContractDialog people={people} templates={templates} onClose={() => setCreating(false)} onCreated={item => { setCreating(false); setSelected(item); load(); }}/>}
+    {creating && <NewContractDialog people={people} templates={templates} onClose={() => onCreating(false)} onCreated={item => { onCreating(false); setSelected(item); load(); }}/>}
   </>;
 }
 

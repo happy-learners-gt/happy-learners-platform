@@ -74,7 +74,7 @@ test("HL-15 ST-154 ST-155 ST-156 ST-157: an educator completes and sends their p
     await page.getByRole("button", { name: "Enviar a revisión" }).click();
     await page.getByRole("dialog", { name: "¿Enviar tu perfil a revisión?" }).getByRole("button", { name: "Enviar a revisión" }).click();
     await expect(toast(page)).toContainText("Perfil enviado a revisión.");
-    await expect(page.getByRole("region", { name: "Publicación" })).toContainText("En revisión");
+    await expect(page.getByRole("status").filter({ hasText: "Administración está revisando tu perfil" })).toBeVisible();
     await adminContext.addCookies([{ name: "hl_session", value: await sessionToken("admin-demo"), url: origin, httpOnly: true, sameSite: "Strict" }]);
     const adminPage = await adminContext.newPage();
     await adminPage.goto("/perfiles");
@@ -91,8 +91,7 @@ test("HL-15 ST-154 ST-155 ST-156 ST-157: an educator completes and sends their p
 
     // The educator reads the note, corrects and sends again; administration approves.
     await page.reload();
-    const publication = page.getByRole("region", { name: "Publicación" });
-    await expect(publication).toContainText("Cuéntanos también cómo trabajas en línea.");
+    await expect(page.getByRole("status").filter({ hasText: "Cuéntanos también cómo trabajas en línea." })).toBeVisible();
     await sections.getByRole("button", { name: "Sobre mí" }).click();
     await page.getByLabel("Enfoque de enseñanza").fill("En línea usamos materiales de casa y una bitácora compartida.");
     await page.getByRole("button", { name: "Guardar perfil" }).click();
@@ -106,7 +105,7 @@ test("HL-15 ST-154 ST-155 ST-156 ST-157: an educator completes and sends their p
     await review.getByRole("button", { name: "Aprobar y publicar" }).click();
     await expect(toast(adminPage)).toContainText(`Perfil de ${name} aprobado y publicado.`);
     await page.reload();
-    await expect(publication).toContainText("Publicado");
+    await expect(page.getByText("Publicado", { exact: true }).first()).toBeVisible();
 
     // An edit of the published profile waits for approval; the team keeps seeing the published version.
     await page.getByLabel("Titular").fill("Ciencias y robótica para primaria");
