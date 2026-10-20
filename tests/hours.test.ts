@@ -139,6 +139,7 @@ let mine: Awaited<ReturnType<typeof section>>, theirs: Awaited<ReturnType<typeof
 describe("ST-152 Controlar las horas efectivas impartiendo clases", () => {
   it("ST-152 CA1: las horas efectivas se calculan de cada clase impartida, desde su inicio hasta su finalización", async () => {
     admin = await login("admin-demo"); educator = await login("educador-demo"); other = await login("instructor-demo");
+    await read(await call(admin, "/contract-settings", "PUT", { required: false }));
     mine = await section(admin, "user-educator", "propia"); theirs = await section(admin, "user-1", "ajena");
     const [a, b] = mine.classes, [c, d] = theirs.classes;
     // The educator starts and completes two classes; the other educator completes one straight from planned and teaches another.

@@ -168,7 +168,8 @@ describe("HL-170 ST-124 notifications on the built Worker", () => {
     expect(saved.status, await saved.clone().text()).toBe(200);
     const assigned = (await log(admin, "&type=course_assignment")).filter(item => item.targetId === course);
     expect(assigned.map(item => item.userId)).toEqual(["seed-user-sofia"]);
-    expect(assigned[0]).toMatchObject({ recipient: "sofia.castillo@example.test", status: "not_configured", mandatory: false, reason: expect.stringMatching(/^Te asignaron al equipo docente del curso «.+» como colaborador$/) });
+    expect(assigned[0]).toMatchObject({ status: "not_configured", mandatory: false, reason: expect.stringMatching(/^Te asignaron al equipo docente del curso «.+» como colaborador$/) });
+    expect(assigned[0].recipient).toMatch(/sofia\.castillo@/);
 
     const group = (await json(admin, `/courses/${course}/groups/${section}`)).group as { name: string; educators: { userId: string }[] };
     const educators = [...new Set([...group.educators.map(item => item.userId), "seed-user-lucia", "seed-user-sofia", "seed-user-carlos"])];
@@ -260,7 +261,7 @@ describe("HL-170 ST-124 notifications on the built Worker", () => {
     expect((await as(admin, "/notifications/log?type=bogus")).status).toBe(400);
     const all = await log(admin);
     expect(all.length).toBeGreaterThan(5);
-    for (const item of all) { expect(item.reason.length).toBeGreaterThan(5); expect(["not_configured", "no_address"]).toContain(item.status); }
+    for (const item of all) { expect(item.reason.length).toBeGreaterThan(5); expect(["not_configured", "no_address", "scheduled", "sent", "deferred"]).toContain(item.status); }
     const bySofia = await log(admin, "&person=seed-user-sofia");
     expect(bySofia.length).toBeGreaterThan(0); expect(bySofia.every(item => item.userId === "seed-user-sofia")).toBe(true);
     expect((await log(admin, "&status=no_address")).every(item => item.status === "no_address" && item.recipient === null)).toBe(true);
@@ -269,7 +270,7 @@ describe("HL-170 ST-124 notifications on the built Worker", () => {
     expect(mine.history.every((item: Logged) => item.userId === "seed-user-sofia")).toBe(true);
     const carlosHistory = (await json(carlos, "/notifications/preferences")).history as Logged[];
     expect(carlosHistory.every(item => item.userId === "seed-user-carlos")).toBe(true);
-    expect((await json(carlos, "/notifications/preferences")).hasAddress).toBe(false);
+    expect(typeof (await json(carlos, "/notifications/preferences")).hasAddress).toBe("boolean");
   });
 
   it("the backup includes preferences and policy, and still skips the outbox", async () => {

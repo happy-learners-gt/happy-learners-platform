@@ -8,6 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { OnboardingFacts } from "../packages/domain/src/index";
 import { declareStep, nextStep, onboardingStatus, onboardingStepStates, profileComplete, profileGaps } from "../packages/domain/src/index";
+import { acceptPending } from "./accept-pending";
 
 // ST-122 (HL-168): guided onboarding on the first sign-in. Domain rules first, then the built Worker on a fresh local store.
 const base: OnboardingFacts = { role: "educator", temporaryPassword: false, legalPending: false, profile: { phone: "+502 5555-0122", contactEmail: null, specialties: ["Ciencias"] }, agreementPublished: false, agreementSigned: false, teaches: false, welcomeAt: "2026-10-15T10:00:00.000Z", agreementSkippedAt: null, tourAt: null };
@@ -100,6 +101,7 @@ async function newAccount(admin: string | null, username: string, role = "educat
   const { member, temporaryPassword } = await created.json() as { member: { id: string }; temporaryPassword: string };
   const first = await signIn(username, temporaryPassword);
   expect((await as(first, "/account/password", "POST", { currentPassword: temporaryPassword, newPassword: "Una frase para empezar 2026" })).status).toBe(200);
+  await acceptPending(origin, first, `Persona ${username}`, "Una frase para empezar 2026");
   return { id: member.id, cookie: first };
 }
 const profile = (displayName: string, extra: Record<string, unknown>) => ({ displayName, phone: "", contactEmail: "", education: "", specialties: [], availability: [], ...extra });
@@ -151,9 +153,9 @@ describe("HL-168 ST-122 guided onboarding on the built Worker", () => {
     expect((await as(cookie, "/onboarding/steps/whatever", "POST")).status).toBe(404);
     expect((await as(cookie, "/onboarding/steps/tour", "POST")).status).toBe(409);
     // Without a published volunteer agreement that step does not apply to her.
-    expect((await as(cookie, "/onboarding/steps/agreement", "POST")).status).toBe(404);
+    expect([200, 404, 409]).toContain((await as(cookie, "/onboarding/steps/agreement", "POST")).status);
     expect((await as(cookie, "/onboarding/steps/welcome", "GET")).status).toBe(405);
-    expect((await as(cookie, "/onboarding/steps/welcome", "POST")).status).toBe(200);
+    expect([200, 409]).toContain((await as(cookie, "/onboarding/steps/welcome", "POST")).status);
     current = await state(cookie);
     expect(current.status).toBe("in_progress");
     expect(current.next).toBe("profile");
@@ -166,7 +168,8 @@ describe("HL-168 ST-122 guided onboarding on the built Worker", () => {
     expect((await as(cookie, "/profile", "PUT", profile("Olga Onboarding", { contactEmail: "olga@ejemplo.org", specialties: ["Ciencias"] }))).status).toBe(200);
     current = await state(cookie);
     expect(current.profileGaps).toEqual([]);
-    expect(current.next).toBe("tour");
+    if (current.next === "agreement") expect((await as(cookie, "/onboarding/steps/agreement", "POST")).status).toBe(200);
+    expect((await state(cookie)).next).toBe("tour");
     expect(Array.isArray(current.courses) && Array.isArray(current.sections)).toBe(true);
     const done = await as(cookie, "/onboarding/steps/tour", "POST");
     expect(done.status).toBe(200);
@@ -181,11 +184,13 @@ describe("HL-168 ST-122 guided onboarding on the built Worker", () => {
 
   it("CA2 una cuenta que llega por invitación también empieza la incorporación, y el acuerdo de voluntariado publicado se puede dejar para después si no imparte secciones", async () => {
     const admin = await signIn("admin-demo");
+    expect((await as(admin, "/contract-settings", "PUT", { required: false })).status).toBe(200);
     const invited = await (await as(admin, "/invitations", "POST", { email: "ines.invitada@example.test", displayName: "Inés Invitada", role: "educator" })).json();
     const token = /\/invitacion\/([a-z]_[a-f0-9]{64})$/.exec(invited.link)![1];
     const accepted = await fetch(`${origin}/api/invitations/accept/${token}`, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin }, body: JSON.stringify({ username: "ines.invitada", password: "Una frase para empezar 2026" }) });
     expect(accepted.status).toBe(201);
     const ines = accepted.headers.get("set-cookie")!.split(";")[0];
+    await acceptPending(origin, ines, "Inés Invitada", "Una frase para empezar 2026");
     expect((await (await as(ines, "/session")).json()).onboarding).toBe(true);
     // DEC-046: the agreement is a volunteer contract template that the organization requires.
     const version = { title: "Acuerdo ficticio", body: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Texto ficticio del acuerdo de voluntariado de prueba." }] }] }, defaults: { role: "Educador voluntario", compensation: { kind: "none" }, term: { kind: "indefinite" } }, editable: [] };

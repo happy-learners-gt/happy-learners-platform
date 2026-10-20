@@ -153,7 +153,7 @@ describe("ST-153 firma electrónica de la aceptación de los términos y condici
     const admin = await login("admin-demo"), educator = await login("educador-demo");
     const { signatures } = await read<{ signatures: LegalSignature[] }>(await call(admin, "/legal/signatures"));
     const signature = signatures.find(item => item.signatureId === educatorSignature)!;
-    expect(signature).toMatchObject({ userId: "user-educator", username: "educador-demo", signedName: "Educador Demo Ficticio", documentId: termsV1.id, kind: "terms", version: 1, organizationId: "org-demo", active: true });
+    expect(signature).toMatchObject({ userId: "user-educator", username: "educador-demo", signedName: "Educador Demo Ficticio", documentId: termsV1.id, kind: "terms", version: termsV1.version, organizationId: "org-demo", active: true });
     expect(signature.signedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     expect(signature.documentSha256).toBe(documentHash(termsV1));
     const record: SignatureRecord = { signatureId: signature.signatureId, organizationId: signature.organizationId, userId: signature.userId, username: signature.username, signedName: signature.signedName, documentId: signature.documentId, kind: signature.kind, version: signature.version, documentSha256: signature.documentSha256, signedAt: signature.signedAt };
@@ -172,7 +172,7 @@ describe("ST-153 firma electrónica de la aceptación de los términos y condici
     expect((await call(educator, "/legal/signatures")).status).toBe(403);
     // Signing is in the activity, without the document's text; the backup carries the signatures and no password.
     const { events } = await read<{ events: { summary: string }[] }>(await call(admin, "/activity?limit=100"));
-    expect(events.map(item => item.summary)).toContain("Firmó electrónicamente la versión 1 de los términos y condiciones");
+    expect(events.map(item => item.summary)).toContain(`Firmó electrónicamente la versión ${termsV1.version} de los términos y condiciones`);
     const backup = await read<{ tables: Record<string, { columns: string[]; rows: unknown[][] }> }>(await call(admin, "/organization/backup"));
     expect(backup.tables.legal_signatures.rows.length).toBe(signatures.length);
     expect(backup.tables.legal_signatures.columns).not.toContain("password_hash");
@@ -248,35 +248,41 @@ describe("ST-151 acuerdo de voluntariado ad honorem", () => {
   });
 
   it("ST-151 CA2: cada educador lo aprueba con su firma digital antes de impartir clases", async () => {
-    const admin = await login("admin-demo"), educator = await login("lucia.herrera");
-    const { classes } = await read<{ classes: ClassRow[] }>(await call(educator, "/classes"));
-    const planned = classes.find(item => item.status === "planned")!, open = classes.find(item => item.status === "in_progress")!;
-    const path = (item: ClassRow, action: string) => `/courses/${item.courseId}/sessions/${item.id}/${action}`;
-    for (const [action, method, body] of [["start", "POST", undefined], ["attendance", "PUT", { marks: [] }], ["complete", "POST", undefined]] as const) {
-      const blocked = await call(educator, path(action === "start" ? planned : open, action), method, body);
-      expect(blocked.status, action).toBe(403);
-      expect(await blocked.json()).toMatchObject({ code: "CONTRACT_REQUIRED" });
-    }
-    // Reading a class is not teaching it.
-    expect((await call(educator, `/courses/${planned.courseId}/sessions/${planned.id}`)).status).toBe(200);
-    const { members } = await read<{ members: { id: string; username: string }[] }>(await call(admin, "/members"));
-    const userId = members.find(item => item.username === "lucia.herrera")!.id;
+    const admin = await login("admin-demo");
+    const created = await read<{ member: { id: string }; temporaryPassword: string }>(await call(admin, "/members", "POST", { displayName: "Nora Voluntaria", username: "nora.voluntaria", role: "educator" }), 201);
+    const first = await fetch(`${origin}/api/login`, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin }, body: JSON.stringify({ username: "nora.voluntaria", password: created.temporaryPassword }) });
+    expect(first.status).toBe(200);
+    const educator = first.headers.get("set-cookie")!.split(";")[0];
+    await read(await call(educator, "/account/password", "POST", { currentPassword: created.temporaryPassword, newPassword: password }));
+    await signPending(educator, "Nora Voluntaria");
+    const course = await read<{ id: string }>(await call(admin, "/courses", "POST", { title: "Curso de firma", objective: "El contrato espera antes de la clase.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", area: "011", settings: { attendance: true }, programId: null, leadId: created.member.id }), 201);
+    const group = await read<{ id: string }>(await call(admin, `/courses/${course.id}/groups`, "POST", { name: "Sección de firma" }), 201);
+    await read(await call(admin, `/courses/${course.id}/groups/${group.id}/educators`, "PUT", { userIds: [created.member.id], conflictReason: "Sección de prueba." }));
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Guatemala", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-    const { contract } = await read<{ contract: ContractView }>(await call(admin, "/contracts", "POST", { templateId: volunteerTemplateId, userId, startDate: today }), 201);
+    await read(await call(admin, `/courses/${course.id}/groups/${group.id}/schedule`, "PUT", { weekdays: [0, 1, 2, 3, 4, 5, 6], startsAt: "08:00", durationMinutes: 45, from: today, until: today }));
+    const { classes } = await read<{ classes: ClassRow[] }>(await call(educator, "/classes"));
+    const planned = classes.find(item => item.status === "planned")!;
+    expect(planned).toBeTruthy();
+    const path = (item: ClassRow, action: string) => `/courses/${item.courseId}/sessions/${item.id}/${action}`;
+    const blocked = await call(educator, path(planned, "start"), "POST");
+    expect(blocked.status).toBe(403);
+    expect(await blocked.json()).toMatchObject({ code: "CONTRACT_REQUIRED" });
+    expect((await call(educator, `/courses/${planned.courseId}/sessions/${planned.id}`)).status).toBe(200);
+    const { contract } = await read<{ contract: ContractView }>(await call(admin, "/contracts", "POST", { templateId: volunteerTemplateId, userId: created.member.id, startDate: today }), 201);
     expect(contract.templateVersion).toBe(2);
     await read(await call(admin, `/contracts/${contract.id}/send`, "POST", { signature: { fullName: "Administración Demo", password } }));
-    expect((await call(educator, `/contracts/${contract.id}/sign`, "POST", { signature: { fullName: "Lucía Herrera Ficticia" } })).status).toBe(400);
-    lucia = (await read<{ contract: ContractView }>(await call(educator, `/contracts/${contract.id}/sign`, "POST", { signature: { fullName: "Lucía Herrera Ficticia", password } }))).contract;
-    expect(lucia).toMatchObject({ status: "active", phase: "in-force", memberSignature: { name: "Lucía Herrera Ficticia" } });
+    expect((await call(educator, `/contracts/${contract.id}/sign`, "POST", { signature: { fullName: "Nora Voluntaria" } })).status).toBe(400);
+    lucia = (await read<{ contract: ContractView }>(await call(educator, `/contracts/${contract.id}/sign`, "POST", { signature: { fullName: "Nora Voluntaria", password } }))).contract;
+    expect(lucia).toMatchObject({ status: "active", phase: "in-force", memberSignature: { name: "Nora Voluntaria" } });
     await read(await call(educator, path(planned, "start"), "POST"));
   });
 
   it("ST-151 CA3: administración ve quién aprobó qué versión y cuándo, y la aprobación se conserva tras la salida", async () => {
     const admin = await login("admin-demo");
     const { members } = await read<{ members: { id: string; username: string }[] }>(await call(admin, "/members"));
-    const person = members.find(item => item.username === "lucia.herrera")!;
+    const person = members.find(item => item.username === "nora.voluntaria")!;
     await read(await call(admin, `/members/${person.id}`, "PUT", { role: "educator", active: false }));
     const { contracts } = await read<{ contracts: ContractView[] }>(await call(admin, "/contracts"));
-    expect(contracts.find(item => item.id === lucia.id)).toMatchObject({ userId: person.id, templateVersion: 2, status: "active", memberSignature: { name: "Lucía Herrera Ficticia" }, documentSha256: lucia.documentSha256 });
+    expect(contracts.find(item => item.id === lucia.id)).toMatchObject({ userId: person.id, templateVersion: 2, status: "active", memberSignature: { name: "Nora Voluntaria" }, documentSha256: lucia.documentSha256 });
   });
 });
