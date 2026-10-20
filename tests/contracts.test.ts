@@ -7,6 +7,7 @@ import { createServer } from "node:net";
 import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { acceptPending } from "./accept-pending";
 import type { Contract, ContractReceiptRecord, ContractTemplate, ContractTerms, ContractVerification, RichTextDocument } from "../packages/contracts/src/index";
 import {
   compensationAllowed, compensationSummary, contractCanonical, contractDatesInput, contractInForce, contractPhase, contractSignatureCanonical, contractTermsFor, contractTermsInput, contractVersionInput,
@@ -131,7 +132,7 @@ const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Guatemala", 
 const adminSignature = { fullName: "Administración de la Demostración", password };
 
 let admin: string | null, volunteerTemplate: ContractTemplate, servicesTemplate: ContractTemplate, educatorContract: Contract;
-type ClassRow = { id: string; courseId: string; status: string };
+type ClassRow = { id: string; courseId: string; status: string; groupId?: string };
 
 describe("DEC-046 contracts on the built Worker", () => {
   beforeAll(async () => { admin = await signIn("admin-demo"); expect(admin).toBeTruthy(); });
@@ -172,7 +173,7 @@ describe("DEC-046 contracts on the built Worker", () => {
     expect(draft).toMatchObject({ status: "draft", phase: "draft", templateVersion: 2, terms: { weeklyHours: 6, compensation: { kind: "none" } }, documentSha256: null });
     expect(draft.bodyText).toContain("Educador de la demostración colabora con Colegio Horizonte (demostración) como Educador voluntario.");
     // A draft is not visible to the person; a wrong password does not sign.
-    expect((await read<{ contracts: Contract[] }>(await as(educator, "/me/contracts"))).contracts).toEqual([]);
+    expect((await read<{ contracts: Contract[] }>(await as(educator, "/me/contracts"))).contracts.some(item => item.id === draft.id)).toBe(false);
     expect((await as(admin, `/contracts/${draft.id}/send`, "POST", { signature: { ...adminSignature, password: "incorrecta" } })).status).toBe(403);
     const sent = (await read<{ contract: Contract }>(await as(admin, `/contracts/${draft.id}/send`, "POST", { signature: adminSignature }))).contract;
     expect(sent).toMatchObject({ status: "sent", phase: "awaiting-signature", organizationSignature: { name: "Administración de la Demostración" } });
@@ -188,27 +189,32 @@ describe("DEC-046 contracts on the built Worker", () => {
   });
 
   it("where a contract is required, teaching waits for one in force; reading does not", async () => {
-    const lucia = await signIn("lucia.herrera");
-    const { classes } = await read<{ classes: ClassRow[] }>(await as(lucia, "/classes"));
-    const planned = classes.filter(item => item.status === "planned");
-    expect(planned.length).toBeGreaterThan(1);
-    await read(await as(lucia, `/courses/${planned[0].courseId}/sessions/${planned[0].id}/start`, "POST"));
+    const created = await read<{ member: { id: string }; temporaryPassword: string }>(await as(admin, "/members", "POST", { displayName: "Nora Sin Contrato", username: "nora.sincontrato", role: "educator" }), 201);
+    const first = await signIn("nora.sincontrato", created.temporaryPassword);
+    await read(await as(first, "/account/password", "POST", { currentPassword: created.temporaryPassword, newPassword: password }));
+    await acceptPending(origin, first, "Nora Sin Contrato", password);
+    const nora = first;
+    const course = await read<{ id: string }>(await as(admin, "/courses", "POST", { title: "Curso sin contrato", objective: "Ver el diálogo al iniciar sin contrato vigente.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", area: "011", settings: { attendance: true }, programId: null, leadId: created.member.id }), 201);
+    const groupId = (await read<{ id: string }>(await as(admin, `/courses/${course.id}/groups`, "POST", { name: "Sección sin contrato" }), 201)).id;
+    await read(await as(admin, `/courses/${course.id}/groups/${groupId}/educators`, "PUT", { userIds: [created.member.id], conflictReason: "Sección de prueba." }));
+    await read(await as(admin, `/courses/${course.id}/groups/${groupId}/schedule`, "PUT", { weekdays: [0, 1, 2, 3, 4, 5, 6], startsAt: "08:00", durationMinutes: 45, from: today, until: today }));
+    const { sessions } = await read<{ sessions: ClassRow[] }>(await as(admin, `/courses/${course.id}/sessions`));
+    const planned = sessions.filter(item => item.groupId === groupId);
+    expect(planned.length).toBeGreaterThan(0);
     expect((await as(admin, "/contract-settings", "PUT", { required: "sí" })).status).toBe(400);
     expect(await read(await as(admin, "/contract-settings", "PUT", { required: true }))).toEqual({ required: true });
-    const blocked = await as(lucia, `/courses/${planned[1].courseId}/sessions/${planned[1].id}/start`, "POST");
+    const blocked = await as(nora, `/courses/${planned[0].courseId}/sessions/${planned[0].id}/start`, "POST");
     expect(blocked.status).toBe(403);
     expect(await blocked.json()).toMatchObject({ code: "CONTRACT_REQUIRED", contractId: null });
-    expect((await as(lucia, `/courses/${planned[1].courseId}/sessions/${planned[1].id}`)).status).toBe(200);
-    const { members } = await read<{ members: { id: string; username: string }[] }>(await as(admin, "/members"));
-    const luciaId = members.find(item => item.username === "lucia.herrera")!.id;
-    const draft = (await read<{ contract: Contract }>(await as(admin, "/contracts", "POST", { templateId: servicesTemplate.id, userId: luciaId, startDate: today, terms: { role: "Tutora de lectura" } }), 201)).contract;
+    expect((await as(nora, `/courses/${planned[0].courseId}/sessions/${planned[0].id}`)).status).toBe(200);
+    const draft = (await read<{ contract: Contract }>(await as(admin, "/contracts", "POST", { templateId: servicesTemplate.id, userId: created.member.id, startDate: today, terms: { role: "Tutora de lectura" } }), 201)).contract;
     expect(draft.endDate).not.toBeNull();
     await read(await as(admin, `/contracts/${draft.id}/send`, "POST", { signature: adminSignature }));
-    expect(await (await as(lucia, `/courses/${planned[1].courseId}/sessions/${planned[1].id}/start`, "POST")).json()).toMatchObject({ code: "CONTRACT_REQUIRED", contractId: draft.id });
-    await read(await as(lucia, `/contracts/${draft.id}/sign`, "POST", { signature: { fullName: "Lucía Herrera", password } }));
-    await read(await as(lucia, `/courses/${planned[1].courseId}/sessions/${planned[1].id}/start`, "POST"));
+    expect(await (await as(nora, `/courses/${planned[0].courseId}/sessions/${planned[0].id}/start`, "POST")).json()).toMatchObject({ code: "CONTRACT_REQUIRED", contractId: draft.id });
+    await read(await as(nora, `/contracts/${draft.id}/sign`, "POST", { signature: { fullName: "Nora Sin Contrato", password } }));
+    await read(await as(nora, `/courses/${planned[0].courseId}/sessions/${planned[0].id}/start`, "POST"));
     // The onboarding's agreement step is the contract, already signed.
-    const { onboarding } = await read<{ onboarding: { steps: { key: string; done: boolean }[] } }>(await as(lucia, "/onboarding"));
+    const { onboarding } = await read<{ onboarding: { steps: { key: string; done: boolean }[] } }>(await as(nora, "/onboarding"));
     expect(onboarding.steps.find(step => step.key === "agreement")).toMatchObject({ done: true });
   });
 
@@ -230,6 +236,7 @@ describe("DEC-046 contracts on the built Worker", () => {
     const accepted = await accept({ ...account, signature: { fullName: "Paula Contreras", accept: true } });
     expect(accepted.status).toBe(201);
     const paula = accepted.headers.get("set-cookie")!.split(";")[0];
+    await acceptPending(origin, paula, "Paula Contreras", account.password);
     const { contracts } = await read<{ contracts: Contract[] }>(await as(paula, "/me/contracts"));
     expect(contracts).toHaveLength(1);
     expect(contracts[0]).toMatchObject({ id: invited.invitation.contractId, status: "active", memberSignature: { name: "Paula Contreras" } });
