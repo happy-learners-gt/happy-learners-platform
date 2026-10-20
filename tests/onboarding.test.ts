@@ -152,10 +152,12 @@ describe("HL-168 ST-122 guided onboarding on the built Worker", () => {
     }
     expect((await as(cookie, "/onboarding/steps/whatever", "POST")).status).toBe(404);
     expect((await as(cookie, "/onboarding/steps/tour", "POST")).status).toBe(409);
-    // Without a published volunteer agreement that step does not apply to her.
-    expect([200, 404, 409]).toContain((await as(cookie, "/onboarding/steps/agreement", "POST")).status);
+    // DEC-046: the demonstration requires a contract, so the agreement step applies; it waits for the welcome.
+    const early = await as(cookie, "/onboarding/steps/agreement", "POST");
+    expect(early.status).toBe(409);
+    expect((await early.json()).code).toBe("ONBOARDING_ORDER");
     expect((await as(cookie, "/onboarding/steps/welcome", "GET")).status).toBe(405);
-    expect([200, 409]).toContain((await as(cookie, "/onboarding/steps/welcome", "POST")).status);
+    expect((await as(cookie, "/onboarding/steps/welcome", "POST")).status).toBe(200);
     current = await state(cookie);
     expect(current.status).toBe("in_progress");
     expect(current.next).toBe("profile");
@@ -168,7 +170,10 @@ describe("HL-168 ST-122 guided onboarding on the built Worker", () => {
     expect((await as(cookie, "/profile", "PUT", profile("Olga Onboarding", { contactEmail: "olga@ejemplo.org", specialties: ["Ciencias"] }))).status).toBe(200);
     current = await state(cookie);
     expect(current.profileGaps).toEqual([]);
-    if (current.next === "agreement") expect((await as(cookie, "/onboarding/steps/agreement", "POST")).status).toBe(200);
+    // She teaches no section, so the contract step is optional and can be left for later.
+    expect(current.next).toBe("agreement");
+    expect(current.steps.find(step => step.key === "agreement")).toMatchObject({ optional: true, done: false });
+    expect((await as(cookie, "/onboarding/steps/agreement", "POST")).status).toBe(200);
     expect((await state(cookie)).next).toBe("tour");
     expect(Array.isArray(current.courses) && Array.isArray(current.sections)).toBe(true);
     const done = await as(cookie, "/onboarding/steps/tour", "POST");

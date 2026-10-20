@@ -264,9 +264,14 @@ describe("ST-151 acuerdo de voluntariado ad honorem", () => {
     const planned = classes.find(item => item.status === "planned")!;
     expect(planned).toBeTruthy();
     const path = (item: ClassRow, action: string) => `/courses/${item.courseId}/sessions/${item.id}/${action}`;
-    const blocked = await call(educator, path(planned, "start"), "POST");
-    expect(blocked.status).toBe(403);
-    expect(await blocked.json()).toMatchObject({ code: "CONTRACT_REQUIRED" });
+    // Starting, taking the roll and completing a class all wait for the contract (the gate comes before the class state).
+    for (const [action, method, body] of [["start", "POST", undefined], ["attendance", "PUT", { marks: [] }], ["complete", "POST", undefined]] as const) {
+      const blocked = await call(educator, path(planned, action), method, body);
+      expect(blocked.status, action).toBe(403);
+      expect(await blocked.json()).toMatchObject({ code: "CONTRACT_REQUIRED" });
+    }
+    // Reading a class is not teaching it.
+    expect((await call(educator, `/courses/${planned.courseId}/sessions/${planned.id}`)).status).toBe(200);
     expect((await call(educator, `/courses/${planned.courseId}/sessions/${planned.id}`)).status).toBe(200);
     const { contract } = await read<{ contract: ContractView }>(await call(admin, "/contracts", "POST", { templateId: volunteerTemplateId, userId: created.member.id, startDate: today }), 201);
     expect(contract.templateVersion).toBe(2);
