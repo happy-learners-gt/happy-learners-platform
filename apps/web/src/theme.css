@@ -62,6 +62,8 @@
   --acrylic-filter: blur(30px) saturate(125%);
   --acrylic-stroke: color-mix(in srgb, var(--colorNeutralStroke2) 70%, transparent);
   --mica: radial-gradient(1200px 480px at 0% -10%, color-mix(in srgb, var(--brand-160) 70%, transparent), transparent 70%), var(--colorNeutralBackground2);
+  /* Pointer light (fluent/light.ts): a soft brand glow under the pointer; quiet enough to never read as a highlight. */
+  --light-glow: color-mix(in srgb, var(--brand-160) 75%, transparent);
 
   /* Typography — Segoe UI Variable (Windows 11), Segoe UI, then each platform's system face; Fluent type ramp. */
   --font-sans: "Segoe UI Variable Text", var(--fontFamilyBase);
@@ -105,8 +107,47 @@
   --color-primary-ink: var(--brand-130); --color-info: var(--brand-130);
   --color-primary-line: var(--brand-60);
   --gradient-brand-soft: linear-gradient(135deg, var(--brand-30) 0%, var(--colorNeutralBackground1) 100%);
-  --mica: radial-gradient(1200px 480px at 0% -10%, color-mix(in srgb, var(--brand-30) 60%, transparent), transparent 70%), var(--colorNeutralBackground2);
   color-scheme: dark;
+  /* Fluent's dark ramp is pure grey with white text and #666 borders: maximum contrast everywhere, which tires the
+     eye. The app's dark theme is a slightly cool, low-glare ramp instead. Text keeps AA on every surface
+     (ink 13.5:1, ink-soft 9.7:1, muted 6.2:1 on --color-surface), surfaces step up in lightness with elevation and
+     borders separate without outlining. Tints are the tone at low strength over the surface, never saturated fills. */
+  --color-canvas: #15171d;
+  --color-surface: #1c1f27;
+  --color-surface-muted: #22252f;
+  --color-surface-sunken: #12141a;
+  --color-surface-hover: #252935;
+  --color-surface-pressed: #2b2f3c;
+  --color-border: #2b2e39;
+  --color-border-control: #3d414f;
+  --color-border-strong: #7f8495;
+  --color-ink: #e7e8ee;
+  --color-ink-soft: #c3c6d1;
+  --color-muted: #9a9eac;
+  --color-placeholder: #858a9a;
+  --violet-soft: color-mix(in srgb, var(--brand-100) 18%, var(--color-surface));
+  --coral-soft: color-mix(in srgb, var(--coral-vivid) 14%, var(--color-surface));
+  --amber-soft: color-mix(in srgb, var(--amber-vivid) 14%, var(--color-surface));
+  --teal-soft: color-mix(in srgb, var(--teal-vivid) 14%, var(--color-surface));
+  --sky-soft: color-mix(in srgb, var(--sky-vivid) 14%, var(--color-surface));
+  --pink-soft: color-mix(in srgb, var(--pink-vivid) 14%, var(--color-surface));
+  --green-soft: color-mix(in srgb, var(--green-vivid) 14%, var(--color-surface));
+  --color-primary-soft: color-mix(in srgb, var(--brand-100) 18%, var(--color-surface));
+  --color-success-soft: color-mix(in srgb, var(--color-success) 14%, var(--color-surface));
+  --color-warning-soft: color-mix(in srgb, var(--color-warning) 14%, var(--color-surface));
+  --color-info-soft: color-mix(in srgb, var(--brand-100) 16%, var(--color-surface));
+  --color-danger-soft: color-mix(in srgb, var(--color-danger) 14%, var(--color-surface));
+  --color-neutral-soft: var(--color-surface-muted);
+  --gradient-brand-soft: linear-gradient(135deg, color-mix(in srgb, var(--brand-80) 22%, var(--color-surface)) 0%, var(--color-surface) 100%);
+  --acrylic-background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+  --acrylic-background-strong: color-mix(in srgb, var(--color-surface) 94%, transparent);
+  --acrylic-stroke: var(--color-border);
+  --mica: radial-gradient(1200px 480px at 0% -10%, color-mix(in srgb, var(--brand-60) 12%, transparent), transparent 70%), var(--color-canvas);
+  /* On dark surfaces the light ramp's pale steps glare; the glow is the brand at a whisper. */
+  --light-glow: color-mix(in srgb, var(--brand-100) 9%, transparent);
+  /* Shadows barely show on dark; a hairline highlight on top gives elevation instead. */
+  --shadow-xs: 0 1px 0 rgb(255 255 255 / .03), 0 1px 2px rgb(0 0 0 / .4);
+  --shadow-sm: 0 1px 0 rgb(255 255 255 / .03), 0 2px 6px rgb(0 0 0 / .35);
 }
 /* High contrast (ST-160): secondary text reads like primary text, every border is the accessible stroke, links are
    underlined and the focus ring is thicker. Works on light and dark alike. */
