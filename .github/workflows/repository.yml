@@ -3,8 +3,9 @@ name: Platform delivery
 on:
   pull_request:
   workflow_dispatch:
+  # Production is checked after every deployment; the daily run only confirms it is still serving (DEC-044 FinOps).
   schedule:
-    - cron: '17 * * * *'
+    - cron: '17 13 * * *'
   # Documentation does not reach the Worker: a docs-only commit keeps the deployed product SHA.
   push:
     branches: [main]
@@ -12,6 +13,11 @@ on:
 
 permissions:
   contents: read
+
+# A new push to a pull request replaces its unfinished run; runs on main are never cancelled.
+concurrency:
+  group: delivery-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   WRANGLER_SEND_METRICS: 'false'
@@ -31,7 +37,18 @@ jobs:
       - run: npm ci
       - run: ./scripts/verify
       - run: npx --no-install playwright install --with-deps chromium
-      - run: npm run test:e2e
+      # Desktop and mobile run at once, each against its own local server and new database, so the job takes about
+      # half as long and each server stays well inside the 30-sign-ins limit.
+      - name: E2E (desktop and mobile in parallel)
+        run: |
+          HL_E2E_PORT=8789 HL_E2E_RESULTS=.release-evidence/e2e-desktop.json npx --no-install playwright test --project=desktop > e2e-desktop.log 2>&1 & desktop=$!
+          HL_E2E_PORT=8790 HL_E2E_RESULTS=.release-evidence/e2e-mobile.json npx --no-install playwright test --project=mobile > e2e-mobile.log 2>&1 & mobile=$!
+          status=0
+          wait "$desktop" || status=1
+          wait "$mobile" || status=1
+          grep -v "^\[WebServer\]" e2e-desktop.log
+          grep -v "^\[WebServer\]" e2e-mobile.log
+          exit "$status"
       - uses: actions/upload-artifact@v4
         with:
           name: demo-${{ github.sha }}

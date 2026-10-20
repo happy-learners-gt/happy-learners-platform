@@ -14,7 +14,8 @@ const storage = external ? undefined : mkdtempSync(join(tmpdir(), "hl-e2e-"));
 export default defineConfig({
   testDir: "tests/e2e", timeout: 45000, retries: 0, workers: 1,
   ...(smoke ? { testMatch: "**/smoke.spec.ts" } : { testIgnore: "**/smoke.spec.ts" }),
-  reporter: [["list"], ["json", { outputFile: ".release-evidence/e2e-results.json" }]],
+  // CI runs desktop and mobile at once, each with its own server; HL_E2E_RESULTS keeps their evidence apart.
+  reporter: [["list"], ["json", { outputFile: process.env.HL_E2E_RESULTS || ".release-evidence/e2e-results.json" }]],
   use: { baseURL: external || localUrl, trace: "off", screenshot: "only-on-failure" },
   projects: [
     { name: "desktop", use: { browserName: "chromium", viewport: { width: 1365, height: 900 } } },
