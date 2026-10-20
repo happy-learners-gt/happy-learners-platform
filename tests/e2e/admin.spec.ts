@@ -58,7 +58,9 @@ test("sign-in errors, organization settings, roles, help, logout and 404", async
   await page.getByRole("menuitem", { name: "Cerrar sesión" }).click();
   await expect(page.getByRole("heading", { name: "Iniciar sesión" })).toBeVisible();
   expect(await page.evaluate(async () => (await fetch("/api/organization")).status)).toBe(401);
-  expect((await request.get("/api/route-that-does-not-exist")).status()).toBe(404);
+  // Through the page: the `request` connection has been idle since the first lines and the local server may have
+  // closed it, which Playwright reports as «socket hang up» instead of retrying.
+  expect(await page.evaluate(async () => (await fetch("/api/route-that-does-not-exist")).status)).toBe(404);
   expect(errors).toEqual([]);
 });
 

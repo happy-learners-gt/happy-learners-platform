@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { readFileSync } from "node:fs";
 import type { APIRequestContext, Page, TestInfo } from "@playwright/test";
 import { test, expect } from "./local-test";
-import { completeOnboarding, e2eName, origin, sessionToken, toast } from "./helpers";
+import { completeOnboarding, e2eName, invitedAccount, origin, sessionToken, toast } from "./helpers";
 
 const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 async function audit(page: Page, label: string) {
@@ -116,7 +116,8 @@ test("HL-15 ST-159: the person downloads their data, asks to close the account a
   const admin = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("admin-demo")}` } });
   const adminContext = await browser.newContext({ viewport: page.viewportSize() });
   try {
-    const person = await freshAccount(admin, info, "Cierre");
+    // Only the account is new here; its sign-in history is the other test's, so it does not spend a sign-in.
+    const person = await invitedAccount(admin, info, "Cierre", password);
     await useSession(page, person.session);
     await page.goto("/cuenta#datos");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Cuenta");

@@ -1,4 +1,4 @@
-import type { Page, TestInfo } from "@playwright/test";
+import type { APIRequestContext, Page, TestInfo } from "@playwright/test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,8 +11,11 @@ export const e2eName = (info: TestInfo, label: string) => `${E2E_PREFIX} ${label
 export const legacyContamination = /\b(?:desktop|mobile)-\d{13}$/;
 
 export const origin = `http://127.0.0.1:${Number(process.env.HL_E2E_PORT || 8789)}`;
-// The API allows 30 logins per client per day. Tests that do not exercise the login form reuse one server
-// session per account; the cache file survives worker restarts and is revalidated against the fresh server.
+// The API allows 30 sign-ins per client in a 15-minute window, and every local run comes from the same client:
+// a whole CI run (about 16 minutes) has to fit in about one window. Tests that do not exercise the login form reuse
+// one server session per account; the cache file survives worker restarts and is revalidated against the fresh
+// server, which on CI starts empty. A new account that only needs to work comes from `invitedAccount`, which does
+// not sign in. A full run spends 26 sign-ins (HL-15: v1.1.1 needed 32 and failed on CI); keep it well below 30.
 const cacheFile = join(tmpdir(), `hl-e2e-sessions-${new URL(origin).port}.json`);
 export async function sessionToken(username: string): Promise<string> {
   const cache: Record<string, string> = existsSync(cacheFile) ? JSON.parse(readFileSync(cacheFile, "utf8")) : {};
@@ -43,6 +46,28 @@ export async function completeOnboarding(session: string, specialty = "Pedagogí
   const state = (await (await call("/onboarding", "GET")).json()).onboarding as { next: string };
   if (state.next === "agreement") expect((await call("/onboarding/steps/agreement")).status).toBe(200);
   expect((await call("/onboarding/steps/tour")).status).toBe(200);
+}
+/**
+ * A new account of the fictional demo, ready to work, without spending the sign-in budget: administration invites
+ * it and the person accepts with their own password (a limit of its own), which opens the session. Terms another
+ * suite published are signed and the welcome is completed. For tests about the first sign-in, create the account
+ * with `/api/members` and its temporary password instead.
+ */
+export async function invitedAccount(admin: APIRequestContext, info: TestInfo, label: string, password: string, specialty?: string) {
+  // Usernames have at most 32 characters.
+  const name = e2eName(info, label), username = `e2e-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 10)}-${info.project.name[0]}${Date.now().toString(36)}`;
+  const invited = await admin.post("/api/invitations", { data: { email: `${username}@ejemplo.test`, displayName: name, role: "educator" } });
+  expect(invited.status(), await invited.text()).toBe(201);
+  const token = new URL((await invited.json() as { link: string }).link).pathname.split("/").pop();
+  const accepted = await fetch(`${origin}/api/invitations/accept/${token}`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ username, password }) });
+  expect(accepted.status, await accepted.clone().text()).toBe(201);
+  const { member } = await accepted.json() as { member: { id: string } };
+  const session = /hl_session=([^;]+)/.exec(accepted.headers.get("set-cookie") || "")![1];
+  const headers = { Origin: origin, "Content-Type": "application/json", Cookie: `hl_session=${session}` };
+  const pending = (await (await fetch(`${origin}/api/session`, { headers })).json()).pending as { id: string }[];
+  if (pending.length) expect((await fetch(`${origin}/api/legal/accept`, { method: "POST", headers, body: JSON.stringify({ documentIds: pending.map(item => item.id), signature: { fullName: name, password } }) })).status).toBe(200);
+  await completeOnboarding(session, specialty);
+  return { id: member.id, member, name, username, session };
 }
 /** Signs in through the form; only for tests about the login itself. */
 export async function signInWithForm(page: Page, username = "educador-demo", path = "/inicio") {

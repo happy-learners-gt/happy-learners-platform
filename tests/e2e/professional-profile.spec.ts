@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { test, expect } from "./local-test";
-import { completeOnboarding, e2eName, origin, sessionToken, toast } from "./helpers";
+import { e2eName, invitedAccount, origin, sessionToken, toast } from "./helpers";
 
 const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 async function audit(page: Page, label: string) {
@@ -20,14 +20,7 @@ test("HL-15 ST-154 ST-155 ST-156 ST-157: an educator completes and sends their p
   const adminContext = await browser.newContext({ viewport: page.viewportSize() || undefined });
   try {
     // A new educator of the fictional demo, who teaches a section with a student code.
-    const name = e2eName(info, "Perfil profesional"), username = `e2e-profesional-${info.project.name}-${Date.now().toString(36)}`;
-    const account = await admin.post("/api/members", { data: { displayName: name, username, role: "educator" } });
-    expect(account.status(), await account.text()).toBe(201);
-    const { member, temporaryPassword } = await account.json() as { member: { id: string }; temporaryPassword: string };
-    const login = await fetch(`${origin}/api/login`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ username, password: temporaryPassword }) });
-    const session = /hl_session=([^;]+)/.exec(login.headers.get("set-cookie") || "")![1];
-    expect((await fetch(`${origin}/api/account/password`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json", Cookie: `hl_session=${session}` }, body: JSON.stringify({ currentPassword: temporaryPassword, newPassword: "Perfil profesional 2026" }) })).status).toBe(200);
-    await completeOnboarding(session, "Ciencias naturales");
+    const { member, name, session } = await invitedAccount(admin, info, "Perfil profesional", "Perfil profesional 2026", "Ciencias naturales");
     const created = await admin.post("/api/courses", { data: { title: e2eName(info, "Curso con perfil"), objective: "Conocer a quien enseña.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", area: "011", settings: { attendance: true }, programId: null, leadId: member.id } });
     expect(created.status(), await created.text()).toBe(201);
     const course = `/api/courses/${(await created.json()).id}`;

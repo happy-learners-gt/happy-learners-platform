@@ -1,5 +1,9 @@
 # Changelog
 
+## Sin publicar
+
+- Pruebas E2E: una corrida completa vuelve a caber en el límite de 30 inicios de sesión cada 15 minutos (usaba 32 desde la 1.1.1 y fallaba en CI al renovar la sesión en el editor); las cuentas nuevas que solo necesitan funcionar entran aceptando una invitación (`invitedAccount`), y la comprobación del 404 de la API ya no reutiliza una conexión inactiva («socket hang up»).
+
 ## 1.1.1 — 2026-10-16
 
 Perfil profesional, cuenta y preferencias de REL-005 (SPR-003; DEC-045). Migraciones 0042 a 0044, acumulativas.

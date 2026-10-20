@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { test, expect } from "./local-test";
-import { completeOnboarding, e2eName, origin, sessionToken, signIn, toast } from "./helpers";
+import { e2eName, invitedAccount, origin, sessionToken, signIn, toast } from "./helpers";
 
 const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 async function audit(page: Page, label: string) {
@@ -18,17 +18,9 @@ test("HL-15 ST-149 ST-150: an educator edits their profile with a photo, adminis
   const admin = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("admin-demo")}` } });
   const adminContext = await browser.newContext();
   try {
-    // A new educator of the fictional demo, signed in with the session of their first sign-in.
-    const name = e2eName(info, "Perfil"), username = `e2e-perfil-${info.project.name}-${Date.now().toString(36)}`;
-    const account = await admin.post("/api/members", { data: { displayName: name, username, role: "educator" } });
-    expect(account.status(), await account.text()).toBe(201);
-    const { member, temporaryPassword } = await account.json() as { member: { id: string }; temporaryPassword: string };
-    const login = await fetch(`${origin}/api/login`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ username, password: temporaryPassword }) });
-    const session = /hl_session=([^;]+)/.exec(login.headers.get("set-cookie") || "")![1];
-    const changed = await fetch(`${origin}/api/account/password`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json", Cookie: `hl_session=${session}` }, body: JSON.stringify({ currentPassword: temporaryPassword, newPassword: "Perfil de prueba 2026" }) });
-    expect(changed.status).toBe(200);
+    // A new educator of the fictional demo, signed in with the session of the accepted invitation.
     // ST-122: the welcome is completed with a minimal profile; this test then edits it from «Mi perfil».
-    await completeOnboarding(session);
+    const { member, name, session } = await invitedAccount(admin, info, "Perfil", "Perfil de prueba 2026");
     await page.context().addCookies([{ name: "hl_session", value: session, url: origin, httpOnly: true, sameSite: "Strict" }]);
 
     // ST-149 criterion 1: the person edits their profile, photo included.
