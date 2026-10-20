@@ -592,3 +592,12 @@ export type ContractOffer = Pick<Contract, "id" | "engagement" | "title" | "body
 export interface ContractSignatureRecord {
   contractId: string; organizationId: string; party: "organization" | "member"; userId: string; username: string; signedName: string; documentSha256: string; signedAt: string;
 }
+/** The downloadable receipt's data block: the signed document, both signatures and their fingerprints. */
+export interface ContractReceiptRecord {
+  contractId: string; organizationId: string; templateVersionId: string; engagement: ContractEngagement; title: string; bodyText: string;
+  terms: ContractTerms; partyName: string; partyEmail: string; startDate: string; endDate: string; documentSha256: string;
+  organizationSignature: ContractSignatureRecord & { signatureSha256: string };
+  memberSignature: (ContractSignatureRecord & { signatureSha256: string }) | null;
+}
+/** The result of verifying a contract receipt: the same four outcomes as a legal signature. */
+export interface ContractVerification { status: SignatureCheck; message: string; contract?: Contract; mismatches?: string[] }

@@ -1,7 +1,7 @@
-import type { Contract, ContractEngagement, ContractOffer, ContractSignatureRecord, ContractTemplate, ContractTemplateVersion, ContractTermField, ContractTerms, Member, RichTextDocument } from "@happy-learners/contracts";
+import type { Contract, ContractEngagement, ContractOffer, ContractReceiptRecord, ContractSignatureRecord, ContractTemplate, ContractTemplateVersion, ContractTermField, ContractTerms, ContractVerification, Member, RichTextDocument } from "@happy-learners/contracts";
 import {
-  closeReasonInput, contractCanonical, contractDatesInput, contractInForce, contractPhase, contractSignatureCanonical, contractSignedNameInput, contractTemplateInput,
-  contractTermsFor, contractValues, contractVersionInput, engagementLabels, localDay, mergeContract, record, richPlainText,
+  closeReasonInput, compensationSummary, contractCanonical, contractDatesInput, contractInForce, contractPhase, contractSignatureCanonical, contractSignedNameInput, contractTemplateInput,
+  contractTermsFor, contractValues, contractVersionInput, engagementLabels, localDay, locationLabels, mergeContract, record, richPlainText,
 } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
 import { digest } from "./auth";
@@ -25,9 +25,11 @@ export function contractMethods(path: string): string[] | null {
   if (new RegExp(`^/api/contract-templates/${idPattern}/draft$`).test(path)) return ["PUT"];
   if (new RegExp(`^/api/contract-templates/${idPattern}/publish$`).test(path)) return ["POST"];
   if (path === "/api/contracts") return ["GET", "POST"];
+  if (path === "/api/contracts/verify") return ["POST"];
   if (path === "/api/contract-settings") return ["GET", "PUT"];
   if (path === "/api/me/contracts") return ["GET"];
   if (new RegExp(`^/api/contracts/${idPattern}$`).test(path)) return ["GET", "PUT", "DELETE"];
+  if (new RegExp(`^/api/contracts/${idPattern}/receipt$`).test(path)) return ["GET"];
   if (new RegExp(`^/api/contracts/${idPattern}/(send|sign|decline|void|terminate|amend)$`).test(path)) return ["POST"];
   return null;
 }
@@ -115,6 +117,10 @@ export async function contracts(path: string, method: string, input: unknown, cu
   const today = todayIn(organization.timezone), now = new Date().toISOString(), admin = current.role === "admin";
 
   if (path === "/api/me/contracts") return reply({ contracts: await contractsOf(db, current.organizationId, current.id, today), required: !!organization.required });
+  if (path === "/api/contracts/verify") {
+    if (!admin) return forbidden();
+    return reply(await verifyContract(db, current.organizationId, input, today));
+  }
 
   if (path === "/api/contract-settings") {
     if (!admin) return forbidden();
@@ -226,6 +232,11 @@ export async function contracts(path: string, method: string, input: unknown, cu
     await db.prepare("UPDATE contracts SET template_version_id=?,engagement=?,title=?,body_json=?,body_text=?,terms_json=?,start_date=?,end_date=?,updated_at=? WHERE id=? AND status='draft'")
       .bind(prepared.versionId, prepared.engagement, prepared.title, JSON.stringify(prepared.body), prepared.bodyText, JSON.stringify(prepared.terms), prepared.startDate, prepared.endDate, now, id).run();
     return reply({ contract: await contractById(db, current.organizationId, id, today) });
+  }
+  if (action === "receipt") {
+    const receipt = await receiptRecord(db, current.organizationId, contract);
+    if (!receipt) return missing();
+    return new Response(receiptHtml(receipt), { headers: { "Content-Type": "text/html; charset=utf-8", "Content-Disposition": `attachment; filename="constancia-${contract.id}.html"` } });
   }
 
   const value = record(input);
@@ -339,6 +350,136 @@ export async function memberSigns(db: Database, organizationId: string, contract
     db.prepare("UPDATE contracts SET user_id=COALESCE(user_id,?),status='active',member_signed_name=?,member_signed_at=?,member_signature_sha256=?,updated_at=? WHERE id=? AND status='sent'").bind(userId, signedName, now, memberSignature, now, contract.id),
     ...(contract.supersedesId ? [db.prepare("UPDATE contracts SET status='superseded',closed_at=?,closed_by=?,close_reason='Reemplazado por una enmienda firmada',updated_at=? WHERE id=? AND status='active'").bind(now, userId, now, contract.supersedesId)] : []),
   ];
+}
+
+async function usernameOf(db: Database, id: string | null | undefined) {
+  if (!id) return null;
+  return (await db.prepare("SELECT username FROM users WHERE id=?").bind(id).first<{ username: string }>())?.username || null;
+}
+async function receiptRecord(db: Database, organizationId: string, contract: Contract): Promise<ContractReceiptRecord | null> {
+  if (!contract.documentSha256 || !contract.organizationSignature) return null;
+  const organizationUsername = await usernameOf(db, contract.organizationSignature.signerId);
+  if (!organizationUsername) return null;
+  const organizationSignature = {
+    contractId: contract.id, organizationId, party: "organization" as const, userId: contract.organizationSignature.signerId,
+    username: organizationUsername, signedName: contract.organizationSignature.name, documentSha256: contract.documentSha256, signedAt: contract.organizationSignature.signedAt,
+    signatureSha256: contract.organizationSignature.signatureSha256,
+  };
+  const memberUsername = await usernameOf(db, contract.userId);
+  const memberSignature = contract.memberSignature && contract.userId && memberUsername ? {
+    contractId: contract.id, organizationId, party: "member" as const, userId: contract.userId, username: memberUsername,
+    signedName: contract.memberSignature.name, documentSha256: contract.documentSha256, signedAt: contract.memberSignature.signedAt,
+    signatureSha256: contract.memberSignature.signatureSha256,
+  } : null;
+  return {
+    contractId: contract.id, organizationId, templateVersionId: contract.templateVersionId, engagement: contract.engagement, title: contract.title,
+    bodyText: contract.bodyText, terms: contract.terms, partyName: contract.partyName, partyEmail: contract.partyEmail ?? "",
+    startDate: contract.startDate, endDate: contract.endDate ?? "indefinite", documentSha256: contract.documentSha256, organizationSignature, memberSignature,
+  };
+}
+const signatureFields = ["contractId", "organizationId", "party", "userId", "username", "signedName", "documentSha256", "signedAt"] as const;
+const receiptDocumentFields = ["contractId", "organizationId", "templateVersionId", "engagement", "title", "bodyText", "partyName", "partyEmail", "startDate", "endDate"] as const;
+const recordOf = (signature: ContractSignatureRecord): ContractSignatureRecord => ({
+  contractId: signature.contractId, organizationId: signature.organizationId, party: signature.party, userId: signature.userId,
+  username: signature.username, signedName: signature.signedName, documentSha256: signature.documentSha256, signedAt: signature.signedAt,
+});
+function signatureMismatches(expected: ContractSignatureRecord & { signatureSha256: string }, received: Record<string, unknown> | null) {
+  if (!received) return ["missing"];
+  return [
+    ...signatureFields.filter(field => received[field] !== expected[field]),
+    ...(received.signatureSha256 !== expected.signatureSha256 ? ["signatureSha256"] : []),
+  ];
+}
+
+/**
+ * Administration verifies a contract by its id or by the fields of a downloaded receipt. The document fingerprint is
+ * recomputed from the stored copy and each signature's from its record; a receipt is compared field by field.
+ */
+async function verifyContract(db: Database, organizationId: string, input: unknown, today: string): Promise<ContractVerification> {
+  const value = record(input), receipt = record(value?.receipt);
+  const id = receipt ? receipt.contractId : value?.contractId;
+  const unknown: ContractVerification = { status: "unknown", message: "No hay ningún contrato firmado con ese identificador en esta organización." };
+  if (typeof id !== "string" || !/^contract-[a-z0-9-]{1,80}$/.test(id.trim())) return unknown;
+  const contract = await contractById(db, organizationId, id.trim(), today);
+  const expected = contract ? await receiptRecord(db, organizationId, contract) : null;
+  if (!contract || !expected) return unknown;
+  const documentSha256 = await digest(contractCanonical({
+    id: contract.id, organizationId, templateVersionId: contract.templateVersionId, engagement: contract.engagement, title: contract.title,
+    bodyText: contract.bodyText, terms: contract.terms, partyName: contract.partyName, partyEmail: contract.partyEmail, startDate: contract.startDate, endDate: contract.endDate,
+  }));
+  if (documentSha256 !== contract.documentSha256)
+    return { status: "document_mismatch", message: "El documento guardado ya no coincide con la versión que se firmó: su huella SHA-256 es distinta.", contract, mismatches: ["documentSha256"] };
+  if (receipt && receipt.documentSha256 !== contract.documentSha256)
+    return { status: "document_mismatch", message: "La constancia no corresponde al documento firmado: la huella SHA-256 del documento no coincide.", contract, mismatches: ["documentSha256"] };
+  const organizationHash = await digest(contractSignatureCanonical(recordOf(expected.organizationSignature)));
+  if (organizationHash !== expected.organizationSignature.signatureSha256)
+    return { status: "receipt_mismatch", message: "El registro de la firma de la organización fue alterado: su huella no coincide.", contract, mismatches: ["organizationSignature"] };
+  if (expected.memberSignature) {
+    const memberHash = await digest(contractSignatureCanonical(recordOf(expected.memberSignature)));
+    if (memberHash !== expected.memberSignature.signatureSha256)
+      return { status: "receipt_mismatch", message: "El registro de la firma de la persona fue alterado: su huella no coincide.", contract, mismatches: ["memberSignature"] };
+  }
+  if (receipt) {
+    const mismatches: string[] = [];
+    for (const field of receiptDocumentFields) if (receipt[field] !== expected[field]) mismatches.push(field);
+    if (JSON.stringify(receipt.terms) !== JSON.stringify(expected.terms)) mismatches.push("terms");
+    mismatches.push(...signatureMismatches(expected.organizationSignature, record(receipt.organizationSignature)).map(field => `organizationSignature.${field}`));
+    if (expected.memberSignature || receipt.memberSignature) {
+      mismatches.push(...(expected.memberSignature
+        ? signatureMismatches(expected.memberSignature, record(receipt.memberSignature))
+        : ["missing"]).map(field => `memberSignature.${field}`));
+    }
+    if (mismatches.length) return { status: "receipt_mismatch", message: `La constancia fue modificada: no coincide en ${mismatches.join(", ")}.`, contract, mismatches };
+  }
+  return { status: "valid", message: `Contrato válido: ${contract.partyName} y la organización firmaron «${contract.title}», y el documento coincide con la versión firmada.`, contract };
+}
+
+const escape = (value: string | number) => String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
+function termsRows(terms: ContractTerms): [string, string][] {
+  const rows: [string, string][] = [["Puesto", terms.role], ["Remuneración", compensationSummary(terms)], ["Plazo", terms.term.kind === "indefinite" ? "Indefinido" : terms.term.months ? `${terms.term.months} meses` : "Plazo fijo"]];
+  if (terms.weeklyHours !== undefined) rows.push(["Horas semanales", String(terms.weeklyHours)]);
+  if (terms.noticeDays !== undefined) rows.push(["Días de preaviso", String(terms.noticeDays)]);
+  if (terms.probationDays !== undefined) rows.push(["Periodo de prueba", String(terms.probationDays)]);
+  if (terms.location) rows.push(["Modalidad", locationLabels[terms.location]]);
+  if (terms.notes) rows.push(["Notas", terms.notes]);
+  return rows;
+}
+
+/**
+ * The downloadable receipt ("constancia"): a self-contained, printable HTML page with the document, the terms, both
+ * signatures and their fingerprints, and the canonical JSON administration's verification reads.
+ */
+export function receiptHtml(receipt: ContractReceiptRecord): string {
+  const data = JSON.stringify(receipt).replace(/</g, "\\u003c");
+  const org = receipt.organizationSignature, member = receipt.memberSignature;
+  const rows: [string, string | number][] = [
+    ["Identificador del contrato", receipt.contractId], ["Organización", receipt.organizationId], ["Documento", receipt.title],
+    ["Tipo de relación", engagementLabels[receipt.engagement]], ["Persona", `${receipt.partyName}${receipt.partyEmail ? ` (${receipt.partyEmail})` : ""}`],
+    ["Inicio", receipt.startDate], ["Fin", receipt.endDate === "indefinite" ? "Indefinido" : receipt.endDate],
+    ["Huella SHA-256 del documento", receipt.documentSha256],
+    ["Firma de la organización", `${org.signedName} · ${org.signedAt}`], ["Huella SHA-256 de la organización", org.signatureSha256],
+    ["Firma de la persona", member ? `${member.signedName} · ${member.signedAt}` : "Pendiente de firma"],
+    ...(member ? [["Huella SHA-256 de la persona", member.signatureSha256] as [string, string]] : []),
+  ];
+  return `<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Constancia de contrato · ${escape(receipt.contractId)}</title>
+<style>body{font:16px/1.5 system-ui,sans-serif;color:#1b1b1b;max-width:48rem;margin:2rem auto;padding:0 1rem}th{text-align:left;vertical-align:top;padding:.25rem 1rem .25rem 0}td{word-break:break-all}pre,code{white-space:pre-wrap;word-break:break-word;background:#f3f3f3;padding:.1rem .25rem}.text{border:1px solid #ccc;padding:0 1rem}</style></head>
+<body><main>
+<h1>Constancia de contrato</h1>
+<p>${escape(receipt.partyName)} y la organización firmaron electrónicamente «${escape(receipt.title)}» confirmando su identidad con la contraseña de su cuenta.</p>
+<table><tbody>${rows.map(([label, value]) => `<tr><th scope="row">${escape(label)}</th><td>${escape(value)}</td></tr>`).join("")}</tbody></table>
+<h2>Condiciones</h2>
+<table><tbody>${termsRows(receipt.terms).map(([label, value]) => `<tr><th scope="row">${escape(label)}</th><td>${escape(value)}</td></tr>`).join("")}</tbody></table>
+<h2>Cómo verificar esta constancia</h2>
+<ol><li>Administración abre Contratos y políticas › Contratos y carga este archivo o escribe el identificador del contrato; la plataforma recalcula las huellas e indica si el contrato es válido, si el documento no coincide o si la constancia fue modificada.</li>
+<li>La huella del documento es el SHA-256 (hexadecimal) del JSON canónico —claves en orden alfabético, sin espacios— de las partes, el texto, las condiciones y las fechas. Un plazo nulo se guarda como <code>"indefinite"</code> y un correo nulo como <code>""</code>.</li>
+<li>La huella de cada firma es el SHA-256 del JSON canónico de <code>{"contractId","documentSha256","organizationId","party","signedAt","signedName","userId","username"}</code>.</li></ol>
+<p>Firma electrónica simple (DEC-046): cuenta, contraseña, nombre escrito, fecha y huella SHA-256 del documento. No es una firma electrónica avanzada con certificado de un prestador acreditado.</p>
+<h2>Texto firmado</h2>
+<section class="text" aria-label="Texto firmado"><h3>${escape(receipt.title)}</h3>${receipt.bodyText.split(/\n{2,}/).map(paragraph => `<p>${escape(paragraph)}</p>`).join("")}</section>
+<script type="application/json" id="hl-constancia">${data}</script>
+</main></body></html>
+`;
 }
 
 /** The contract an invitation offers, as the invitee reviews it before creating the account. */

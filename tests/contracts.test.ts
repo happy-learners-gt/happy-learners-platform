@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,11 +7,13 @@ import { createServer } from "node:net";
 import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Contract, ContractTemplate, ContractTerms, RichTextDocument } from "../packages/contracts/src/index";
+import type { Contract, ContractReceiptRecord, ContractTemplate, ContractTerms, ContractVerification, RichTextDocument } from "../packages/contracts/src/index";
 import {
-  compensationAllowed, compensationSummary, contractCanonical, contractDatesInput, contractInForce, contractPhase, contractTermsFor, contractTermsInput, contractVersionInput,
+  compensationAllowed, compensationSummary, contractCanonical, contractDatesInput, contractInForce, contractPhase, contractSignatureCanonical, contractTermsFor, contractTermsInput, contractVersionInput,
   mergeContract, richPlainText,
 } from "../packages/domain/src/index";
+
+const sha256 = (text: string) => createHash("sha256").update(text, "utf8").digest("hex");
 
 // DEC-046: contracts agnostic to the kind of engagement. Domain rules first, then the whole flow on the built Worker:
 // templates and versions, a contract prepared, signed by the organization and by the person, the teaching gate, an
@@ -271,5 +274,45 @@ describe("DEC-046 contracts on the built Worker", () => {
     expect(documents.find(item => item.kind === "terms")).toMatchObject({ status: "published", bodyJson: body, body: "Primera cláusula de los términos de uso.\n\nSegunda cláusula con más detalle.", effectiveAt: tomorrow });
     // Until its effective date, nobody is asked to accept it.
     expect((await read<{ pending: unknown[] }>(await as(await signIn("tomas.aguilar"), "/session"))).pending).toEqual([]);
+  });
+
+  it("the signer and administration download the receipt; administration verifies the fingerprints", async () => {
+    const lucia = await signIn("lucia.herrera");
+    const { contracts } = await read<{ contracts: Contract[] }>(await as(lucia, "/me/contracts"));
+    const mine = contracts.find(item => item.status === "active" && item.memberSignature && item.documentSha256)!;
+    const own = await as(lucia, `/contracts/${mine.id}/receipt`);
+    expect(own.status).toBe(200);
+    expect(own.headers.get("content-type")).toContain("text/html");
+    expect(own.headers.get("content-disposition")).toBe(`attachment; filename="constancia-${mine.id}.html"`);
+    const html = await own.text();
+    for (const text of ["Constancia de contrato", mine.title, mine.partyName, mine.documentSha256!, mine.organizationSignature!.signatureSha256, mine.memberSignature!.signatureSha256, "Firma electrónica simple (DEC-046)"]) expect(html).toContain(text);
+    expect(html).not.toContain(password);
+    const receipt = JSON.parse(/<script type="application\/json" id="hl-constancia">([^<]*)<\/script>/.exec(html)![1]) as ContractReceiptRecord;
+    expect(receipt.documentSha256).toBe(mine.documentSha256);
+    expect(receipt.organizationSignature.signatureSha256).toBe(sha256(contractSignatureCanonical({
+      contractId: receipt.contractId, organizationId: receipt.organizationId, party: "organization", userId: receipt.organizationSignature.userId,
+      username: receipt.organizationSignature.username, signedName: receipt.organizationSignature.signedName, documentSha256: receipt.documentSha256, signedAt: receipt.organizationSignature.signedAt,
+    })));
+    expect(receipt.memberSignature!.signatureSha256).toBe(sha256(contractSignatureCanonical({
+      contractId: receipt.contractId, organizationId: receipt.organizationId, party: "member", userId: receipt.memberSignature!.userId,
+      username: receipt.memberSignature!.username, signedName: receipt.memberSignature!.signedName, documentSha256: receipt.documentSha256, signedAt: receipt.memberSignature!.signedAt,
+    })));
+    expect((await as(admin, `/contracts/${mine.id}/receipt`)).status).toBe(200);
+    expect((await as(await signIn("sofia.castillo"), `/contracts/${mine.id}/receipt`)).status).toBe(404);
+    const { members } = await read<{ members: { id: string; username: string }[] }>(await as(admin, "/members"));
+    const draft = (await read<{ contract: Contract }>(await as(admin, "/contracts", "POST", { templateId: volunteerTemplate.id, userId: members.find(item => item.username === "sofia.castillo")!.id, startDate: today }), 201)).contract;
+    expect((await as(admin, `/contracts/${draft.id}/receipt`)).status).toBe(404);
+
+    const verified = async (body: unknown) => read<ContractVerification>(await as(admin, "/contracts/verify", "POST", body));
+    expect((await verified({ contractId: mine.id })).status).toBe("valid");
+    expect((await verified({ receipt })).status).toBe("valid");
+    expect((await verified({ receipt: { ...receipt, documentSha256: sha256("otro documento") } }))).toMatchObject({ status: "document_mismatch", mismatches: ["documentSha256"] });
+    const renamed = await verified({ receipt: { ...receipt, organizationSignature: { ...receipt.organizationSignature, signedName: "Otra Persona" } } });
+    expect(renamed.status).toBe("receipt_mismatch");
+    expect(renamed.mismatches).toContain("organizationSignature.signedName");
+    expect((await verified({ receipt: { ...receipt, organizationSignature: { ...receipt.organizationSignature, signatureSha256: "0".repeat(64) } } })).status).toBe("receipt_mismatch");
+    expect((await verified({ contractId: "contract-00000000-0000-0000-0000-000000000000" })).status).toBe("unknown");
+    expect((await verified({ contractId: "<script>" })).status).toBe("unknown");
+    expect((await as(lucia, "/contracts/verify", "POST", { contractId: mine.id })).status).toBe(403);
   });
 });
