@@ -16,7 +16,8 @@ async function invite(page: Page, email: string, name: string, role: "educator" 
   await dialog.getByLabel("Correo", { exact: true }).fill(email);
   await dialog.getByLabel("Nombre", { exact: true }).fill(name);
   await dialog.getByLabel("Rol", { exact: true }).selectOption(role);
-  await dialog.getByRole("button", { name: "Enviar invitación" }).click();
+  await dialog.getByRole("button", { name: "Continuar" }).click();
+  await dialog.getByRole("button", { name: "Enviar sin contrato" }).click();
   const result = page.getByRole("dialog", { name: "Invitación creada" });
   // Local runs have no mail provider: the message stays in the outbox and the link is the way to share it.
   await expect(result).toContainText("el envío no está configurado");
