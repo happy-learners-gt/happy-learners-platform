@@ -54,29 +54,31 @@ function OrganizationForm() {
     finally { setBusy(false); }
   }
   return <>
-    <PageHeader title="Organización" description="Nombre, zona horaria, formato regional y calendario de días sin clase del espacio compartido."/>
-    <form className="form-card reading" onSubmit={save} onChange={() => setDirty(true)}>
+    <PageHeader title="Organización" description="Nombre, zona, formato regional, días sin clase y respaldo."/>
+    <div className="form-sheet account-cards">
+    <form className="panel" onSubmit={save} onChange={() => setDirty(true)}>
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
       <fieldset disabled={busy} className="stack">
-        <Field label="Nombre de la organización" hint="En la demostración usa un nombre ficticio."><input name="name" required minLength={3} maxLength={80} defaultValue={organization?.name || ""}/></Field>
-        <Field label="Zona horaria" hint={`Hora local: ${new Intl.DateTimeFormat(currentRegional().locale, { timeZone: zone, hour: "numeric", minute: "2-digit", hourCycle: currentRegional().hourCycle }).format(new Date())} (${utcOffset(zone)}). El día de hoy y las fechas de las clases se calculan en esta zona; es también la zona de quien no elige otra en sus preferencias.`}>
-          <select name="timezone" value={zone} onChange={event => setZone(event.target.value)}>
-            {zones.map(group => <optgroup key={group.region} label={group.region}>{group.zones.map(item => <option key={item.id} value={item.id}>{item.id} ({item.offset})</option>)}</optgroup>)}
-          </select>
-        </Field>
-        <Field label="Formato regional" hint="Cómo se escriben fechas, horas y números para quien no elige otro formato en sus preferencias.">
-          <select name="locale" defaultValue={organization?.locale || "es"}>
-            {[...new Set([organization?.locale || "es", ...suggestedLocales])].filter(tag => { try { return Intl.DateTimeFormat.supportedLocalesOf([tag]).length > 0; } catch { return false; } }).map(tag => <option key={tag} value={tag}>{localeLabel(tag)}</option>)}
-          </select>
-        </Field>
+        <div className="form-grid-12">
+          <div className="form-span-12"><Field label="Nombre de la organización" hint="En la demostración usa un nombre ficticio."><input name="name" required minLength={3} maxLength={80} defaultValue={organization?.name || ""}/></Field></div>
+          <div className="form-span-4"><Field label="Zona horaria" hint={`Hora local: ${new Intl.DateTimeFormat(currentRegional().locale, { timeZone: zone, hour: "numeric", minute: "2-digit", hourCycle: currentRegional().hourCycle }).format(new Date())} (${utcOffset(zone)}).`}>
+            <select name="timezone" value={zone} onChange={event => setZone(event.target.value)}>
+              {zones.map(group => <optgroup key={group.region} label={group.region}>{group.zones.map(item => <option key={item.id} value={item.id}>{item.id} ({item.offset})</option>)}</optgroup>)}
+            </select>
+          </Field></div>
+          <div className="form-span-4"><Field label="Formato regional" hint="Fechas, horas y números de quien no elige otro formato.">
+            <select name="locale" defaultValue={organization?.locale || "es"}>
+              {[...new Set([organization?.locale || "es", ...suggestedLocales])].filter(tag => { try { return Intl.DateTimeFormat.supportedLocalesOf([tag]).length > 0; } catch { return false; } }).map(tag => <option key={tag} value={tag}>{localeLabel(tag)}</option>)}
+            </select>
+          </Field></div>
+        </div>
         <div className="form-actions"><button className="button primary">{busy ? "Guardando…" : "Guardar organización"}</button></div>
       </fieldset>
     </form>
-    <div className="reading"><DaysOff writable/></div>
-    <div className="reading">
-      <Section title="Respaldo" action={<a className="button secondary small" href="/api/organization/backup" download><Icon name="download" size={16}/>Descargar respaldo</a>}>
-        <p className="muted">Una copia en JSON de los cursos, las lecciones, las secciones, el calendario y los registros de la organización. No incluye contraseñas, sesiones ni el contenido de los documentos subidos. Guárdala en un lugar privado: contiene los nombres de los estudiantes.</p>
-      </Section>
+    <DaysOff writable/>
+    <Section title="Respaldo" action={<a className="button secondary small" href="/api/organization/backup" download><Icon name="download" size={16}/>Descargar respaldo</a>}>
+      <p className="muted">Una copia en JSON de los cursos, las lecciones, las secciones, el calendario y los registros de la organización. No incluye contraseñas, sesiones ni el contenido de los documentos subidos. Guárdala en un lugar privado: contiene los nombres de los estudiantes.</p>
+    </Section>
     </div>
   </>;
 }
