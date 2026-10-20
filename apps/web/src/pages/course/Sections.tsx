@@ -209,7 +209,7 @@ function ConflictDialog({ section, conflicts, busy, onClose, onConfirm }: { sect
   const [reason, setReason] = useState("");
   const names = [...new Set(conflicts.map(conflict => conflict.name))];
   const overlaps = conflicts.some(conflict => conflict.kind !== "availability"), outside = conflicts.some(conflict => conflict.kind === "availability");
-  const headline = overlaps && outside ? "tienen clases que chocan con otra sección o quedan fuera de su disponibilidad."
+  const headline = overlaps && outside ? `${names.length === 1 ? "tiene" : "tienen"} clases que chocan con otra sección o quedan fuera de su disponibilidad.`
     : outside ? `${names.length === 1 ? "tiene" : "tienen"} clases fuera de la disponibilidad que ${names.length === 1 ? "declaró" : "declararon"}.`
     : `ya ${names.length === 1 ? "imparte" : "imparten"} otra sección a la misma hora.`;
   return <Modal title={outside && !overlaps ? "Fuera de su disponibilidad" : "Choque de horario"} onClose={onClose}>
