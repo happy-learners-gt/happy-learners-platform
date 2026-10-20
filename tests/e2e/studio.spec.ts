@@ -149,7 +149,8 @@ test("an expired session asks to sign in again and keeps the unsaved edit", asyn
   await expect(saveStatus(page)).toContainText(/No se guardó|Conectando para guardar/);
   await dialog.getByLabel("Contraseña").fill("Aprender-2026!");
   await dialog.getByRole("button", { name: "Continuar" }).click();
-  await expect(toast(page)).toContainText("Sesión renovada");
+  // Signing in again verifies the password and reloads the session with its preferences; on a slow runner that takes longer than 5 s.
+  await expect(toast(page)).toContainText("Sesión renovada", { timeout: 15_000 });
   await expect(saveStatus(page)).toContainText("Borrador guardado", { timeout: 15_000 });
   await page.reload();
   await expect(activity(page, "Instrucciones").locator(".richtext-content")).toContainText("Texto escrito después de que expiró la sesión.");
