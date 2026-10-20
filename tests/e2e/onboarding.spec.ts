@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { test, expect } from "./local-test";
-import { e2eName, sessionToken, signIn, toast } from "./helpers";
+import { e2eName, expectRecentActivity, sessionToken, signIn, toast } from "./helpers";
 
 // ST-122 (HL-168). The terms and privacy are published in the fictional external organization, like tests/e2e/legal.spec.ts,
 // so no other suite is gated by them.
@@ -103,6 +103,6 @@ test("HL-168 ST-122: a new account changes its password, signs the terms, comple
     await page.getByLabel("Incorporación").selectOption("complete");
     await expect(row).toContainText("Completa");
     await audit(page, "educadores con incorporación");
-    await expect(page.locator(".activity-feed").first()).toContainText("completó su incorporación");
+    await expectRecentActivity(page, "completó su incorporación");
   } finally { await admin.dispose(); }
 });

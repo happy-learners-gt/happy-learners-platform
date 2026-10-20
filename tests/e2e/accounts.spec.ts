@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { test, expect } from "./local-test";
-import { e2eName, signIn, toast } from "./helpers";
+import { e2eName, expectRecentActivity, signIn, toast } from "./helpers";
 
 const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 async function audit(page: Page, label: string) {
@@ -34,7 +34,7 @@ test("HL-137 ST-093: administration creates an account, its first sign-in requir
   const row = page.getByRole("row", { name: new RegExp(name) });
   await expect(row).toContainText(`@${username}`);
   await expect(row).toContainText("Contraseña temporal");
-  await expect(page.locator(".activity-feed").first()).toContainText(`creó la cuenta de ${name}`);
+  await expectRecentActivity(page, `creó la cuenta de ${name}`);
 
   // First sign-in: the temporary password leads to "Cambia tu contraseña" and nothing else.
   const context = await browser.newContext({ viewport: page.viewportSize() });
@@ -65,14 +65,14 @@ test("HL-137 ST-093: administration creates an account, its first sign-in requir
   const again = (await dialog.getByLabel("Contraseña temporal").textContent())!.trim();
   expect(again).not.toBe(temporary);
   await dialog.getByRole("button", { name: "Listo, ya la guardé" }).click();
-  await expect(page.locator(".activity-feed").first()).toContainText(`restableció la contraseña de ${name}`);
+  await expectRecentActivity(page, `restableció la contraseña de ${name}`);
   expect(await educator.evaluate(async () => (await fetch("/api/session")).status)).toBe(401);
 
   // CA2: without access, the account stays listed with its history but cannot sign in.
   await row.getByRole("button", { name: `Acciones de ${name}` }).click();
   await page.getByRole("menuitem", { name: "Quitar acceso" }).click();
   await expect(row).toContainText("Sin acceso");
-  await expect(page.locator(".activity-feed").first()).toContainText(`desactivó la cuenta de ${name}`);
+  await expectRecentActivity(page, `desactivó la cuenta de ${name}`);
   expect(await educator.evaluate(async ([user, password]) => (await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: user, password }) })).status, [username, again])).toBe(401);
   await context.close();
 });

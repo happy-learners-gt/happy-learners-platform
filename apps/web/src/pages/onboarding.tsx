@@ -149,11 +149,12 @@ export function useOnboardingPeople(revision: number) {
   useEffect(() => { api<{ people: OnboardingPerson[] }>("/onboarding/people").then(result => setPeople(new Map(result.people.map(person => [person.userId, person])))).catch(() => setPeople(new Map())); }, [revision]);
   return people;
 }
-export function OnboardingBadge({ person }: { person: OnboardingPerson | undefined }) {
+export function OnboardingBadge({ person, compact }: { person: OnboardingPerson | undefined; compact?: boolean }) {
   if (!person) return <span className="muted">—</span>;
   const missing = person.missing.map(step => onboardingStepLabels[step].toLowerCase());
+  const detail = person.status === "complete" ? person.completedAt ? `el ${day(person.completedAt)}` : "" : `${person.startedAt ? `desde el ${day(person.startedAt)}` : ""}${missing.length ? ` · falta: ${missing.join(", ")}` : ""}`;
   return <span className="onboarding-cell"><StatusBadge tone={statusTone[person.status]}>{onboardingStatusLabels[person.status]}</StatusBadge>
-    <span className="muted small">{person.status === "complete" ? person.completedAt ? `el ${day(person.completedAt)}` : "" : `${person.startedAt ? `desde el ${day(person.startedAt)}` : ""}${missing.length ? ` · falta: ${missing.join(", ")}` : ""}`}</span></span>;
+    {!compact && detail && <span className="muted small">{detail}</span>}</span>;
 }
 export function OnboardingFilter({ value, onChange }: { value: OnboardingPersonStatus | ""; onChange: (value: OnboardingPersonStatus | "") => void }) {
   return <label className="onboarding-filter"><span>Incorporación</span>

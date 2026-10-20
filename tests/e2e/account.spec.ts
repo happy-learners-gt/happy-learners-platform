@@ -144,7 +144,7 @@ test("HL-15 ST-159: the person downloads their data, asks to close the account a
 
     const adminPage = await adminContext.newPage();
     await adminContext.addCookies([{ name: "hl_session", value: await sessionToken("admin-demo"), url: origin, httpOnly: true, sameSite: "Strict" }]);
-    await adminPage.goto("/educadores");
+    await adminPage.goto("/educadores#cierres");
     const requests = adminPage.getByRole("region", { name: "Lista de solicitudes de cierre" });
     await expect(requests.getByRole("row", { name: new RegExp(person.name) })).toContainText("Solicitado");
     await expect(requests.getByRole("row", { name: new RegExp(person.name) })).toContainText("Cambio de trabajo");

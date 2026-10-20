@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { test, expect } from "./local-test";
-import { completeOnboarding, e2eName, origin, publish, sessionToken, signIn, toast } from "./helpers";
+import { completeOnboarding, e2eName, expectRecentActivity, origin, publish, sessionToken, signIn, toast } from "./helpers";
 
 const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 async function audit(page: Page, label: string) {
@@ -37,7 +37,7 @@ test("HL-174 ST-128 ST-135: administration assigns coordination of one program, 
     await expect(toast(page)).toContainText("tiene la coordinación académica de primaria bilingüe");
     await expect(row).toContainText("Coordinación: 1 programa");
     // Criterion 3: the change is in the activity.
-    await expect(page.locator(".activity-feed").first()).toContainText(`asignó la coordinación académica a ${name}`);
+    await expectRecentActivity(page, `asignó la coordinación académica a ${name}`);
 
     // The person signs in after the change and chooses their own password.
     const login = await fetch(`${origin}/api/login`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ username, password: created.temporaryPassword }) });

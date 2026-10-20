@@ -64,6 +64,19 @@ export const sectionNav = (page: Page) => page.getByRole("navigation", { name: "
 export const saveStatus = (page: Page) => page.locator(".save-indicator");
 export const toast = (page: Page) => page.locator(".toast-region");
 
+/** The organization activity log, without needing the feed on the current page. */
+export async function expectRecentActivity(page: Page, text: string | RegExp) {
+  const pattern = text instanceof RegExp ? text : new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  await expect.poll(async () => {
+    const data = await page.evaluate(async () => {
+      const response = await fetch("/api/activity?limit=20");
+      if (!response.ok) return "";
+      return ((await response.json()) as { events: { summary: string }[] }).events.map(item => item.summary).join("\n");
+    });
+    return data;
+  }).toMatch(pattern);
+}
+
 /** Opens the drawer on narrow screens; the sidebar is always visible from 1024 px. */
 export async function openNavigation(page: Page) {
   const toggle = page.getByRole("button", { name: "Menú", exact: true });

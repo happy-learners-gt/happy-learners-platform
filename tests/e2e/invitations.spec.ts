@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { test, expect } from "./local-test";
-import { e2eName, signIn, toast } from "./helpers";
+import { e2eName, expectRecentActivity, signIn, toast } from "./helpers";
 
 const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 async function audit(page: Page, label: string) {
@@ -44,7 +44,7 @@ test("HL-167 ST-121: administration invites by e-mail, the person accepts from t
   const row = invitations.getByRole("row", { name: new RegExp(name) });
   await expect(row).toContainText("Pendiente");
   await expect(row).toContainText("Sin envío configurado");
-  await expect(page.locator(".activity-feed").first()).toContainText(`invitó a ${name}`);
+  await expectRecentActivity(page, `invitó a ${name}`);
 
   // CA2: the person opens the link without a session, chooses a username and password and lands signed in.
   const context = await browser.newContext({ viewport: page.viewportSize() });
@@ -68,7 +68,9 @@ test("HL-167 ST-121: administration invites by e-mail, the person accepts from t
   await expect(guest.getByRole("heading", { level: 1 })).toHaveText("Esta invitación ya se usó");
 
   await page.reload();
+  await page.getByRole("navigation", { name: "Secciones de educadores" }).getByRole("link", { name: "Invitaciones" }).click();
   await expect(page.getByRole("region", { name: "Invitaciones" }).getByRole("row", { name: new RegExp(name) })).toContainText("Aceptada");
+  await page.getByRole("navigation", { name: "Secciones de educadores" }).getByRole("link", { name: "Personas" }).click();
   await expect(page.getByRole("region", { name: "Personas de la organización" })).toContainText(`invitada-${stamp}@example.test`);
 
   // CA3: revoking asks for confirmation, invalidates the link and is recorded.
@@ -79,7 +81,7 @@ test("HL-167 ST-121: administration invites by e-mail, the person accepts from t
   await page.getByRole("menuitem", { name: "Revocar" }).click();
   await page.getByRole("dialog", { name: `¿Revocar la invitación de ${revokedName}?` }).getByRole("button", { name: "Revocar invitación" }).click();
   await expect(revokedRow).toContainText("Revocada");
-  await expect(page.locator(".activity-feed").first()).toContainText(`revocó la invitación de ${revokedName}`);
+  await expectRecentActivity(page, `revocó la invitación de ${revokedName}`);
   await guest.goto(second.link);
   await expect(guest.getByRole("heading", { level: 1 })).toHaveText("Esta invitación fue revocada");
   await audit(guest, "invitación revocada");

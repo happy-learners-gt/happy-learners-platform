@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { test, expect } from "./local-test";
-import { e2eName, sessionToken, signIn, toast } from "./helpers";
+import { e2eName, expectRecentActivity, sessionToken, signIn, toast } from "./helpers";
 
 const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 async function audit(page: Page, label: string) {
@@ -50,7 +50,7 @@ test("HL-169 ST-123: administration registers a departure after reassigning the 
     await expect(toast(page)).toContainText(`Salida de ${name} registrada`);
     await expect(row).toContainText("Sin acceso");
     await expect(row).toContainText("Salió el");
-    await expect(page.locator(".activity-feed").first()).toContainText(`registró la salida de ${name}`);
+    await expectRecentActivity(page, `registró la salida de ${name}`);
     await audit(page, "educadores tras la salida");
     const team = ((await (await admin.get("/api/progress")).json()).courses as { courseId: string; team: { userId: string; role: string }[] }[]).find(course => course.courseId === courseId)!.team;
     expect(team.map(member => [member.userId, member.role]).sort()).toEqual([["user-1", "co-teacher"], ["user-educator", "lead"]]);

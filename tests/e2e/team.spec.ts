@@ -1,5 +1,5 @@
 import { test, expect } from "./local-test";
-import { openNavigation, signIn, toast } from "./helpers";
+import { signIn, toast } from "./helpers";
 
 test("seeded educators see their courses' progress, teams and who did what", async ({ page }) => {
   await signIn(page, "lucia.herrera", "/inicio");
@@ -41,15 +41,12 @@ test("administration reviews each educator's contributions and every course's pr
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Educadores");
   const row = page.getByRole("row", { name: /Diego Ramírez/ });
   await expect(row).toContainText("responsable de 5");
-  await expect(row).toContainText(/\d+ creadas · \d+ publicaciones/);
-  await row.getByRole("button", { name: "Diego Ramírez", exact: true }).click();
-  const feed = page.locator("section").filter({ has: page.getByRole("heading", { name: "Actividad de Diego Ramírez" }) });
-  await expect(feed).toContainText("Diego Ramírez");
-  await expect(feed).not.toContainText("Lucía Herrera");
-  const progress = page.locator("section").filter({ has: page.getByRole("heading", { name: "Avance por curso" }) });
+  await expect(page.getByRole("navigation", { name: "Secciones de educadores" }).getByRole("link", { name: "Personas" })).toHaveAttribute("aria-current", "page");
+  await page.goto("/inicio");
+  const progress = page.locator("section").filter({ has: page.getByRole("heading", { name: "Avance de los cursos" }) });
   for (const title of ["Matemáticas 3.º primaria", "Ciencias Naturales 4.º primaria", "English Explorers A1", "Taller de robótica educativa", "Arte y expresión creativa"]) await expect(progress.getByRole("link", { name: title })).toBeVisible();
-  await openNavigation(page);
-  await page.getByRole("navigation", { name: "Administración" }).getByRole("link", { name: "Configuración académica" }).click();
+  await expect(page.locator(".activity-feed.people").first()).toContainText(/Diego Ramírez|Marta Ruiz/);
+  await page.goto("/configuracion-academica");
   await expect(page.locator(".program-list")).toContainText("Primaria bilingüe");
   await expect(page.locator(".program-list")).toContainText("2 cursos");
 
