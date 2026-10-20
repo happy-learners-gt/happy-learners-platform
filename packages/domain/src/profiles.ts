@@ -129,3 +129,15 @@ export function staffDocumentInput(value: { type?: unknown; title?: unknown; iss
   if (expiresOn && expiresOn < issuedOn) return null;
   return { type, title, issuedOn, expiresOn };
 }
+
+/**
+ * DEC-047: whether a class on a calendar day falls outside the weekly availability someone declared. A class without a
+ * duration counts as its start time; an empty availability never restricts.
+ */
+export function outsideAvailability(slots: AvailabilitySlot[], date: string, startsAt: string, minutes: number | null): boolean {
+  if (!slots.length) return false;
+  const [y, m, d] = date.split("-").map(Number), weekday = ((new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7) + 1;
+  const toMinutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+  const start = toMinutes(startsAt), end = start + (minutes || 0);
+  return !slots.some(slot => slot.day === weekday && toMinutes(slot.start) <= start && end <= toMinutes(slot.end));
+}

@@ -193,6 +193,8 @@ export interface SectionSummary extends ClassGroup {
 export interface SectionEducator { userId: string; name: string; username: string; conflicts?: EducatorConflict[] }
 /** Classes of a section that overlap with another section the same educator teaches; confirmed ones carry who allowed them. */
 export interface EducatorConflict {
+  /** DEC-047: «overlap» with another section of the same educator, or classes «availability» outside the slots they declared. */
+  kind?: "overlap" | "availability";
   groupId: string; userId: string; name: string; otherGroupId: string; otherGroup: string; otherCourseId: string; otherCourse: string;
   overlaps: number; firstDate: string; startsAt: string; otherStartsAt: string;
   confirmation: { reason: string; confirmedAt: string; confirmedBy: string } | null;

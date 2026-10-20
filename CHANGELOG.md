@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.4 — 2026-10-20
+
+Disponibilidad del educador en la asignación de secciones de REL-005 (SPR-003; DEC-047). Migración 0047.
+
+- La disponibilidad semanal que cada educador declara en su perfil cuenta al asignarlo a una sección: si alguna clase próxima queda fuera de sus franjas, la asignación pide confirmar con un motivo, como un choque con otra sección (DEC-035), y la confirmación queda en la sección y en la actividad. Quien no declaró disponibilidad no tiene restricción.
+- La sección, el equipo y el registro de salida muestran «Fuera de su disponibilidad» junto a los choques de horario; el perfil explica para qué se usa la disponibilidad.
+- Demostración (0047): cada educador declara franjas que cubren sus clases, salvo una clase del sábado de Tomás Aguilar, que muestra el aviso.
+
 ## 1.1.3 — 2026-10-20
 
 Alineación de los formularios de REL-005 (SPR-003; DEC-046).
