@@ -1564,7 +1564,10 @@ a.tab { display: inline-flex; align-items: center; text-decoration: none; }
 .device-cell { display: inline-flex; align-items: center; gap: var(--space-2); }
 .device-cell > .icon { flex: none; color: var(--color-muted); }
 .account-table th[scope="row"] { min-width: 180px; }
-.data-sections { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-3) var(--space-4); list-style: none; margin: 0; padding: 0; }
+.account-cards { display: grid; gap: var(--space-5); }
+.account-cards .account-anchor .panel { padding: var(--space-6); }
+.data-sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3) var(--space-4); list-style: none; margin: 0; padding: 0; }
+@media (max-width: 639px) { .data-sections { grid-template-columns: minmax(0, 1fr); } }
 .data-sections li { display: grid; gap: 2px; }
 .closure-history summary { cursor: pointer; font-weight: var(--weight-medium); }
 .closure-history ul { margin-top: var(--space-2); }
