@@ -97,7 +97,8 @@ describe("HL-15 ST-149 educator profile on the built Worker", () => {
     expect((await as(null, "/profile")).status).toBe(401);
     const empty = (await (await as(carlos, "/profile")).json()).profile;
     expect(empty).toMatchObject({ displayName: "Carlos Mejía", photo: false });
-    expect(empty.specialties.length).toBeGreaterThanOrEqual(0);
+    // DEC-046 demo (0046): every demonstration educator starts with a complete profile, specialties included.
+    expect(empty.specialties.length).toBeGreaterThan(0);
     expect((await as(carlos, "/profile", "PUT", { displayName: "Carlos Mejía", phone: "123" })).status).toBe(400);
     expect((await as(carlos, "/profile", "PUT", { displayName: "Carlos Mejía", availability: [{ day: 1, start: "08:00", end: "10:00" }, { day: 1, start: "09:00", end: "11:00" }] })).status).toBe(400);
     const saved = await as(carlos, "/profile", "PUT", { displayName: "Carlos A. Mejía", phone, contactEmail, education: "Profesorado en Matemática y Física", specialties: ["Álgebra", "Geometría"], availability: [{ day: 2, start: "14:00", end: "17:00" }, { day: 4, start: "08:00", end: "12:00" }] });
