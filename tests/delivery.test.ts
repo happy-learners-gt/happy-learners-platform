@@ -9,17 +9,21 @@ describe("delivery gate", () => {
     const checks = workflow.jobs["critical-flows"].steps;
     expect(checks.find((step: { run?: string }) => step.run === "npm run test:smoke").env.BASE_URL).toMatch(/^https:/);
     expect(checks.some((step: { run?: string }) => step.run === "npm run test:e2e")).toBe(false);
-    const e2e = workflow.jobs.verify.steps.find((step: { run?: string }) => step.run === "npm run test:e2e");
+    // The full suite runs in verify against local servers only: desktop and mobile at once, never with BASE_URL.
+    const e2e = workflow.jobs.verify.steps.find((step: { name?: string }) => step.name === "E2E (desktop and mobile in parallel)");
     expect(e2e.env?.BASE_URL).toBeUndefined();
+    expect(e2e.run).not.toContain("BASE_URL");
+    expect(e2e.run).toContain("--project=desktop");
+    expect(e2e.run).toContain("--project=mobile");
   });
   it("verifies PRs and main pushes, and requires a successful verification before deploying", () => {
     expect(workflow.on.push).toEqual({ branches: ["main"], "paths-ignore": ["**/*.md", "docs/**"] });
-    // The hourly check compares production with the last successful deployment, not with the head of main.
+    // The daily check compares production with the last successful deployment, not with the head of main.
     const flows = workflow.jobs["critical-flows"];
     expect(flows.permissions).toEqual({ contents: "read", deployments: "read" });
     expect(flows.steps.find((step: { run?: string }) => step.run === "node scripts/critical-flows.mjs").env.EXPECTED_SHA).toBe("${{ steps.expected.outputs.sha }}");
     expect(workflow.on).toHaveProperty("pull_request");
-    expect(workflow.on.schedule).toEqual([{ cron: "17 * * * *" }]);
+    expect(workflow.on.schedule).toEqual([{ cron: "17 13 * * *" }]);
     expect(workflow.jobs.verify.steps.some((step: { run?: string }) => step.run === "./scripts/verify")).toBe(true);
     expect(workflow.jobs.deploy.needs).toBe("verify");
     for (const job of Object.values(workflow.jobs)) {
