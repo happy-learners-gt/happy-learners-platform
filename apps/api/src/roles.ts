@@ -19,6 +19,7 @@ export async function roles(path: string, method: string, input: unknown, curren
     const rows = await db.prepare(`SELECT u.id,u.username,COALESCE(u.display_name,u.username) AS displayName,CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END AS role,m.active,u.must_change_password AS mustChangePassword,u.email,
       (SELECT count(*) FROM course_members cm JOIN courses c ON c.id=cm.course_id WHERE cm.user_id=u.id AND cm.role='lead' AND c.status='active') AS leads,
       (SELECT count(*) FROM course_members cm JOIN courses c ON c.id=cm.course_id WHERE cm.user_id=u.id AND cm.role='co-teacher' AND c.status='active') AS coTeaches,
+      (SELECT count(*) FROM section_educators e JOIN course_groups g ON g.id=e.group_id AND g.status='active' JOIN courses c ON c.id=g.course_id AND c.status='active' WHERE e.user_id=u.id) AS sections,
       (SELECT count(*) FROM activity_events e WHERE e.actor_id=u.id AND e.target_type='lesson' AND e.action='created') AS lessonsCreated,
       (SELECT count(*) FROM activity_events e WHERE e.actor_id=u.id AND e.action='published') AS publications,
       (SELECT count(DISTINCT e.target_id) FROM activity_events e WHERE e.actor_id=u.id AND e.target_type='session' AND e.action='recorded') AS attendance,

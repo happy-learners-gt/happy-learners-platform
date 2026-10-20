@@ -86,6 +86,7 @@ test("HL-15 ST-149 ST-150: an educator edits their profile with a photo, adminis
     await expect(documentRow).toContainText("Por vencer");
     await audit(adminPage, "expediente");
     await detail.getByRole("button", { name: "Cerrar" }).click();
+    await adminPage.getByRole("navigation", { name: "Secciones de educadores" }).getByRole("link", { name: "Documentos por vencer" }).click();
     const overview = adminPage.getByRole("region", { name: "Documentos vencidos o por vencer" });
     await expect(overview).toContainText(name);
     await expect(overview).toContainText("Por vencer");
