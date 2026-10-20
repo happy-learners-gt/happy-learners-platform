@@ -300,7 +300,7 @@ fieldset:disabled input, fieldset:disabled select, fieldset:disabled textarea { 
 .select-inline select { width: auto; min-height: 40px; padding: 6px 32px 6px 12px; }
 .inline-form { display: grid; gap: var(--space-3); padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-md); animation: rise var(--motion-base) var(--ease-enter); }
 .inline-form h2 { font-size: var(--text-base); }
-.inline-form fieldset { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: var(--space-3); align-items: end; }
+.inline-form fieldset { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: var(--space-3); align-items: start; }
 .inline-form .inline-form-actions { grid-column: 1 / -1; }
 .inline-name { font-weight: var(--weight-bold); }
 .inline-name.unit { font-size: var(--text-lg); font-family: var(--font-display); }
@@ -1397,7 +1397,9 @@ ul.cell-list li svg { display: inline-block; vertical-align: -2px; margin-right:
 .removable-chip { gap: var(--space-1); padding-right: 4px; }
 .chip-remove { display: inline-grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: var(--radius-pill); background: none; color: var(--color-ink-soft); }
 .chip-remove:hover { background: var(--color-neutral-soft); color: var(--color-ink); }
-.specialty-add { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); }
+.specialty-add { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-3); }
+/* A button beside fields lines up with their controls, whatever hints sit below them. */
+.field-action { margin-top: calc(var(--text-sm) * var(--leading) + 6px); min-height: var(--control-h); }
 .specialty-add .field { flex: 1 1 220px; }
 .availability-list, .plain-list, .expiring-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .availability-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(110px, auto) minmax(110px, auto) auto; gap: var(--space-2); align-items: center; }
@@ -1453,7 +1455,13 @@ a.tab { display: inline-flex; align-items: center; text-decoration: none; }
 .status-step.is-current .status-step-mark { border-color: var(--color-primary); background: var(--color-primary-soft); }
 .status-step:not(:last-child)::after { content: ""; width: 1.25rem; height: 2px; background: var(--color-border); }
 .form-sheet { max-width: 55rem; display: grid; gap: var(--space-6); }
-.form-grid-12 { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--space-4); }
+.form-grid-12 { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
+/* Fields in one row share their label, control and hint rows (subgrid): a label that wraps or a hint under one
+   control never shifts the controls beside it. Anything else in the grid spans the same three rows. */
+.form-grid-12 > [class*="form-span"] { grid-row: span 3; }
+.form-grid-12 > [class*="form-span"]:has(> .field:only-child) { display: grid; grid-template-rows: subgrid; row-gap: 6px; align-content: start; }
+.form-grid-12 > [class*="form-span"] > .field:only-child { display: contents; }
+.form-grid-12 > [class*="form-span"] > .field:only-child > label { align-self: end; }
 .form-span-3 { grid-column: span 3; }
 .form-span-4 { grid-column: span 4; }
 .form-span-6 { grid-column: span 6; }
@@ -1503,8 +1511,11 @@ a.tab { display: inline-flex; align-items: center; text-decoration: none; }
 @media (pointer: coarse) { .completeness-steps .link-button { min-height: 36px; } }
 .section-title { font-size: var(--text-md); }
 .entry-list > li { padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
-.language-row { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.2fr) auto auto; gap: var(--space-3); align-items: center; }
-.link-row { display: grid; grid-template-columns: minmax(140px, 200px) minmax(0, 1fr) auto; gap: var(--space-3); align-items: end; }
+.language-row { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.2fr) auto auto; gap: var(--space-3); align-items: end; }
+/* The language name and the checkbox sit on the select's line, not on its label's. */
+.language-row > strong, .language-row > .switch { min-height: var(--control-h); display: flex; align-items: center; gap: .3em; }
+.link-row { display: grid; grid-template-columns: minmax(140px, 200px) minmax(0, 1fr) auto; gap: var(--space-3); align-items: start; }
+.link-row > .icon-button { margin-top: calc(var(--text-sm) * var(--leading) + 6px); }
 .privacy-list { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
 .input-narrow { max-width: 10rem; }
 .config-section.entry { background: var(--color-surface); }
