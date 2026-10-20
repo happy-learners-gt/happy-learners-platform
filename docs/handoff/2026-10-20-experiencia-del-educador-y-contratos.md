@@ -236,3 +236,33 @@ por vista; en oscuro, sin destellos ni bloques claros. La carpeta `ui-audit/` no
 Tipos en `packages/contracts/src/index.ts` (`Contract`, `ContractTemplate`, `ContractTerms`, `ContractPhase`…);
 etiquetas en español en `packages/domain/src/contracts.ts` (`engagementLabels`, `contractPhaseLabels`,
 `compensationLabels`, `locationLabels`, `periodLabels`) y `compensationSummary` para mostrar la remuneración.
+
+## 6. Revisión intermedia del equipo de desarrollo (20-oct, sobre 17c6dc7)
+
+T1 a T10 van bien encaminadas y `./scripts/verify` no tiene regresiones; los fallos que aparecen con la máquina cargada
+desaparecen al repetir. Corrige esto **antes** de seguir con T12, en un commit `HL-15 fix(ui): correcciones de la
+revisión intermedia`:
+
+- **R1. Perfil con tres columnas de navegación.** Menú de la app + menú de Mi cuenta + secciones del perfil dejan el
+  formulario en ~600 px. Quita la columna de secciones del perfil: muestra las secciones como tarjetas apiladas y, bajo
+  el encabezado, una barra horizontal fija de anclas (Identidad, Sobre mí, Idiomas…) con su marca de completitud y
+  resaltado de la sección visible. Nunca más de dos niveles de navegación lateral.
+- **R2. El estado se repite cuatro veces** (insignia, pasos, tarjeta «Publicación» y su insignia). Deja la insignia
+  junto al título y `StatusSteps`; elimina la tarjeta «Publicación». Solo un banner cuando hay cambios pedidos o una
+  revisión en curso.
+- **R3. Completitud.** Con 0 % la tarjeta ocupa medio alto de pantalla. Hazla compacta en la cabecera del formulario:
+  anillo de 40 px, «Perfil al N %» y «3 pasos siguientes» que abre la lista; «Para enviarlo necesitas…» va dentro de
+  ese panel.
+- **R4. Rejilla del perfil.** Identidad en filas: Nombre (6) · Nombre preferido (3) · Pronombres (3); Titular (12);
+  País (4) · Ciudad (4) · Zona horaria (4). La foto a la izquierda del bloque de nombre, no encima.
+- **R5. Tabla de Educadores.** Los nombres y usuarios se parten a mitad de palabra («Administra­ción»,
+  «@marta.rui z») porque las columnas son de ancho igual. Usa `table-layout: auto`, `min-width: 240px` en Persona,
+  sin `word-break` dentro de palabras (el usuario con elipsis en la segunda línea), Carga en una línea corta
+  («7 cursos · 5 secciones», el detalle responsable/colabora en texto atenuado debajo) y «Cuenta principal» como
+  insignia junto al nombre, no suelta en la columna de acciones.
+- **R6. Acciones en el encabezado.** «Nueva plantilla» (y las acciones primarias de cada pestaña) van en el
+  `PageHeader`, alineadas con el título, no en una fila suelta sobre la tarjeta.
+- **R7. Inicio en oscuro.** El héroe sigue saturado; incluye su degradado en T11 (más oscuro y menos saturado en
+  `data-theme="dark"`).
+- **Verificación local.** Corre `./scripts/verify` sin otros procesos pesados (servidores de prueba, otra suite): con
+  carga alta, las pruebas sobre el Worker local fallan por tiempo y dan falsos negativos.
