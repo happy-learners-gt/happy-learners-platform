@@ -35,24 +35,32 @@ export function ContractTermsSummary({ contract }: { contract: Pick<Contract, "t
   </div>;
 }
 
+export function ReceiptLink({ id, compact }: { id: string; compact?: boolean }) {
+  return <a className={`button secondary${compact ? " small" : ""}`} href={`/api/contracts/${encodeURIComponent(id)}/receipt`} download><Icon name="download" size={16}/>Descargar constancia</a>;
+}
+
 export function SignContractDialog({ contract, onClose, onSigned }: { contract: Contract; onClose: () => void; onSigned: (contract: Contract) => void }) {
-  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [busy, setBusy] = useState(false), [error, setError] = useState(""), [signed, setSigned] = useState<Contract | null>(null);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
     const data = Object.fromEntries(new FormData(event.currentTarget));
     try {
       const result = await api<{ contract: Contract }>(`/contracts/${contract.id}/sign`, "POST", { signature: { fullName: data.fullName, password: data.password } });
+      setSigned(result.contract);
       onSigned(result.contract);
     } catch (cause) { setError(message(cause)); setBusy(false); }
   }
-  return <Modal title="Firmar contrato" onClose={onClose}>
-    <form className="stack" onSubmit={submit}><fieldset className="stack" disabled={busy}>
+  return <Modal title={signed ? "Firma registrada" : "Firmar contrato"} onClose={onClose} footer={signed ? <button type="button" className="button primary" onClick={onClose}>Cerrar</button> : undefined}>
+    {signed ? <div className="stack">
+      <p role="status">Firmaste «{signed.title}». La constancia incluye la huella SHA-256 del documento y las de ambas firmas, para que administración pueda verificarla.</p>
+      <ReceiptLink id={signed.id}/>
+    </div> : <form className="stack" onSubmit={submit}><fieldset className="stack" disabled={busy}>
       <p className="muted small">Firmas «{contract.title}» escribiendo tu nombre completo y confirmando tu identidad con la contraseña de tu cuenta.</p>
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
       <Field label="Nombre completo"><input name="fullName" required minLength={3} maxLength={120} autoComplete="name"/></Field>
       <Field label="Contraseña de tu cuenta"><input name="password" type="password" required maxLength={128} autoComplete="current-password"/></Field>
       <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">{busy ? "Firmando…" : "Firmar"}</button></div>
-    </fieldset></form>
+    </fieldset></form>}
   </Modal>;
 }
 
@@ -92,7 +100,7 @@ export function MyContractsPage() {
     if (!open) return;
     document.getElementById(open)?.scrollIntoView({ block: "start" });
   }, [open, contracts]);
-  const replace = (next: Contract) => { setContracts(current => (current || []).map(item => item.id === next.id ? next : item)); setSigning(null); setDeclining(null); };
+  const replace = (next: Contract) => { setContracts(current => (current || []).map(item => item.id === next.id ? next : item)); };
   if (error) return <><PageHeader title="Contratos" description="Tus acuerdos con la organización: vigencia, condiciones y firma."/><ErrorState error={error} retry={load}/></>;
   if (!contracts) return <><PageHeader title="Contratos" description="Tus acuerdos con la organización: vigencia, condiciones y firma."/><Loading label="Cargando tus contratos…" lines={4}/></>;
   return <>
@@ -111,6 +119,7 @@ export function MyContractsPage() {
             <button type="button" className="button secondary small" onClick={() => setOpen(expanded ? null : item.id)} aria-expanded={expanded}>{expanded ? "Ocultar documento" : "Ver documento"}</button>
             {item.status === "sent" && <button type="button" className="button primary small" onClick={() => setSigning(item)}>Firmar</button>}
             {item.status === "sent" && <button type="button" className="button ghost small" onClick={() => setDeclining(item)}>Rechazar</button>}
+            {item.documentSha256 && <ReceiptLink id={item.id} compact/>}
           </div>
           {expanded && <div className="contract-offer">
             {item.body && <RichText value={item.body} editable={false} toolbar={false} label={`Documento de ${item.title}`}/>}
@@ -123,7 +132,7 @@ export function MyContractsPage() {
         </li>;
       })}</ul>}
     {signing && <SignContractDialog contract={signing} onClose={() => setSigning(null)} onSigned={next => { replace(next); toast({ message: "Contrato firmado." }); }}/>}
-    {declining && <DeclineContractDialog contract={declining} onClose={() => setDeclining(null)} onDeclined={next => { replace(next); toast({ message: "Contrato rechazado." }); }}/>}
+    {declining && <DeclineContractDialog contract={declining} onClose={() => setDeclining(null)} onDeclined={next => { replace(next); setDeclining(null); toast({ message: "Contrato rechazado." }); }}/>}
   </>;
 }
 

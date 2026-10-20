@@ -32,10 +32,13 @@ export async function signIn(page: Page, username = "educador-demo", path = "/in
  * complete it through the API with a minimal «perfil completo» (contact e-mail and one specialty); the derived steps
  * cannot be skipped, so this saves a real profile.
  */
-export async function completeOnboarding(session: string, specialty = "Pedagogía") {
+export async function completeOnboarding(session: string, specialty = "Pedagogía", password?: string) {
   const headers = { Origin: origin, "Content-Type": "application/json", Cookie: `hl_session=${session}` };
   const call = (path: string, method = "POST", data?: unknown) => fetch(`${origin}/api${path}`, { method, headers, ...(data ? { body: JSON.stringify(data) } : {}) });
-  const current = await (await call("/session", "GET")).json() as { member: { displayName: string; username: string }; onboarding?: true };
+  const current = await (await call("/session", "GET")).json() as { member: { displayName: string; username: string }; onboarding?: true; pending?: { id: string }[] };
+  if (current.pending?.length && password) {
+    expect((await call("/legal/accept", "POST", { documentIds: current.pending.map(item => item.id), signature: { fullName: current.member.displayName || current.member.username, password } })).status).toBe(200);
+  }
   if (!current.onboarding) return;
   expect((await call("/onboarding/steps/welcome")).status).toBe(200);
   const saved = await call("/profile", "PUT", { displayName: current.member.displayName || current.member.username, contactEmail: `${current.member.username}@ejemplo.test`, specialties: [specialty] });

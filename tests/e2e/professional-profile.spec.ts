@@ -27,7 +27,7 @@ test("HL-15 ST-154 ST-155 ST-156 ST-157: an educator completes and sends their p
     const login = await fetch(`${origin}/api/login`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ username, password: temporaryPassword }) });
     const session = /hl_session=([^;]+)/.exec(login.headers.get("set-cookie") || "")![1];
     expect((await fetch(`${origin}/api/account/password`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json", Cookie: `hl_session=${session}` }, body: JSON.stringify({ currentPassword: temporaryPassword, newPassword: "Perfil profesional 2026" }) })).status).toBe(200);
-    await completeOnboarding(session, "Ciencias naturales");
+    await completeOnboarding(session, "Ciencias naturales", "Perfil profesional 2026");
     const created = await admin.post("/api/courses", { data: { title: e2eName(info, "Curso con perfil"), objective: "Conocer a quien enseña.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", area: "011", settings: { attendance: true }, programId: null, leadId: member.id } });
     expect(created.status(), await created.text()).toBe(201);
     const course = `/api/courses/${(await created.json()).id}`;
@@ -37,7 +37,7 @@ test("HL-15 ST-154 ST-155 ST-156 ST-157: an educator completes and sends their p
     await page.context().addCookies([{ name: "hl_session", value: session, url: origin, httpOnly: true, sameSite: "Strict" }]);
 
     // ST-154: «Mi perfil» by sections; ST-149's specialty arrived as a teaching area.
-    await page.goto("/perfil");
+    await page.goto("/mi-cuenta/perfil");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Mi perfil");
     const meter = page.getByRole("progressbar", { name: /Perfil completo al/ });
     // The specialty given at the welcome already counts as a teaching area.
