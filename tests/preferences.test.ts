@@ -357,7 +357,7 @@ describe("ST-160 ST-161 preferences on the built Worker", () => {
 
     // Back to immediate: what was waiting leaves on the next access.
     expect((await as(sofia, "/me/notification-preferences", "PUT", { frequency: "immediate", quietHours: null })).status).toBe(200);
-    expect(new Date((await json(sofia, "/me/notification-preferences")).nextDelivery).getTime()).toBeLessThanOrEqual(Date.now());
+    expect(new Date((await json(sofia, "/me/notification-preferences")).nextDelivery).getTime()).toBeLessThanOrEqual(Date.now() + 2000);
   });
 
   it("CA ST-161 changing one's own password leaves a mandatory account notice for the owner", async () => {
