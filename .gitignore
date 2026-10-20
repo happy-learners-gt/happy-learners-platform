@@ -22,3 +22,4 @@ __pycache__/
 .release-evidence/
 test-results/
 playwright-report/
+ui-audit/
