@@ -352,7 +352,7 @@ function LanguagesTab({ draft, patch, err }: TabProps) {
         <option value="">Elige un idioma…</option>{options.filter(option => !draft.languages.some(item => item.code === option.code)).map(option => <option key={option.code} value={option.code}>{option.name}</option>)}
       </select></Field>
       <Field label="Otro idioma (código)" optional hint="Código BCP 47, por ejemplo tzj, pt-BR o es-419."><input value={other} onChange={event => setOther(event.target.value)} maxLength={12} onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => { if (event.key === "Enter") { event.preventDefault(); add(other.trim()); setOther(""); } }}/></Field>
-      <button type="button" className="button secondary small" disabled={!other.trim()} onClick={() => { add(other.trim()); setOther(""); }}><Icon name="plus" size={16}/>Agregar código</button>
+      <button type="button" className="button secondary small field-action" disabled={!other.trim()} onClick={() => { add(other.trim()); setOther(""); }}><Icon name="plus" size={16}/>Agregar código</button>
     </div>}
   </>;
 }
@@ -378,7 +378,7 @@ function TeachingTab({ draft, patch, err }: TabProps) {
       <div className="specialty-add">
         <Field label="Nueva área" hint="Por ejemplo: Álgebra, Lectoescritura, Robótica, Inglés como lengua extranjera."><input value={label} maxLength={profileLimits.areaLabel} onChange={event => setLabel(event.target.value)} onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => { if (event.key === "Enter") { event.preventDefault(); add(); } }}/></Field>
         <Field label="Campo amplio" optional><select value={field} onChange={event => setField(event.target.value)}><option value="">Sin clasificar</option>{iscedFields.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
-        <button type="button" className="button secondary small" onClick={add}><Icon name="plus" size={16}/>Agregar área</button>
+        <button type="button" className="button secondary small field-action" onClick={add}><Icon name="plus" size={16}/>Agregar área</button>
       </div>
     </fieldset>
     <ChipChoices legend="Niveles educativos que atiendes" hint="Clasificación Internacional Normalizada de la Educación (CINE 2011)." options={iscedLevels.map(item => ({ value: item.value, label: item.label }))} value={draft.levels} onChange={levels => patch({ levels })} error={err("levels")}/>

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.3 — 2026-10-20
+
+Alineación de los formularios de REL-005 (SPR-003; DEC-046).
+
+- Los campos de una misma fila comparten la fila de la etiqueta, la del control y la de la ayuda: una etiqueta de dos líneas o un texto de ayuda bajo un control ya no desplazan los controles vecinos (Identidad, Idiomas, Preferencias, contratos e invitaciones).
+- Los botones junto a campos (Agregar idioma, Agregar área, Agregar especialidad, quitar enlace) se alinean con los controles; en cada idioma, el nombre y «Enseño en este idioma» quedan a la altura del selector.
+
 ## 1.1.2 — 2026-10-20
 
 Contratos y experiencia del educador de REL-005 (SPR-003; DEC-046). Migraciones 0045 y 0046, acumulativas.
