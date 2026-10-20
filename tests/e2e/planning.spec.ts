@@ -64,6 +64,14 @@ test("ST-118: assigning an educator who teaches at the same time asks for a reco
   const educator = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("educador-demo")}` } });
   // Other specs teach as this educator from 04:00 to about 10:00; each project and retry gets its own two hours after that.
   const hour = 12 + (info.project.name === "mobile" ? 4 : 0) + info.retry * 8;
+  // DEC-047: this test is about overlaps, so the educator declares the whole week while it runs (availability has its
+  // own test in tests/availability.test.ts) and gets their declared slots back at the end.
+  const declared = (await (await educator.get("/api/me/profile")).json()).profile.availability;
+  const declare = async (availability: unknown) => {
+    const { profile } = await (await educator.get("/api/me/profile")).json();
+    expect((await educator.put("/api/me/profile", { data: { availability, draftVersion: profile.draftVersion } })).status()).toBe(200);
+  };
+  await declare([1, 2, 3, 4, 5, 6, 7].map(day => ({ day, start: "00:00", end: "23:59" })));
   try {
     const { path } = await course(admin, educator, `${E2E_PREFIX} Choques ${info.project.name}`);
     const section = async (name: string, startsAt: string) => {
@@ -103,5 +111,5 @@ test("ST-118: assigning an educator who teaches at the same time asks for a reco
     expect(JSON.stringify(activity)).toContain("Confirmó el choque de horario");
     expect((await admin.put(`${path}/groups/${second}/educators`, { data: { userIds: [] } })).status()).toBe(200);
     expect((await admin.put(`${path}/groups/${second}/educators`, { data: { userIds: ["user-educator"] } })).status()).toBe(200);
-  } finally { await admin.dispose(); await educator.dispose(); }
+  } finally { await declare(declared); await admin.dispose(); await educator.dispose(); }
 });
