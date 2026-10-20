@@ -942,6 +942,10 @@ dialog.modal.viewer .modal-body > .usage, dialog.modal.viewer .modal-body > p { 
 .course-facets li.is-program { border-color: color-mix(in srgb, var(--green-vivid) 60%, transparent); background: var(--green-soft); color: var(--green-ink); font-weight: var(--weight-bold); }
 .course-card .course-facets { margin: 0; }
 .facet-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2) var(--space-3); margin-bottom: var(--space-4); }
+.directory-filters { display: grid; grid-template-columns: minmax(14rem, 2fr) repeat(4, 10rem) auto; align-items: end; gap: var(--space-3); }
+.directory-filters .field { min-height: calc(var(--touch) + 1.5rem); }
+.directory-filters select { width: 100%; }
+.directory-clear { align-self: end; min-height: var(--touch); }
 .facet { display: grid; gap: 4px; color: var(--color-muted); font-size: var(--text-xs); font-weight: var(--weight-bold); }
 .facet select { min-height: 38px !important; min-width: 170px; font-size: var(--text-sm); }
 .field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: var(--space-4); align-items: start; }
@@ -1508,9 +1512,10 @@ a.tab { display: inline-flex; align-items: center; text-decoration: none; }
 .profile-card-section h3, .profile-card-section h4 { font-size: var(--text-base); }
 .profile-card-section a { display: inline-flex; align-items: center; gap: 6px; }
 .timeline > li { padding-left: var(--space-3); border-left: 3px solid var(--color-primary-line, var(--color-border)); }
-.directory-grid { list-style: none; margin: 0; padding: 0; }
-.directory-card { display: flex; gap: var(--space-3); align-items: flex-start; height: 100%; padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
-.directory-name { font-size: var(--text-base); }
+.directory-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5); }
+.directory-card { display: flex; gap: var(--space-3); align-items: flex-start; height: 100%; padding: var(--space-6); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+.directory-name { font-size: var(--text-base); display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.profile-card-header.is-hero .profile-photo { width: 10rem; height: 10rem; }
 .small-chips .chip-button { min-height: 26px; padding: 0 10px; font-size: var(--text-xs); }
 .review-list > li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-3); align-items: center; padding: var(--space-3) 0; border-top: 1px solid var(--color-border); }
 .review-list > li:first-child { border-top: 0; }
@@ -1519,6 +1524,9 @@ a.tab { display: inline-flex; align-items: center; text-decoration: none; }
   .profile-section-nav { position: static; }
   .profile-section-nav ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); gap: var(--space-2); }
   .profile-section-nav button { border: 1px solid var(--color-border); background: var(--color-surface); }
+  .directory-filters { grid-template-columns: minmax(0, 1fr) repeat(2, minmax(9rem, 1fr)); }
+  .directory-search { grid-column: 1 / -1; }
+  .directory-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) {
   .language-row, .link-row { grid-template-columns: minmax(0, 1fr) auto; }
@@ -1527,6 +1535,8 @@ a.tab { display: inline-flex; align-items: center; text-decoration: none; }
   .profile-card-header { flex-direction: column; }
   .review-list > li { grid-template-columns: auto minmax(0, 1fr); }
   .review-list > li > .button { grid-column: 1 / -1; justify-self: start; }
+  .directory-filters { grid-template-columns: minmax(0, 1fr); }
+  .directory-grid { grid-template-columns: minmax(0, 1fr); }
 }
 /* «Mi cuenta»: one hub, one nav. Sidebar from 1024 px; a section list on smaller screens. */
 .account-hub { display: grid; grid-template-columns: 15.5rem minmax(0, 1fr); gap: var(--space-6); align-items: start; }

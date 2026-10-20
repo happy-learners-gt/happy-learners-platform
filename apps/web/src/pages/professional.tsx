@@ -597,12 +597,14 @@ export function ProfileCard({ profile, level = 2, compact }: { profile: PublicPr
   const place = [content.city, countryName(content.country)].filter(Boolean).join(", ");
   const teaching = show("teaching") && (content.areas.length || content.levels.length || content.modalities.length || content.formats.length || content.audiences.length || content.experienceYears !== null);
   return <article className={`profile-card${compact ? " compact" : ""}`} aria-label={`Perfil de ${profile.displayName}`}>
-    <header className="profile-card-header">
-      {profile.photoUrl ? <img className="profile-photo" src={profile.photoUrl} alt="" width={88} height={88}/> : <Avatar name={profile.displayName} size={88}/>}
+    <header className={`profile-card-header${compact ? "" : " is-hero"}`}>
+      {profile.photoUrl ? <img className="profile-photo" src={profile.photoUrl} alt="" width={compact ? 56 : 160} height={compact ? 56 : 160}/> : <Avatar name={profile.displayName} size={compact ? 56 : 160}/>}
       <div className="profile-card-title">
         <H>{profile.displayName}</H>
         {(content.preferredName || content.pronouns) && <p className="muted small">{content.preferredName && <>Prefiere que le llamen {content.preferredName}</>}{content.preferredName && content.pronouns ? " · " : ""}{content.pronouns}</p>}
         {content.headline && <p className="profile-headline">{content.headline}</p>}
+        {show("languages") && content.languages.length > 0 && <ul className="chips small-chips" aria-label="Idiomas">{content.languages.map(item => <li key={item.code}><span className="chip-button">{languageLabel(item.code)} · {proficiencyLabel(item.proficiency)}</span></li>)}</ul>}
+        {!compact && content.videoUrl && show("about") && <p><a className="button secondary small" href={content.videoUrl} target="_blank" rel="noopener noreferrer"><Icon name="play" size={16}/>Ver video de presentación<span className="sr-only"> (se abre en otra pestaña)</span></a></p>}
         <p className="profile-meta muted small">{place && <span><Icon name="home" size={14}/>{place}</span>}{content.timezone && <span><Icon name="clock" size={14}/>{content.timezone.replaceAll("_", " ")}</span>}
           {verified > 0 && <StatusBadge tone="success">{verified === 1 ? "1 credencial verificada" : `${verified} credenciales verificadas`}</StatusBadge>}</p>
       </div>
@@ -610,7 +612,7 @@ export function ProfileCard({ profile, level = 2, compact }: { profile: PublicPr
     {show("about") && (content.bio || content.approach || content.videoUrl) && <section className="profile-card-section"><S>Sobre mí</S>
       {content.bio && <p className="pre-line">{content.bio}</p>}
       {content.approach && <><p className="eyebrow">Enfoque de enseñanza</p><p className="pre-line">{content.approach}</p></>}
-      {content.videoUrl && <p><a href={content.videoUrl} target="_blank" rel="noopener noreferrer"><Icon name="play" size={16}/>Ver video de presentación<span className="sr-only"> (se abre en otra pestaña)</span></a></p>}
+      {compact && content.videoUrl && <p><a href={content.videoUrl} target="_blank" rel="noopener noreferrer"><Icon name="play" size={16}/>Ver video de presentación<span className="sr-only"> (se abre en otra pestaña)</span></a></p>}
     </section>}
     {show("languages") && content.languages.length > 0 && <section className="profile-card-section"><S>Idiomas</S>
       <ul className="chips">{content.languages.map(item => <li key={item.code}><span className="chip-button">{languageLabel(item.code)} · {proficiencyLabel(item.proficiency)}{item.teaches ? " · enseña" : ""}</span></li>)}</ul>
@@ -663,29 +665,31 @@ export function TeamDirectory() {
   const filtered = Object.entries(filters).some(([key, value]) => key !== "q" && value) || !!filters.q;
   return <>
     <PageHeader title="Equipo" description="Conoce a las personas del equipo: qué enseñan, en qué idiomas y en qué niveles. Solo aparecen los perfiles publicados."/>
-    <div className="facet-bar" role="search" aria-label="Filtrar el equipo">
-      <Field label="Buscar"><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Nombre, titular o área"/></Field>
+    <div className="facet-bar directory-filters" role="search" aria-label="Filtrar el equipo">
+      <div className="directory-search"><Field label="Buscar"><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Nombre, titular o área"/></Field></div>
       <Field label="Área"><select value={filters.area} onChange={event => set("area")(event.target.value)}><option value="">Todas</option>
         {(data?.facets.areas || []).map(item => <option key={item.value} value={item.value}>{item.value} ({item.total})</option>)}
         {iscedFields.map(item => <option key={item.value} value={item.value}>Campo: {item.label}</option>)}</select></Field>
       <Field label="Nivel"><select value={filters.level} onChange={event => set("level")(event.target.value)}><option value="">Todos</option>{iscedLevels.map(item => <option key={item.value} value={item.value}>{item.short}</option>)}</select></Field>
       <Field label="Idioma"><select value={filters.language} onChange={event => set("language")(event.target.value)}><option value="">Todos</option>{(data?.facets.languages || []).map(item => <option key={item.value} value={item.value}>{languageLabel(item.value)} ({item.total})</option>)}</select></Field>
       <Field label="Modalidad"><select value={filters.modality} onChange={event => set("modality")(event.target.value)}><option value="">Todas</option>{teachingModalities.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
-      {filtered && <button type="button" className="button ghost small" onClick={() => { setQuery(""); setFilters({ q: "", area: "", level: "", language: "", modality: "" }); }}>Quitar filtros</button>}
+      {filtered && <button type="button" className="button ghost small directory-clear" onClick={() => { setQuery(""); setFilters({ q: "", area: "", level: "", language: "", modality: "" }); }}>Quitar filtros</button>}
     </div>
     {error ? <ErrorState error={error} retry={load}/> : !data ? <Loading label="Cargando el equipo…" cards={3}/> : !data.entries.length
       ? <EmptyState icon="users" title={data.total ? "Nadie coincide con los filtros" : "Aún no hay perfiles publicados"}>{data.total ? "Prueba con otros filtros." : "Cuando las personas del equipo publiquen su perfil, aparecerán aquí."}</EmptyState>
       : <><p className="toolbar-count" role="status">{data.entries.length === 1 ? "1 persona" : `${data.entries.length} personas`}</p>
-        <ul className="card-grid directory-grid" aria-label="Personas del equipo">{data.entries.map(entry => <li key={entry.userId}><article className="directory-card">
-          {entry.photoUrl ? <img className="profile-photo" src={entry.photoUrl} alt="" width={56} height={56}/> : <Avatar name={entry.displayName} size={56}/>}
-          <div className="stack-tight">
-            <h2 className="directory-name"><Link href={`/equipo/${entry.userId}`}>{entry.displayName}</Link></h2>
-            {entry.headline && <p className="small">{entry.headline}</p>}
-            {entry.areas.length > 0 && <ul className="chips small-chips" aria-label="Áreas">{entry.areas.slice(0, 4).map(item => <li key={item.label}><span className="chip-button">{item.label}</span></li>)}</ul>}
-            <p className="muted small">{[entry.languages.map(item => languageLabel(item.code)).join(", "), entry.levels.map(levelLabel).join(", ")].filter(Boolean).join(" · ")}</p>
-            {entry.verifiedCredentials > 0 && <StatusBadge tone="success">{entry.verifiedCredentials === 1 ? "1 credencial verificada" : `${entry.verifiedCredentials} credenciales verificadas`}</StatusBadge>}
-          </div>
-        </article></li>)}</ul></>}
+        <ul className="directory-grid" aria-label="Personas del equipo">{data.entries.map(entry => {
+          const extra = entry.areas.length > 3 ? entry.areas.length - 3 : 0;
+          return <li key={entry.userId}><article className="directory-card">
+            {entry.photoUrl ? <img className="profile-photo" src={entry.photoUrl} alt="" width={72} height={72}/> : <Avatar name={entry.displayName} size={72}/>}
+            <div className="stack-tight">
+              <h2 className="directory-name"><Link href={`/equipo/${entry.userId}`}>{entry.displayName}</Link>{entry.verifiedCredentials > 0 && <> <StatusBadge tone="success">Verificada</StatusBadge></>}</h2>
+              {entry.headline && <p className="small">{entry.headline}</p>}
+              {entry.areas.length > 0 && <ul className="chips small-chips" aria-label="Áreas">{entry.areas.slice(0, 3).map(item => <li key={item.label}><span className="chip-button">{item.label}</span></li>)}{extra > 0 && <li><span className="chip-button">+{extra}</span></li>}</ul>}
+              {entry.languages.length > 0 && <p className="muted small">{entry.languages.map(item => languageLabel(item.code)).join(", ")}</p>}
+            </div>
+          </article></li>;
+        })}</ul></>}
   </>;
 }
 

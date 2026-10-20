@@ -56,7 +56,7 @@ test("HL-15 ST-154 ST-155 ST-156 ST-157: an educator completes and sends their p
     await page.getByRole("checkbox", { name: "CINE 1 · Educación primaria" }).check();
     await page.getByRole("checkbox", { name: "En línea" }).check();
     await sections.getByRole("button", { name: "Contacto" }).click();
-    await page.getByLabel("Teléfono").fill("+502 5555-0157");
+    await page.getByRole("textbox", { name: "Teléfono (opcional)" }).fill("+502 5555-0157");
     await page.getByRole("button", { name: "Guardar perfil" }).click();
     await expect(toast(page)).toContainText("Perfil guardado.");
     await expect(meter).not.toHaveAttribute("aria-valuenow", "8");
