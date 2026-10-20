@@ -40,14 +40,14 @@ test("HL-15 ST-149 ST-150: an educator edits their profile with a photo, adminis
     await expect(toast(page)).toContainText("Foto actualizada.");
     await expect(page.getByRole("img", { name: "Tu foto de perfil" })).toBeVisible();
     // ST-154: the profile is edited by sections (tabs); one save keeps every section.
-    const sections = page.getByRole("tablist", { name: "Secciones del perfil" });
-    await sections.getByRole("tab", { name: "Trayectoria" }).click();
+    const sections = page.getByRole("navigation", { name: "Secciones del perfil" });
+    await sections.getByRole("button", { name: "Trayectoria" }).click();
     await page.getByLabel("Resumen de formación").fill("Profesorado ficticio en Matemática");
-    await sections.getByRole("tab", { name: "Enseñanza" }).click();
+    await sections.getByRole("button", { name: "Enseñanza" }).click();
     await page.getByLabel("Nueva área").fill("Álgebra");
     await page.getByRole("button", { name: "Agregar área" }).click();
     await expect(page.getByRole("list", { name: "Tus áreas de enseñanza" })).toContainText("Álgebra");
-    await sections.getByRole("tab", { name: "Contacto y disponibilidad" }).click();
+    await sections.getByRole("button", { name: "Contacto" }).click();
     await page.getByLabel("Teléfono").fill("+502 5555-0149");
     await page.getByLabel("Correo de contacto").fill("perfil.contacto@ejemplo.org");
     await page.getByRole("button", { name: "Agregar franja" }).click();

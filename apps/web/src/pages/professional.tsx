@@ -13,11 +13,12 @@ import { api, ApiError, message, sendFile } from "../api";
 import { Link, useUnsavedChanges } from "../navigation";
 import { useSession } from "../session";
 import { timeAgo } from "../model";
-import { Modal, useFeedback } from "../ui/feedback";
+import { Drawer, Modal, useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import { Avatar } from "../ui/progress";
-import { Tabs } from "../ui/Tabs";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, Section, StatusBadge } from "../ui/primitives";
+import { StatusSteps } from "../ui/StatusSteps";
+import type { StatusStep } from "../ui/StatusSteps";
 import type { Tone } from "../ui/primitives";
 import { departureDay } from "./departure";
 import { PersonPhoto } from "./profile";
@@ -26,13 +27,12 @@ import { PersonPhoto } from "./profile";
  * ST-154 to ST-157 (DEC-045): «Mi perfil» by sections with its completeness and a preview as a student sees it,
  * the team directory and each person's page, and the review queue for profiles and credentials.
  */
-type Tab = "identity" | "about" | "languages" | "teaching" | "career" | "credentials" | "links" | "contact" | "privacy";
+type Tab = "identity" | "about" | "languages" | "teaching" | "career" | "credentials" | "links" | "contact";
 const tabs: { value: Tab; label: string }[] = [
   { value: "identity", label: "Identidad" }, { value: "about", label: "Sobre mí" }, { value: "languages", label: "Idiomas" }, { value: "teaching", label: "Enseñanza" },
-  { value: "career", label: "Trayectoria" }, { value: "credentials", label: "Credenciales" }, { value: "links", label: "Enlaces" }, { value: "contact", label: "Contacto y disponibilidad" },
-  { value: "privacy", label: "Privacidad" },
+  { value: "career", label: "Trayectoria" }, { value: "credentials", label: "Credenciales" }, { value: "links", label: "Enlaces" }, { value: "contact", label: "Contacto" },
 ];
-/** Which tab holds each field of an error path from the API. */
+/** Which section holds each field of an error path from the API. */
 function tabOf(path: string): Tab {
   const key = path.split(".")[0];
   if (["preferredName", "pronouns", "headline", "country", "city", "timezone", "displayName"].includes(key)) return "identity";
@@ -41,8 +41,21 @@ function tabOf(path: string): Tab {
   if (["areas", "levels", "modalities", "formats", "audiences", "experienceYears"].includes(key)) return "teaching";
   if (["experience", "education", "educationSummary"].includes(key)) return "career";
   if (key === "links") return "links";
-  if (key === "visibility") return "privacy";
   return "contact";
+}
+function sectionDone(section: Tab, profile: MyProfessionalProfile) {
+  const steps = profile.completeness.steps.filter(step => (step.section === "photo" ? "identity" : step.section) === section);
+  return steps.length > 0 && steps.every(step => step.done);
+}
+function profileSteps(status: ProfileStatus): StatusStep[] {
+  const order: ProfileStatus[] = ["draft", "in_review", "published"];
+  const current = status === "changes_requested" ? "in_review" : status === "hidden" ? "published" : status;
+  const index = order.indexOf(current);
+  return [
+    { id: "draft", label: "Borrador", state: index > 0 ? "done" : "current" },
+    { id: "in_review", label: status === "changes_requested" ? "Cambios solicitados" : "En revisión", state: index > 1 ? "done" : index === 1 ? "current" : "todo" },
+    { id: "published", label: status === "hidden" ? "Oculto" : "Publicado", state: index >= 2 ? "done" : "todo" },
+  ];
 }
 export const statusTone: Record<ProfileStatus, Tone> = { draft: "neutral", in_review: "info", changes_requested: "warning", published: "success", hidden: "neutral" };
 const credentialTone: Record<CredentialStatus, Tone> = { draft: "neutral", submitted: "info", verified: "success", rejected: "danger", withdrawn: "neutral", expired: "warning" };
@@ -138,8 +151,9 @@ function ProfileEditor({ initial, reload }: { initial: MyProfessionalProfile; re
   const errorCount = Object.keys(errors).length;
   const tabErrors = (value: Tab) => Object.keys(errors).filter(key => tabOf(key) === value).length;
 
+  const go = (section: Tab) => setTab(section);
   return <>
-    <PageHeader title="Mi perfil" description="Tu perfil profesional: lo que el equipo y los estudiantes de tus secciones conocen de ti. Tú eliges quién ve cada sección; tu teléfono y tu correo nunca llegan a los estudiantes."
+    <PageHeader title="Mi perfil" description="Lo que el equipo y los estudiantes de tus secciones conocen de ti."
       meta={<span className="profile-status-line"><StatusBadge tone={statusTone[status]}>{profileStatusLabels[status]}</StatusBadge>
         {profile.submission?.status === "in_review" && published && <StatusBadge tone="info">Cambios en revisión</StatusBadge>}
         {profile.hasChanges && published && profile.submission?.status !== "in_review" && <StatusBadge tone="warning">Cambios sin enviar</StatusBadge>}</span>}
@@ -148,11 +162,26 @@ function ProfileEditor({ initial, reload }: { initial: MyProfessionalProfile; re
         {profile.publication && <Link className="button ghost" href={`/equipo/${profile.userId}`}><Icon name="users" size={18}/>Ver publicado</Link>}
       </>}
       primary={<button type="button" className="button primary" disabled={busy || !canSubmit} onClick={() => void submit()}><Icon name="send" size={18}/>{submitLabel}</button>}/>
-    <div className="profile-layout">
-      {/* Not a form: the credential dialog has its own form, and forms cannot nest. */}
-      <div className="profile-main stack">
-        {(alert || errorCount > 0) && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{alert || "Revisa los campos marcados."}{errorCount > 0 && ` (${errorCount === 1 ? "1 campo" : `${errorCount} campos`})`}</p>}
-        <Tabs label="Secciones del perfil" value={tab} onChange={setTab} items={tabs.map(item => ({ ...item, badge: tabErrors(item.value) ? <><span className="tab-alert" aria-hidden="true">!</span><span className="sr-only">, con errores</span></> : undefined }))}>
+    {profile.submission?.status === "returned" && <div className="message-bar warning" role="status">
+      <Icon name="alert" size={18}/>
+      <div><strong>Administración te pidió cambios</strong><p className="pre-line">{profile.submission.note}</p>
+        <button type="button" className="button secondary small" onClick={() => go("about")}>Ir a Sobre mí</button></div>
+    </div>}
+    <StatusSteps label="Estado del perfil" steps={profileSteps(status)}/>
+    <div className="profile-workspace">
+      <nav className="profile-section-nav" aria-label="Secciones del perfil">
+        <ul>{tabs.map(item => <li key={item.value}>
+          <button type="button" aria-current={tab === item.value || undefined} onClick={() => go(item.value)}>
+            <span>{item.label}{tabErrors(item.value) > 0 && <span className="sr-only">, con errores</span>}</span>
+            <span className={`profile-section-mark${tabErrors(item.value) ? " is-error" : sectionDone(item.value, profile) ? " is-done" : ""}`} aria-hidden="true"/>
+          </button>
+        </li>)}</ul>
+      </nav>
+      <div className="profile-layout">
+        <div className="profile-main">
+          <Completeness profile={profile} onGo={section => go(section === "photo" ? "identity" : section === "availability" || section === "contact" ? "contact" : section as Tab)}/>
+          <Publication profile={profile} onHide={() => void visibilityAction("hide")} onShow={() => void visibilityAction("show")}/>
+          {(alert || errorCount > 0) && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{alert || "Revisa los campos marcados."}{errorCount > 0 && ` (${errorCount === 1 ? "1 campo" : `${errorCount} campos`})`}</p>}
           {tab === "credentials" ? <CredentialsTab profile={profile} onChange={refresh}/> : <fieldset className="stack" disabled={busy}>
             {tab === "identity" && <IdentityTab draft={draft} patch={patch} account={account} patchAccount={patchAccount} err={err} profile={profile} photo={photo} setPhoto={setPhoto}/>}
             {tab === "about" && <AboutTab draft={draft} patch={patch} err={err}/>}
@@ -160,32 +189,43 @@ function ProfileEditor({ initial, reload }: { initial: MyProfessionalProfile; re
             {tab === "teaching" && <TeachingTab draft={draft} patch={patch} err={err}/>}
             {tab === "career" && <CareerTab draft={draft} patch={patch} err={err} education={account.education} setEducation={education => patchAccount({ education })}/>}
             {tab === "links" && <LinksTab draft={draft} patch={patch} err={err}/>}
-            {tab === "contact" && <ContactTab account={account} patchAccount={patchAccount} err={err}/>}
-            {tab === "privacy" && <PrivacyTab visibility={visibility} onChange={value => { setVisibility(value); setDirty(true); }}/>}
+            {tab === "contact" && <>
+              <ContactTab account={account} patchAccount={patchAccount} err={err}/>
+              <PrivacyTab visibility={visibility} onChange={value => { setVisibility(value); setDirty(true); }}/>
+            </>}
           </fieldset>}
-        </Tabs>
-        {tab !== "credentials" && <div className="save-bar">
-          <span className="muted small" role="status">{dirty ? "Tienes cambios sin guardar." : "Todo guardado."}</span>
-          <button type="button" className="button primary" disabled={busy} onClick={() => void save()}>{busy ? "Guardando…" : "Guardar perfil"}</button>
-        </div>}
+          {tab !== "credentials" && dirty && <div className="save-bar">
+            <span className="muted small" role="status">Tienes cambios sin guardar.</span>
+            <button type="button" className="button primary" disabled={busy} onClick={() => void save()}>{busy ? "Guardando…" : "Guardar perfil"}</button>
+          </div>}
+        </div>
       </div>
-      <aside className="profile-aside stack" aria-label="Estado del perfil">
-        <Completeness profile={profile} onGo={section => setTab(section === "photo" ? "identity" : section === "availability" || section === "contact" ? "contact" : section)}/>
-        <Publication profile={profile} onHide={() => void visibilityAction("hide")} onShow={() => void visibilityAction("show")}/>
-      </aside>
     </div>
     {preview && <PreviewDialog profile={profile} draft={draft} visibility={visibility} name={account.displayName} photo={photo} onClose={() => setPreview(false)}/>}
   </>;
 }
 
 function Completeness({ profile, onGo }: { profile: MyProfessionalProfile; onGo: (section: ProfileSection | "photo") => void }) {
-  const { percent, steps } = profile.completeness, missing = steps.filter(step => !step.done);
+  const { percent, steps } = profile.completeness, missing = steps.filter(step => !step.done), next = missing.slice(0, 3);
+  const [all, setAll] = useState(false);
+  const shown = all ? missing : next;
+  const radius = 28, circ = 2 * Math.PI * radius, dash = (percent / 100) * circ;
   return <section className="panel completeness" aria-labelledby="completeness-title">
-    <div className="panel-header"><h2 id="completeness-title">Perfil completo al {percent} %</h2></div>
-    <div className="meter" role="progressbar" aria-labelledby="completeness-title" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}><span style={{ width: `${percent}%` }}/></div>
+    <div className="completeness-ring">
+      <svg width="72" height="72" viewBox="0 0 72 72" aria-hidden="true">
+        <circle className="track" cx="36" cy="36" r={radius}/>
+        <circle className="value" cx="36" cy="36" r={radius} strokeDasharray={`${dash} ${circ}`}/>
+      </svg>
+      <div>
+        <h2 id="completeness-title" className="completeness-pct">{percent} %</h2>
+        <p className="muted small" id="completeness-label">Perfil completo al {percent} %</p>
+      </div>
+    </div>
+    <div className="meter sr-only" role="progressbar" aria-labelledby="completeness-label" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}/>
     {missing.length ? <>
-      <p className="muted small">Un perfil completo da confianza a estudiantes y familias. Te falta:</p>
-      <ul className="plain-list completeness-steps">{missing.map(step => <li key={step.key}><button type="button" className="link-button" onClick={() => onGo(step.section)}>{step.label}</button></li>)}</ul>
+      <p className="muted small">{all ? "Todo lo que falta:" : "Tus tres pasos siguientes:"}</p>
+      <ul className="plain-list completeness-steps">{shown.map(step => <li key={step.key}><button type="button" className="link-button" onClick={() => onGo(step.section)}>{step.label}</button></li>)}</ul>
+      {missing.length > 3 && <button type="button" className="button ghost small" onClick={() => setAll(!all)}>{all ? "Ver menos" : "Ver todo"}</button>}
     </> : <p className="muted small"><Icon name="check" size={16}/> Tu perfil tiene todo lo recomendado.</p>}
     {profile.missing.length > 0 && <p className="small"><strong>Para enviarlo necesitas</strong> {profile.missing.join(", ")}.</p>}
   </section>;
@@ -248,20 +288,18 @@ function IdentityTab({ draft, patch, account, patchAccount, err, profile, photo,
         </div>
       </div>
     </div>
-    <div className="field-grid">
-      <Field label="Nombre" hint="Como aparece en los cursos, las secciones y la actividad. Se aplica de inmediato." error={err("displayName")}><input value={account.displayName} onChange={event => patchAccount({ displayName: event.target.value })} maxLength={80} autoComplete="name" required/></Field>
-      <Field label="Nombre preferido" optional hint="Cómo te gusta que te llamen." error={err("preferredName")}><input value={draft.preferredName} onChange={event => patch({ preferredName: event.target.value })} maxLength={profileLimits.preferredName}/></Field>
-      <Field label="Pronombres" optional hint="Por ejemplo: ella, él, elle." error={err("pronouns")}><input value={draft.pronouns} onChange={event => patch({ pronouns: event.target.value })} maxLength={profileLimits.pronouns}/></Field>
-    </div>
-    <Field label="Titular" hint={<>Una línea sobre lo que enseñas y a quién. <Counter value={draft.headline} max={profileLimits.headline}/></>} error={err("headline")}>
-      <input value={draft.headline} onChange={event => patch({ headline: event.target.value })} maxLength={profileLimits.headline} placeholder="Por ejemplo: Docente de ciencias para secundaria, con enfoque en laboratorio"/></Field>
-    <div className="field-grid">
-      <CountrySelect label="País" value={draft.country} onChange={country => patch({ country })} error={err("country")}/>
-      <Field label="Ciudad" optional error={err("city")}><input value={draft.city} onChange={event => patch({ city: event.target.value })} maxLength={profileLimits.city} autoComplete="address-level2"/></Field>
-      <Field label="Zona horaria" optional hint="Para mostrar tus horarios en la hora de cada persona." error={err("timezone")}><select value={draft.timezone || ""} onChange={event => patch({ timezone: event.target.value || null })}>
+    <div className="form-grid-12">
+      <div className="form-span-6"><Field label="Nombre" hint="Como aparece en los cursos, las secciones y la actividad. Se aplica de inmediato." error={err("displayName")}><input value={account.displayName} onChange={event => patchAccount({ displayName: event.target.value })} maxLength={80} autoComplete="name" required/></Field></div>
+      <div className="form-span-4"><Field label="Nombre preferido" optional hint="Cómo te gusta que te llamen." error={err("preferredName")}><input value={draft.preferredName} onChange={event => patch({ preferredName: event.target.value })} maxLength={profileLimits.preferredName}/></Field></div>
+      <div className="form-span-4"><Field label="Pronombres" optional hint="Por ejemplo: ella, él, elle." error={err("pronouns")}><input value={draft.pronouns} onChange={event => patch({ pronouns: event.target.value })} maxLength={profileLimits.pronouns}/></Field></div>
+      <div className="form-span-12"><Field label="Titular" hint={<>Una línea sobre lo que enseñas y a quién. <Counter value={draft.headline} max={profileLimits.headline}/></>} error={err("headline")}>
+        <input value={draft.headline} onChange={event => patch({ headline: event.target.value })} maxLength={profileLimits.headline} placeholder="Por ejemplo: Docente de ciencias para secundaria, con enfoque en laboratorio"/></Field></div>
+      <div className="form-span-4"><CountrySelect label="País" value={draft.country} onChange={country => patch({ country })} error={err("country")}/></div>
+      <div className="form-span-4"><Field label="Ciudad" optional error={err("city")}><input value={draft.city} onChange={event => patch({ city: event.target.value })} maxLength={profileLimits.city} autoComplete="address-level2"/></Field></div>
+      <div className="form-span-4"><Field label="Zona horaria" optional hint="Para mostrar tus horarios en la hora de cada persona." error={err("timezone")}><select value={draft.timezone || ""} onChange={event => patch({ timezone: event.target.value || null })}>
         <option value="">Sin indicar</option>
         {zones.map(group => <optgroup key={group.region} label={group.region}>{group.zones.map(zone => <option key={zone.id} value={zone.id}>{zone.city} ({zone.offset})</option>)}</optgroup>)}
-      </select></Field>
+      </select></Field></div>
     </div>
   </>;
 }
@@ -336,44 +374,78 @@ function TeachingTab({ draft, patch, err }: TabProps) {
 }
 
 function CareerTab({ draft, patch, err, education, setEducation }: TabProps & { education: string; setEducation: (value: string) => void }) {
-  const setExperience = (index: number, value: Partial<ProfessionalProfile["experience"][number]>) => patch({ experience: draft.experience.map((item, i) => i === index ? { ...item, ...value } : item) });
-  const setStudy = (index: number, value: Partial<ProfessionalProfile["education"][number]>) => patch({ education: draft.education.map((item, i) => i === index ? { ...item, ...value } : item) });
+  const [editing, setEditing] = useState<{ kind: "experience" | "education"; index: number | "new" } | null>(null);
+  const emptyExperience = { role: "", institution: "", country: draft.country, from: "", to: null as string | null, description: "" };
+  const emptyStudy = { degree: "", institution: "", country: draft.country, year: null as number | null, field: "" };
   return <>
     <section className="stack" aria-labelledby="experience-title">
-      <h2 id="experience-title" className="section-title">Experiencia</h2>
+      <div className="panel-title-row"><h2 id="experience-title" className="section-title">Experiencia</h2>
+        {draft.experience.length < profileLimits.experience && <button type="button" className="button secondary small" onClick={() => setEditing({ kind: "experience", index: "new" })}><Icon name="plus" size={16}/>Agregar experiencia</button>}</div>
       {err("experience") && <p className="field-error">{err("experience")}</p>}
-      {draft.experience.map((item, index) => <fieldset key={index} className="config-section entry">
-        <legend>Experiencia {index + 1}</legend>
-        <div className="field-grid">
-          <Field label="Cargo" error={err(`experience.${index}.role`)}><input value={item.role} maxLength={profileLimits.role} onChange={event => setExperience(index, { role: event.target.value })}/></Field>
-          <Field label="Institución" error={err(`experience.${index}.institution`)}><input value={item.institution} maxLength={profileLimits.institution} onChange={event => setExperience(index, { institution: event.target.value })}/></Field>
-          <CountrySelect label="País" value={item.country} onChange={country => setExperience(index, { country })} error={err(`experience.${index}.country`)}/>
-          <Field label="Desde" hint="Mes y año." error={err(`experience.${index}.from`)}><input type="month" value={item.from} onChange={event => setExperience(index, { from: event.target.value })}/></Field>
-          <Field label="Hasta" optional hint="Vacío si es tu cargo actual." error={err(`experience.${index}.to`)}><input type="month" value={item.to || ""} onChange={event => setExperience(index, { to: event.target.value || null })}/></Field>
+      {draft.experience.length ? <ul className="plain-list stack">{draft.experience.map((item, index) => <li key={index} className="entry-card">
+        <div className="entry-card-head"><div><strong>{item.role || "Sin cargo"}</strong><p className="muted small">{item.institution}{item.country ? ` · ${countryName(item.country)}` : ""} · {item.from || "sin fecha"}{item.to ? ` a ${item.to}` : " a la fecha"}</p></div>
+          <span className="row-actions">
+            <button type="button" className="button ghost small" onClick={() => setEditing({ kind: "experience", index })} aria-label={`Editar experiencia ${index + 1}`}><Icon name="edit" size={16}/>Editar</button>
+            <button type="button" className="button ghost small" onClick={() => patch({ experience: draft.experience.filter((_, i) => i !== index) })} aria-label={`Quitar experiencia ${index + 1}`}><Icon name="close" size={16}/>Quitar</button>
+          </span>
         </div>
-        <Field label="Descripción" optional error={err(`experience.${index}.description`)}><textarea rows={3} value={item.description} maxLength={profileLimits.description} onChange={event => setExperience(index, { description: event.target.value })}/></Field>
-        <div><button type="button" className="button ghost small" onClick={() => patch({ experience: draft.experience.filter((_, i) => i !== index) })}><Icon name="close" size={16}/>Quitar experiencia {index + 1}</button></div>
-      </fieldset>)}
-      {draft.experience.length < profileLimits.experience && <div><button type="button" className="button secondary small" onClick={() => patch({ experience: [...draft.experience, { role: "", institution: "", country: draft.country, from: "", to: null, description: "" }] })}><Icon name="plus" size={16}/>Agregar experiencia</button></div>}
+        {item.description && <p className="small pre-line">{item.description}</p>}
+      </li>)}</ul> : <EmptyState compact icon="users" title="Sin experiencia">Agrega los cargos que quieres que vean el equipo y los estudiantes.</EmptyState>}
     </section>
     <section className="stack" aria-labelledby="education-title">
-      <h2 id="education-title" className="section-title">Formación</h2>
+      <div className="panel-title-row"><h2 id="education-title" className="section-title">Formación</h2>
+        {draft.education.length < profileLimits.education && <button type="button" className="button secondary small" onClick={() => setEditing({ kind: "education", index: "new" })}><Icon name="plus" size={16}/>Agregar estudio</button>}</div>
       {err("education") && <p className="field-error">{err("education")}</p>}
-      {draft.education.map((item, index) => <fieldset key={index} className="config-section entry">
-        <legend>Estudio {index + 1}</legend>
-        <div className="field-grid">
-          <Field label="Título o programa" error={err(`education.${index}.degree`)}><input value={item.degree} maxLength={profileLimits.degree} onChange={event => setStudy(index, { degree: event.target.value })}/></Field>
-          <Field label="Institución" error={err(`education.${index}.institution`)}><input value={item.institution} maxLength={profileLimits.institution} onChange={event => setStudy(index, { institution: event.target.value })}/></Field>
-          <Field label="Campo de estudio" optional error={err(`education.${index}.field`)}><input value={item.field} maxLength={profileLimits.field} onChange={event => setStudy(index, { field: event.target.value })}/></Field>
-          <CountrySelect label="País" value={item.country} onChange={country => setStudy(index, { country })} error={err(`education.${index}.country`)}/>
-          <Field label="Año" optional hint="De graduación o el esperado." error={err(`education.${index}.year`)}><input type="number" inputMode="numeric" min={1940} max={2100} value={item.year ?? ""} onChange={event => setStudy(index, { year: event.target.value === "" ? null : Number(event.target.value) })}/></Field>
+      {draft.education.length ? <ul className="plain-list stack">{draft.education.map((item, index) => <li key={index} className="entry-card">
+        <div className="entry-card-head"><div><strong>{item.degree || "Sin título"}</strong><p className="muted small">{item.institution}{item.country ? ` · ${countryName(item.country)}` : ""}{item.year ? ` · ${item.year}` : ""}{item.field ? ` · ${item.field}` : ""}</p></div>
+          <span className="row-actions">
+            <button type="button" className="button ghost small" onClick={() => setEditing({ kind: "education", index })} aria-label={`Editar estudio ${index + 1}`}><Icon name="edit" size={16}/>Editar</button>
+            <button type="button" className="button ghost small" onClick={() => patch({ education: draft.education.filter((_, i) => i !== index) })} aria-label={`Quitar estudio ${index + 1}`}><Icon name="close" size={16}/>Quitar</button>
+          </span>
         </div>
-        <div><button type="button" className="button ghost small" onClick={() => patch({ education: draft.education.filter((_, i) => i !== index) })}><Icon name="close" size={16}/>Quitar estudio {index + 1}</button></div>
-      </fieldset>)}
-      {draft.education.length < profileLimits.education && <div><button type="button" className="button secondary small" onClick={() => patch({ education: [...draft.education, { degree: "", institution: "", country: draft.country, year: null, field: "" }] })}><Icon name="plus" size={16}/>Agregar estudio</button></div>}
+      </li>)}</ul> : <EmptyState compact icon="file" title="Sin formación">Agrega tus títulos y programas.</EmptyState>}
       <Field label="Resumen de formación" optional hint="Texto libre de tu perfil anterior. Lo ven administración y tú." error={err("educationSummary")}><textarea rows={3} value={education} maxLength={1000} onChange={event => setEducation(event.target.value)}/></Field>
     </section>
+    {editing?.kind === "experience" && <ExperienceDrawer item={editing.index === "new" ? emptyExperience : draft.experience[editing.index]} onClose={() => setEditing(null)}
+      onSave={value => { patch({ experience: editing.index === "new" ? [...draft.experience, value] : draft.experience.map((item, i) => i === editing.index ? value : item) }); setEditing(null); }}/>}
+    {editing?.kind === "education" && <EducationDrawer item={editing.index === "new" ? emptyStudy : draft.education[editing.index]} onClose={() => setEditing(null)}
+      onSave={value => { patch({ education: editing.index === "new" ? [...draft.education, value] : draft.education.map((item, i) => i === editing.index ? value : item) }); setEditing(null); }}/>}
   </>;
+}
+
+function ExperienceDrawer({ item, onClose, onSave }: { item: ProfessionalProfile["experience"][number]; onClose: () => void; onSave: (value: ProfessionalProfile["experience"][number]) => void }) {
+  const [form, setForm] = useState(item);
+  const set = (value: Partial<typeof form>) => setForm(current => ({ ...current, ...value }));
+  return <Drawer title={item.role ? "Editar experiencia" : "Agregar experiencia"} onClose={onClose}>
+    <form className="stack" onSubmit={event => { event.preventDefault(); onSave(form); }}>
+      <div className="form-grid-12">
+        <div className="form-span-6"><Field label="Cargo"><input value={form.role} maxLength={profileLimits.role} onChange={event => set({ role: event.target.value })} required/></Field></div>
+        <div className="form-span-6"><Field label="Institución"><input value={form.institution} maxLength={profileLimits.institution} onChange={event => set({ institution: event.target.value })} required/></Field></div>
+        <div className="form-span-4"><CountrySelect label="País" value={form.country} onChange={country => set({ country })}/></div>
+        <div className="form-span-4"><Field label="Desde" hint="Mes y año."><input type="month" value={form.from} onChange={event => set({ from: event.target.value })} required/></Field></div>
+        <div className="form-span-4"><Field label="Hasta" optional hint="Vacío si es tu cargo actual."><input type="month" value={form.to || ""} onChange={event => set({ to: event.target.value || null })}/></Field></div>
+        <div className="form-span-12"><Field label="Descripción" optional><textarea rows={3} value={form.description} maxLength={profileLimits.description} onChange={event => set({ description: event.target.value })}/></Field></div>
+      </div>
+      <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">Guardar</button></div>
+    </form>
+  </Drawer>;
+}
+
+function EducationDrawer({ item, onClose, onSave }: { item: ProfessionalProfile["education"][number]; onClose: () => void; onSave: (value: ProfessionalProfile["education"][number]) => void }) {
+  const [form, setForm] = useState(item);
+  const set = (value: Partial<typeof form>) => setForm(current => ({ ...current, ...value }));
+  return <Drawer title={item.degree ? "Editar estudio" : "Agregar estudio"} onClose={onClose}>
+    <form className="stack" onSubmit={event => { event.preventDefault(); onSave(form); }}>
+      <div className="form-grid-12">
+        <div className="form-span-6"><Field label="Título o programa"><input value={form.degree} maxLength={profileLimits.degree} onChange={event => set({ degree: event.target.value })} required/></Field></div>
+        <div className="form-span-6"><Field label="Institución"><input value={form.institution} maxLength={profileLimits.institution} onChange={event => set({ institution: event.target.value })} required/></Field></div>
+        <div className="form-span-6"><Field label="Campo de estudio" optional><input value={form.field} maxLength={profileLimits.field} onChange={event => set({ field: event.target.value })}/></Field></div>
+        <div className="form-span-4"><CountrySelect label="País" value={form.country} onChange={country => set({ country })}/></div>
+        <div className="form-span-4"><Field label="Año" optional hint="De graduación o el esperado."><input type="number" inputMode="numeric" min={1940} max={2100} value={form.year ?? ""} onChange={event => set({ year: event.target.value === "" ? null : Number(event.target.value) })}/></Field></div>
+      </div>
+      <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">Guardar</button></div>
+    </form>
+  </Drawer>;
 }
 
 function LinksTab({ draft, patch, err }: TabProps) {
@@ -470,7 +542,7 @@ function CredentialDialog({ userId, credential, onClose, onDone }: { userId: str
     } catch (cause) { setError(message(cause)); setErrors((cause instanceof ApiError ? cause.detail.errors : undefined) as Record<string, string> || {}); setBusy(false); }
   }
   const documents = (file?.documents || []).filter(item => !item.withdrawnAt);
-  return <Modal title={credential ? "Editar credencial" : "Agregar credencial"} onClose={onClose} wide>
+  return <Drawer title={credential ? "Editar credencial" : "Agregar credencial"} onClose={onClose}>
     <form className="stack" onSubmit={event => { event.preventDefault(); void save(true); }}><fieldset className="stack" disabled={busy}>
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
       {credential && (credential.status === "verified" || credential.status === "expired") && <p className="message-bar warning"><Icon name="alert" size={18}/>Si cambias una credencial verificada, vuelve a borrador y necesita una nueva verificación.</p>}
@@ -493,7 +565,7 @@ function CredentialDialog({ userId, credential, onClose, onDone }: { userId: str
         <button className="button primary">{busy ? "Guardando…" : "Guardar y enviar a verificación"}</button>
       </div>
     </fieldset></form>
-  </Modal>;
+  </Drawer>;
 }
 
 function PreviewDialog({ profile, draft, visibility, name, photo, onClose }: { profile: MyProfessionalProfile; draft: ProfessionalProfile; visibility: ProfileVisibility; name: string; photo: string | null; onClose: () => void }) {
