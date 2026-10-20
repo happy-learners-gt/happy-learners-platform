@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { FormEvent } from "react";
-import type { CompensationKind, Contract, ContractEngagement, ContractPhase, ContractTemplate, ContractTemplateVersion, ContractTermField, ContractTerms, Member, RichTextDocument, WorkLocation } from "@happy-learners/contracts";
+import type { ChangeEvent, FormEvent } from "react";
+import type { CompensationKind, Contract, ContractEngagement, ContractPhase, ContractTemplate, ContractTemplateVersion, ContractTermField, ContractTerms, ContractVerification, Member, RichTextDocument, WorkLocation } from "@happy-learners/contracts";
 import {
   compensationAllowed, compensationKinds, compensationLabels, compensationPeriods, compensationSummary, contractEngagements,
   contractPhaseLabels, contractTermFields, contractVariables, contractValues, engagementLabels, locationLabels, mergeContract,
@@ -18,6 +18,7 @@ import type { Tone } from "../ui/primitives";
 import { StatusSteps } from "../ui/StatusSteps";
 import type { StatusStep } from "../ui/StatusSteps";
 import { LegalSettings } from "./legal";
+import { ReceiptLink } from "./my-contracts";
 
 const tabs = [
   { id: "plantillas", label: "Plantillas", href: "/contratos" },
@@ -282,6 +283,7 @@ function ContractsTab({ creating, onCreating }: { creating: boolean; onCreating:
       </table></div>}
     {selected && <ContractDetail contract={selected} onClose={() => setSelected(null)} onChanged={next => { setSelected(next); load(); }} onGone={() => { setSelected(null); load(); }} toast={toast} confirm={confirm}/>}
     {creating && <NewContractDialog people={people} templates={templates} onClose={() => onCreating(false)} onCreated={item => { onCreating(false); setSelected(item); load(); }}/>}
+    <ContractVerify/>
   </>;
 }
 
@@ -324,6 +326,7 @@ function ContractDetail({ contract, onClose, onChanged, onGone, toast, confirm }
       <Section title="Firmas">
         <p className="small">Organización: {contract.organizationSignature ? `${contract.organizationSignature.name} · ${contract.organizationSignature.signedAt.slice(0, 10)}` : "Pendiente"}</p>
         <p className="small">Persona: {contract.memberSignature ? `${contract.memberSignature.name} · ${contract.memberSignature.signedAt.slice(0, 10)}` : "Pendiente"}</p>
+        {contract.documentSha256 && <ReceiptLink id={contract.id} compact/>}
       </Section>
       {contract.closeReason && <p className="muted small">Cierre: {contract.closeReason}</p>}
       <div className="form-actions">
@@ -393,6 +396,49 @@ function NewContractDialog({ people, templates, onClose, onCreated }: { people: 
       <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary" disabled={!published.length}>{busy ? "Creando…" : "Crear borrador"}</button></div>
     </fieldset></form>
   </Modal>;
+}
+
+const verificationTone: Record<ContractVerification["status"], "success" | "danger" | "warning"> = { valid: "success", document_mismatch: "danger", receipt_mismatch: "danger", unknown: "warning" };
+const verificationLabel: Record<ContractVerification["status"], string> = { valid: "Contrato válido", document_mismatch: "El documento no coincide", receipt_mismatch: "Constancia modificada", unknown: "Contrato desconocido" };
+function receiptFields(text: string): Record<string, unknown> | null {
+  try { return JSON.parse(text) as Record<string, unknown>; } catch { /* Not JSON: read it as the receipt's HTML. */ }
+  const block = new DOMParser().parseFromString(text, "text/html").getElementById("hl-constancia")?.textContent;
+  try { return block ? JSON.parse(block) as Record<string, unknown> : null; } catch { return null; }
+}
+
+function ContractVerify() {
+  const [result, setResult] = useState<ContractVerification | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  const [receipt, setReceipt] = useState<{ name: string; fields: Record<string, unknown> } | null>(null);
+  async function verify(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setError(""); setResult(null);
+    const id = String(new FormData(event.currentTarget).get("contractId") || "").trim();
+    if (!receipt && !id) { setError("Escribe el identificador del contrato o carga su constancia."); return; }
+    setBusy(true);
+    try { setResult(await api<ContractVerification>("/contracts/verify", "POST", receipt ? { receipt: receipt.fields } : { contractId: id })); }
+    catch (cause) { setError(message(cause)); }
+    finally { setBusy(false); }
+  }
+  async function choose(event: ChangeEvent<HTMLInputElement>) {
+    setError(""); setResult(null);
+    const file = event.target.files?.[0];
+    if (!file) { setReceipt(null); return; }
+    const fields = file.size <= 2_000_000 ? receiptFields(await file.text()) : null;
+    if (!fields) { setReceipt(null); setError("Ese archivo no es una constancia de contrato de Happy Learners."); return; }
+    setReceipt({ name: file.name, fields });
+  }
+  return <form className="stack signature-verify" onSubmit={verify} aria-labelledby="contract-verify-title">
+    <h2 id="contract-verify-title">Verificar una constancia</h2>
+    <p className="muted small">Carga el archivo de la constancia o escribe el identificador del contrato. Se recalculan las huellas del documento y de cada firma.</p>
+    <Field label="Archivo de la constancia" optional><input type="file" accept=".html,.htm,.json,text/html,application/json" onChange={event => void choose(event)}/></Field>
+    <Field label="Identificador del contrato" optional hint="Empieza por «contract-». Se usa si no cargas un archivo."><input name="contractId" maxLength={100} disabled={!!receipt}/></Field>
+    {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
+    <div className="form-actions"><button className="button secondary" disabled={busy}>{busy ? "Verificando…" : "Verificar"}</button></div>
+    <div role="status" aria-live="polite">{result && <div className="signature-result">
+      <StatusBadge tone={verificationTone[result.status]}>{verificationLabel[result.status]}</StatusBadge>
+      <p className="small">{result.message}</p>
+      {result.contract?.documentSha256 && <p className="muted small">Huella del documento: <code>{result.contract.documentSha256}</code></p>}
+    </div>}</div>
+  </form>;
 }
 
 function SettingsTab() {

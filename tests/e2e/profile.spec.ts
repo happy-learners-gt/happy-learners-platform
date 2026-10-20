@@ -28,7 +28,7 @@ test("HL-15 ST-149 ST-150: an educator edits their profile with a photo, adminis
     const changed = await fetch(`${origin}/api/account/password`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json", Cookie: `hl_session=${session}` }, body: JSON.stringify({ currentPassword: temporaryPassword, newPassword: "Perfil de prueba 2026" }) });
     expect(changed.status).toBe(200);
     // ST-122: the welcome is completed with a minimal profile; this test then edits it from «Mi perfil».
-    await completeOnboarding(session);
+    await completeOnboarding(session, "Pedagogía", "Perfil de prueba 2026");
     await page.context().addCookies([{ name: "hl_session", value: session, url: origin, httpOnly: true, sameSite: "Strict" }]);
 
     // ST-149 criterion 1: the person edits their profile, photo included.
@@ -39,7 +39,7 @@ test("HL-15 ST-149 ST-150: an educator edits their profile with a photo, adminis
     await page.getByLabel("Subir foto").setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: png });
     await expect(toast(page)).toContainText("Foto actualizada.");
     await expect(page.getByRole("img", { name: "Tu foto de perfil" })).toBeVisible();
-    // ST-154: the profile is edited by sections (tabs); one save keeps every section.
+    // ST-154: the profile is edited by stacked sections; one save keeps every section.
     const sections = page.getByRole("navigation", { name: "Secciones del perfil" });
     await sections.getByRole("button", { name: "Trayectoria" }).click();
     await page.getByLabel("Resumen de formación").fill("Profesorado ficticio en Matemática");
@@ -48,8 +48,8 @@ test("HL-15 ST-149 ST-150: an educator edits their profile with a photo, adminis
     await page.getByRole("button", { name: "Agregar área" }).click();
     await expect(page.getByRole("list", { name: "Tus áreas de enseñanza" })).toContainText("Álgebra");
     await sections.getByRole("button", { name: "Contacto" }).click();
-    await page.getByLabel("Teléfono").fill("+502 5555-0149");
-    await page.getByLabel("Correo de contacto").fill("perfil.contacto@ejemplo.org");
+    await page.getByRole("textbox", { name: "Teléfono (opcional)" }).fill("+502 5555-0149");
+    await page.getByRole("textbox", { name: "Correo de contacto (opcional)" }).fill("perfil.contacto@ejemplo.org");
     await page.getByRole("button", { name: "Agregar franja" }).click();
     await page.getByLabel("Día de la franja 1").selectOption("3");
     await page.getByLabel("Desde, franja 1").fill("14:00");
@@ -91,9 +91,11 @@ test("HL-15 ST-149 ST-150: an educator edits their profile with a photo, adminis
     await expect(overview).toContainText(name);
     await expect(overview).toContainText("Por vencer");
 
-    // ST-150 criterion 2: the educator downloads their own document, and the download is in the activity.
-    await page.reload();
-    const mine = page.getByRole("region", { name: "Mi expediente" });
+    // ST-150 criterion 2: the educator downloads their own document from Mi cuenta › Expediente, and the download is in the activity.
+    await page.getByRole("navigation", { name: "Mi cuenta" }).getByRole("link", { name: "Expediente" }).click();
+    await expect(page).toHaveURL(/\/mi-cuenta\/expediente$/);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Expediente");
+    const mine = page.getByRole("region", { name: /Documentos/ });
     await expect(mine.getByRole("row", { name: /Antecedentes penales ficticios/ })).toContainText("Por vencer");
     const download = page.waitForEvent("download");
     await mine.getByRole("link", { name: "Descargar Antecedentes penales ficticios" }).click();

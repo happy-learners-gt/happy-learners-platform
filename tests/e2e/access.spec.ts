@@ -48,9 +48,9 @@ test("HL-174 ST-128 ST-135: administration assigns coordination of one program, 
     const coordinator = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${token}` } });
     // Terms or a privacy policy another test published must be accepted first, as for anyone.
     const pending = (await (await coordinator.get("/api/session")).json()).pending as { id: string }[];
-    if (pending.length) expect((await coordinator.post("/api/legal/accept", { data: { documentIds: pending.map(item => item.id) } })).status()).toBe(200);
+    if (pending.length) expect((await coordinator.post("/api/legal/accept", { data: { documentIds: pending.map(item => item.id), signature: { fullName: name, password: "Coordina el programa 2026" } } })).status()).toBe(200);
     // ST-122: and, as a new account, the welcome.
-    await completeOnboarding(token);
+    await completeOnboarding(token, "Pedagogía", "Coordina el programa 2026");
 
     // A co-teacher of Ciencias sends a lesson to review: a copy of a published one, so it meets the course's requirements.
     const lessons = (await (await lucia.get("/api/lessons?drafts=1&course=seed-course-ciencias")).json()).lessons as { id: string; revision: number; status: string }[];
