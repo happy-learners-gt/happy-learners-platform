@@ -65,7 +65,7 @@ test("DEC-046: administration publishes a template, invites with a contract, the
     await guest.getByLabel("Contraseña", { exact: true }).fill(password);
     await guest.getByLabel("Repite la contraseña").fill(password);
     await guest.getByRole("button", { name: "Crear cuenta y entrar" }).click();
-    await expect(guest.getByRole("heading", { level: 1 })).toHaveText(/Bienvenida|Acepta los términos/);
+    await expect(guest.getByRole("heading", { level: 1 })).toHaveText("Acepta los términos y la política de privacidad");
     const cookie = (await guest.context().cookies()).find(item => item.name === "hl_session")?.value;
     expect(cookie).toBeTruthy();
     const guestHeaders = { Origin: origin, "Content-Type": "application/json", Cookie: `hl_session=${cookie}` };

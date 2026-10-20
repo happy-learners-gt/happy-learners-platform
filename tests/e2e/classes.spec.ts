@@ -160,7 +160,11 @@ test("ST-098: the section code shows only that section's published content and i
   const space = await (await get("/api/student/space")).json();
   expect(space.group.name).toBeTruthy();
   expect(space.next).toBeTruthy();
-  expect(JSON.stringify(space)).not.toMatch(/displayName|attendance|notes|taughtBy/);
+  // ST-157: «Tu educador» shows the educators' published profiles on purpose; nothing else names a person, and the
+  // card never carries contact data.
+  const { educators, ...rest } = space;
+  expect(JSON.stringify(rest)).not.toMatch(/displayName|attendance|notes|taughtBy/);
+  expect(JSON.stringify(educators ?? [])).not.toMatch(/phone|contactEmail|"email"|attendance|notes/);
   // The section cookie is not an educator session.
   expect((await get("/api/courses")).status).toBe(401);
   expect((await get("/api/courses/seed-course-matematicas/groups")).status).toBe(401);
