@@ -144,10 +144,12 @@ async function assignEducators(input: unknown, current: Member, db: Database, co
   const raw = (input as Record<string, unknown>).conflictReason;
   const reason = typeof raw === "string" ? raw.trim().replace(/\s+/g, " ") : "";
   if (conflicts.length && !reason) {
-    const names = [...new Set(conflicts.map(conflict => conflict.name))].join(" y ");
-    return reply({ error: `${names} ya imparte otra sección a la misma hora. Confirma el choque con un motivo para asignar igualmente.`, conflicts }, 409);
+    const names = (kind: string) => [...new Set(conflicts.filter(conflict => (conflict.kind || "overlap") === kind).map(conflict => conflict.name))].join(" y ");
+    const overlap = names("overlap"), outside = names("availability");
+    const facts = [overlap && `${overlap} ya imparte otra sección a la misma hora`, outside && `${outside} tiene clases fuera de la disponibilidad que declaró`].filter(Boolean).join("; ");
+    return reply({ error: `${facts}. Confirma con un motivo para asignar igualmente.`, conflicts }, 409);
   }
-  if (conflicts.length && (reason.length < 3 || reason.length > 300 || /[<>\x00-\x1f]/.test(reason))) return reply({ error: "Escribe en 3 a 300 caracteres por qué se acepta el choque de horario." }, 400);
+  if (conflicts.length && (reason.length < 3 || reason.length > 300 || /[<>\x00-\x1f]/.test(reason))) return reply({ error: "Escribe en 3 a 300 caracteres por qué se acepta la asignación." }, 400);
   const now = new Date().toISOString();
   await db.batch([
     db.prepare("DELETE FROM section_educators WHERE group_id=?").bind(group.id),
@@ -156,7 +158,7 @@ async function assignEducators(input: unknown, current: Member, db: Database, co
     ...conflicts.flatMap(conflict => [
       db.prepare("INSERT INTO educator_conflict_overrides(id,organization_id,group_id,user_id,other_group_id,overlaps,first_date,reason,confirmed_by,confirmed_at) VALUES (?,?,?,?,?,?,?,?,?,?)")
         .bind(`conflict-${crypto.randomUUID()}`, current.organizationId, group.id, conflict.userId, conflict.otherGroupId, conflict.overlaps, conflict.firstDate, reason, current.id, now),
-      event(db, current, { action: "assigned", targetType: "group", targetId: group.id, courseId, summary: `Confirmó el choque de horario de ${conflict.name} con «${conflict.otherCourse} · ${conflict.otherGroup}» (${conflict.overlaps === 1 ? "1 clase" : `${conflict.overlaps} clases`}). Motivo: ${reason}`.slice(0, 240) }),
+      event(db, current, { action: "assigned", targetType: "group", targetId: group.id, courseId, summary: conflict.kind === "availability" ? `Confirmó que ${conflict.name} imparte fuera de su disponibilidad en «${group.name}» (${conflict.overlaps === 1 ? "1 clase" : `${conflict.overlaps} clases`})` : `Confirmó el choque de horario de ${conflict.name} con «${conflict.otherCourse} · ${conflict.otherGroup}» (${conflict.overlaps === 1 ? "1 clase" : `${conflict.overlaps} clases`}). Motivo: ${reason}`.slice(0, 240) }),
     ]),
   ]);
   // ST-124: whoever starts teaching the section is told by e-mail.
