@@ -7,6 +7,7 @@ import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { acceptablePassword, accountInput, temporaryAlphabet, temporaryPassword } from "../packages/domain/src/index";
+import { acceptPending } from "./accept-pending";
 
 // ST-093 (HL-137): team accounts. Domain rules first, then the built Worker on a fresh local store.
 const temporary = /^[A-HJ-NP-Za-km-z2-9]{4}(-[A-HJ-NP-Za-km-z2-9]{4}){3}$/;
@@ -107,6 +108,7 @@ describe("HL-137 ST-093 team accounts on the built Worker", () => {
     expect((await as(first, "/account/password", "POST", { currentPassword: temporaryOne, newPassword: "corta" })).status).toBe(400);
     expect((await as(first, "/account/password", "POST", { currentPassword: temporaryOne, newPassword: "Mi casa tiene 3 gatos" })).status).toBe(200);
     expect((await (await as(first, "/session")).json()).member.mustChangePassword).toBeUndefined();
+    await acceptPending(origin, first, "Paula Gómez", "Mi casa tiene 3 gatos");
     expect((await as(first, "/courses")).status).toBe(200);
     expect(await signIn("paula.gomez", temporaryOne)).toBeNull();
     expect(await signIn("paula.gomez", "Mi casa tiene 3 gatos")).not.toBeNull();

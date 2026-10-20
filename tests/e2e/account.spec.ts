@@ -48,7 +48,8 @@ test("HL-15 ST-158: the person adds a sign-in e-mail confirmed through the copie
     await useSession(page, person.session);
     await page.goto("/inicio");
     await page.getByRole("button", { name: /^Perfil de / }).click();
-    await page.getByRole("menuitem", { name: "Cuenta" }).click();
+    await page.getByRole("menuitem", { name: "Mi cuenta" }).click();
+    await page.getByRole("navigation", { name: "Mi cuenta" }).getByRole("link", { name: "Cuenta y seguridad" }).click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Cuenta");
     for (const section of ["Correo", "Contraseña", "Sesiones activas", "Historial de accesos", "Mis datos", "Cerrar la cuenta"]) await expect(page.getByRole("heading", { level: 2, name: section, exact: true })).toBeVisible();
     await expect(page.getByText(`@${person.username}`)).toBeVisible();
@@ -119,6 +120,7 @@ test("HL-15 ST-159: the person downloads their data, asks to close the account a
     const person = await freshAccount(admin, info, "Cierre");
     await useSession(page, person.session);
     await page.goto("/cuenta#datos");
+    await expect(page).toHaveURL(/\/mi-cuenta\/cuenta#datos$/);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Cuenta");
 
     // Criterion 1: the JSON download holds the person's own records only.
@@ -142,7 +144,7 @@ test("HL-15 ST-159: the person downloads their data, asks to close the account a
 
     const adminPage = await adminContext.newPage();
     await adminContext.addCookies([{ name: "hl_session", value: await sessionToken("admin-demo"), url: origin, httpOnly: true, sameSite: "Strict" }]);
-    await adminPage.goto("/educadores");
+    await adminPage.goto("/educadores#cierres");
     const requests = adminPage.getByRole("region", { name: "Lista de solicitudes de cierre" });
     await expect(requests.getByRole("row", { name: new RegExp(person.name) })).toContainText("Solicitado");
     await expect(requests.getByRole("row", { name: new RegExp(person.name) })).toContainText("Cambio de trabajo");

@@ -27,7 +27,7 @@ test("HL-15 ST-154 ST-155 ST-156 ST-157: an educator completes and sends their p
     const login = await fetch(`${origin}/api/login`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ username, password: temporaryPassword }) });
     const session = /hl_session=([^;]+)/.exec(login.headers.get("set-cookie") || "")![1];
     expect((await fetch(`${origin}/api/account/password`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json", Cookie: `hl_session=${session}` }, body: JSON.stringify({ currentPassword: temporaryPassword, newPassword: "Perfil profesional 2026" }) })).status).toBe(200);
-    await completeOnboarding(session, "Ciencias naturales");
+    await completeOnboarding(session, "Ciencias naturales", "Perfil profesional 2026");
     const created = await admin.post("/api/courses", { data: { title: e2eName(info, "Curso con perfil"), objective: "Conocer a quien enseña.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", area: "011", settings: { attendance: true }, programId: null, leadId: member.id } });
     expect(created.status(), await created.text()).toBe(201);
     const course = `/api/courses/${(await created.json()).id}`;
@@ -37,26 +37,26 @@ test("HL-15 ST-154 ST-155 ST-156 ST-157: an educator completes and sends their p
     await page.context().addCookies([{ name: "hl_session", value: session, url: origin, httpOnly: true, sameSite: "Strict" }]);
 
     // ST-154: «Mi perfil» by sections; ST-149's specialty arrived as a teaching area.
-    await page.goto("/perfil");
+    await page.goto("/mi-cuenta/perfil");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Mi perfil");
     const meter = page.getByRole("progressbar", { name: /Perfil completo al/ });
     // The specialty given at the welcome already counts as a teaching area.
     await expect(meter).toHaveAttribute("aria-valuenow", "8");
-    const sections = page.getByRole("tablist", { name: "Secciones del perfil" });
+    const sections = page.getByRole("navigation", { name: "Secciones del perfil" });
     await page.getByLabel("Titular").fill("Docente de ciencias para primaria, con experimentos de bajo costo");
     await page.getByRole("combobox", { name: /^País/ }).selectOption("GT");
     await page.getByLabel("Zona horaria").selectOption("America/Guatemala");
-    await sections.getByRole("tab", { name: "Sobre mí" }).click();
+    await sections.getByRole("button", { name: "Sobre mí" }).click();
     await page.getByLabel("Biografía").fill("Acompaño a niñas y niños a preguntar como científicos: observamos, medimos y compartimos lo que descubrimos.");
-    await sections.getByRole("tab", { name: "Idiomas" }).click();
+    await sections.getByRole("button", { name: "Idiomas" }).click();
     await page.getByLabel("Agregar idioma").selectOption("es");
     await expect(page.getByRole("list", { name: "Tus idiomas" })).toContainText("Español");
-    await sections.getByRole("tab", { name: "Enseñanza" }).click();
+    await sections.getByRole("button", { name: "Enseñanza" }).click();
     await expect(page.getByRole("list", { name: "Tus áreas de enseñanza" })).toContainText("Ciencias naturales");
     await page.getByRole("checkbox", { name: "CINE 1 · Educación primaria" }).check();
     await page.getByRole("checkbox", { name: "En línea" }).check();
-    await sections.getByRole("tab", { name: "Contacto y disponibilidad" }).click();
-    await page.getByLabel("Teléfono").fill("+502 5555-0157");
+    await sections.getByRole("button", { name: "Contacto" }).click();
+    await page.getByRole("textbox", { name: "Teléfono (opcional)" }).fill("+502 5555-0157");
     await page.getByRole("button", { name: "Guardar perfil" }).click();
     await expect(toast(page)).toContainText("Perfil guardado.");
     await expect(meter).not.toHaveAttribute("aria-valuenow", "8");
@@ -74,7 +74,7 @@ test("HL-15 ST-154 ST-155 ST-156 ST-157: an educator completes and sends their p
     await page.getByRole("button", { name: "Enviar a revisión" }).click();
     await page.getByRole("dialog", { name: "¿Enviar tu perfil a revisión?" }).getByRole("button", { name: "Enviar a revisión" }).click();
     await expect(toast(page)).toContainText("Perfil enviado a revisión.");
-    await expect(page.getByRole("region", { name: "Publicación" })).toContainText("En revisión");
+    await expect(page.getByRole("status").filter({ hasText: "Administración está revisando tu perfil" })).toBeVisible();
     await adminContext.addCookies([{ name: "hl_session", value: await sessionToken("admin-demo"), url: origin, httpOnly: true, sameSite: "Strict" }]);
     const adminPage = await adminContext.newPage();
     await adminPage.goto("/perfiles");
@@ -91,9 +91,8 @@ test("HL-15 ST-154 ST-155 ST-156 ST-157: an educator completes and sends their p
 
     // The educator reads the note, corrects and sends again; administration approves.
     await page.reload();
-    const publication = page.getByRole("region", { name: "Publicación" });
-    await expect(publication).toContainText("Cuéntanos también cómo trabajas en línea.");
-    await sections.getByRole("tab", { name: "Sobre mí" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Cuéntanos también cómo trabajas en línea." })).toBeVisible();
+    await sections.getByRole("button", { name: "Sobre mí" }).click();
     await page.getByLabel("Enfoque de enseñanza").fill("En línea usamos materiales de casa y una bitácora compartida.");
     await page.getByRole("button", { name: "Guardar perfil" }).click();
     await expect(toast(page)).toContainText("Perfil guardado.");
@@ -106,7 +105,7 @@ test("HL-15 ST-154 ST-155 ST-156 ST-157: an educator completes and sends their p
     await review.getByRole("button", { name: "Aprobar y publicar" }).click();
     await expect(toast(adminPage)).toContainText(`Perfil de ${name} aprobado y publicado.`);
     await page.reload();
-    await expect(publication).toContainText("Publicado");
+    await expect(page.getByText("Publicado", { exact: true }).first()).toBeVisible();
 
     // An edit of the published profile waits for approval; the team keeps seeing the published version.
     await page.getByLabel("Titular").fill("Ciencias y robótica para primaria");
@@ -132,7 +131,7 @@ test("HL-15 ST-154 ST-155 ST-156 ST-157: an educator completes and sends their p
 
     // ST-155: the educator sends a credential; administration verifies it.
     await page.reload();
-    await sections.getByRole("tab", { name: "Credenciales" }).click();
+    await sections.getByRole("button", { name: "Credenciales" }).click();
     await page.getByRole("button", { name: "Agregar credencial" }).click();
     const credential = page.getByRole("dialog", { name: "Agregar credencial" });
     await credential.getByLabel("Tipo").selectOption("teaching_license");

@@ -1,7 +1,16 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { test, expect } from "./local-test";
-import { e2eName, signIn, toast } from "./helpers";
+import { e2eName, expectRecentActivity, origin, sessionToken, signIn, toast } from "./helpers";
+
+// DEC-046: the demonstration requires a contract (0046), which makes the contract step mandatory. ST-121 is about the
+// invitation itself, so this file invites without one; tests/e2e/contracts.spec.ts covers inviting with a contract.
+async function requireContract(required: boolean) {
+  const response = await fetch(`${origin}/api/contract-settings`, { method: "PUT", headers: { Cookie: `hl_session=${await sessionToken("admin-demo")}`, Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ required }) });
+  expect(response.status, await response.text()).toBe(200);
+}
+test.beforeAll(() => requireContract(false));
+test.afterAll(() => requireContract(true));
 
 const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 async function audit(page: Page, label: string) {
@@ -16,7 +25,8 @@ async function invite(page: Page, email: string, name: string, role: "educator" 
   await dialog.getByLabel("Correo", { exact: true }).fill(email);
   await dialog.getByLabel("Nombre", { exact: true }).fill(name);
   await dialog.getByLabel("Rol", { exact: true }).selectOption(role);
-  await dialog.getByRole("button", { name: "Enviar invitación" }).click();
+  await dialog.getByRole("button", { name: "Continuar" }).click();
+  await dialog.getByRole("button", { name: "Enviar sin contrato" }).click();
   const result = page.getByRole("dialog", { name: "Invitación creada" });
   // Local runs have no mail provider: the message stays in the outbox and the link is the way to share it.
   await expect(result).toContainText("el envío no está configurado");
@@ -44,7 +54,7 @@ test("HL-167 ST-121: administration invites by e-mail, the person accepts from t
   const row = invitations.getByRole("row", { name: new RegExp(name) });
   await expect(row).toContainText("Pendiente");
   await expect(row).toContainText("Sin envío configurado");
-  await expect(page.locator(".activity-feed").first()).toContainText(`invitó a ${name}`);
+  await expectRecentActivity(page, `invitó a ${name}`);
 
   // CA2: the person opens the link without a session, chooses a username and password and lands signed in.
   const context = await browser.newContext({ viewport: page.viewportSize() });
@@ -60,6 +70,13 @@ test("HL-167 ST-121: administration invites by e-mail, the person accepts from t
   await expect(guest.getByRole("alert")).toContainText("no coinciden");
   await guest.getByLabel("Repite la contraseña").fill("Una frase para recordar 2026");
   await guest.getByRole("button", { name: "Crear cuenta y entrar" }).click();
+  // ST-126, ST-127: the demonstration's terms and privacy (0046) come first, signed with the new password.
+  await expect(guest.getByRole("heading", { level: 1 })).toHaveText("Acepta los términos y la política de privacidad");
+  await expect(guest.getByRole("checkbox")).toHaveCount(2);
+  for (const box of await guest.getByRole("checkbox").all()) await box.check();
+  await guest.getByLabel("Nombre completo").fill(name);
+  await guest.getByLabel("Contraseña de tu cuenta").fill("Una frase para recordar 2026");
+  await guest.getByRole("button", { name: "Firmar y continuar" }).click();
   // ST-122: a new account lands on its welcome.
   await expect(guest.getByRole("heading", { level: 1 })).toHaveText("Bienvenida");
   expect(await guest.evaluate(async () => (await (await fetch("/api/session")).json()).member.displayName)).toBe(name);
@@ -68,7 +85,9 @@ test("HL-167 ST-121: administration invites by e-mail, the person accepts from t
   await expect(guest.getByRole("heading", { level: 1 })).toHaveText("Esta invitación ya se usó");
 
   await page.reload();
+  await page.getByRole("navigation", { name: "Secciones de educadores" }).getByRole("link", { name: "Invitaciones" }).click();
   await expect(page.getByRole("region", { name: "Invitaciones" }).getByRole("row", { name: new RegExp(name) })).toContainText("Aceptada");
+  await page.getByRole("navigation", { name: "Secciones de educadores" }).getByRole("link", { name: "Personas" }).click();
   await expect(page.getByRole("region", { name: "Personas de la organización" })).toContainText(`invitada-${stamp}@example.test`);
 
   // CA3: revoking asks for confirmation, invalidates the link and is recorded.
@@ -79,7 +98,7 @@ test("HL-167 ST-121: administration invites by e-mail, the person accepts from t
   await page.getByRole("menuitem", { name: "Revocar" }).click();
   await page.getByRole("dialog", { name: `¿Revocar la invitación de ${revokedName}?` }).getByRole("button", { name: "Revocar invitación" }).click();
   await expect(revokedRow).toContainText("Revocada");
-  await expect(page.locator(".activity-feed").first()).toContainText(`revocó la invitación de ${revokedName}`);
+  await expectRecentActivity(page, `revocó la invitación de ${revokedName}`);
   await guest.goto(second.link);
   await expect(guest.getByRole("heading", { level: 1 })).toHaveText("Esta invitación fue revocada");
   await audit(guest, "invitación revocada");

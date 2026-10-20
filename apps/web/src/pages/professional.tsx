@@ -13,27 +13,26 @@ import { api, ApiError, message, sendFile } from "../api";
 import { Link, useUnsavedChanges } from "../navigation";
 import { useSession } from "../session";
 import { timeAgo } from "../model";
-import { Modal, useFeedback } from "../ui/feedback";
+import { Drawer, Modal, useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import { Avatar } from "../ui/progress";
-import { Tabs } from "../ui/Tabs";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, Section, StatusBadge } from "../ui/primitives";
+import { StatusSteps } from "../ui/StatusSteps";
+import type { StatusStep } from "../ui/StatusSteps";
 import type { Tone } from "../ui/primitives";
 import { departureDay } from "./departure";
-import { MyNotifications } from "./notifications";
-import { PersonPhoto, StaffFileSection } from "./profile";
+import { PersonPhoto } from "./profile";
 
 /**
  * ST-154 to ST-157 (DEC-045): «Mi perfil» by sections with its completeness and a preview as a student sees it,
  * the team directory and each person's page, and the review queue for profiles and credentials.
  */
-type Tab = "identity" | "about" | "languages" | "teaching" | "career" | "credentials" | "links" | "contact" | "privacy";
+type Tab = "identity" | "about" | "languages" | "teaching" | "career" | "credentials" | "links" | "contact";
 const tabs: { value: Tab; label: string }[] = [
   { value: "identity", label: "Identidad" }, { value: "about", label: "Sobre mí" }, { value: "languages", label: "Idiomas" }, { value: "teaching", label: "Enseñanza" },
-  { value: "career", label: "Trayectoria" }, { value: "credentials", label: "Credenciales" }, { value: "links", label: "Enlaces" }, { value: "contact", label: "Contacto y disponibilidad" },
-  { value: "privacy", label: "Privacidad" },
+  { value: "career", label: "Trayectoria" }, { value: "credentials", label: "Credenciales" }, { value: "links", label: "Enlaces" }, { value: "contact", label: "Contacto" },
 ];
-/** Which tab holds each field of an error path from the API. */
+/** Which section holds each field of an error path from the API. */
 function tabOf(path: string): Tab {
   const key = path.split(".")[0];
   if (["preferredName", "pronouns", "headline", "country", "city", "timezone", "displayName"].includes(key)) return "identity";
@@ -42,8 +41,21 @@ function tabOf(path: string): Tab {
   if (["areas", "levels", "modalities", "formats", "audiences", "experienceYears"].includes(key)) return "teaching";
   if (["experience", "education", "educationSummary"].includes(key)) return "career";
   if (key === "links") return "links";
-  if (key === "visibility") return "privacy";
   return "contact";
+}
+function sectionDone(section: Tab, profile: MyProfessionalProfile) {
+  const steps = profile.completeness.steps.filter(step => (step.section === "photo" ? "identity" : step.section) === section);
+  return steps.length > 0 && steps.every(step => step.done);
+}
+function profileSteps(status: ProfileStatus): StatusStep[] {
+  const order: ProfileStatus[] = ["draft", "in_review", "published"];
+  const current = status === "changes_requested" ? "in_review" : status === "hidden" ? "published" : status;
+  const index = order.indexOf(current);
+  return [
+    { id: "draft", label: "Borrador", state: index > 0 ? "done" : "current" },
+    { id: "in_review", label: status === "changes_requested" ? "Cambios solicitados" : "En revisión", state: index > 1 ? "done" : index === 1 ? "current" : "todo" },
+    { id: "published", label: status === "hidden" ? "Oculto" : "Publicado", state: index >= 2 ? "done" : "todo" },
+  ];
 }
 export const statusTone: Record<ProfileStatus, Tone> = { draft: "neutral", in_review: "info", changes_requested: "warning", published: "success", hidden: "neutral" };
 const credentialTone: Record<CredentialStatus, Tone> = { draft: "neutral", submitted: "info", verified: "success", rejected: "danger", withdrawn: "neutral", expired: "warning" };
@@ -78,28 +90,40 @@ const accountOf = (profile: MyProfessionalProfile): Account => ({ displayName: p
 
 /** «Mi perfil» (ST-154, ST-156): the working copy by sections, its completeness, its publication and a preview. */
 export function MyProfilePage() {
-  const { member } = useSession();
   const [profile, setProfile] = useState<MyProfessionalProfile | null>(null), [error, setError] = useState("");
   const load = () => { setError(""); api<{ profile: MyProfessionalProfile }>("/me/profile").then(result => setProfile(result.profile)).catch(cause => setError(message(cause))); };
   useEffect(load, []);
-  return <>
-    {error ? <><PageHeader title="Mi perfil"/><ErrorState error={error} retry={load}/></> : !profile ? <><PageHeader title="Mi perfil"/><Loading label="Cargando tu perfil…"/></> : <ProfileEditor key={profile.userId} initial={profile} reload={load}/>}
-    <div className="reading"><MyNotifications/></div>
-    <div className="reading"><StaffFileSection userId={member.id} title="Mi expediente" admin={false}/></div>
-  </>;
+  return error ? <><PageHeader title="Mi perfil"/><ErrorState error={error} retry={load}/></>
+    : !profile ? <><PageHeader title="Mi perfil"/><Loading label="Cargando tu perfil…"/></>
+    : <ProfileEditor key={profile.userId} initial={profile} reload={load}/>;
 }
 
 function ProfileEditor({ initial, reload }: { initial: MyProfessionalProfile; reload: () => void }) {
   const { toast, confirm } = useFeedback();
   const [profile, setProfile] = useState(initial);
   const [draft, setDraft] = useState<ProfessionalProfile>(initial.draft), [visibility, setVisibility] = useState<ProfileVisibility>(initial.visibility), [account, setAccount] = useState<Account>(accountOf(initial));
-  const [tab, setTab] = useState<Tab>("identity"), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [errors, setErrors] = useState<Record<string, string>>({}), [alert, setAlert] = useState("");
+  const [visible, setVisible] = useState<Tab>("identity"), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [errors, setErrors] = useState<Record<string, string>>({}), [alert, setAlert] = useState("");
   const [preview, setPreview] = useState(false), [photo, setPhoto] = useState(initial.photoVersion);
   useUnsavedChanges(dirty);
+  useEffect(() => {
+    const nodes = tabs.map(item => document.getElementById(`profile-${item.value}`)).filter((node): node is HTMLElement => !!node);
+    if (!nodes.length) return;
+    const observer = new IntersectionObserver(entries => {
+      const seen = entries.filter(entry => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      const id = seen?.target.id.replace("profile-", "") as Tab | undefined;
+      if (id) setVisible(id);
+    }, { rootMargin: "-25% 0px -55% 0px", threshold: [0.15, 0.4, 0.7] });
+    for (const node of nodes) observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
   const accept = (next: MyProfessionalProfile) => { setProfile(next); setDraft(next.draft); setVisibility(next.visibility); setAccount(accountOf(next)); setDirty(false); setErrors({}); setAlert(""); };
   const patch = (value: Partial<ProfessionalProfile>) => { setDraft(current => ({ ...current, ...value })); setDirty(true); };
   const patchAccount = (value: Partial<Account>) => { setAccount(current => ({ ...current, ...value })); setDirty(true); };
   const err = (path: string) => errors[path];
+  const go = (section: Tab) => {
+    setVisible(section);
+    document.getElementById(`profile-${section}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   // Credentials save on their own: refresh the status, completeness and list without touching unsaved edits.
   const refresh = () => { api<{ profile: MyProfessionalProfile }>("/me/profile").then(result => setProfile(result.profile)).catch(() => reload()); };
 
@@ -114,7 +138,7 @@ function ProfileEditor({ initial, reload }: { initial: MyProfessionalProfile; re
       return true;
     } catch (cause) {
       const detail = cause instanceof ApiError ? cause.detail.errors as Record<string, string> | undefined : undefined;
-      if (detail) { setErrors(detail); setTab(tabOf(Object.keys(detail)[0])); }
+      if (detail) { setErrors(detail); go(tabOf(Object.keys(detail)[0])); }
       setAlert(message(cause));
       return false;
     } finally { setBusy(false); }
@@ -141,42 +165,83 @@ function ProfileEditor({ initial, reload }: { initial: MyProfessionalProfile; re
   const submitLabel = !profile.reviewRequired ? (published ? "Publicar cambios" : "Publicar perfil") : profile.submission?.status === "in_review" ? "Reenviar a revisión" : published ? "Enviar cambios a revisión" : "Enviar a revisión";
   const errorCount = Object.keys(errors).length;
   const tabErrors = (value: Tab) => Object.keys(errors).filter(key => tabOf(key) === value).length;
-
+  const jump = (section: ProfileSection | "photo") => go(section === "photo" ? "identity" : section === "availability" || section === "contact" ? "contact" : section as Tab);
   return <>
-    <PageHeader title="Mi perfil" description="Tu perfil profesional: lo que el equipo y los estudiantes de tus secciones conocen de ti. Tú eliges quién ve cada sección; tu teléfono y tu correo nunca llegan a los estudiantes."
+    <PageHeader title="Mi perfil" description="Lo que el equipo y los estudiantes de tus secciones conocen de ti."
       meta={<span className="profile-status-line"><StatusBadge tone={statusTone[status]}>{profileStatusLabels[status]}</StatusBadge>
         {profile.submission?.status === "in_review" && published && <StatusBadge tone="info">Cambios en revisión</StatusBadge>}
         {profile.hasChanges && published && profile.submission?.status !== "in_review" && <StatusBadge tone="warning">Cambios sin enviar</StatusBadge>}</span>}
       actions={<>
         <button type="button" className="button secondary" onClick={() => setPreview(true)}><Icon name="eye" size={18}/>Vista previa</button>
         {profile.publication && <Link className="button ghost" href={`/equipo/${profile.userId}`}><Icon name="users" size={18}/>Ver publicado</Link>}
+        {status === "published" && <button type="button" className="button ghost" onClick={() => void visibilityAction("hide")}><Icon name="archive" size={16}/>Ocultar perfil</button>}
+        {status === "hidden" && profile.hiddenBy !== "admin" && <button type="button" className="button ghost" onClick={() => void visibilityAction("show")}><Icon name="eye" size={16}/>Mostrar perfil</button>}
       </>}
       primary={<button type="button" className="button primary" disabled={busy || !canSubmit} onClick={() => void submit()}><Icon name="send" size={18}/>{submitLabel}</button>}/>
-    <div className="profile-layout">
-      {/* Not a form: the credential dialog has its own form, and forms cannot nest. */}
-      <div className="profile-main stack">
-        {(alert || errorCount > 0) && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{alert || "Revisa los campos marcados."}{errorCount > 0 && ` (${errorCount === 1 ? "1 campo" : `${errorCount} campos`})`}</p>}
-        <Tabs label="Secciones del perfil" value={tab} onChange={setTab} items={tabs.map(item => ({ ...item, badge: tabErrors(item.value) ? <><span className="tab-alert" aria-hidden="true">!</span><span className="sr-only">, con errores</span></> : undefined }))}>
-          {tab === "credentials" ? <CredentialsTab profile={profile} onChange={refresh}/> : <fieldset className="stack" disabled={busy}>
-            {tab === "identity" && <IdentityTab draft={draft} patch={patch} account={account} patchAccount={patchAccount} err={err} profile={profile} photo={photo} setPhoto={setPhoto}/>}
-            {tab === "about" && <AboutTab draft={draft} patch={patch} err={err}/>}
-            {tab === "languages" && <LanguagesTab draft={draft} patch={patch} err={err}/>}
-            {tab === "teaching" && <TeachingTab draft={draft} patch={patch} err={err}/>}
-            {tab === "career" && <CareerTab draft={draft} patch={patch} err={err} education={account.education} setEducation={education => patchAccount({ education })}/>}
-            {tab === "links" && <LinksTab draft={draft} patch={patch} err={err}/>}
-            {tab === "contact" && <ContactTab account={account} patchAccount={patchAccount} err={err}/>}
-            {tab === "privacy" && <PrivacyTab visibility={visibility} onChange={value => { setVisibility(value); setDirty(true); }}/>}
-          </fieldset>}
-        </Tabs>
-        {tab !== "credentials" && <div className="save-bar">
-          <span className="muted small" role="status">{dirty ? "Tienes cambios sin guardar." : "Todo guardado."}</span>
-          <button type="button" className="button primary" disabled={busy} onClick={() => void save()}>{busy ? "Guardando…" : "Guardar perfil"}</button>
-        </div>}
-      </div>
-      <aside className="profile-aside stack" aria-label="Estado del perfil">
-        <Completeness profile={profile} onGo={section => setTab(section === "photo" ? "identity" : section === "availability" || section === "contact" ? "contact" : section)}/>
-        <Publication profile={profile} onHide={() => void visibilityAction("hide")} onShow={() => void visibilityAction("show")}/>
-      </aside>
+    {profile.submission?.status === "returned" && <div className="message-bar warning" role="status">
+      <Icon name="alert" size={18}/>
+      <div><strong>Administración te pidió cambios</strong><p className="pre-line">{profile.submission.note}</p>
+        <button type="button" className="button secondary small" onClick={() => go("about")}>Ir a Sobre mí</button></div>
+    </div>}
+    {profile.submission?.status === "in_review" && <div className="message-bar info" role="status">
+      <Icon name="info" size={18}/>
+      <div><strong>Administración está revisando tu perfil</strong>
+        <p>{profile.publication ? `La versión ${profile.submission.version} está en revisión desde ${timeAgo(profile.submission.submittedAt)}; mientras tanto se ve la versión ${profile.publication.version}.` : "Puedes seguir editando; si quieres incluir los cambios, reenvíalo."}</p></div>
+    </div>}
+    <StatusSteps label="Estado del perfil" steps={profileSteps(status)}/>
+    <nav className="profile-anchors" aria-label="Secciones del perfil">
+      {tabs.map(item => <button key={item.value} type="button" aria-current={visible === item.value || undefined} onClick={() => go(item.value)}>
+        <span>{item.label}{tabErrors(item.value) > 0 && <span className="sr-only">, con errores</span>}</span>
+        <span className={`profile-section-mark${tabErrors(item.value) ? " is-error" : sectionDone(item.value, profile) ? " is-done" : ""}`} aria-hidden="true"/>
+      </button>)}
+    </nav>
+    <div className="profile-form">
+      <Completeness profile={profile} onGo={jump}/>
+      {(alert || errorCount > 0) && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{alert || "Revisa los campos marcados."}{errorCount > 0 && ` (${errorCount === 1 ? "1 campo" : `${errorCount} campos`})`}</p>}
+      <fieldset className="profile-sections" disabled={busy}>
+        <section id="profile-identity" className="panel" aria-labelledby="profile-identity-title">
+          <h2 id="profile-identity-title">Identidad</h2>
+          <IdentityTab draft={draft} patch={patch} account={account} patchAccount={patchAccount} err={err} profile={profile} photo={photo} setPhoto={setPhoto}/>
+        </section>
+        <section id="profile-about" className="panel" aria-labelledby="profile-about-title">
+          <h2 id="profile-about-title">Sobre mí</h2>
+          <AboutTab draft={draft} patch={patch} err={err}/>
+        </section>
+        <section id="profile-languages" className="panel" aria-labelledby="profile-languages-title">
+          <h2 id="profile-languages-title">Idiomas</h2>
+          <LanguagesTab draft={draft} patch={patch} err={err}/>
+        </section>
+        <section id="profile-teaching" className="panel" aria-labelledby="profile-teaching-title">
+          <h2 id="profile-teaching-title">Enseñanza</h2>
+          <TeachingTab draft={draft} patch={patch} err={err}/>
+        </section>
+        <section id="profile-career" className="panel" aria-labelledby="profile-career-title">
+          <h2 id="profile-career-title">Trayectoria</h2>
+          <CareerTab draft={draft} patch={patch} err={err} education={account.education} setEducation={education => patchAccount({ education })}/>
+        </section>
+      </fieldset>
+      <section id="profile-credentials" className="panel" aria-labelledby="profile-credentials-title">
+        <h2 id="profile-credentials-title">Credenciales</h2>
+        <CredentialsTab profile={profile} onChange={refresh}/>
+      </section>
+      <fieldset className="profile-sections" disabled={busy}>
+        <section id="profile-links" className="panel" aria-labelledby="profile-links-title">
+          <h2 id="profile-links-title">Enlaces</h2>
+          <LinksTab draft={draft} patch={patch} err={err}/>
+        </section>
+        <section id="profile-contact" className="panel" aria-labelledby="profile-contact-title">
+          <h2 id="profile-contact-title">Contacto</h2>
+          <ContactTab account={account} patchAccount={patchAccount} err={err}/>
+          <PrivacyTab visibility={visibility} onChange={value => { setVisibility(value); setDirty(true); }}/>
+        </section>
+      </fieldset>
+      {profile.history.length > 0 && <details className="history"><summary>Historial de versiones publicadas ({profile.history.length})</summary>
+        <ol className="plain-list small">{profile.history.map(item => <li key={item.version}>Versión {item.version} · {item.publishedAt ? departureDay(item.publishedAt.slice(0, 10)) : ""}{item.decidedBy ? ` · aprobó ${item.decidedBy}` : ""}{item.status === "published" ? " · vigente" : ""}</li>)}</ol>
+      </details>}
+      {dirty && <div className="save-bar">
+        <span className="muted small" role="status">Tienes cambios sin guardar.</span>
+        <button type="button" className="button primary" disabled={busy} onClick={() => void save()}>{busy ? "Guardando…" : "Guardar perfil"}</button>
+      </div>}
     </div>
     {preview && <PreviewDialog profile={profile} draft={draft} visibility={visibility} name={account.displayName} photo={photo} onClose={() => setPreview(false)}/>}
   </>;
@@ -184,40 +249,29 @@ function ProfileEditor({ initial, reload }: { initial: MyProfessionalProfile; re
 
 function Completeness({ profile, onGo }: { profile: MyProfessionalProfile; onGo: (section: ProfileSection | "photo") => void }) {
   const { percent, steps } = profile.completeness, missing = steps.filter(step => !step.done);
-  return <section className="panel completeness" aria-labelledby="completeness-title">
-    <div className="panel-header"><h2 id="completeness-title">Perfil completo al {percent} %</h2></div>
-    <div className="meter" role="progressbar" aria-labelledby="completeness-title" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}><span style={{ width: `${percent}%` }}/></div>
-    {missing.length ? <>
-      <p className="muted small">Un perfil completo da confianza a estudiantes y familias. Te falta:</p>
-      <ul className="plain-list completeness-steps">{missing.map(step => <li key={step.key}><button type="button" className="link-button" onClick={() => onGo(step.section)}>{step.label}</button></li>)}</ul>
-    </> : <p className="muted small"><Icon name="check" size={16}/> Tu perfil tiene todo lo recomendado.</p>}
-    {profile.missing.length > 0 && <p className="small"><strong>Para enviarlo necesitas</strong> {profile.missing.join(", ")}.</p>}
-  </section>;
-}
-
-function Publication({ profile, onHide, onShow }: { profile: MyProfessionalProfile; onHide: () => void; onShow: () => void }) {
-  const { status, submission, publication } = profile;
-  const text: Record<ProfileStatus, string> = {
-    draft: profile.reviewRequired ? "Aún no lo envías. Cuando esté listo, envíalo a revisión: administración lo aprueba antes de publicarlo." : "Aún no lo publicas. Al enviarlo se publica de inmediato.",
-    in_review: "Administración está revisando tu perfil. Puedes seguir editando; si quieres incluir los cambios, reenvíalo.",
-    changes_requested: "Administración te pidió cambios. Corrige y vuelve a enviarlo.",
-    published: "El equipo y los estudiantes de tus secciones ven la versión publicada, según tu privacidad.",
-    hidden: profile.hiddenBy === "admin" ? "Administración ocultó tu perfil. Pídele que lo vuelva a mostrar." : profile.hiddenBy === "system" ? "Tu perfil se ocultó al cambiar el acceso de tu cuenta." : "Ocultaste tu perfil: nadie más lo ve.",
-  };
-  return <section className="panel" aria-labelledby="publication-title">
-    <div className="panel-header"><h2 id="publication-title">Publicación</h2><StatusBadge tone={statusTone[status]}>{profileStatusLabels[status]}</StatusBadge></div>
-    <p className="small">{text[status]}</p>
-    {submission?.status === "returned" && <div className="message-bar warning" role="note"><Icon name="alert" size={18}/><div><strong>Cambios solicitados por {submission.decidedBy}</strong><p className="pre-line">{submission.note}</p></div></div>}
-    {submission?.status === "in_review" && publication && <p className="small muted">La versión {submission.version} está en revisión desde {timeAgo(submission.submittedAt)}; mientras tanto se ve la versión {publication.version}.</p>}
-    {publication && <p className="small">Versión publicada: <strong>{publication.version}</strong>, {timeAgo(publication.publishedAt)}.</p>}
-    <div className="button-row">
-      {status === "published" && <button type="button" className="button secondary small" onClick={onHide}><Icon name="archive" size={16}/>Ocultar perfil</button>}
-      {status === "hidden" && profile.hiddenBy !== "admin" && <button type="button" className="button secondary small" onClick={onShow}><Icon name="eye" size={16}/>Mostrar perfil</button>}
+  const [open, setOpen] = useState(false);
+  const radius = 16, circ = 2 * Math.PI * radius, dash = (percent / 100) * circ;
+  const nextCount = Math.min(3, missing.length);
+  const nextLabel = nextCount === 1 ? "1 paso siguiente" : `${nextCount} pasos siguientes`;
+  return <div className="profile-completeness">
+    <div className="completeness-ring is-compact">
+      <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+        <circle className="track" cx="20" cy="20" r={radius}/>
+        <circle className="value" cx="20" cy="20" r={radius} strokeDasharray={`${dash} ${circ}`}/>
+      </svg>
+      <div>
+        <p id="completeness-label">Perfil al {percent} %</p>
+        {missing.length ? <button type="button" className="link-button" aria-expanded={open} onClick={() => setOpen(!open)}>{nextLabel}</button>
+          : <p className="muted small"><Icon name="check" size={16}/> Todo lo recomendado está listo.</p>}
+      </div>
     </div>
-    {profile.history.length > 0 && <details className="history"><summary>Historial de versiones publicadas ({profile.history.length})</summary>
-      <ol className="plain-list small">{profile.history.map(item => <li key={item.version}>Versión {item.version} · {item.publishedAt ? departureDay(item.publishedAt.slice(0, 10)) : ""}{item.decidedBy ? ` · aprobó ${item.decidedBy}` : ""}{item.status === "published" ? " · vigente" : ""}</li>)}</ol>
-    </details>}
-  </section>;
+    <div className="meter sr-only" role="progressbar" aria-label={`Perfil completo al ${percent} %`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}/>
+    {open && missing.length > 0 && <div className="completeness-panel">
+      <p className="muted small">Tus siguientes pasos:</p>
+      <ul className="plain-list completeness-steps">{missing.map(step => <li key={step.key}><button type="button" className="link-button" onClick={() => onGo(step.section)}>{step.label}</button></li>)}</ul>
+      {profile.missing.length > 0 && <p className="small"><strong>Para enviarlo necesitas</strong> {profile.missing.join(", ")}.</p>}
+    </div>}
+  </div>;
 }
 
 type TabProps = { draft: ProfessionalProfile; patch: (value: Partial<ProfessionalProfile>) => void; err: (path: string) => string | undefined };
@@ -240,34 +294,30 @@ function IdentityTab({ draft, patch, account, patchAccount, err, profile, photo,
     catch (cause) { toast({ tone: "error", message: message(cause) }); }
     finally { setPhotoBusy(false); }
   }
-  return <>
-    <div className="profile-photo-row">
+  return <div className="identity-block">
+    <div className="identity-photo">
       <PersonPhoto userId={profile.userId} name={account.displayName || profile.username} version={photo} size={72} alt={photo ? "Tu foto de perfil" : ""}/>
-      <div className="stack">
-        <p className="muted small">JPG, PNG o WebP de hasta 2 MB. La ve el equipo y, con tu perfil publicado, los estudiantes de tus secciones. Se aplica de inmediato.</p>
-        <div className="form-actions">
-          <label className="button secondary small file-button"><Icon name="upload" size={16}/>{photoBusy ? "Subiendo…" : photo ? "Cambiar foto" : "Subir foto"}
-            <input ref={fileRef} type="file" className="sr-only" accept="image/jpeg,image/png,image/webp" disabled={photoBusy} onChange={event => void upload(event.target.files?.[0])}/></label>
-          {photo && <button type="button" className="button ghost small" disabled={photoBusy} onClick={() => void remove()}>Quitar foto</button>}
-        </div>
+      <div className="form-actions">
+        <label className="button secondary small file-button"><Icon name="upload" size={16}/>{photoBusy ? "Subiendo…" : photo ? "Cambiar foto" : "Subir foto"}
+          <input ref={fileRef} type="file" className="sr-only" accept="image/jpeg,image/png,image/webp" disabled={photoBusy} onChange={event => void upload(event.target.files?.[0])}/></label>
+        {photo && <button type="button" className="button ghost small" disabled={photoBusy} onClick={() => void remove()}>Quitar foto</button>}
       </div>
+      <p className="muted small">JPG, PNG o WebP de hasta 2 MB. Se aplica de inmediato.</p>
     </div>
-    <div className="field-grid">
-      <Field label="Nombre" hint="Como aparece en los cursos, las secciones y la actividad. Se aplica de inmediato." error={err("displayName")}><input value={account.displayName} onChange={event => patchAccount({ displayName: event.target.value })} maxLength={80} autoComplete="name" required/></Field>
-      <Field label="Nombre preferido" optional hint="Cómo te gusta que te llamen." error={err("preferredName")}><input value={draft.preferredName} onChange={event => patch({ preferredName: event.target.value })} maxLength={profileLimits.preferredName}/></Field>
-      <Field label="Pronombres" optional hint="Por ejemplo: ella, él, elle." error={err("pronouns")}><input value={draft.pronouns} onChange={event => patch({ pronouns: event.target.value })} maxLength={profileLimits.pronouns}/></Field>
-    </div>
-    <Field label="Titular" hint={<>Una línea sobre lo que enseñas y a quién. <Counter value={draft.headline} max={profileLimits.headline}/></>} error={err("headline")}>
-      <input value={draft.headline} onChange={event => patch({ headline: event.target.value })} maxLength={profileLimits.headline} placeholder="Por ejemplo: Docente de ciencias para secundaria, con enfoque en laboratorio"/></Field>
-    <div className="field-grid">
-      <CountrySelect label="País" value={draft.country} onChange={country => patch({ country })} error={err("country")}/>
-      <Field label="Ciudad" optional error={err("city")}><input value={draft.city} onChange={event => patch({ city: event.target.value })} maxLength={profileLimits.city} autoComplete="address-level2"/></Field>
-      <Field label="Zona horaria" optional hint="Para mostrar tus horarios en la hora de cada persona." error={err("timezone")}><select value={draft.timezone || ""} onChange={event => patch({ timezone: event.target.value || null })}>
+    <div className="form-grid-12">
+      <div className="form-span-6"><Field label="Nombre" hint="Como aparece en los cursos, las secciones y la actividad. Se aplica de inmediato." error={err("displayName")}><input value={account.displayName} onChange={event => patchAccount({ displayName: event.target.value })} maxLength={80} autoComplete="name" required/></Field></div>
+      <div className="form-span-3"><Field label="Nombre preferido" optional hint="Cómo te gusta que te llamen." error={err("preferredName")}><input value={draft.preferredName} onChange={event => patch({ preferredName: event.target.value })} maxLength={profileLimits.preferredName}/></Field></div>
+      <div className="form-span-3"><Field label="Pronombres" optional hint="Por ejemplo: ella, él, elle." error={err("pronouns")}><input value={draft.pronouns} onChange={event => patch({ pronouns: event.target.value })} maxLength={profileLimits.pronouns}/></Field></div>
+      <div className="form-span-12"><Field label="Titular" hint={<>Una línea sobre lo que enseñas y a quién. <Counter value={draft.headline} max={profileLimits.headline}/></>} error={err("headline")}>
+        <input value={draft.headline} onChange={event => patch({ headline: event.target.value })} maxLength={profileLimits.headline} placeholder="Por ejemplo: Docente de ciencias para secundaria, con enfoque en laboratorio"/></Field></div>
+      <div className="form-span-4"><CountrySelect label="País" value={draft.country} onChange={country => patch({ country })} error={err("country")}/></div>
+      <div className="form-span-4"><Field label="Ciudad" optional error={err("city")}><input value={draft.city} onChange={event => patch({ city: event.target.value })} maxLength={profileLimits.city} autoComplete="address-level2"/></Field></div>
+      <div className="form-span-4"><Field label="Zona horaria" optional hint="Para mostrar tus horarios en la hora de cada persona." error={err("timezone")}><select value={draft.timezone || ""} onChange={event => patch({ timezone: event.target.value || null })}>
         <option value="">Sin indicar</option>
         {zones.map(group => <optgroup key={group.region} label={group.region}>{group.zones.map(zone => <option key={zone.id} value={zone.id}>{zone.city} ({zone.offset})</option>)}</optgroup>)}
-      </select></Field>
+      </select></Field></div>
     </div>
-  </>;
+  </div>;
 }
 
 function AboutTab({ draft, patch, err }: TabProps) {
@@ -340,44 +390,78 @@ function TeachingTab({ draft, patch, err }: TabProps) {
 }
 
 function CareerTab({ draft, patch, err, education, setEducation }: TabProps & { education: string; setEducation: (value: string) => void }) {
-  const setExperience = (index: number, value: Partial<ProfessionalProfile["experience"][number]>) => patch({ experience: draft.experience.map((item, i) => i === index ? { ...item, ...value } : item) });
-  const setStudy = (index: number, value: Partial<ProfessionalProfile["education"][number]>) => patch({ education: draft.education.map((item, i) => i === index ? { ...item, ...value } : item) });
+  const [editing, setEditing] = useState<{ kind: "experience" | "education"; index: number | "new" } | null>(null);
+  const emptyExperience = { role: "", institution: "", country: draft.country, from: "", to: null as string | null, description: "" };
+  const emptyStudy = { degree: "", institution: "", country: draft.country, year: null as number | null, field: "" };
   return <>
     <section className="stack" aria-labelledby="experience-title">
-      <h2 id="experience-title" className="section-title">Experiencia</h2>
+      <div className="panel-title-row"><h3 id="experience-title" className="section-title">Experiencia</h3>
+        {draft.experience.length < profileLimits.experience && <button type="button" className="button secondary small" onClick={() => setEditing({ kind: "experience", index: "new" })}><Icon name="plus" size={16}/>Agregar experiencia</button>}</div>
       {err("experience") && <p className="field-error">{err("experience")}</p>}
-      {draft.experience.map((item, index) => <fieldset key={index} className="config-section entry">
-        <legend>Experiencia {index + 1}</legend>
-        <div className="field-grid">
-          <Field label="Cargo" error={err(`experience.${index}.role`)}><input value={item.role} maxLength={profileLimits.role} onChange={event => setExperience(index, { role: event.target.value })}/></Field>
-          <Field label="Institución" error={err(`experience.${index}.institution`)}><input value={item.institution} maxLength={profileLimits.institution} onChange={event => setExperience(index, { institution: event.target.value })}/></Field>
-          <CountrySelect label="País" value={item.country} onChange={country => setExperience(index, { country })} error={err(`experience.${index}.country`)}/>
-          <Field label="Desde" hint="Mes y año." error={err(`experience.${index}.from`)}><input type="month" value={item.from} onChange={event => setExperience(index, { from: event.target.value })}/></Field>
-          <Field label="Hasta" optional hint="Vacío si es tu cargo actual." error={err(`experience.${index}.to`)}><input type="month" value={item.to || ""} onChange={event => setExperience(index, { to: event.target.value || null })}/></Field>
+      {draft.experience.length ? <ul className="plain-list stack">{draft.experience.map((item, index) => <li key={index} className="entry-card">
+        <div className="entry-card-head"><div><strong>{item.role || "Sin cargo"}</strong><p className="muted small">{item.institution}{item.country ? ` · ${countryName(item.country)}` : ""} · {item.from || "sin fecha"}{item.to ? ` a ${item.to}` : " a la fecha"}</p></div>
+          <span className="row-actions">
+            <button type="button" className="button ghost small" onClick={() => setEditing({ kind: "experience", index })} aria-label={`Editar experiencia ${index + 1}`}><Icon name="edit" size={16}/>Editar</button>
+            <button type="button" className="button ghost small" onClick={() => patch({ experience: draft.experience.filter((_, i) => i !== index) })} aria-label={`Quitar experiencia ${index + 1}`}><Icon name="close" size={16}/>Quitar</button>
+          </span>
         </div>
-        <Field label="Descripción" optional error={err(`experience.${index}.description`)}><textarea rows={3} value={item.description} maxLength={profileLimits.description} onChange={event => setExperience(index, { description: event.target.value })}/></Field>
-        <div><button type="button" className="button ghost small" onClick={() => patch({ experience: draft.experience.filter((_, i) => i !== index) })}><Icon name="close" size={16}/>Quitar experiencia {index + 1}</button></div>
-      </fieldset>)}
-      {draft.experience.length < profileLimits.experience && <div><button type="button" className="button secondary small" onClick={() => patch({ experience: [...draft.experience, { role: "", institution: "", country: draft.country, from: "", to: null, description: "" }] })}><Icon name="plus" size={16}/>Agregar experiencia</button></div>}
+        {item.description && <p className="small pre-line">{item.description}</p>}
+      </li>)}</ul> : <EmptyState compact icon="users" title="Sin experiencia">Agrega los cargos que quieres que vean el equipo y los estudiantes.</EmptyState>}
     </section>
     <section className="stack" aria-labelledby="education-title">
-      <h2 id="education-title" className="section-title">Formación</h2>
+      <div className="panel-title-row"><h3 id="education-title" className="section-title">Formación</h3>
+        {draft.education.length < profileLimits.education && <button type="button" className="button secondary small" onClick={() => setEditing({ kind: "education", index: "new" })}><Icon name="plus" size={16}/>Agregar estudio</button>}</div>
       {err("education") && <p className="field-error">{err("education")}</p>}
-      {draft.education.map((item, index) => <fieldset key={index} className="config-section entry">
-        <legend>Estudio {index + 1}</legend>
-        <div className="field-grid">
-          <Field label="Título o programa" error={err(`education.${index}.degree`)}><input value={item.degree} maxLength={profileLimits.degree} onChange={event => setStudy(index, { degree: event.target.value })}/></Field>
-          <Field label="Institución" error={err(`education.${index}.institution`)}><input value={item.institution} maxLength={profileLimits.institution} onChange={event => setStudy(index, { institution: event.target.value })}/></Field>
-          <Field label="Campo de estudio" optional error={err(`education.${index}.field`)}><input value={item.field} maxLength={profileLimits.field} onChange={event => setStudy(index, { field: event.target.value })}/></Field>
-          <CountrySelect label="País" value={item.country} onChange={country => setStudy(index, { country })} error={err(`education.${index}.country`)}/>
-          <Field label="Año" optional hint="De graduación o el esperado." error={err(`education.${index}.year`)}><input type="number" inputMode="numeric" min={1940} max={2100} value={item.year ?? ""} onChange={event => setStudy(index, { year: event.target.value === "" ? null : Number(event.target.value) })}/></Field>
+      {draft.education.length ? <ul className="plain-list stack">{draft.education.map((item, index) => <li key={index} className="entry-card">
+        <div className="entry-card-head"><div><strong>{item.degree || "Sin título"}</strong><p className="muted small">{item.institution}{item.country ? ` · ${countryName(item.country)}` : ""}{item.year ? ` · ${item.year}` : ""}{item.field ? ` · ${item.field}` : ""}</p></div>
+          <span className="row-actions">
+            <button type="button" className="button ghost small" onClick={() => setEditing({ kind: "education", index })} aria-label={`Editar estudio ${index + 1}`}><Icon name="edit" size={16}/>Editar</button>
+            <button type="button" className="button ghost small" onClick={() => patch({ education: draft.education.filter((_, i) => i !== index) })} aria-label={`Quitar estudio ${index + 1}`}><Icon name="close" size={16}/>Quitar</button>
+          </span>
         </div>
-        <div><button type="button" className="button ghost small" onClick={() => patch({ education: draft.education.filter((_, i) => i !== index) })}><Icon name="close" size={16}/>Quitar estudio {index + 1}</button></div>
-      </fieldset>)}
-      {draft.education.length < profileLimits.education && <div><button type="button" className="button secondary small" onClick={() => patch({ education: [...draft.education, { degree: "", institution: "", country: draft.country, year: null, field: "" }] })}><Icon name="plus" size={16}/>Agregar estudio</button></div>}
+      </li>)}</ul> : <EmptyState compact icon="file" title="Sin formación">Agrega tus títulos y programas.</EmptyState>}
       <Field label="Resumen de formación" optional hint="Texto libre de tu perfil anterior. Lo ven administración y tú." error={err("educationSummary")}><textarea rows={3} value={education} maxLength={1000} onChange={event => setEducation(event.target.value)}/></Field>
     </section>
+    {editing?.kind === "experience" && <ExperienceDrawer item={editing.index === "new" ? emptyExperience : draft.experience[editing.index]} onClose={() => setEditing(null)}
+      onSave={value => { patch({ experience: editing.index === "new" ? [...draft.experience, value] : draft.experience.map((item, i) => i === editing.index ? value : item) }); setEditing(null); }}/>}
+    {editing?.kind === "education" && <EducationDrawer item={editing.index === "new" ? emptyStudy : draft.education[editing.index]} onClose={() => setEditing(null)}
+      onSave={value => { patch({ education: editing.index === "new" ? [...draft.education, value] : draft.education.map((item, i) => i === editing.index ? value : item) }); setEditing(null); }}/>}
   </>;
+}
+
+function ExperienceDrawer({ item, onClose, onSave }: { item: ProfessionalProfile["experience"][number]; onClose: () => void; onSave: (value: ProfessionalProfile["experience"][number]) => void }) {
+  const [form, setForm] = useState(item);
+  const set = (value: Partial<typeof form>) => setForm(current => ({ ...current, ...value }));
+  return <Drawer title={item.role ? "Editar experiencia" : "Agregar experiencia"} onClose={onClose}>
+    <form className="stack" onSubmit={event => { event.preventDefault(); onSave(form); }}>
+      <div className="form-grid-12">
+        <div className="form-span-6"><Field label="Cargo"><input value={form.role} maxLength={profileLimits.role} onChange={event => set({ role: event.target.value })} required/></Field></div>
+        <div className="form-span-6"><Field label="Institución"><input value={form.institution} maxLength={profileLimits.institution} onChange={event => set({ institution: event.target.value })} required/></Field></div>
+        <div className="form-span-4"><CountrySelect label="País" value={form.country} onChange={country => set({ country })}/></div>
+        <div className="form-span-4"><Field label="Desde" hint="Mes y año."><input type="month" value={form.from} onChange={event => set({ from: event.target.value })} required/></Field></div>
+        <div className="form-span-4"><Field label="Hasta" optional hint="Vacío si es tu cargo actual."><input type="month" value={form.to || ""} onChange={event => set({ to: event.target.value || null })}/></Field></div>
+        <div className="form-span-12"><Field label="Descripción" optional><textarea rows={3} value={form.description} maxLength={profileLimits.description} onChange={event => set({ description: event.target.value })}/></Field></div>
+      </div>
+      <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">Guardar</button></div>
+    </form>
+  </Drawer>;
+}
+
+function EducationDrawer({ item, onClose, onSave }: { item: ProfessionalProfile["education"][number]; onClose: () => void; onSave: (value: ProfessionalProfile["education"][number]) => void }) {
+  const [form, setForm] = useState(item);
+  const set = (value: Partial<typeof form>) => setForm(current => ({ ...current, ...value }));
+  return <Drawer title={item.degree ? "Editar estudio" : "Agregar estudio"} onClose={onClose}>
+    <form className="stack" onSubmit={event => { event.preventDefault(); onSave(form); }}>
+      <div className="form-grid-12">
+        <div className="form-span-6"><Field label="Título o programa"><input value={form.degree} maxLength={profileLimits.degree} onChange={event => set({ degree: event.target.value })} required/></Field></div>
+        <div className="form-span-6"><Field label="Institución"><input value={form.institution} maxLength={profileLimits.institution} onChange={event => set({ institution: event.target.value })} required/></Field></div>
+        <div className="form-span-6"><Field label="Campo de estudio" optional><input value={form.field} maxLength={profileLimits.field} onChange={event => set({ field: event.target.value })}/></Field></div>
+        <div className="form-span-4"><CountrySelect label="País" value={form.country} onChange={country => set({ country })}/></div>
+        <div className="form-span-4"><Field label="Año" optional hint="De graduación o el esperado."><input type="number" inputMode="numeric" min={1940} max={2100} value={form.year ?? ""} onChange={event => set({ year: event.target.value === "" ? null : Number(event.target.value) })}/></Field></div>
+      </div>
+      <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">Guardar</button></div>
+    </form>
+  </Drawer>;
 }
 
 function LinksTab({ draft, patch, err }: TabProps) {
@@ -474,7 +558,7 @@ function CredentialDialog({ userId, credential, onClose, onDone }: { userId: str
     } catch (cause) { setError(message(cause)); setErrors((cause instanceof ApiError ? cause.detail.errors : undefined) as Record<string, string> || {}); setBusy(false); }
   }
   const documents = (file?.documents || []).filter(item => !item.withdrawnAt);
-  return <Modal title={credential ? "Editar credencial" : "Agregar credencial"} onClose={onClose} wide>
+  return <Drawer title={credential ? "Editar credencial" : "Agregar credencial"} onClose={onClose}>
     <form className="stack" onSubmit={event => { event.preventDefault(); void save(true); }}><fieldset className="stack" disabled={busy}>
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
       {credential && (credential.status === "verified" || credential.status === "expired") && <p className="message-bar warning"><Icon name="alert" size={18}/>Si cambias una credencial verificada, vuelve a borrador y necesita una nueva verificación.</p>}
@@ -497,7 +581,7 @@ function CredentialDialog({ userId, credential, onClose, onDone }: { userId: str
         <button className="button primary">{busy ? "Guardando…" : "Guardar y enviar a verificación"}</button>
       </div>
     </fieldset></form>
-  </Modal>;
+  </Drawer>;
 }
 
 function PreviewDialog({ profile, draft, visibility, name, photo, onClose }: { profile: MyProfessionalProfile; draft: ProfessionalProfile; visibility: ProfileVisibility; name: string; photo: string | null; onClose: () => void }) {
@@ -529,12 +613,14 @@ export function ProfileCard({ profile, level = 2, compact }: { profile: PublicPr
   const place = [content.city, countryName(content.country)].filter(Boolean).join(", ");
   const teaching = show("teaching") && (content.areas.length || content.levels.length || content.modalities.length || content.formats.length || content.audiences.length || content.experienceYears !== null);
   return <article className={`profile-card${compact ? " compact" : ""}`} aria-label={`Perfil de ${profile.displayName}`}>
-    <header className="profile-card-header">
-      {profile.photoUrl ? <img className="profile-photo" src={profile.photoUrl} alt="" width={88} height={88}/> : <Avatar name={profile.displayName} size={88}/>}
+    <header className={`profile-card-header${compact ? "" : " is-hero"}`}>
+      {profile.photoUrl ? <img className="profile-photo" src={profile.photoUrl} alt="" width={compact ? 56 : 160} height={compact ? 56 : 160}/> : <Avatar name={profile.displayName} size={compact ? 56 : 160}/>}
       <div className="profile-card-title">
         <H>{profile.displayName}</H>
         {(content.preferredName || content.pronouns) && <p className="muted small">{content.preferredName && <>Prefiere que le llamen {content.preferredName}</>}{content.preferredName && content.pronouns ? " · " : ""}{content.pronouns}</p>}
         {content.headline && <p className="profile-headline">{content.headline}</p>}
+        {show("languages") && content.languages.length > 0 && <ul className="chips small-chips" aria-label="Idiomas">{content.languages.map(item => <li key={item.code}><span className="chip-button">{languageLabel(item.code)} · {proficiencyLabel(item.proficiency)}</span></li>)}</ul>}
+        {!compact && content.videoUrl && show("about") && <p><a className="button secondary small" href={content.videoUrl} target="_blank" rel="noopener noreferrer"><Icon name="play" size={16}/>Ver video de presentación<span className="sr-only"> (se abre en otra pestaña)</span></a></p>}
         <p className="profile-meta muted small">{place && <span><Icon name="home" size={14}/>{place}</span>}{content.timezone && <span><Icon name="clock" size={14}/>{content.timezone.replaceAll("_", " ")}</span>}
           {verified > 0 && <StatusBadge tone="success">{verified === 1 ? "1 credencial verificada" : `${verified} credenciales verificadas`}</StatusBadge>}</p>
       </div>
@@ -542,7 +628,7 @@ export function ProfileCard({ profile, level = 2, compact }: { profile: PublicPr
     {show("about") && (content.bio || content.approach || content.videoUrl) && <section className="profile-card-section"><S>Sobre mí</S>
       {content.bio && <p className="pre-line">{content.bio}</p>}
       {content.approach && <><p className="eyebrow">Enfoque de enseñanza</p><p className="pre-line">{content.approach}</p></>}
-      {content.videoUrl && <p><a href={content.videoUrl} target="_blank" rel="noopener noreferrer"><Icon name="play" size={16}/>Ver video de presentación<span className="sr-only"> (se abre en otra pestaña)</span></a></p>}
+      {compact && content.videoUrl && <p><a href={content.videoUrl} target="_blank" rel="noopener noreferrer"><Icon name="play" size={16}/>Ver video de presentación<span className="sr-only"> (se abre en otra pestaña)</span></a></p>}
     </section>}
     {show("languages") && content.languages.length > 0 && <section className="profile-card-section"><S>Idiomas</S>
       <ul className="chips">{content.languages.map(item => <li key={item.code}><span className="chip-button">{languageLabel(item.code)} · {proficiencyLabel(item.proficiency)}{item.teaches ? " · enseña" : ""}</span></li>)}</ul>
@@ -595,29 +681,31 @@ export function TeamDirectory() {
   const filtered = Object.entries(filters).some(([key, value]) => key !== "q" && value) || !!filters.q;
   return <>
     <PageHeader title="Equipo" description="Conoce a las personas del equipo: qué enseñan, en qué idiomas y en qué niveles. Solo aparecen los perfiles publicados."/>
-    <div className="facet-bar" role="search" aria-label="Filtrar el equipo">
-      <Field label="Buscar"><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Nombre, titular o área"/></Field>
+    <div className="facet-bar directory-filters" role="search" aria-label="Filtrar el equipo">
+      <div className="directory-search"><Field label="Buscar"><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Nombre, titular o área"/></Field></div>
       <Field label="Área"><select value={filters.area} onChange={event => set("area")(event.target.value)}><option value="">Todas</option>
         {(data?.facets.areas || []).map(item => <option key={item.value} value={item.value}>{item.value} ({item.total})</option>)}
         {iscedFields.map(item => <option key={item.value} value={item.value}>Campo: {item.label}</option>)}</select></Field>
       <Field label="Nivel"><select value={filters.level} onChange={event => set("level")(event.target.value)}><option value="">Todos</option>{iscedLevels.map(item => <option key={item.value} value={item.value}>{item.short}</option>)}</select></Field>
       <Field label="Idioma"><select value={filters.language} onChange={event => set("language")(event.target.value)}><option value="">Todos</option>{(data?.facets.languages || []).map(item => <option key={item.value} value={item.value}>{languageLabel(item.value)} ({item.total})</option>)}</select></Field>
       <Field label="Modalidad"><select value={filters.modality} onChange={event => set("modality")(event.target.value)}><option value="">Todas</option>{teachingModalities.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
-      {filtered && <button type="button" className="button ghost small" onClick={() => { setQuery(""); setFilters({ q: "", area: "", level: "", language: "", modality: "" }); }}>Quitar filtros</button>}
+      {filtered && <button type="button" className="button ghost small directory-clear" onClick={() => { setQuery(""); setFilters({ q: "", area: "", level: "", language: "", modality: "" }); }}>Quitar filtros</button>}
     </div>
     {error ? <ErrorState error={error} retry={load}/> : !data ? <Loading label="Cargando el equipo…" cards={3}/> : !data.entries.length
       ? <EmptyState icon="users" title={data.total ? "Nadie coincide con los filtros" : "Aún no hay perfiles publicados"}>{data.total ? "Prueba con otros filtros." : "Cuando las personas del equipo publiquen su perfil, aparecerán aquí."}</EmptyState>
       : <><p className="toolbar-count" role="status">{data.entries.length === 1 ? "1 persona" : `${data.entries.length} personas`}</p>
-        <ul className="card-grid directory-grid" aria-label="Personas del equipo">{data.entries.map(entry => <li key={entry.userId}><article className="directory-card">
-          {entry.photoUrl ? <img className="profile-photo" src={entry.photoUrl} alt="" width={56} height={56}/> : <Avatar name={entry.displayName} size={56}/>}
-          <div className="stack-tight">
-            <h2 className="directory-name"><Link href={`/equipo/${entry.userId}`}>{entry.displayName}</Link></h2>
-            {entry.headline && <p className="small">{entry.headline}</p>}
-            {entry.areas.length > 0 && <ul className="chips small-chips" aria-label="Áreas">{entry.areas.slice(0, 4).map(item => <li key={item.label}><span className="chip-button">{item.label}</span></li>)}</ul>}
-            <p className="muted small">{[entry.languages.map(item => languageLabel(item.code)).join(", "), entry.levels.map(levelLabel).join(", ")].filter(Boolean).join(" · ")}</p>
-            {entry.verifiedCredentials > 0 && <StatusBadge tone="success">{entry.verifiedCredentials === 1 ? "1 credencial verificada" : `${entry.verifiedCredentials} credenciales verificadas`}</StatusBadge>}
-          </div>
-        </article></li>)}</ul></>}
+        <ul className="directory-grid" aria-label="Personas del equipo">{data.entries.map(entry => {
+          const extra = entry.areas.length > 3 ? entry.areas.length - 3 : 0;
+          return <li key={entry.userId}><article className="directory-card">
+            {entry.photoUrl ? <img className="profile-photo" src={entry.photoUrl} alt="" width={72} height={72}/> : <Avatar name={entry.displayName} size={72}/>}
+            <div className="stack-tight">
+              <h2 className="directory-name"><Link href={`/equipo/${entry.userId}`}>{entry.displayName}</Link>{entry.verifiedCredentials > 0 && <> <StatusBadge tone="success">Verificada</StatusBadge></>}</h2>
+              {entry.headline && <p className="small">{entry.headline}</p>}
+              {entry.areas.length > 0 && <ul className="chips small-chips" aria-label="Áreas">{entry.areas.slice(0, 3).map(item => <li key={item.label}><span className="chip-button">{item.label}</span></li>)}{extra > 0 && <li><span className="chip-button">+{extra}</span></li>}</ul>}
+              {entry.languages.length > 0 && <p className="muted small">{entry.languages.map(item => languageLabel(item.code)).join(", ")}</p>}
+            </div>
+          </article></li>;
+        })}</ul></>}
   </>;
 }
 
@@ -633,7 +721,7 @@ export function TeamProfilePage({ id }: { id: string }) {
   if (!state) return <><PageHeader title="Perfil" crumbs={crumbs}/><Loading label="Cargando el perfil…"/></>;
   return <>
     <PageHeader title={state.profile.displayName} crumbs={crumbs} meta={state.status !== "published" || !state.active ? <StatusBadge tone="neutral">{!state.active ? "Sin acceso" : profileStatusLabels[state.status]}</StatusBadge> : undefined}
-      actions={id === member.id ? <Link className="button secondary" href="/perfil"><Icon name="edit" size={18}/>Editar mi perfil</Link> : undefined}/>
+      actions={id === member.id ? <Link className="button secondary" href="/mi-cuenta/perfil"><Icon name="edit" size={18}/>Editar mi perfil</Link> : undefined}/>
     {state.status === "hidden" && <p className="message-bar warning reading"><Icon name="alert" size={18}/>Este perfil está oculto: solo lo ven la persona y administración.</p>}
     <div className="reading"><ProfileCard profile={state.profile} level={2}/></div>
     <p className="muted small reading">Versión {state.profile.version}, publicada {timeAgo(state.profile.publishedAt)}. Así lo ve el equipo; los estudiantes ven solo lo que la persona comparte con ellos.</p>

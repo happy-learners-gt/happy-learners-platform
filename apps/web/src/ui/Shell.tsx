@@ -15,6 +15,7 @@ import { Modal, useFeedback } from "./feedback";
 import { Field } from "./primitives";
 import { courseConfiguration } from "../pages/course/context";
 import { AgreementBanner } from "../pages/legal";
+import { ContractBanner } from "../pages/my-contracts";
 
 export function Brand() {
   return <Link href="/inicio" className="brand" aria-label="Happy Learners, ir a Inicio"><span className="brand-mark" aria-hidden="true">hl</span><span className="brand-name">Happy Learners</span></Link>;
@@ -39,7 +40,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="app-body">
       <aside id="app-sidebar" ref={panel} className="sidebar"><Sidebar/></aside>
       {open && <div className="drawer-backdrop" aria-hidden="true" onClick={() => setOpen(false)}/>}
-      <main id="main" tabIndex={-1} className="main"><AgreementBanner/>{children}</main>
+      <main id="main" tabIndex={-1} className="main"><ContractBanner/><AgreementBanner/>{children}</main>
     </div>
   </div>;
 }
@@ -72,10 +73,9 @@ function TopBar({ menuButton }: { menuButton: ReactNode }) {
       <Link href="/ayuda" className="icon-button" aria-label="Ayuda"><Icon name="help"/></Link>
       <Menu label={`Perfil de ${member.displayName || member.username}`} icon="user" text={member.displayName || member.username} items={[
         { label: `${roleLabel(member)}${organization?.name ? ` · ${organization.name}` : ""}`, icon: "shield", onSelect: () => {}, disabled: true },
-        { label: "Mi perfil", icon: "user", onSelect: () => navigate("/perfil") },
-        { label: "Perfil público", icon: "eye", onSelect: () => navigate(`/equipo/${member.id}`) },
-        { label: "Cuenta", icon: "settings", onSelect: () => navigate("/cuenta") },
-        { label: "Preferencias", icon: "options", onSelect: () => navigate("/preferencias") },
+        { label: "Mi cuenta", icon: "user", onSelect: () => navigate("/mi-cuenta/perfil") },
+        { label: "Ver mi perfil público", icon: "eye", onSelect: () => navigate(`/equipo/${member.id}`) },
+        { label: "Ayuda", icon: "help", onSelect: () => navigate("/ayuda") },
         "separator",
         { label: "Cerrar sesión", icon: "logout", onSelect: logout },
       ]}/>
@@ -191,6 +191,7 @@ function Sidebar() {
     {admin && <nav aria-label="Administración" className="sidebar-secondary"><span className="sidebar-eyebrow">Administración</span><ul className="nav-tree">
       {page({ href: "/organizacion", label: "Organización", icon: "settings", hue: "coral", active: path === "/organizacion" })}
       {page({ href: "/educadores", label: "Educadores", icon: "users", hue: "pink", active: path === "/educadores" })}
+      {page({ href: "/contratos", label: "Contratos y políticas", icon: "file", hue: "violet", active: path === "/contratos" })}
       {page({ href: "/perfiles", label: "Revisión de perfiles", icon: "check", hue: "sky", active: path === "/perfiles" })}
       {page({ href: "/configuracion-academica", label: "Configuración académica", icon: "grid", hue: "green", active: path === "/configuracion-academica" })}
       {page({ href: "/roles-y-accesos", label: "Roles y accesos", icon: "shield", hue: "violet", active: path === "/roles-y-accesos" })}

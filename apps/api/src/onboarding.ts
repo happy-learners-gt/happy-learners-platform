@@ -31,26 +31,33 @@ export async function onboardingPending(db: Database, current: Member): Promise<
 /** Every fact the steps are derived from, for one person or for the whole organization. */
 async function factsOf(db: Database, organizationId: string, userId?: string) {
   const one = userId ? " AND m.user_id=?" : "", ids = userId ? [userId] : [];
-  const [people, published, accepted, profiles, teaching, records] = await db.batch([
+  const [people, published, accepted, profiles, teaching, records, organization, contracts] = await db.batch([
     db.prepare(`SELECT u.id,u.username,COALESCE(u.display_name,u.username) AS name,CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END AS role,m.active,u.must_change_password AS temporary FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.organization_id=?${one} ORDER BY name`).bind(organizationId, ...ids),
     db.prepare("SELECT id,kind,version,title FROM legal_documents WHERE organization_id=? AND status='published'").bind(organizationId),
     db.prepare(`SELECT a.user_id AS userId,a.document_id AS id FROM legal_acceptances a JOIN memberships m ON m.user_id=a.user_id WHERE a.organization_id=? AND a.withdrawn_at IS NULL${one}`).bind(organizationId, ...ids),
     db.prepare(`SELECT p.user_id AS userId,p.phone,p.contact_email AS contactEmail,p.specialties FROM staff_profiles p JOIN memberships m ON m.user_id=p.user_id WHERE p.organization_id=?${one}`).bind(organizationId, ...ids),
     db.prepare(`SELECT DISTINCT e.user_id AS userId FROM section_educators e JOIN course_groups g ON g.id=e.group_id AND g.status='active' JOIN courses c ON c.id=g.course_id AND c.status='active' JOIN memberships m ON m.user_id=e.user_id WHERE e.organization_id=?${one}`).bind(organizationId, ...ids),
     db.prepare(`SELECT ${recordColumns} FROM onboarding o JOIN memberships m ON m.user_id=o.user_id WHERE o.organization_id=?${one}`).bind(organizationId, ...ids),
-  ]) as unknown as [{ id: string; username: string; name: string; role: "admin" | "educator"; active: number; temporary: number }[], PendingDocument[], { userId: string; id: string }[], ProfileRow[], { userId: string }[], Record[]];
+    // DEC-046: where a contract is required, the agreement step is the contract: signed, or sent and waiting.
+    db.prepare("SELECT contract_required AS required FROM organizations WHERE id=?").bind(organizationId),
+    db.prepare(`SELECT c.user_id AS userId,c.id,c.title,c.status FROM contracts c JOIN memberships m ON m.user_id=c.user_id WHERE c.organization_id=? AND c.status IN ('sent','active','terminated')${one} ORDER BY c.created_at DESC`).bind(organizationId, ...ids),
+  ]) as unknown as [{ id: string; username: string; name: string; role: "admin" | "educator"; active: number; temporary: number }[], PendingDocument[], { userId: string; id: string }[], ProfileRow[], { userId: string }[], Record[], { required: number }[], { userId: string; id: string; title: string; status: string }[]];
+  const required = !!organization[0]?.required;
   const teaches = new Set(teaching.map(row => row.userId));
   return people.map(person => {
     const mine = accepted.filter(row => row.userId === person.id).map(row => row.id);
     const record = records.find(row => row.userId === person.id) || null;
-    const agreement = pendingAgreement(published, mine);
+    const agreement = required ? null : pendingAgreement(published, mine);
+    const theirs = contracts.filter(row => row.userId === person.id);
+    const waiting = theirs.find(row => row.status === "sent");
     const facts: OnboardingFacts = {
       role: person.role, temporaryPassword: !!person.temporary, legalPending: pendingDocuments(published, mine).length > 0,
       profile: profileOf(profiles.find(row => row.userId === person.id)),
-      agreementPublished: published.some(item => item.kind === "volunteer"), agreementSigned: !agreement, teaches: teaches.has(person.id),
+      agreementPublished: required || published.some(item => item.kind === "volunteer"),
+      agreementSigned: required ? theirs.some(row => row.status !== "sent") : !agreement, teaches: teaches.has(person.id),
       welcomeAt: record?.welcomeAt || null, agreementSkippedAt: record?.agreementSkippedAt || null, tourAt: record?.tourAt || null,
     };
-    return { person, record, facts, agreement, steps: onboardingStepStates(facts) };
+    return { person, record, facts, agreement, contract: required && waiting ? { id: waiting.id, title: waiting.title } : null, steps: onboardingStepStates(facts) };
   });
 }
 
@@ -65,14 +72,14 @@ async function stateOf(db: Database, current: Member): Promise<OnboardingState> 
   return {
     status: onboardingStatus(record), startedAt: record?.startedAt || null, completedAt: record ? record.completedAt : null,
     steps, next: record && !record.completedAt ? nextStep(steps) : null, profileGaps: profileGaps(facts.role, facts.profile),
-    agreement: applies ? found.agreement : null, courses, sections,
+    agreement: applies ? found.agreement : null, contract: applies ? found.contract : null, courses, sections,
   };
 }
 
 const refusals = {
   unknown: [404, "Ese paso de la incorporación no existe."],
   derived: [409, "Este paso se completa con tus datos: cambia tu contraseña, acepta los documentos, guarda tu perfil o firma el acuerdo."],
-  required: [409, "Impartes al menos una sección: firma el acuerdo de voluntariado para continuar."],
+  required: [409, "Impartes al menos una sección: firma tu contrato o el acuerdo de voluntariado para continuar."],
   order: [409, "Completa antes los pasos anteriores de la incorporación."],
 } as const;
 

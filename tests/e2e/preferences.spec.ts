@@ -26,7 +26,8 @@ test("ST-160 ST-161: theme and text size persist after reloading, an e-mail noti
     // Appearance: dark theme and 130 % text apply at once and come back after reloading.
     await signIn(page, "educador-demo", "/inicio");
     await page.getByRole("button", { name: /^Perfil de / }).click();
-    await page.getByRole("menuitem", { name: "Preferencias" }).click();
+    await page.getByRole("menuitem", { name: "Mi cuenta" }).click();
+    await page.getByRole("navigation", { name: "Mi cuenta" }).getByRole("link", { name: "Preferencias" }).click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Preferencias");
     await page.getByRole("tab", { name: "Apariencia y accesibilidad" }).click();
     await page.getByRole("radio", { name: "Oscuro" }).check();
@@ -46,7 +47,7 @@ test("ST-160 ST-161: theme and text size persist after reloading, an e-mail noti
     expect((await (await educator.get("/api/me/preferences")).json()).preferences).toMatchObject({ theme: "dark", textScale: 130 });
 
     // Notifications: one notice off by e-mail, saved; an account notice is locked on.
-    await page.getByRole("tab", { name: "Notificaciones" }).click();
+    await page.getByRole("navigation", { name: "Mi cuenta" }).getByRole("link", { name: "Notificaciones" }).click();
     const matrix = page.getByRole("region", { name: "Avisos por canal" });
     const changed = matrix.getByRole("switch", { name: "Cambio de una clase: Correo" });
     await expect(changed).toBeChecked();
@@ -62,6 +63,7 @@ test("ST-160 ST-161: theme and text size persist after reloading, an e-mail noti
     await expect(page.getByRole("region", { name: "Avisos por canal" }).getByRole("switch", { name: "Cambio de una clase: En la aplicación" })).toBeChecked();
 
     // Region: another zone; the agenda shows the next class in it.
+    await page.getByRole("navigation", { name: "Mi cuenta" }).getByRole("link", { name: "Preferencias" }).click();
     await page.getByRole("tab", { name: "Región e idioma" }).click();
     await page.getByLabel("Zona horaria", { exact: true }).selectOption("Asia/Tokyo");
     await expect(toast(page)).toContainText("Zona horaria guardada.");

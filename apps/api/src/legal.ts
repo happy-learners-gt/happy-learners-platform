@@ -1,20 +1,25 @@
 import type { LegalAcceptance, LegalDocument, LegalKind, LegalSignature, Member, PendingDocument, SignatureRecord, SignatureVerification } from "@happy-learners/contracts";
-import { documentCanonical, isLegalKind, legalDraftInput, legalLabels, organizationIds, pendingAgreement, pendingDocuments, record, signatureCanonical, signedKinds, signedNameInput } from "@happy-learners/domain";
+import { documentCanonical, isLegalKind, localDay, legalDraftInput, legalLabels, organizationIds, pendingAgreement, pendingDocuments, record, signatureCanonical, signedKinds, signedNameInput } from "@happy-learners/domain";
 import { digest, verifyPassword } from "./auth";
 import type { Database } from "./storage";
 import { event } from "./team";
 import { notify, type Notifier } from "./notify";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
-const columns = "id,kind,status,version,title,body,consent,updated_at AS updatedAt,published_at AS publishedAt,(SELECT COALESCE(u.display_name,u.username) FROM users u WHERE u.id=d.published_by) AS publishedBy";
+const columns = "id,kind,status,version,title,body,consent,body_json AS bodyJson,effective_at AS effectiveAt,updated_at AS updatedAt,published_at AS publishedAt,(SELECT COALESCE(u.display_name,u.username) FROM users u WHERE u.id=d.published_by) AS publishedBy";
 /** "la versión 2 de los términos y condiciones": what an event or a message names, without the document's text. */
 const nouns: Record<LegalKind, string> = { terms: "los términos y condiciones", privacy: "la política de privacidad", volunteer: "el acuerdo de voluntariado ad honorem" };
 const named = (kind: LegalKind, version: number | null) => `la versión ${version} de ${nouns[kind]}`;
 
 /** The latest published version of each kind and what the person still has to accept (ST-126, ST-127). */
+/** DEC-046: a version's effective date is a day in the organization's own time zone. */
+async function organizationToday(db: Database, organizationId: string) {
+  const row = await db.prepare("SELECT timezone FROM organizations WHERE id=?").bind(organizationId).first<{ timezone: string | null }>();
+  return localDay(row?.timezone || "America/Guatemala");
+}
 export async function pendingFor(db: Database, current: Member): Promise<PendingDocument[]> {
   const [published, inForce] = await db.batch([
-    db.prepare("SELECT id,kind,version,title FROM legal_documents WHERE organization_id=? AND status='published'").bind(current.organizationId),
+    db.prepare("SELECT id,kind,version,title FROM legal_documents WHERE organization_id=? AND status='published' AND (effective_at IS NULL OR effective_at<=?)").bind(current.organizationId, await organizationToday(db, current.organizationId)),
     db.prepare("SELECT document_id AS id FROM legal_acceptances WHERE organization_id=? AND user_id=? AND withdrawn_at IS NULL").bind(current.organizationId, current.id),
   ]) as unknown as [PendingDocument[], { id: string }[]];
   return pendingDocuments(published, inForce.map(row => row.id));
@@ -36,9 +41,11 @@ export async function agreementBlock(db: Database, current: Member): Promise<Res
   return agreement ? reply({ error: `Firma la versión ${agreement.version} del acuerdo de voluntariado ad honorem antes de impartir clases. Puedes firmarlo desde Ayuda.`, code: "VOLUNTEER_AGREEMENT_REQUIRED", agreement }, 403) : null;
 }
 
+/** DEC-046: the rich-text body travels as a document, not as its stored JSON string. */
+const documentOf = (row: LegalDocument) => ({ ...row, bodyJson: typeof row.bodyJson === "string" ? JSON.parse(row.bodyJson) : row.bodyJson ?? null });
 async function currentDocuments(db: Database, organizationId: string) {
-  return (await db.prepare(`SELECT ${columns} FROM legal_documents d WHERE organization_id=? AND status='published' AND version=(SELECT max(version) FROM legal_documents x WHERE x.organization_id=d.organization_id AND x.kind=d.kind AND x.status='published') ORDER BY kind DESC`)
-    .bind(organizationId).all<LegalDocument>()).results;
+  return (await db.prepare(`SELECT ${columns} FROM legal_documents d WHERE organization_id=? AND status='published' AND version=(SELECT max(version) FROM legal_documents x WHERE x.organization_id=d.organization_id AND x.kind=d.kind AND x.status='published' AND (x.effective_at IS NULL OR x.effective_at<=?)) ORDER BY kind DESC`)
+    .bind(organizationId, await organizationToday(db, organizationId)).all<LegalDocument>()).results.map(documentOf);
 }
 function acceptances(db: Database, organizationId: string, userId?: string) {
   return db.prepare(`SELECT a.id,a.document_id AS documentId,d.kind,d.version,a.user_id AS userId,COALESCE(u.display_name,u.username) AS name,a.accepted_at AS acceptedAt,a.withdrawn_at AS withdrawnAt,s.id AS signatureId,s.signed_name AS signedName
@@ -49,7 +56,7 @@ async function mine(db: Database, current: Member) {
   return { documents: await currentDocuments(db, current.organizationId), pending: await pendingFor(db, current), agreement: await agreementFor(db, current), mine: await acceptances(db, current.organizationId, current.id) };
 }
 async function allDocuments(db: Database, organizationId: string) {
-  return (await db.prepare(`SELECT ${columns} FROM legal_documents d WHERE organization_id=? ORDER BY kind DESC,CASE status WHEN 'draft' THEN 0 ELSE 1 END,version DESC`).bind(organizationId).all<LegalDocument>()).results;
+  return (await db.prepare(`SELECT ${columns} FROM legal_documents d WHERE organization_id=? ORDER BY kind DESC,CASE status WHEN 'draft' THEN 0 ELSE 1 END,version DESC`).bind(organizationId).all<LegalDocument>()).results.map(documentOf);
 }
 
 /**
@@ -122,11 +129,17 @@ export async function legal(path: string, method: string, input: unknown, curren
   }
   const [, , , , kind, action] = path.split("/");
   if (!isLegalKind(kind)) return reply({ error: "Documento no disponible." }, 404);
+  // DEC-046: the volunteer agreement is now a contract template; its published versions stay as the record they are.
+  if (kind === "volunteer") return reply({ error: "El acuerdo de voluntariado ahora se gestiona como una plantilla de contrato en Contratos.", code: "MOVED_TO_CONTRACTS" }, 410);
   const draft = await db.prepare("SELECT id FROM legal_documents WHERE organization_id=? AND kind=? AND status='draft'").bind(current.organizationId, kind).first<{ id: string }>();
   if (action === "publish") {
     if (!draft) return reply({ error: "Guarda un borrador antes de publicarlo." }, 409);
-    await db.prepare("UPDATE legal_documents SET status='published',version=(SELECT COALESCE(max(version),0)+1 FROM legal_documents WHERE organization_id=? AND kind=?),published_by=?,published_at=? WHERE id=? AND status='draft'")
-      .bind(current.organizationId, kind, current.id, now, draft.id).run();
+    // DEC-046: a version applies from its effective date (today or later); until then the previous one stays in force.
+    const requested = record(input)?.effectiveAt, today = await organizationToday(db, current.organizationId);
+    const effectiveAt = typeof requested === "string" && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : today;
+    if (effectiveAt < today) return reply({ error: "La vigencia de una versión empieza hoy o después." }, 400);
+    await db.prepare("UPDATE legal_documents SET status='published',version=(SELECT COALESCE(max(version),0)+1 FROM legal_documents WHERE organization_id=? AND kind=?),published_by=?,published_at=?,effective_at=? WHERE id=? AND status='draft'")
+      .bind(current.organizationId, kind, current.id, now, effectiveAt, draft.id).run();
     const published = await db.prepare("SELECT version FROM legal_documents WHERE id=?").bind(draft.id).first<{ version: number }>();
     await event(db, current, { action: "published", targetType: "legal", targetId: draft.id, summary: `Publicó ${named(kind, published?.version ?? null)}` }).run();
     // ST-161: everyone hears of a new version by a mandatory notice (bell and e-mail), except who published it.
@@ -141,14 +154,15 @@ export async function legal(path: string, method: string, input: unknown, curren
   }
   const value = legalDraftInput(kind, input);
   if (!value) return reply({ error: kind !== "privacy" ? "Escribe un título de 3 a 120 caracteres y un texto de al menos 20 caracteres, sin marcas HTML." : "Escribe un título de 3 a 120 caracteres, un texto de al menos 20 caracteres y un texto de consentimiento de 10 a 1000 caracteres en una sola línea." }, 400);
-  if (draft) await db.prepare("UPDATE legal_documents SET title=?,body=?,consent=?,updated_by=?,updated_at=? WHERE id=? AND status='draft'").bind(value.title, value.body, value.consent, current.id, now, draft.id).run();
-  else await db.prepare("INSERT INTO legal_documents(id,organization_id,kind,status,title,body,consent,updated_by,updated_at) VALUES (?,?,?,'draft',?,?,?,?,?)").bind(`legal-${kind}-${crypto.randomUUID()}`, current.organizationId, kind, value.title, value.body, value.consent, current.id, now).run();
+  const bodyJson = value.bodyJson ? JSON.stringify(value.bodyJson) : null;
+  if (draft) await db.prepare("UPDATE legal_documents SET title=?,body=?,body_json=?,consent=?,updated_by=?,updated_at=? WHERE id=? AND status='draft'").bind(value.title, value.body, bodyJson, value.consent, current.id, now, draft.id).run();
+  else await db.prepare("INSERT INTO legal_documents(id,organization_id,kind,status,title,body,body_json,consent,updated_by,updated_at) VALUES (?,?,?,'draft',?,?,?,?,?,?)").bind(`legal-${kind}-${crypto.randomUUID()}`, current.organizationId, kind, value.title, value.body, bodyJson, value.consent, current.id, now).run();
   return reply({ documents: await allDocuments(db, current.organizationId) });
 }
 
 /** Failed signing attempts per account: at most five every 15 minutes, in the bucket table sign-in uses. */
 const maxSigningFailures = 5;
-async function confirmIdentity(db: Database, current: Member, password: string): Promise<Response | null> {
+export async function confirmIdentity(db: Database, current: Member, password: string): Promise<Response | null> {
   const bucket = await digest(`signature:${current.organizationId}:${current.id}`), now = Date.now();
   const limit = await db.prepare("SELECT attempts FROM login_limits WHERE bucket=? AND expires_at>?").bind(bucket, now).first<{ attempts: number }>();
   if (limit && limit.attempts >= maxSigningFailures) return Response.json({ error: "Demasiados intentos de firma con una contraseña incorrecta. Espera 15 minutos y vuelve a intentar.", code: "SIGNATURE_RATE_LIMITED" }, { status: 429, headers: { "Retry-After": "900" } });

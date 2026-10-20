@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { test, expect } from "./local-test";
-import { e2eName, sessionToken, signIn, toast } from "./helpers";
+import { e2eName, expectRecentActivity, sessionToken, signIn, toast } from "./helpers";
 
 // ST-122 (HL-168). The terms and privacy are published in the fictional external organization, like tests/e2e/legal.spec.ts,
 // so no other suite is gated by them.
@@ -12,7 +12,7 @@ async function audit(page: Page, label: string) {
   const { violations } = await new AxeBuilder({ page }).withTags(wcag).analyze();
   expect(violations.map(item => `${label}: ${item.id} · ${item.nodes.map(node => node.target.join(" ")).slice(0, 3).join(" | ")}`)).toEqual([]);
 }
-const stepHeading = (page: Page, title: string) => page.getByRole("heading", { level: 2, name: new RegExp(`^Paso \\d de \\d: ${title}$`) });
+const stepHeading = (page: Page, title: string | RegExp) => page.getByRole("heading", { level: 2, name: title instanceof RegExp ? title : new RegExp(`^Paso \\d de \\d: ${title}$`) });
 
 test("HL-168 ST-122: a new account changes its password, signs the terms, completes its welcome and lands on Inicio; administration sees it complete", async ({ page, browser, playwright, baseURL }, info) => {
   test.setTimeout(120_000);
@@ -84,8 +84,8 @@ test("HL-168 ST-122: a new account changes its password, signs the terms, comple
     await expect(person.getByText("Tu perfil está completo.")).toBeVisible();
     await audit(person, "bienvenida: perfil");
     await person.getByRole("button", { name: "Continuar" }).click();
-    // A volunteer agreement published by another suite is optional here: this person teaches no section yet.
-    if (await stepHeading(person, "Firma tu acuerdo de voluntariado").isVisible()) await person.getByRole("button", { name: "Firmar más tarde" }).click();
+    // A contract or leftover volunteer agreement published by another suite is optional here: this person teaches no section yet.
+    if (await stepHeading(person, /^Paso \d de \d: Firma tu (contrato|acuerdo de voluntariado)$/).isVisible()) await person.getByRole("button", { name: "Firmar más tarde" }).click();
     await expect(stepHeading(person, "Tus cursos y secciones")).toBeVisible();
     await expect(person.getByText("Sincronizar con mi calendario")).toBeVisible();
     await audit(person, "bienvenida: cursos y secciones");
@@ -103,6 +103,6 @@ test("HL-168 ST-122: a new account changes its password, signs the terms, comple
     await page.getByLabel("Incorporación").selectOption("complete");
     await expect(row).toContainText("Completa");
     await audit(page, "educadores con incorporación");
-    await expect(page.locator(".activity-feed").first()).toContainText("completó su incorporación");
+    await expectRecentActivity(page, "completó su incorporación");
   } finally { await admin.dispose(); }
 });

@@ -11,17 +11,15 @@ import { useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import type { IconName } from "../ui/icons";
 import { Field, Loading, PageHeader, Section } from "../ui/primitives";
-import { MyNotifications } from "./notifications";
 
 /**
- * /preferencias (ST-160, ST-161): how the application reads and looks for this person, and what it tells them.
- * Three tabs — Región e idioma, Apariencia y accesibilidad, Notificaciones — whose address is the hash, so a link (or
- * an e-mail) opens the right one. Each choice saves on its own and applies at once; the account keeps it.
+ * «Preferencias» in Mi cuenta (ST-160): how the application reads and looks for this person.
+ * Two tabs — Región e idioma, Apariencia y accesibilidad — whose address is the hash. The notices live in
+ * «Notificaciones». Each choice saves on its own and applies at once; the account keeps it.
  */
-const tabs: { id: "region" | "apariencia" | "notificaciones"; label: string; icon: IconName }[] = [
+const tabs: { id: "region" | "apariencia"; label: string; icon: IconName }[] = [
   { id: "region", label: "Región e idioma", icon: "globe" },
   { id: "apariencia", label: "Apariencia y accesibilidad", icon: "accessibility" },
-  { id: "notificaciones", label: "Notificaciones", icon: "bell" },
 ];
 type Tab = typeof tabs[number]["id"];
 
@@ -29,7 +27,7 @@ export function PreferencesPage() {
   const { url, navigate } = useNavigation();
   const tab: Tab = tabs.find(item => `#${item.id}` === url.hash)?.id || "region";
   const base = useId(), refs = useRef<(HTMLButtonElement | null)[]>([]);
-  const choose = (next: Tab) => navigate(`/preferencias#${next}`, true);
+  const choose = (next: Tab) => navigate(`/mi-cuenta/preferencias#${next}`, true);
   function onKey(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
@@ -37,14 +35,14 @@ export function PreferencesPage() {
     choose(tabs[next].id); refs.current[next]?.focus();
   }
   return <>
-    <PageHeader title="Preferencias" description="Cómo se ven las fechas y la aplicación para ti, y qué avisos recibes. Se guardan en tu cuenta y te siguen en cualquier dispositivo."/>
+    <PageHeader title="Preferencias" description="Cómo se ven las fechas y la aplicación para ti."/>
     <div role="tablist" aria-label="Secciones de las preferencias" className="tabs preferences-tabs">
       {tabs.map((item, index) => <button key={item.id} ref={element => { refs.current[index] = element; }} type="button" role="tab" id={`${base}-${item.id}`} aria-controls={`${base}-panel`}
         aria-selected={tab === item.id} tabIndex={tab === item.id ? 0 : -1} className="tab" onClick={() => choose(item.id)} onKeyDown={event => onKey(event, index)}>
         <Icon name={item.icon} size={18} filled={tab === item.id}/><span>{item.label}</span></button>)}
     </div>
-    <div role="tabpanel" id={`${base}-panel`} aria-labelledby={`${base}-${tab}`} className="tab-panel reading">
-      {tab === "region" ? <RegionSettings/> : tab === "apariencia" ? <AppearanceSettings/> : <MyNotifications/>}
+    <div role="tabpanel" id={`${base}-panel`} aria-labelledby={`${base}-${tab}`} className="tab-panel form-sheet">
+      {tab === "region" ? <RegionSettings/> : <AppearanceSettings/>}
     </div>
   </>;
 }
@@ -95,53 +93,51 @@ function RegionSettings() {
   const locales = chosen.locale && !supported.includes(chosen.locale as typeof supported[number]) ? [chosen.locale, ...supported] : supported;
   return <div className="stack-lg">
     <Section title="Idioma y formato">
-      <div className="field-grid">
-        <Field label="Idioma de la interfaz" hint="Por ahora la aplicación está disponible en español; aquí aparecerán los demás idiomas cuando lo estén.">
+      <div className="form-grid-12">
+        <div className="form-span-4"><Field label="Idioma de la interfaz" hint="Por ahora la aplicación está disponible en español; aquí aparecerán los demás idiomas cuando lo estén.">
           <select value={preferences.language} disabled={busy === "language"} onChange={event => void save({ language: event.target.value as UserPreferences["language"] }, "Idioma guardado.")}>
             {interfaceLanguages.map(item => <option key={item.code} value={item.code}>{item.label}</option>)}
           </select>
-        </Field>
-        <Field label="Formato regional" hint="Cómo se escriben las fechas, las horas y los números.">
+        </Field></div>
+        <div className="form-span-4"><Field label="Formato regional" hint="Cómo se escriben las fechas, las horas y los números.">
           <select value={chosen.locale || ""} disabled={busy === "locale"} onChange={event => void save({ locale: event.target.value || null }, "Formato regional guardado.")}>
             <option value="">Como la organización ({localeLabel(organization.locale)})</option>
             {locales.map(tag => <option key={tag} value={tag}>{localeLabel(tag)}</option>)}
           </select>
-        </Field>
+        </Field></div>
+        <div className="form-span-4"><Field label="Página de inicio" hint="La primera página que se abre al entrar.">
+          <select value={preferences.homePage} disabled={busy === "homePage"} onChange={event => void save({ homePage: event.target.value as UserPreferences["homePage"] }, "Página de inicio guardada.")}>
+            {homePages.map(page => <option key={page.value} value={page.value}>{page.label}</option>)}
+          </select>
+        </Field></div>
       </div>
       <p className="format-sample" aria-live="polite"><span className="muted small">Así se verá:</span> <strong>{sample(preferences.locale, preferences.hourCycle, preferences.timezone)}</strong></p>
     </Section>
     <Section title="Zona horaria y calendario">
-      <div className="field-grid">
-        <Field label="Zona horaria" hint={<>Hora local: {formatInstantTime(new Date().toISOString())} ({utcOffset(preferences.timezone)}). La agenda, el horario, las horas y tu calendario usan esta zona.</>}>
+      <div className="form-grid-12">
+        <div className="form-span-4"><Field label="Zona horaria" hint={<>Hora local: {formatInstantTime(new Date().toISOString())} ({utcOffset(preferences.timezone)}).</>}>
           <select value={chosen.timezone || ""} disabled={busy === "timezone"} onChange={event => void save({ timezone: event.target.value || null }, "Zona horaria guardada.")}>
             <option value="">Como la organización ({organization.timezone.replaceAll("_", " ")})</option>
             {groups.map(group => <optgroup key={group.region} label={group.region}>{group.zones.map(zone => <option key={zone.id} value={zone.id}>{zone.city} ({zone.offset})</option>)}</optgroup>)}
           </select>
-        </Field>
-        <Field label="Primer día de la semana">
+        </Field></div>
+        <div className="form-span-4"><Field label="Primer día de la semana">
           <select value={chosen.weekStart ? String(chosen.weekStart) : ""} disabled={busy === "weekStart"} onChange={event => void save({ weekStart: event.target.value ? Number(event.target.value) : null }, "Primer día de la semana guardado.")}>
             <option value="">Según el formato regional ({dayName(preferences.weekStart).toLocaleLowerCase("es")})</option>
             {[1, 2, 3, 4, 5, 6, 7].map(day => <option key={day} value={day}>{dayName(day)}</option>)}
           </select>
-        </Field>
+        </Field></div>
+        <div className="form-span-4"><fieldset className="choice-field">
+          <legend>Formato de hora</legend>
+          <div className="segmented" role="radiogroup" aria-label="Formato de hora">
+            {([["", `Auto (${preferences.hourCycle === "h12" ? "12 h" : "24 h"})`], ["h12", "12 h"], ["h23", "24 h"]] as const).map(([value, label]) =>
+              <label key={value || "auto"}><input type="radio" name="hour-cycle" value={value} checked={(chosen.hourCycle || "") === value} disabled={busy === "hourCycle"}
+                onChange={() => void save({ hourCycle: (value || null) as UserPreferences["hourCycle"] }, "Formato de hora guardado.")}/><span>{label}</span></label>)}
+          </div>
+        </fieldset></div>
       </div>
       {device && device !== preferences.timezone && <p className="notice"><Icon name="info" size={18}/><span>Este dispositivo está en {zoneName(device)} ({device.replaceAll("_", " ")}).</span>
         <button type="button" className="button secondary small" disabled={!!busy} onClick={() => void save({ timezone: device }, "Zona horaria guardada.")}>Usar la de este dispositivo</button></p>}
-      <fieldset className="choice-field">
-        <legend>Formato de hora</legend>
-        <div className="segmented" role="radiogroup" aria-label="Formato de hora">
-          {([["", `Automático (${preferences.hourCycle === "h12" ? "12 h" : "24 h"})`], ["h12", "12 horas"], ["h23", "24 horas"]] as const).map(([value, label]) =>
-            <label key={value || "auto"}><input type="radio" name="hour-cycle" value={value} checked={(chosen.hourCycle || "") === value} disabled={busy === "hourCycle"}
-              onChange={() => void save({ hourCycle: (value || null) as UserPreferences["hourCycle"] }, "Formato de hora guardado.")}/><span>{label}</span></label>)}
-        </div>
-      </fieldset>
-    </Section>
-    <Section title="Al entrar">
-      <Field label="Página de inicio" hint="La primera página que se abre al entrar a Happy Learners.">
-        <select value={preferences.homePage} disabled={busy === "homePage"} onChange={event => void save({ homePage: event.target.value as UserPreferences["homePage"] }, "Página de inicio guardada.")}>
-          {homePages.map(page => <option key={page.value} value={page.value}>{page.label}</option>)}
-        </select>
-      </Field>
     </Section>
   </div>;
 }

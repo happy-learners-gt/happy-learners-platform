@@ -18,7 +18,10 @@ export function PageHeader({ title, description, crumbs, meta, actions, primary 
   return <header className="page-header">
     {crumbs && <Breadcrumbs items={crumbs}/>}
     <div className="page-header-row">
-      <div className="page-header-text"><h1>{title}</h1>{description && <p className="page-description">{description}</p>}{meta && <div className="page-meta">{meta}</div>}</div>
+      <div className="page-header-text">
+        <div className="page-header-title"><h1>{title}</h1>{meta && <div className="page-meta">{meta}</div>}</div>
+        {description && <p className="page-description">{description}</p>}
+      </div>
       {(actions || primary) && <div className="page-actions">{actions}{primary}</div>}
     </div>
   </header>;

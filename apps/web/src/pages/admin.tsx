@@ -1,23 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import type { AcademicProfile, CourseFormat, EffectivePreferences, CourseSettings, EducationLevel, EducationType, Member, Modality, ModuleLabel, Organization, Pacing, SequenceTemplate, StudyProgram, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
-import { accountInput, areaLabel, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, moduleLabels, moduleNoun, pacings, sequenceOf, sequenceTemplates, settingDefinitions, suggestedLocales, timezoneGroups, utcOffset } from "@happy-learners/domain";
+import type { AcademicProfile, Contract, ContractPhase, CourseFormat, EffectivePreferences, CourseSettings, EducationLevel, EducationType, Member, Modality, ModuleLabel, OnboardingPerson, Organization, Pacing, SequenceTemplate, StudyProgram, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
+import { accountInput, areaLabel, contractPhaseLabels, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, moduleLabels, moduleNoun, pacings, sequenceOf, sequenceTemplates, settingDefinitions, suggestedLocales, timezoneGroups, utcOffset } from "@happy-learners/domain";
 import type { SettingKey } from "@happy-learners/domain";
-import { plural, timeAgo } from "../model";
-import { ActivityFeed, Avatar, CourseProgressList, useProgress } from "../ui/progress";
+import { plural } from "../model";
+import { Avatar } from "../ui/progress";
 import { api, message } from "../api";
-import { useNavigation, useUnsavedChanges } from "../navigation";
+import { Link, useNavigation, useUnsavedChanges } from "../navigation";
 import { useSession } from "../session";
 import { Modal, useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import { Menu } from "../ui/Menu";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section, StatusBadge } from "../ui/primitives";
+import type { Tone } from "../ui/primitives";
 import { DaysOff } from "./calendar";
 import { ProgramPathDialog } from "./programPath";
 import { DepartureDialog, departureDay } from "./departure";
 import { Invitations } from "./invitations";
 import { ClosureRequests } from "./account";
-import { LegalSettings } from "./legal";
 import { ExpiringDocuments, PersonDetail } from "./profile";
 import { CoordinationBadge, CoordinationDialog } from "./access";
 import { OnboardingBadge, OnboardingFilter, useOnboardingPeople } from "./onboarding";
@@ -54,51 +54,90 @@ function OrganizationForm() {
     finally { setBusy(false); }
   }
   return <>
-    <PageHeader title="Organización" description="Nombre, zona horaria, formato regional y calendario de días sin clase del espacio compartido."/>
-    <form className="form-card reading" onSubmit={save} onChange={() => setDirty(true)}>
+    <PageHeader title="Organización" description="Nombre, zona, formato regional, días sin clase y respaldo."/>
+    <div className="form-sheet account-cards">
+    <form className="panel" onSubmit={save} onChange={() => setDirty(true)}>
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
       <fieldset disabled={busy} className="stack">
-        <Field label="Nombre de la organización" hint="En la demostración usa un nombre ficticio."><input name="name" required minLength={3} maxLength={80} defaultValue={organization?.name || ""}/></Field>
-        <Field label="Zona horaria" hint={`Hora local: ${new Intl.DateTimeFormat(currentRegional().locale, { timeZone: zone, hour: "numeric", minute: "2-digit", hourCycle: currentRegional().hourCycle }).format(new Date())} (${utcOffset(zone)}). El día de hoy y las fechas de las clases se calculan en esta zona; es también la zona de quien no elige otra en sus preferencias.`}>
-          <select name="timezone" value={zone} onChange={event => setZone(event.target.value)}>
-            {zones.map(group => <optgroup key={group.region} label={group.region}>{group.zones.map(item => <option key={item.id} value={item.id}>{item.id} ({item.offset})</option>)}</optgroup>)}
-          </select>
-        </Field>
-        <Field label="Formato regional" hint="Cómo se escriben fechas, horas y números para quien no elige otro formato en sus preferencias.">
-          <select name="locale" defaultValue={organization?.locale || "es"}>
-            {[...new Set([organization?.locale || "es", ...suggestedLocales])].filter(tag => { try { return Intl.DateTimeFormat.supportedLocalesOf([tag]).length > 0; } catch { return false; } }).map(tag => <option key={tag} value={tag}>{localeLabel(tag)}</option>)}
-          </select>
-        </Field>
+        <div className="form-grid-12">
+          <div className="form-span-12"><Field label="Nombre de la organización" hint="En la demostración usa un nombre ficticio."><input name="name" required minLength={3} maxLength={80} defaultValue={organization?.name || ""}/></Field></div>
+          <div className="form-span-4"><Field label="Zona horaria" hint={`Hora local: ${new Intl.DateTimeFormat(currentRegional().locale, { timeZone: zone, hour: "numeric", minute: "2-digit", hourCycle: currentRegional().hourCycle }).format(new Date())} (${utcOffset(zone)}).`}>
+            <select name="timezone" value={zone} onChange={event => setZone(event.target.value)}>
+              {zones.map(group => <optgroup key={group.region} label={group.region}>{group.zones.map(item => <option key={item.id} value={item.id}>{item.id} ({item.offset})</option>)}</optgroup>)}
+            </select>
+          </Field></div>
+          <div className="form-span-4"><Field label="Formato regional" hint="Fechas, horas y números de quien no elige otro formato.">
+            <select name="locale" defaultValue={organization?.locale || "es"}>
+              {[...new Set([organization?.locale || "es", ...suggestedLocales])].filter(tag => { try { return Intl.DateTimeFormat.supportedLocalesOf([tag]).length > 0; } catch { return false; } }).map(tag => <option key={tag} value={tag}>{localeLabel(tag)}</option>)}
+            </select>
+          </Field></div>
+        </div>
         <div className="form-actions"><button className="button primary">{busy ? "Guardando…" : "Guardar organización"}</button></div>
       </fieldset>
     </form>
-    <div className="reading"><DaysOff writable/></div>
-    <div className="reading">
-      <Section title="Respaldo" action={<a className="button secondary small" href="/api/organization/backup" download><Icon name="download" size={16}/>Descargar respaldo</a>}>
-        <p className="muted">Una copia en JSON de los cursos, las lecciones, las secciones, el calendario y los registros de la organización. No incluye contraseñas, sesiones ni el contenido de los documentos subidos. Guárdala en un lugar privado: contiene los nombres de los estudiantes.</p>
-      </Section>
+    <DaysOff writable/>
+    <Section title="Respaldo" action={<a className="button secondary small" href="/api/organization/backup" download><Icon name="download" size={16}/>Descargar respaldo</a>}>
+      <p className="muted">Una copia en JSON de los cursos, las lecciones, las secciones, el calendario y los registros de la organización. No incluye contraseñas, sesiones ni el contenido de los documentos subidos. Guárdala en un lugar privado: contiene los nombres de los estudiantes.</p>
+    </Section>
     </div>
-    <LegalSettings/>
   </>;
 }
 
 export function Members() {
   return <AdminOnly title="Educadores"><MemberList/></AdminOnly>;
 }
-type MemberStats = Member & { leads: number; coTeaches: number; lessonsCreated: number; publications: number; attendance: number; events: number; lastActivity: string | null; departedOn?: string };
-/** People of the organization, what each one does and how their courses are progressing. */
+type MemberStats = Member & { leads: number; coTeaches: number; sections: number; lessonsCreated: number; publications: number; attendance: number; events: number; lastActivity: string | null; departedOn?: string };
+const educatorTabs = [
+  { id: "personas", label: "Personas", href: "/educadores" },
+  { id: "invitaciones", label: "Invitaciones", href: "/educadores#invitaciones" },
+  { id: "contratos", label: "Contratos", href: "/contratos#contratos" },
+  { id: "incorporacion", label: "Incorporación", href: "/educadores#incorporacion" },
+  { id: "cierres", label: "Cierres de cuenta", href: "/educadores#cierres" },
+  { id: "documentos", label: "Documentos por vencer", href: "/educadores#documentos" },
+] as const;
+type EducatorTab = Exclude<(typeof educatorTabs)[number]["id"], "contratos">;
+const educatorTabOf = (hash: string): EducatorTab => ({
+  "": "personas", "#personas": "personas", "#invitaciones": "invitaciones", "#incorporacion": "incorporacion", "#cierres": "cierres", "#documentos": "documentos",
+} as const)[hash] || "personas";
+const contractTone: Record<ContractPhase, Tone> = {
+  draft: "neutral", "awaiting-signature": "warning", scheduled: "info", "in-force": "success", ending: "warning",
+  expired: "neutral", declined: "danger", voided: "neutral", terminated: "neutral", superseded: "neutral",
+};
+const contractRank: Record<ContractPhase, number> = {
+  "in-force": 0, ending: 1, "awaiting-signature": 2, scheduled: 3, draft: 4, expired: 5, terminated: 6, declined: 7, voided: 8, superseded: 9,
+};
+function currentContractOf(contracts: Contract[], userId: string) {
+  return contracts.filter(item => item.userId === userId).sort((a, b) => contractRank[a.phase] - contractRank[b.phase] || b.createdAt.localeCompare(a.createdAt))[0];
+}
+function loadLabel(member: Pick<MemberStats, "leads" | "coTeaches" | "sections">) {
+  const courses = (member.leads || 0) + (member.coTeaches || 0);
+  const summary = `${courses === 1 ? "1 curso" : `${courses} cursos`} · ${member.sections === 1 ? "1 sección" : `${member.sections || 0} secciones`}`;
+  const detail = [member.leads ? `responsable de ${member.leads}` : "", member.coTeaches ? `colabora en ${member.coTeaches}` : ""].filter(Boolean).join(" · ");
+  return { summary: courses || member.sections ? summary : "", detail };
+}
+
+/** People of the organization, split into tabs so the page stays one screen tall. */
 function MemberList() {
   const { toast, confirm } = useFeedback();
-  const [members, setMembers] = useState<MemberStats[] | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(""), [person, setPerson] = useState("");
+  const { url, navigate } = useNavigation();
+  const [members, setMembers] = useState<MemberStats[] | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState("");
   const [adding, setAdding] = useState(false), [inviting, setInviting] = useState(false), [issued, setIssued] = useState<Issued | null>(null), [revision, setRevision] = useState(0);
   const [leaving, setLeaving] = useState<{ id: string; name: string } | null>(null), { member: me } = useSession();
-  // ST-149, ST-150: a person's profile and staff file.
   const [detail, setDetail] = useState<{ id: string; name: string } | null>(null);
   const [coordinating, setCoordinating] = useState<MemberStats | null>(null);
-  const progress = useProgress();
-  // ST-122: the onboarding of each person, as a column and a filter.
+  const [contracts, setContracts] = useState<Contract[]>([]);
   const onboarding = useOnboardingPeople(revision), [onboardingFilter, setOnboardingFilter] = useState<OnboardingPersonStatus | "">("");
-  const load = async () => { setError(""); try { setMembers((await api<{ members: MemberStats[] }>("/members")).members); setRevision(value => value + 1); } catch (cause) { setError(message(cause)); } };
+  const tab = educatorTabOf(url.hash);
+  const load = async () => {
+    setError("");
+    try {
+      const [people, listed] = await Promise.all([
+        api<{ members: MemberStats[] }>("/members"),
+        api<{ contracts: Contract[] }>("/contracts").catch(() => ({ contracts: [] as Contract[] })),
+      ]);
+      setMembers(people.members); setContracts(listed.contracts); setRevision(value => value + 1);
+    } catch (cause) { setError(message(cause)); }
+  };
   useEffect(() => { void load(); }, []);
   async function update(member: Member, patch: Partial<Member>) {
     setBusy(member.id);
@@ -114,58 +153,84 @@ function MemberList() {
     catch (cause) { toast({ tone: "error", message: message(cause) }); }
     finally { setBusy(""); }
   }
-  const header = <PageHeader title="Educadores" description="Quién puede entrar, qué hace cada persona y cómo avanzan los cursos. Los estudiantes no necesitan cuenta."
+  const invite = () => { navigate("/educadores#invitaciones"); setInviting(true); };
+  const header = <PageHeader title="Educadores" description="Quién forma el equipo, su contrato y su incorporación. Los estudiantes no necesitan cuenta."
     primary={members && <PrimaryAction icon="plus" onClick={() => setAdding(true)}>Agregar cuenta</PrimaryAction>}
-    actions={members && <button type="button" className="button secondary" onClick={() => setInviting(true)}><Icon name="send" size={16}/>Invitar por correo</button>}/>;
-  if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
-  if (!members) return <>{header}<Loading label="Cargando equipo…"/></>;
-  const titles = Object.fromEntries((progress.courses || []).map(item => [item.courseId, item.title]));
-  const selected = members.find(member => member.id === person);
+    actions={members && <button type="button" className="button secondary" onClick={invite}><Icon name="send" size={16}/>Invitar por correo</button>}/>;
+  const tabs = <nav className="tabs scrollable-tabs" aria-label="Secciones de educadores">
+    {educatorTabs.map(item => <Link key={item.id} href={item.href} className="tab" aria-current={item.id === "contratos" ? undefined : tab === item.id ? "page" : undefined}>{item.label}</Link>)}
+  </nav>;
+  if (error) return <>{header}{tabs}<ErrorState error={error} retry={() => void load()}/></>;
+  if (!members) return <>{header}{tabs}<Loading label="Cargando equipo…"/></>;
+  const visible = members.filter(member => !onboardingFilter || onboarding?.get(member.id)?.status === onboardingFilter);
   return <>
     {header}
-    <div className="table-toolbar"><OnboardingFilter value={onboardingFilter} onChange={setOnboardingFilter}/></div>
-    <div className="table-card" role="region" aria-label="Personas de la organización" tabIndex={0}><table className="members-table">
-      <caption className="sr-only">Personas de la organización y su actividad</caption>
-      <thead><tr><th scope="col">Persona</th><th scope="col">Rol</th><th scope="col">Cursos</th><th scope="col">Lecciones</th><th scope="col">Clases registradas</th><th scope="col">Última actividad</th><th scope="col">Acceso</th><th scope="col">Incorporación</th><th scope="col"><span className="sr-only">Acciones</span></th></tr></thead>
-      <tbody>{members.filter(member => !onboardingFilter || onboarding?.get(member.id)?.status === onboardingFilter).map(member => {
-        const owner = member.id === "user-0", name = member.displayName || member.username;
-        return <tr key={member.id}>
-          <th scope="row"><span className="person-cell"><Avatar name={name} size={30}/><span><button type="button" className="link-button" onClick={() => setPerson(person === member.id ? "" : member.id)} aria-pressed={person === member.id}>{name}</button><span className="muted small">@{member.username}{member.email ? ` · ${member.email}` : ""}</span></span></span></th>
-          <td>{member.role === "admin" ? "Administración" : "Educador"}{member.coordination && <><br/><CoordinationBadge scope={member.coordination}/></>}</td>
-          <td>{member.leads || member.coTeaches ? <>{member.leads ? `responsable de ${member.leads}` : ""}{member.leads && member.coTeaches ? " · " : ""}{member.coTeaches ? `colabora en ${member.coTeaches}` : ""}</> : <span className="muted">—</span>}</td>
-          <td>{member.lessonsCreated ? `${member.lessonsCreated} creadas · ${member.publications} publicaciones` : <span className="muted">—</span>}</td>
-          <td>{member.attendance || <span className="muted">—</span>}</td>
-          <td>{member.lastActivity ? <time dateTime={member.lastActivity}>{timeAgo(member.lastActivity)}</time> : <span className="muted">Sin actividad</span>}</td>
-          <td><StatusBadge tone={!member.active ? "neutral" : member.mustChangePassword ? "warning" : "success"}>{!member.active ? "Sin acceso" : member.mustChangePassword ? "Contraseña temporal" : "Activo"}</StatusBadge>{member.departedOn && <span className="muted small departed-on">Salió el {departureDay(member.departedOn)}</span>}</td>
-          <td>{onboarding ? <OnboardingBadge person={onboarding.get(member.id)}/> : <span className="muted">…</span>}</td>
-          <td className="cell-actions">{owner ? <span className="row-actions"><span className="muted small">Cuenta principal</span><Menu label={`Acciones de ${name}`} items={[{ label: "Perfil y expediente", icon: "user", onSelect: () => setDetail({ id: member.id, name }) }]}/></span> : <Menu label={`Acciones de ${name}`} items={[
-            { label: "Perfil y expediente", icon: "user", onSelect: () => setDetail({ id: member.id, name }) },
-            { label: member.role === "admin" ? "Cambiar a educador" : "Cambiar a administración", icon: "users", disabled: busy === member.id, onSelect: () => void update(member, { role: member.role === "admin" ? "educator" : "admin" }) },
-            ...(member.role === "educator" && member.active ? [{ label: member.coordination ? "Cambiar la coordinación académica" : "Asignar coordinación académica", icon: "shield" as const, disabled: busy === member.id, onSelect: () => setCoordinating(member) }] : []),
-            { label: "Restablecer contraseña", icon: "undo", disabled: busy === member.id, onSelect: () => void reset(member) },
-            { label: member.active ? "Quitar acceso" : "Dar acceso", icon: "shield", danger: member.active, disabled: busy === member.id, onSelect: () => void update(member, { active: !member.active }) },
-            ...(member.id !== me.id && (member.active || !member.departedOn) ? [{ label: "Registrar salida", icon: "logout" as const, danger: true, disabled: busy === member.id, onSelect: () => setLeaving({ id: member.id, name }) }] : []),
-          ]}/>}</td>
-        </tr>;
-      })}</tbody>
-    </table></div>
-    <Invitations inviting={inviting} onInviting={setInviting} onChanged={() => void load()}/>
-    <ClosureRequests revision={revision} onDeparture={setLeaving}/>
-    <ExpiringDocuments onOpen={setDetail} revision={revision}/>
-    <div className="admin-grid">
-      <Section title="Avance por curso">
-        {progress.error ? <ErrorState error={progress.error} retry={() => void progress.reload()}/> : !progress.courses ? <Loading label="Calculando avance…" lines={4}/> : <CourseProgressList courses={progress.courses}/>}
-      </Section>
-      <Section title={selected ? `Actividad de ${selected.displayName || selected.username}` : "Actividad reciente de la organización"} action={selected && <button type="button" className="link-button" onClick={() => setPerson("")}>Ver toda</button>}>
-        <ActivityFeed key={`${person}-${revision}`} actor={person || undefined} limit={15} courseTitles={titles}/>
-      </Section>
-    </div>
+    {tabs}
+    {tab === "personas" && <>
+      <div className="table-toolbar"><OnboardingFilter value={onboardingFilter} onChange={setOnboardingFilter}/></div>
+      <div className="table-card" role="region" aria-label="Personas de la organización" tabIndex={0}><table className="members-table">
+        <caption className="sr-only">Personas de la organización, su carga, su contrato y su acceso</caption>
+        <thead><tr><th scope="col">Persona</th><th scope="col">Rol</th><th scope="col">Carga</th><th scope="col">Contrato</th><th scope="col">Incorporación</th><th scope="col">Acceso</th><th scope="col"><span className="sr-only">Acciones</span></th></tr></thead>
+        <tbody>{visible.map(member => {
+          const owner = member.id === "user-0", name = member.displayName || member.username, load = loadLabel(member);
+          const contract = currentContractOf(contracts, member.id);
+          return <tr key={member.id}>
+            <th scope="row" className="cell-person"><span className="person-cell"><Avatar name={name} size={30}/><span>
+              <span className="person-name-line"><button type="button" className="link-button" onClick={() => setDetail({ id: member.id, name })}>{name}</button>{owner && <StatusBadge>Cuenta principal</StatusBadge>}</span>
+              <span className="person-username muted small">@{member.username}{member.email ? ` · ${member.email}` : ""}</span>
+            </span></span></th>
+            <td>{member.role === "admin" ? "Administración" : "Educador"}{member.coordination && <><br/><CoordinationBadge scope={member.coordination}/></>}</td>
+            <td className="cell-load">{load.summary ? <><span>{load.summary}</span>{load.detail && <span className="muted small">{load.detail}</span>}</> : <span className="muted">—</span>}</td>
+            <td>{contract ? <StatusBadge tone={contractTone[contract.phase]}>{contractPhaseLabels[contract.phase]}</StatusBadge> : <span className="muted">—</span>}</td>
+            <td>{onboarding ? <OnboardingBadge person={onboarding.get(member.id)} compact/> : <span className="muted">…</span>}</td>
+            <td><StatusBadge tone={!member.active ? "neutral" : member.mustChangePassword ? "warning" : "success"}>{!member.active ? "Sin acceso" : member.mustChangePassword ? "Contraseña temporal" : "Activo"}</StatusBadge>{member.departedOn && <span className="muted small departed-on">Salió el {departureDay(member.departedOn)}</span>}</td>
+            <td className="cell-actions">{owner ? <Menu label={`Acciones de ${name}`} items={[{ label: "Perfil y expediente", icon: "user", onSelect: () => setDetail({ id: member.id, name }) }]}/> : <Menu label={`Acciones de ${name}`} items={[
+              { label: "Perfil y expediente", icon: "user", onSelect: () => setDetail({ id: member.id, name }) },
+              { label: member.role === "admin" ? "Cambiar a educador" : "Cambiar a administración", icon: "users", disabled: busy === member.id, onSelect: () => void update(member, { role: member.role === "admin" ? "educator" : "admin" }) },
+              ...(member.role === "educator" && member.active ? [{ label: member.coordination ? "Cambiar la coordinación académica" : "Asignar coordinación académica", icon: "shield" as const, disabled: busy === member.id, onSelect: () => setCoordinating(member) }] : []),
+              { label: "Restablecer contraseña", icon: "undo", disabled: busy === member.id, onSelect: () => void reset(member) },
+              { label: member.active ? "Quitar acceso" : "Dar acceso", icon: "shield", danger: member.active, disabled: busy === member.id, onSelect: () => void update(member, { active: !member.active }) },
+              ...(member.id !== me.id && (member.active || !member.departedOn) ? [{ label: "Registrar salida", icon: "logout" as const, danger: true, disabled: busy === member.id, onSelect: () => setLeaving({ id: member.id, name }) }] : []),
+            ]}/>}</td>
+          </tr>;
+        })}</tbody>
+      </table></div>
+    </>}
+    {(tab === "invitaciones" || inviting) && <Invitations inviting={inviting} onInviting={setInviting} onChanged={() => void load()}/>}
+    {tab === "incorporacion" && <OnboardingPeople members={members} people={onboarding} filter={onboardingFilter} onFilter={setOnboardingFilter} onOpen={setDetail}/>}
+    {tab === "cierres" && <ClosureRequests revision={revision} onDeparture={setLeaving}/>}
+    {tab === "documentos" && <ExpiringDocuments onOpen={setDetail} revision={revision}/>}
     {adding && <AccountDialog onClose={() => setAdding(false)} onCreated={async result => { setAdding(false); setIssued(result); await load(); }}/>}
     {coordinating && <CoordinationDialog person={{ id: coordinating.id, name: coordinating.displayName || coordinating.username }} current={coordinating.coordination || null} onClose={() => setCoordinating(null)} onDone={async text => { setCoordinating(null); await load(); toast({ message: text }); }}/>}
     {issued && <TemporaryPassword issued={issued} onClose={() => setIssued(null)}/>}
     {detail && <PersonDetail person={detail} onClose={() => { setDetail(null); void load(); }}/>}
     {leaving && <DepartureDialog person={leaving} onClose={() => setLeaving(null)} onDone={async date => { const name = leaving.name; setLeaving(null); await load(); toast({ message: `Salida de ${name} registrada el ${departureDay(date)}. Ya no puede entrar.` }); }}/>}
   </>;
+}
+
+function OnboardingPeople({ members, people, filter, onFilter, onOpen }: {
+  members: MemberStats[]; people: Map<string, OnboardingPerson> | null;
+  filter: OnboardingPersonStatus | ""; onFilter: (value: OnboardingPersonStatus | "") => void; onOpen: (person: { id: string; name: string }) => void;
+}) {
+  const rows = members.filter(member => !filter || people?.get(member.id)?.status === filter);
+  return <Section title="Incorporación">
+    <div className="table-toolbar"><OnboardingFilter value={filter} onChange={onFilter}/></div>
+    {!people ? <Loading label="Cargando incorporación…" lines={3}/> : !rows.length
+      ? <EmptyState compact icon="users" title={filter ? "Nadie coincide con este filtro" : "Sin personas"}>{filter ? "Prueba con otro estado o elige «Todas»." : "Cuando alguien se incorpore, verás aquí en qué paso va."}</EmptyState>
+      : <div className="table-card" role="region" aria-label="Incorporación de cada persona" tabIndex={0}><table className="members-table">
+        <caption className="sr-only">Estado de la incorporación de cada persona</caption>
+        <thead><tr><th scope="col">Persona</th><th scope="col">Rol</th><th scope="col">Incorporación</th><th scope="col">Acceso</th></tr></thead>
+        <tbody>{rows.map(member => {
+          const name = member.displayName || member.username;
+          return <tr key={member.id}>
+            <th scope="row"><span className="person-cell"><Avatar name={name} size={30}/><span><button type="button" className="link-button" onClick={() => onOpen({ id: member.id, name })}>{name}</button><span className="muted small">@{member.username}</span></span></span></th>
+            <td>{member.role === "admin" ? "Administración" : "Educador"}</td>
+            <td><OnboardingBadge person={people.get(member.id)}/></td>
+            <td><StatusBadge tone={!member.active ? "neutral" : member.mustChangePassword ? "warning" : "success"}>{!member.active ? "Sin acceso" : member.mustChangePassword ? "Contraseña temporal" : "Activo"}</StatusBadge></td>
+          </tr>;
+        })}</tbody>
+      </table></div>}
+  </Section>;
 }
 
 type Issued = { name: string; username: string; password: string; created: boolean };
