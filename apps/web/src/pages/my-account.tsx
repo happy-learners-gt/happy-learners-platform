@@ -3,8 +3,9 @@ import { Link } from "../navigation";
 import { useSession } from "../session";
 import { Icon } from "../ui/icons";
 import type { IconName } from "../ui/icons";
-import { EmptyState, PageHeader } from "../ui/primitives";
+import { PageHeader } from "../ui/primitives";
 import { AccountPage } from "./account";
+import { MyContractsPage } from "./my-contracts";
 import { StaffFileSection } from "./profile";
 import { MyNotifications } from "./notifications";
 import { PreferencesPage } from "./preferences";
@@ -47,7 +48,7 @@ function content(section: AccountSection): ReactNode {
   switch (section) {
     case "perfil": return <MyProfilePage/>;
     case "expediente": return <MyFilePage/>;
-    case "contratos": return <MyContractsPlaceholder/>;
+    case "contratos": return <MyContractsPage/>;
     case "cuenta": return <AccountPage/>;
     case "preferencias": return <PreferencesPage/>;
     case "notificaciones": return <MyNotificationsPage/>;
@@ -69,11 +70,4 @@ function MyNotificationsPage() {
   </>;
 }
 
-/** T9 sustituye este vacío por las tarjetas de contrato, la firma y el rechazo. */
-function MyContractsPlaceholder() {
-  return <>
-    <PageHeader title="Contratos" description="Tus acuerdos con la organización: vigencia, condiciones y firma."/>
-    <EmptyState icon="file" title="Aún no tienes contratos">Cuando administración te envíe un contrato, lo verás aquí para leerlo y firmarlo.</EmptyState>
-  </>;
-}
 

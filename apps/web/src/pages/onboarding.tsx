@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { MouseEvent } from "react";
-import type { LegalDocument, ProgramScope, OnboardingPerson, OnboardingPersonStatus, OnboardingState, OnboardingStep, StaffProfile } from "@happy-learners/contracts";
+import type { Contract, LegalDocument, ProgramScope, OnboardingPerson, OnboardingPersonStatus, OnboardingState, OnboardingStep, StaffProfile } from "@happy-learners/contracts";
 import { builtInRoles, onboardingStatusLabels, onboardingStepLabels, permissionCatalog, reachLabels } from "@happy-learners/domain";
 import type { BuiltInRole } from "@happy-learners/domain";
 import { api, message } from "../api";
@@ -10,7 +10,9 @@ import { ErrorState, Loading, StatusBadge } from "../ui/primitives";
 import type { Tone } from "../ui/primitives";
 import { ProfileForm } from "./profile";
 import { SignDialog } from "./legal";
+import { ContractTermsSummary, SignContractDialog } from "./my-contracts";
 import { formatInstantDate } from "../regional";
+import { RichText } from "../RichText";
 
 /**
  * ST-122: «Bienvenida», the guided onboarding of a new account. It opens after the own password (ST-093) and the terms
@@ -19,7 +21,11 @@ import { formatInstantDate } from "../regional";
 const scopeText = (scope: ProgramScope) => "all" in scope ? "todos los programas" : `${scope.programs.length} ${scope.programs.length === 1 ? "programa" : "programas"}`;
 const day = (value: string) => formatInstantDate(value);
 const wizardSteps: OnboardingStep[] = ["welcome", "profile", "agreement", "tour"];
-const titles: Partial<Record<OnboardingStep, string>> = { welcome: "Qué puedes hacer", profile: "Completa tu perfil", agreement: "Firma tu acuerdo de voluntariado", tour: "Tus cursos y secciones" };
+const titlesOf = (state: OnboardingState | null): Partial<Record<OnboardingStep, string>> => ({
+  welcome: "Qué puedes hacer", profile: "Completa tu perfil",
+  agreement: state?.contract ? "Firma tu contrato" : "Firma tu acuerdo de voluntariado",
+  tour: "Tus cursos y secciones",
+});
 
 export function OnboardingWizard({ onDone, onLogout }: { onDone: (href: string) => Promise<void>; onLogout: () => void }) {
   const [state, setState] = useState<OnboardingState | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false), [actionError, setActionError] = useState("");
@@ -43,11 +49,12 @@ export function OnboardingWizard({ onDone, onLogout }: { onDone: (href: string) 
   }
   const index = current ? visible.indexOf(current) : -1;
   const doneOf = (key: OnboardingStep) => !!state?.steps.find(step => step.key === key)?.done;
+  const titles = titlesOf(state);
   return <div className="login-page">
     <a className="skip-link" href="#main">Saltar al contenido</a>
     <main id="main" className="login-main">
       <div className="login-brand"><span className="brand-mark" aria-hidden="true">hl</span><span>Happy Learners</span></div>
-      <section className="login-card legal-card onboarding-card" aria-labelledby="onboarding-title">
+      <section className={`login-card legal-card onboarding-card${state?.contract && current === "agreement" ? " is-wide" : ""}`} aria-labelledby="onboarding-title">
         <h1 id="onboarding-title">Bienvenida</h1>
         <p>Unos pasos para empezar a trabajar sabiendo qué puedes hacer. Tu avance se guarda: si sales, continúas donde quedaste.</p>
         {error ? <ErrorState error={error} retry={() => load()}/> : !state || !current ? <Loading label="Cargando tu bienvenida…" lines={5}/> : <>
@@ -112,12 +119,25 @@ function ProfileStep({ state, onSaved }: { state: OnboardingState; onSaved: () =
 }
 
 function AgreementStep({ state, onSigned }: { state: OnboardingState; onSigned: () => void }) {
-  const [document, setDocument] = useState<LegalDocument | null>(null), [signing, setSigning] = useState(false);
+  const [document, setDocument] = useState<LegalDocument | null>(null), [contract, setContract] = useState<Contract | null>(null), [signing, setSigning] = useState(false);
   const step = state.steps.find(item => item.key === "agreement");
   useEffect(() => { if (state.agreement) api<{ documents: LegalDocument[] }>("/legal").then(result => setDocument(result.documents.find(item => item.id === state.agreement?.id) || null)).catch(() => undefined); }, [state.agreement?.id]);
-  if (step?.done) return <p role="status">{step.skipped ? "Elegiste firmarlo más tarde. Lo verás como aviso hasta que lo firmes; sin él no puedes impartir clases." : "Ya firmaste el acuerdo de voluntariado vigente."}</p>;
+  useEffect(() => { if (state.contract) api<{ contract: Contract }>(`/contracts/${state.contract.id}`).then(result => setContract(result.contract)).catch(() => undefined); }, [state.contract?.id]);
+  if (step?.done) return <p role="status">{step.skipped ? "Elegiste firmarlo más tarde. Lo verás como aviso hasta que lo firmes; sin él no puedes impartir clases." : state.contract || contract ? "Ya firmaste tu contrato." : "Ya firmaste el acuerdo de voluntariado vigente."}</p>;
+  if (state.contract) return <div className="stack">
+    <p>Administración te envió el contrato <strong>{state.contract.title}</strong>. Léelo y fírmalo con tu nombre completo y tu contraseña.</p>
+    <p className="muted small">{step?.optional ? "Puedes firmarlo más tarde, pero no podrás iniciar clases, pasar lista ni completarlas hasta firmarlo." : "Ya tienes secciones asignadas, así que necesitas firmarlo para continuar."}</p>
+    {contract ? <>
+      {contract.body && <RichText value={contract.body} editable={false} toolbar={false} label="Documento del contrato"/>}
+      <ContractTermsSummary contract={contract}/>
+      {contract.organizationSignature && <p className="small">Firma de la organización: {contract.organizationSignature.name} · {contract.organizationSignature.signedAt.slice(0, 10)}</p>}
+    </> : <Loading label="Cargando el contrato…" lines={4}/>}
+    <div><button type="button" className="button primary" disabled={!contract} onClick={() => setSigning(true)}><Icon name="shield" size={16}/>Leer y firmar el contrato</button></div>
+    {signing && contract && <SignContractDialog contract={contract} onClose={() => setSigning(false)} onSigned={() => { setSigning(false); onSigned(); }}/>}
+  </div>;
+  if (!state.agreement) return <p>Administración te enviará un contrato. Cuando lo tengas, lo firmarás aquí para continuar.</p>;
   return <div className="stack">
-    <p>Tu organización publicó la versión {state.agreement?.version} del acuerdo de voluntariado ad honorem: deja constancia de que tu actividad es voluntaria y sin remuneración económica. Se firma con tu nombre completo y tu contraseña.</p>
+    <p>Tu organización publicó la versión {state.agreement.version} del acuerdo de voluntariado ad honorem: deja constancia de que tu actividad es voluntaria y sin remuneración económica. Se firma con tu nombre completo y tu contraseña.</p>
     <p className="muted small">{step?.optional ? "Puedes firmarlo más tarde, pero no podrás iniciar clases, pasar lista ni completarlas hasta firmarlo." : "Ya tienes secciones asignadas, así que necesitas firmarlo para continuar."}</p>
     <div><button type="button" className="button primary" disabled={!document} onClick={() => setSigning(true)}><Icon name="shield" size={16}/>Leer y firmar el acuerdo</button></div>
     {signing && document && <SignDialog document={document} onClose={() => { setSigning(false); onSigned(); }} onSigned={() => undefined}/>}

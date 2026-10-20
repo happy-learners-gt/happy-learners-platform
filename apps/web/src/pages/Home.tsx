@@ -12,6 +12,7 @@ import type { IconName } from "../ui/icons";
 import { LessonBadge } from "../ui/LessonOutline";
 import { EmptyState, ErrorState, Loading, PrimaryAction, Section, StatTiles, StatusBadge, Updated } from "../ui/primitives";
 import { ActivityFeed, CourseProgressList, useProgress } from "../ui/progress";
+import { PendingContractHomeCard } from "./my-contracts";
 import { SectionCards } from "./sections/SectionCard";
 import { sectionPath } from "./sections/context";
 import { classBadge } from "./course/Classes";
@@ -78,6 +79,7 @@ export function Home() {
     {!organization?.configured && member.role === "admin" && <p className="notice"><Icon name="info" size={18}/>Configura el nombre de tu organización. <Link href="/organizacion">Abrir configuración</Link></p>}
     <div className="dashboard">
       <div className="dashboard-main">
+        <PendingContractHomeCard/>
         {data.toReview.length > 0 && <Section title={`Por revisar (${data.toReview.length})`} className="order-1">
           <p className="muted small">Lecciones que tu equipo envió para que las publiques.</p>
           <ul className="link-list">{data.toReview.map(item => <li key={item.id}>
