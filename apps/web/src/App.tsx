@@ -19,6 +19,7 @@ import { Search } from "./pages/Search";
 import { Help, NotFound } from "./pages/Help";
 import { StyleGuide } from "./pages/StyleGuide";
 import { Members, OrganizationSettings, AcademicSettings } from "./pages/admin";
+import { ContractsPage } from "./pages/contracts";
 import { AcceptInvitation } from "./pages/invitations";
 import { AccessPage } from "./pages/access";
 import { NotificationsAdmin } from "./pages/notifications";
@@ -165,6 +166,7 @@ function page(first: string, second: string | undefined, url: URL) {
     case "guia-de-estilo": return <StyleGuide/>;
     case "organizacion": return <OrganizationSettings/>;
     case "educadores": return <Members/>;
+    case "contratos": return <ContractsPage/>;
     case "mi-cuenta": return isAccountSection(second) ? <MyAccountPage section={second}/> : <Redirect to="/mi-cuenta/perfil"/>;
     case "perfil": return <Redirect to={url.hash === "#notificaciones" ? "/mi-cuenta/notificaciones" : "/mi-cuenta/perfil"}/>;
     case "equipo": return second ? <TeamProfilePage key={second} id={second}/> : <TeamDirectory/>;
