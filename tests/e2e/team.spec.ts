@@ -32,8 +32,10 @@ test("seeded educators see their courses' progress, teams and who did what", asy
   // Courses can be filtered by who leads them.
   await page.goto("/cursos");
   await page.getByLabel("Responsable").selectOption("seed-user-lucia");
-  await expect(page.locator("article.course-card")).toHaveCount(1);
-  await expect(page.locator("article.course-card")).toContainText("Matemáticas 3.º primaria");
+  // Lucía leads Matemáticas 3.º and, since the school pilot (0054), Matemáticas 6.º.
+  await expect(page.locator("article.course-card")).toHaveCount(2);
+  await expect(page.locator("article.course-card").filter({ hasText: "Matemáticas 3.º primaria" })).toHaveCount(1);
+  await expect(page.locator("article.course-card").filter({ hasText: "Matemáticas 6.º primaria" })).toHaveCount(1);
 });
 
 test("administration reviews each educator's contributions and every course's progress", async ({ page }) => {

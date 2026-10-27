@@ -607,6 +607,8 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: dialog-in
 .badge-row.start { justify-content: flex-start; }
 .map-edit { display: flex; gap: var(--space-2); align-items: center; }
 .book-map .map-edit input.map-pages { width: 120px; min-width: 0; }
+.coverage-note { display: block; font-size: var(--text-xs); color: var(--color-warning); }
+.coverage-note.is-covered { color: var(--color-success); }
 .readiness { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); font-size: var(--text-sm); }
 .readiness li { display: flex; align-items: center; gap: var(--space-2); }
 .readiness li.is-ok { color: var(--color-success); }
