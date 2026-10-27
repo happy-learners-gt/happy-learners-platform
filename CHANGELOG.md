@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.2.0 — 2026-10-27
+
+Piloto escolar de REL-010 (DEC-048 a DEC-052). Migraciones 0048 a 0053, acumulativas.
+
+- DEC-048: **Ciclo lectivo** en Organización. Administración define cada ciclo (borrador, vigente o cerrado; uno vigente
+  por organización) con sus bimestres, trimestres, semestres o unidades, dentro del ciclo y sin traslapes, y el peso de
+  cada periodo. **Crear el siguiente ciclo** copia el patrón de periodos un año después, sin estudiantes ni notas. El
+  horario de cada sección conserva sus fechas; al configurarlo se sugieren las del ciclo vigente. Los días sin clase
+  siguen siendo los de DEC-026.
+- DEC-049: **Notas** de cada sección (libreta mínima): una nota opcional de 0 a 100 por estudiante del listado y
+  periodo del ciclo vigente, con su promedio y si aprueba. Una nota vacía nunca cuenta como cero. Escala (0–100 o
+  letras A–F), nota mínima, umbrales de las letras y promedio simple o ponderado son ajustes del curso que el programa
+  puede fijar. Quien imparte la sección y administración escriben; coordinación lee. Un periodo se puede cerrar y solo
+  administración lo reabre; cerrar el ciclo congela sus notas y no promueve a nadie.
+- DEC-050: **Bibliografía del curso** en su biblioteca: referencias a recursos ya existentes (archivos en R2, textos o
+  enlaces) con rol de texto, apoyo u otro, y un solo **libro principal**, publicado y con rol de texto.
+- DEC-051: **Paquetes curriculares**. La «Dosificación de los aprendizajes · Matemáticas · Sexto Grado» de CNB Guatemala
+  (7 competencias, 26 indicadores y 84 contenidos, con su fuente) se activa en Configuración académica, y la persona
+  responsable de cada curso agrega sus indicadores al plan curricular sin duplicados.
+- DEC-052: **Proponer lecciones**. El texto del libro principal se lee en el navegador (sin OCR); el **Mapa del libro**
+  propone las páginas de cada indicador, una revisión con IA las confirma citando frases que se verifican en cada
+  página, y el equipo las confirma o corrige. Las propuestas son borradores con los momentos de la secuencia
+  didáctica, las páginas citadas, una pregunta de evaluación y el indicador; se procesan en segundo plano por lotes y
+  nunca se publican solas. OpenAI se usa solo con sus secretos configurados. **PDF de entrega** de un módulo para una
+  sección, solo con lo publicado, con membrete y pie de copia de entrega.
+- La auditoría de la matriz de accesos ordena los eventos simultáneos por su orden de registro.
+
 ## 1.1.4 — 2026-10-20
 
 Disponibilidad del educador en la asignación de secciones de REL-005 (SPR-003; DEC-047). Migración 0047.

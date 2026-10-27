@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Opt-in OpenAI for lesson proposals, locally. Reads ONLY OPENAI_API_KEY, OPENAI_MODEL and LESSON_MAX_OUTPUT_TOKENS
+# from an env file you already keep elsewhere (for example another project's .env), never prints their values, and
+# never writes them into this repository.
+#
+#   ./scripts/openai smoke <env-file>   one real request: proposes a lesson and checks it fits the lesson model
+#   ./scripts/openai dev <env-file> [wrangler-args...]   builds and serves http://localhost:8787 with OpenAI as the
+#                                       lesson generator; extra arguments go to wrangler dev (for example --persist-to)
+#
+# ./scripts/verify never calls OpenAI; this script is the only way these calls happen.
+set -euo pipefail
+
+usage() { echo "Uso: ./scripts/openai smoke <archivo-env> | dev <archivo-env> [argumentos de wrangler dev]" >&2; exit 2; }
+[[ $# -ge 2 ]] || usage
+mode="$1"; source_file="$2"; shift 2
+[[ "$mode" == "dev" || $# -eq 0 ]] || usage
+[[ "$mode" == "smoke" || "$mode" == "dev" ]] || usage
+[[ -r "$source_file" ]] || { echo "No se puede leer $source_file" >&2; exit 1; }
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+work="$(mktemp -d)"; chmod 700 "$work"
+trap 'rm -rf "$work"' EXIT
+env_file="$work/openai.env"; umask 077; : > "$env_file"
+
+# Plain KEY=value lines only: the file is read, never executed. Surrounding quotes are removed.
+for name in OPENAI_API_KEY OPENAI_MODEL LESSON_MAX_OUTPUT_TOKENS; do
+  line="$(grep -E "^[[:space:]]*(export[[:space:]]+)?${name}=" "$source_file" | tail -n 1 || true)"
+  [[ -n "$line" ]] || continue
+  value="${line#*=}"; value="${value%$'\r'}"
+  if [[ "$value" =~ ^\"(.*)\"$ || "$value" =~ ^\'(.*)\'$ ]]; then value="${BASH_REMATCH[1]}"; fi
+  [[ -n "$value" ]] || continue
+  printf '%s=%s\n' "$name" "$value" >> "$env_file"
+  export "$name=$value"
+done
+if [[ -z "${OPENAI_API_KEY:-}" || -z "${OPENAI_MODEL:-}" ]]; then
+  echo "El archivo debe definir OPENAI_API_KEY y OPENAI_MODEL." >&2; exit 1
+fi
+echo "OpenAI configurado con el modelo ${OPENAI_MODEL} (la clave no se muestra)."
+
+cd "$repo_root"
+export WRANGLER_SEND_METRICS=false
+if [[ "$mode" == "smoke" ]]; then
+  npx --no-install vitest run --config vitest.openai.config.ts
+else
+  npm run build
+  # The values reach the local Worker through a private temporary file, not through command-line arguments.
+  npx --no-install wrangler dev --local --config build/wrangler.json --ip 127.0.0.1 --port 8787 --env-file "$env_file" "$@"
+fi

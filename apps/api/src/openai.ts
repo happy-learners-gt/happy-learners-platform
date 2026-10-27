@@ -1,0 +1,46 @@
+import { mapPrompt, mapSchema, proposalPrompt, proposalSchema } from "@happy-learners/domain";
+import type { BookMapper, LessonDraftGenerator, MapOutput, ProposalOutput } from "@happy-learners/domain";
+
+declare global { interface Env { OPENAI_API_KEY?: string; OPENAI_MODEL?: string; LESSON_MAX_OUTPUT_TOKENS?: string; LESSON_REQUEST_TIMEOUT_MS?: string } }
+
+/** A failure worth trying again later: rate limits, outages, timeouts, network errors. */
+export class TransientError extends Error {}
+
+type Settings = { key: string; model: string; maxOutputTokens?: number; timeoutMs?: number };
+/** The settings an environment gives, or null when OpenAI is not configured (both the secret and the model are needed). */
+export function openAiSettings(env: Pick<Env, "OPENAI_API_KEY" | "OPENAI_MODEL" | "LESSON_MAX_OUTPUT_TOKENS" | "LESSON_REQUEST_TIMEOUT_MS">): Settings | null {
+  if (!env.OPENAI_API_KEY || !env.OPENAI_MODEL) return null;
+  const number = (value: string | undefined, min: number, max: number) => { const parsed = Number(value); return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : undefined; };
+  return { key: env.OPENAI_API_KEY, model: env.OPENAI_MODEL, maxOutputTokens: number(env.LESSON_MAX_OUTPUT_TOKENS, 500, 32000), timeoutMs: number(env.LESSON_REQUEST_TIMEOUT_MS, 5000, 300000) };
+}
+
+/** One request to OpenAI's Responses API with structured output (strict JSON Schema), unstored; the parsed answer. */
+async function structured<T>({ key, model, maxOutputTokens = 16000, timeoutMs = 120_000 }: Settings, request: typeof fetch, name: string, schema: object, prompt: { system: string; user: string }): Promise<T> {
+  const response = await request("https://api.openai.com/v1/responses", {
+    method: "POST", signal: AbortSignal.timeout(timeoutMs),
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model, instructions: prompt.system, input: prompt.user, store: false, max_output_tokens: maxOutputTokens, text: { format: { type: "json_schema", name, schema, strict: true } } }),
+  }).catch(() => { throw new TransientError("transport"); });
+  if (response.status === 429 || response.status >= 500) throw new TransientError(`status ${response.status}`);
+  if (!response.ok) throw new Error(`status ${response.status}`);
+  const data = await response.json() as { status?: string; incomplete_details?: { reason?: string }; output?: { type: string; content?: { type: string; text?: string; refusal?: string }[] }[] };
+  // A truncated answer is not JSON yet; a refusal is not an answer.
+  if (data.status === "incomplete") throw new Error(`incomplete ${data.incomplete_details?.reason || ""}`.trim());
+  const parts = data.output?.find(item => item.type === "message")?.content || [];
+  if (parts.some(part => part.type === "refusal")) throw new Error("refusal");
+  const text = parts.find(part => part.type === "output_text")?.text;
+  if (!text) throw new Error("empty");
+  return JSON.parse(text) as T;
+}
+
+/**
+ * Lesson proposals from a language model. A lesson is a few thousand tokens of JSON: the default output cap leaves
+ * room for a reasoning model's thinking too.
+ */
+export function openAiGenerator(settings: Settings, request: typeof fetch = fetch): LessonDraftGenerator {
+  return { kind: "openai", generate: input => structured<ProposalOutput>(settings, request, "lesson_proposal", proposalSchema, proposalPrompt(input)) };
+}
+/** The book map's check from a language model: which candidate pages work on an indicator, each with a quote. */
+export function openAiMapper(settings: Settings, request: typeof fetch = fetch): BookMapper {
+  return { kind: "openai", map: input => structured<MapOutput>(settings, request, "book_map", mapSchema, mapPrompt(input)) };
+}

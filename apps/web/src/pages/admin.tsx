@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import type { AcademicProfile, Contract, ContractPhase, CourseFormat, EffectivePreferences, CourseSettings, EducationLevel, EducationType, Member, Modality, ModuleLabel, OnboardingPerson, Organization, Pacing, SequenceTemplate, StudyProgram, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
-import { accountInput, areaLabel, contractPhaseLabels, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, moduleLabels, moduleNoun, pacings, sequenceOf, sequenceTemplates, settingDefinitions, suggestedLocales, timezoneGroups, utcOffset } from "@happy-learners/domain";
+import type { AcademicProfile, Contract, ContractPhase, CourseFormat, EffectivePreferences, CourseSettings, EducationLevel, EducationType, Member, Modality, OnboardingPerson, Organization, Pacing, StudyProgram, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
+import { accountInput, areaLabel, contractPhaseLabels, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, pacings, settingChoices, settingDefinitions, settingText, settingValue, suggestedLocales, timezoneGroups, utcOffset } from "@happy-learners/domain";
 import type { SettingKey } from "@happy-learners/domain";
 import { plural } from "../model";
 import { Avatar } from "../ui/progress";
@@ -14,6 +14,8 @@ import { Menu } from "../ui/Menu";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section, StatusBadge } from "../ui/primitives";
 import type { Tone } from "../ui/primitives";
 import { DaysOff } from "./calendar";
+import { AcademicYears } from "./academic-years";
+import { CurriculumPackages } from "./curriculum-packages";
 import { ProgramPathDialog } from "./programPath";
 import { DepartureDialog, departureDay } from "./departure";
 import { Invitations } from "./invitations";
@@ -54,7 +56,7 @@ function OrganizationForm() {
     finally { setBusy(false); }
   }
   return <>
-    <PageHeader title="Organización" description="Nombre, zona, formato regional, días sin clase y respaldo."/>
+    <PageHeader title="Organización" description="Nombre, zona, formato regional, ciclo lectivo, días sin clase y respaldo."/>
     <div className="form-sheet account-cards">
     <form className="panel" onSubmit={save} onChange={() => setDirty(true)}>
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
@@ -75,6 +77,7 @@ function OrganizationForm() {
         <div className="form-actions"><button className="button primary">{busy ? "Guardando…" : "Guardar organización"}</button></div>
       </fieldset>
     </form>
+    <AcademicYears/>
     <DaysOff writable/>
     <Section title="Respaldo" action={<a className="button secondary small" href="/api/organization/backup" download><Icon name="download" size={16}/>Descargar respaldo</a>}>
       <p className="muted">Una copia en JSON de los cursos, las lecciones, las secciones, el calendario y los registros de la organización. No incluye contraseñas, sesiones ni el contenido de los documentos subidos. Guárdala en un lugar privado: contiene los nombres de los estudiantes.</p>
@@ -273,6 +276,7 @@ export function AcademicSettings() {
   return <AdminOnly title="Configuración académica"><PageHeader title="Configuración académica" description="Programas que agrupan cursos y comparten su configuración, etiquetas para la biblioteca y los estándares con que se describe cada curso."/>
     <ProgramEditor/>
     <TaxonomyEditor/>
+    <CurriculumPackages/>
     <StandardsReference/>
   </AdminOnly>;
 }
@@ -332,7 +336,7 @@ function ProgramDialog({ item, onClose, onSave }: { item?: StudyProgram; onClose
   const derived = derivedSettings(profile);
   const change = (patch: Partial<typeof profile>) => setProfile(current => { const next = { ...current, ...patch }; if (next.educationType === "formal" && next.level === "unspecified") next.level = "primary"; return next; });
   function setSetting(key: SettingKey, value: string) {
-    setSettings(current => { const next = { ...current } as Record<string, unknown>; if (value === "") delete next[key]; else next[key] = value === "true" ? true : value === "false" ? false : value; return next as CourseSettings; });
+    setSettings(current => { const next = { ...current } as Record<string, unknown>; const parsed = settingValue(key, value); if (parsed === undefined) delete next[key]; else next[key] = parsed; return next as CourseSettings; });
     if (value === "") setLocked(current => current.filter(item => item !== key));
   }
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -341,7 +345,7 @@ function ProgramDialog({ item, onClose, onSave }: { item?: StudyProgram; onClose
     await onSave({ name: form.get("name"), description: form.get("description"), ...profile, area: profile.area || null, settings, locked, status: item?.status || "active" });
     setBusy(false);
   }
-  const text = (key: SettingKey, value: unknown) => key === "moduleLabel" ? moduleNoun(value as ModuleLabel).Many : key === "defaultSequence" ? sequenceOf(value as SequenceTemplate).label : value ? "Sí" : "No";
+  const text = settingText;
   return <Modal title={item ? "Editar programa" : "Crear programa"} onClose={onClose} wide>
     <form className="stack" onSubmit={submit}><fieldset className="stack" disabled={busy}>
       <Field label="Nombre" hint="Por ejemplo: Primaria bilingüe, Inglés para adultos, Licenciatura en Educación."><input name="name" required maxLength={120} defaultValue={item?.name}/></Field>
@@ -358,7 +362,7 @@ function ProgramDialog({ item, onClose, onSave }: { item?: StudyProgram; onClose
         <p className="muted small">Sin valor, cada curso usa lo que corresponde a su tipo. Con valor, es el punto de partida de sus cursos; si lo fijas, ningún curso del programa puede cambiarlo.</p>
         <ul className="settings-list">{settingDefinitions.map(definition => {
           const key = definition.key;
-          const options: [string, string][] = key === "moduleLabel" ? moduleLabels.map(option => [option.value, moduleNoun(option.value).Many]) : key === "defaultSequence" ? sequenceTemplates.map(option => [option.value, option.label]) : [["true", "Sí"], ["false", "No"]];
+          const options = settingChoices(key, settings[key]);
           return <li key={key} className="setting-item">
             <div><strong id={`program-setting-${key}`}>{definition.label}</strong><p className="muted small">{definition.description}</p></div>
             <div className="setting-control">

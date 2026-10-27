@@ -602,6 +602,51 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: dialog-in
 .days-off-form { padding-top: var(--space-3); border-top: 1px solid var(--color-border); }
 .days-off li.is-past { opacity: .7; }
 .days-off-panel .link-button { justify-self: start; font-size: var(--text-sm); }
+.book-map td { vertical-align: top; }
+.book-map .quote { margin: var(--space-1) 0 0; color: var(--color-ink-soft); }
+.badge-row.start { justify-content: flex-start; }
+.map-edit { display: flex; gap: var(--space-2); align-items: center; }
+.book-map .map-edit input.map-pages { width: 120px; min-width: 0; }
+.readiness { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); font-size: var(--text-sm); }
+.readiness li { display: flex; align-items: center; gap: var(--space-2); }
+.readiness li.is-ok { color: var(--color-success); }
+.readiness li.is-missing { color: var(--color-ink-soft); }
+.proposal-outcomes { border: 0; padding: 0; margin: 0; min-width: 0; }
+.proposal-outcomes legend { font-weight: 600; color: var(--color-ink); margin-bottom: var(--space-2); }
+.proposal-jobs, .proposal-items { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.proposal-jobs > li { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.proposal-items li { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--space-3); align-items: start; }
+.proposal-items li > div { display: grid; gap: 2px; min-width: 0; }
+.package-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.package-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.package-list li > div { display: grid; gap: 2px; min-width: 0; }
+.package-picker { border: 0; padding: 0; margin: 0; min-width: 0; max-height: 60vh; overflow: auto; }
+.package-competency { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); margin: 0; display: grid; gap: var(--space-2); min-width: 0; }
+.package-competency legend { padding: 0 var(--space-1); color: var(--color-ink); font-size: var(--text-sm); }
+.package-indicator { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-2); align-items: start; font-size: var(--text-sm); color: var(--color-ink); }
+.package-indicator.is-linked { color: var(--color-ink-soft); }
+.package-indicator details { margin-top: 2px; color: var(--color-ink-soft); }
+.package-indicator details ul { margin: var(--space-1) 0 0; padding-left: var(--space-4); }
+.bibliography { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.bibliography li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-3); padding: 8px var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-ink-soft); }
+.bibliography li.is-primary { border-color: var(--color-primary-line); background: var(--color-primary-soft); }
+.bibliography li > div:not(.badge-row) { display: grid; gap: 2px; min-width: 0; }
+.bibliography li strong { color: var(--color-ink); }
+.badge-row { display: flex; flex-wrap: wrap; gap: var(--space-1); justify-content: flex-end; }
+.bibliography-panel { margin-bottom: var(--space-4); }
+@media (max-width: 640px) { .bibliography li { grid-template-columns: auto minmax(0, 1fr) auto; } .bibliography .badge-row { order: 3; grid-column: 2 / 3; justify-content: flex-start; } }
+.academic-years { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.academic-years > li { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-ink-soft); }
+.academic-years > li.is-past { opacity: .7; }
+.academic-year-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-3); }
+.academic-year-head > div { display: grid; gap: 2px; min-width: 0; }
+.academic-year-head strong { color: var(--color-ink); }
+.period-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); font-size: var(--text-sm); }
+.period-list li { padding: 4px var(--space-2); border-radius: var(--radius-sm); background: var(--color-surface-muted); color: var(--color-ink); }
+.period-rows { border: 0; padding: 0; margin: 0; min-width: 0; }
+.period-rows legend { font-weight: 600; color: var(--color-ink); margin-bottom: var(--space-2); }
+.period-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) 76px auto; gap: var(--space-3); align-items: end; }
+@media (max-width: 640px) { .period-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 76px auto; } .period-row > :first-child { grid-column: 1 / -1; } }
 .sheet-footer { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; position: sticky; bottom: 0; padding: var(--space-3) 0 0; background: var(--color-surface); border-top: 1px solid var(--color-border); }
 
 /* Settings, admin, library previews */
@@ -901,6 +946,16 @@ dialog.modal.viewer .modal-body > .usage, dialog.modal.viewer .modal-body > p { 
 .coverage-table th, .coverage-table td { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-border); text-align: left; vertical-align: top; }
 .coverage-table thead th { background: var(--color-surface-muted); color: var(--color-muted); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-caps); }
 .coverage-table tbody th { min-width: 240px; max-width: 360px; font-weight: var(--weight-medium); }
+.grades-table { min-width: 560px; }
+.grades-table tbody th { min-width: 200px; }
+.grades-table td { vertical-align: middle; }
+.grade-head { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.grade-lock { display: inline-flex; align-items: center; gap: 2px; text-transform: none; letter-spacing: 0; color: var(--color-ink-soft); }
+.grade-cell { white-space: nowrap; }
+.grades-table .grade-cell input.grade-input { width: 80px; min-width: 0; text-align: right; }
+.grades-table .grade-cell input.grade-input[aria-invalid="true"] { border-color: var(--color-danger); }
+.grade-letter { display: inline-block; min-width: 1.5em; margin-left: var(--space-2); font-weight: 600; color: var(--color-ink); }
+.grade-policy a { white-space: nowrap; }
 .row-outcome { display: flex; gap: var(--space-2); align-items: flex-start; }
 .coverage-table tfoot th, .coverage-table tfoot td { border-bottom: 0; background: var(--color-surface-muted); }
 .coverage-cell { display: grid; gap: 4px; justify-items: start; min-width: 120px; }

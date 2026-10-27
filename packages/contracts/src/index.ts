@@ -128,7 +128,15 @@ export type Pacing = "scheduled" | "self-paced";
 export type ModuleLabel = "modules" | "units" | "weeks" | "sessions" | "topics" | "blocks";
 export interface AcademicProfile { educationType: EducationType; level: EducationLevel; modality: Modality; pacing: Pacing }
 /** Behaviour a course's configuration controls. Missing values are inherited or derived. */
-export interface CourseSettings { moduleLabel?: ModuleLabel; defaultSequence?: SequenceTemplate; attendance?: boolean; workGroups?: boolean; outcomesRequired?: boolean; assessmentRequired?: boolean }
+export type GradeScale = "numeric_100" | "letters_af";
+export type GradeAverage = "simple" | "weighted";
+/** Minimum score (0–100) for A, B, C and D, in that order; below D is F. */
+export type LetterThresholds = [number, number, number, number];
+export interface CourseSettings {
+  moduleLabel?: ModuleLabel; defaultSequence?: SequenceTemplate; attendance?: boolean; workGroups?: boolean; outcomesRequired?: boolean; assessmentRequired?: boolean;
+  /** How the section's gradebook reads (libreta): scale, passing score, letter thresholds and how periods average. */
+  gradeScale?: GradeScale; passingGrade?: number; letterThresholds?: LetterThresholds; gradeAverage?: GradeAverage;
+}
 /** A set of courses that share a configuration; it can fix settings for all of them. */
 export interface StudyProgram extends AcademicProfile {
   id: string; name: string; description: string; format: CourseFormat; area?: string;
@@ -162,6 +170,85 @@ export interface Material {
 }
 /** A weekly class time of a section and the period it applies to; days use 0 for Sunday (ST-099). */
 export interface SectionSchedule { weekdays: number[]; startsAt: string; durationMinutes: number; from: string; until: string }
+/**
+ * The organization's school year (ciclo lectivo) and its periods. Independent of each section's schedule, which only
+ * takes its dates as a suggestion; days without class remain the calendar breaks of DEC-026.
+ */
+export type AcademicYearStatus = "draft" | "current" | "closed";
+export type PeriodKind = "bimester" | "trimester" | "semester" | "unit";
+/** `weight` counts when a course averages its periods by weight (1 to 100). */
+export interface AcademicPeriod { id: string; position: number; name: string; from: string; until: string; weight: number }
+export interface AcademicYear {
+  id: string; name: string; from: string; until: string; status: AcademicYearStatus; periodKind: PeriodKind; periods: AcademicPeriod[];
+  createdAt: string; updatedAt: string; activatedAt: string | null; closedAt: string | null;
+}
+/** «Proponer lecciones»: whether a course is ready and the state of its proposal jobs (rebanada 5a). */
+export type ProposalItemStatus = "queued" | "running" | "done" | "error";
+export interface ProposalReadiness {
+  outcomes: { id: string; statement: string; code: string | null }[];
+  units: { id: string; name: string }[];
+  sequence: { id: string; label: string };
+  bookText: "ready" | "no_text" | "missing" | "stale" | null;
+  generator: "openai" | "fixture" | null;
+  /** What still keeps the course from asking for proposals, in Spanish; empty when it is ready. */
+  blockers: string[];
+}
+export interface ProposalJob {
+  id: string; unitId: string; unitName: string; generator: "openai" | "fixture"; createdAt: string; requestedBy: string;
+  items: { id: string; outcomeId: string; statement: string; status: ProposalItemStatus; error: string | null; pages: number[]; lessonId: string | null; lessonTitle: string | null }[];
+}
+export interface CourseProposals extends ProposalReadiness { book: { fileId: string; title: string; pages: number; sha256: string } | null; jobs: ProposalJob[]; canPropose: boolean }
+/** The book map (rebanada 5b): the pages of the main book that work on each indicator, with verified evidence. */
+export interface BookMapView {
+  book: { title: string; pages: number } | null;
+  bookText: ProposalReadiness["bookText"];
+  mapper: "openai" | "fixture" | null;
+  canEdit: boolean;
+  outcomes: {
+    outcomeId: string; code: string | null; statement: string;
+    candidates: { page: number; score: number }[]; pages: number[]; evidence: { page: number; quote: string }[];
+    source: "lexical" | "ai" | "teacher" | null; status: "proposed" | "confirmed" | null;
+    aiStatus: "none" | "queued" | "running" | "done" | "error"; aiError: string | null;
+  }[];
+  summary: { total: number; mapped: number; confirmed: number; uncovered: number };
+}
+/** A curricular package kept in the repository (an official reference) and whether the organization activated it. */
+export interface CurriculumPackageSummary {
+  id: string; version: string; title: string; area: string; grade: string; level: string;
+  source: { name: string; url: string; retrievedOn: string };
+  competencies: number; indicators: number; active: boolean; activatedAt: string | null; activatedVersion: string | null;
+}
+/** A package's indicator as a course sees it: whether it is already in the course's plan, and as which outcome. */
+export interface PackageIndicatorView { code: string; statement: string; level: CognitiveLevel; contents: string[]; outcomeId: string | null }
+export interface CoursePackageView extends CurriculumPackageSummary {
+  competencyList: { code: string; statement: string; competencyId: string | null; indicators: PackageIndicatorView[] }[];
+}
+/**
+ * The course's bibliography: references to items already in its library (a text, a link or a file in R2), each with
+ * a role. At most one, with the role «text» and published, is the course's main book.
+ */
+export type BibliographyRole = "text" | "support" | "other";
+export interface BibliographyReference {
+  id: string; courseId: string; itemId: string; kind: Material["kind"]; title: string; status: Material["status"];
+  fileName?: string; mediaType?: string; role: BibliographyRole; primary: boolean; citation: string; updatedAt: string;
+}
+/** The minimal gradebook (libreta) of a section: one optional score per student and period of a school year. */
+export interface GradebookPeriod extends AcademicPeriod { locked: boolean; lockedAt: string | null; lockedBy: string | null }
+export interface GradeEntry { learnerId: string; periodId: string; score: number }
+export interface GradeResult { learnerId: string; average: number | null; letter: string | null; passed: boolean | null; complete: boolean }
+export interface Gradebook {
+  section: { id: string; name: string; courseId: string; courseTitle: string; status: "active" | "archived" };
+  year: Pick<AcademicYear, "id" | "name" | "from" | "until" | "status"> | null;
+  /** School years whose grades can be read (the current one and the closed ones), newest first. */
+  years: Pick<AcademicYear, "id" | "name" | "status">[];
+  periods: GradebookPeriod[];
+  learners: { id: string; name: string }[];
+  grades: GradeEntry[];
+  results: GradeResult[];
+  policy: { scale: GradeScale; passingGrade: number; letterThresholds: LetterThresholds; average: GradeAverage };
+  /** Writes the scores of open periods; locks a period; reopens it (administration only). */
+  canEdit: boolean; canLock: boolean; canUnlock: boolean;
+}
 /** A section of a course: the students assigned to it, its access code and its schedule (ST-026, ST-099). */
 export interface ClassGroup { id: string; courseId: string; name: string; status: "active" | "archived"; learnerCount: number; accessCode?: string | null; schedule?: SectionSchedule | null; educators: SectionEducator[] }
 /** How far a section has come with its course, from its own records only (DEC-024). */

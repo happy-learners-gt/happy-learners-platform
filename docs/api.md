@@ -18,6 +18,7 @@ Un método no admitido responde 405 con `Allow`; una ruta desconocida, 404.
 | GET, POST | `/api/members` · PUT `/api/members/:id` · POST `/api/members/:id/password` · GET, POST `/api/members/:id/departure` · PUT `/api/members/:id/coordination` | Administración |
 | GET | `/api/access/matrix` · GET, POST `/api/access/groups` · PUT, DELETE `/api/access/groups/:id` · PUT `/api/access/groups/:id/permissions` · PUT `/api/access/groups/:id/members` | Administración |
 | GET, POST | `/api/calendar` · DELETE `/api/calendar/:id` | Lectura con sesión; escritura de administración |
+| GET, POST | `/api/academic-years` · PUT, DELETE `/api/academic-years/:id` · POST `/api/academic-years/:id/activate`, `/close`, `/next` | Lectura con sesión; escritura de administración |
 | GET | `/api/activity`, `/api/progress`, `/api/people`, `/api/reviews` | Sesión, filtrado por permisos |
 | GET, POST | `/api/feeds/calendar` | Sesión: estado del enlace de calendario propio; POST lo crea o regenera |
 | GET | `/api/feeds/calendar/:token.ics` | Público con el enlace secreto; solo GET |
@@ -58,6 +59,19 @@ salida de … el AAAA-MM-DD», sin el motivo) y `assigned` sobre `team` o `group
 hizo se borra. Responde 409 para la propia cuenta, la administradora inicial o una salida ya registrada de una cuenta
 sin acceso. Reactivar con `PUT /api/members/:id` conserva la salida; `GET /api/members` incluye `departedOn` con la
 fecha de la última. El respaldo incluye la tabla `departures`.
+
+Ciclo lectivo (0048). `GET /api/academic-years` responde `{ years, today }` con los ciclos de la organización, del más
+reciente al más antiguo, cada uno con `{ id, name, from, until, status, periodKind, periods, createdAt, updatedAt,
+activatedAt, closedAt }`; `status` es `draft`, `current` o `closed`, y `periodKind`, `bimester`, `trimester`, `semester`
+o `unit`. Los periodos (`{ id, position, name, from, until, weight }`, con `weight` de 1 a 100 para el promedio ponderado) van ordenados. `POST` recibe `{ name, from, until,
+periodKind, periods: [{ name, from, until, weight? }] }` y crea un borrador (201). `PUT /api/academic-years/:id` recibe lo mismo, y
+cada periodo que conserva su `id` mantiene su identidad. El servidor valida que el ciclo dure hasta un año y que los
+periodos queden dentro de él, sin traslaparse y con nombres distintos (400). El nombre es único en la organización (409).
+`activate` exige un borrador con al menos un periodo y que no haya otro ciclo vigente (409); `close` solo aplica al
+vigente; un ciclo cerrado ya no se edita y solo se elimina un borrador (409). `next` crea en borrador el ciclo siguiente
+(«Ciclo 2027» → «Ciclo 2028») con las fechas y el patrón de periodos un año después, sin copiar secciones, estudiantes
+ni notas. El ciclo no cambia el horario de las secciones: al configurar uno nuevo, la pantalla sugiere las fechas del
+ciclo vigente. Los días sin clase siguen en `/api/calendar` (DEC-026).
 
 ## Roles y accesos
 
@@ -174,6 +188,102 @@ incluye `legal_signatures`.
 | GET | `/api/resources` (biblioteca compartida, solo lectura) |
 | GET | `/api/taxonomy` · POST `/api/vocabularies`, `/api/terms` · PUT `…/:id` |
 
+### Propuestas de lecciones y PDF de entrega (0052)
+
+**Requisitos.** `GET /api/courses/:id/proposals` dice si el curso puede pedir propuestas y lista sus trabajos:
+- `outcomes`: indicadores activos del plan, con su código CNB;
+- `units`: módulos;
+- `sequence`: la secuencia didáctica que resuelve el curso;
+- `book`: el libro principal, que debe ser un PDF publicado;
+- `bookText`: `missing`, `stale`, `ready` o `no_text`;
+- `generator`: `openai`, `fixture` o `null`;
+- `blockers`: en español lo que falta;
+- `jobs` y `canPropose` (el equipo del curso).
+
+**Texto del libro.** El navegador lee el PDF con pdf.js y `PUT …/proposals/book-text` guarda su texto por página: `{ fileId,
+sha256, pages: [{ page, text }] }`, hasta 1000 páginas y 8 MiB. El servidor nunca procesa PDF. Un PDF sin capa de texto
+(escaneado) responde 422 y no hay OCR.
+
+**Pedir propuestas.** `POST …/proposals` recibe `{ unitId, outcomeIds, minutes }` (hasta 12 indicadores) y responde 202:
+- crea un elemento por indicador, con las páginas del libro que le corresponden según una búsqueda léxica TF-IDF determinista;
+- un indicador que el libro no trata queda en `error` de inmediato;
+- la clave de idempotencia (curso, módulo, indicador, huella del libro, versión de las instrucciones, generador y duración)
+  impide duplicar una lección: pedir lo mismo otra vez responde 409;
+- `POST …/proposals/:job/retry` devuelve a la cola los elementos con error que tienen páginas.
+
+**Ejecución.** Nunca ocurre en un request. La alarma del Durable Object de la organización procesa lotes de 3 elementos
+(`queued → running → done | error`). En una sola transacción crea la lección en borrador y marca el elemento `done`.
+Un elemento interrumpido vuelve a la cola a los 10 minutos.
+
+**Generadores.** Responden un JSON estricto que la plataforma convierte a su modelo de lección (momentos de la secuencia,
+bloques, una pregunta de evaluación, el libro como recurso, el indicador) y valida.
+- OpenAI se usa si existen los secretos `OPENAI_API_KEY` y `OPENAI_MODEL` (Responses API con salida estructurada,
+  `store: false`).
+- El generador `fixture`, determinista y sin llamadas externas, se usa solo con `LESSON_GENERATOR=fixture` (pruebas y
+  demostración local).
+- Los borradores siguen el flujo existente de revisión y publicación; nada se publica solo.
+
+**PDF de entrega.** `GET /api/courses/:id/units/:unitId/delivery.pdf?section=:groupId[&period=:periodId]`:
+- incluye solo la versión publicada de cada lección del módulo (`published_content`), nunca un borrador;
+- el membrete lleva organización, docentes de la sección, curso, sección, ciclo lectivo, periodo (el pedido o el de hoy)
+  y fecha y hora de generación;
+- cada página lleva el pie «Copia de entrega. No redistribuir. Generado en Happy Learners.»;
+- lo descarga quien ve la sección; responde 409 si el módulo no tiene lecciones publicadas;
+- la actividad registra cada descarga.
+
+### Mapa del libro (0053)
+
+`GET /api/courses/:id/book-map` responde, para el libro principal (identificado por su SHA-256: otro libro empieza otro
+mapa) y cada indicador activo del plan, `{ candidates, pages, evidence, source, status, aiStatus, aiError }` y un
+resumen (`total`, `mapped`, `confirmed`, `uncovered`). Lo gestiona el equipo del curso:
+- `POST …/book-map` (cuerpo `{}`) busca de nuevo en el texto del libro y conserva lo confirmado.
+- `POST …/book-map/check` encola la revisión con IA, que procesa la alarma del Durable Object en lotes de 3. El modelo
+  (o el fixture) dice qué páginas candidatas trabajan el indicador y cita una frase de cada una. **Solo se acepta una
+  página si su cita está de verdad en ella**; las demás se descartan y se cuentan.
+- `PUT …/book-map/outcomes/:outcomeId` recibe `{ pages: "12, 15-17" }` y confirma. La lista vacía significa «el libro no
+  lo trata».
+- `POST …/book-map/confirm` confirma lo propuesto.
+
+Las propuestas de lecciones usan las páginas confirmadas y, si no hay, la búsqueda. La clave de idempotencia incluye las
+páginas, así que corregir el mapa permite una propuesta nueva.
+
+### OpenAI en local
+
+`./scripts/verify` nunca llama a OpenAI. `./scripts/openai smoke <archivo-env>` hace una petición real de prueba, y
+`./scripts/openai dev <archivo-env>` sirve `http://localhost:8787` con OpenAI. El script lee del archivo únicamente
+`OPENAI_API_KEY`, `OPENAI_MODEL` y `LESSON_MAX_OUTPUT_TOKENS` (sin ejecutarlo ni mostrar valores) y los pasa al Worker
+por un archivo temporal privado. `LESSON_MAX_OUTPUT_TOKENS` vale 16000 por defecto y `LESSON_REQUEST_TIMEOUT_MS`,
+120000. En producción serían secretos del Worker (`OPENAI_API_KEY`) y variables (`OPENAI_MODEL`), configurados por
+quien administra el despliegue.
+
+### Paquetes curriculares (0051)
+
+Los paquetes son referencias curriculares oficiales versionadas en el repositorio como datos estructurados
+(`packages/domain/src/cnb/`), cada uno con su fuente (URL y fecha de consulta). El primero es la «Dosificación de los
+aprendizajes · Matemáticas · Sexto Grado» de CNB Guatemala: 7 competencias, 26 indicadores de logro y sus 84
+contenidos. Se transcribió con su redacción y numeración; el extracto no conserva en qué unidad (1–4) va cada contenido,
+y eso no se transcribió. El nivel cognitivo de cada indicador es una clasificación de la plataforma, no de la fuente.
+`GET /api/curriculum-packages` responde `{ packages }` con cada paquete y si la organización lo activó.
+`POST /api/curriculum-packages/:id/activate` y `/deactivate` son de administración; desactivar no toca los planes.
+`GET /api/courses/:id/curriculum-packages` responde los paquetes activos con lo que el curso ya tomó (`outcomeId`,
+`competencyId`) y `canLink`. `POST /api/courses/:id/curriculum-packages/:pkg` recibe `{ codes, version }`: solo la
+persona responsable del curso (403). Cada indicador elegido se agrega como resultado de aprendizaje dentro de su
+competencia, creada una sola vez y con la fuente como evidencia. Lo ya tomado se omite (`skipped`); no hay duplicados.
+Responde 201 con `{ added, skipped, version }`, 400 si un código no es del paquete o se superan los límites del plan,
+404 si el paquete no está activo y 409 si el curso cambió de versión.
+
+### Bibliografía del curso (0050)
+
+`GET /api/courses/:id/bibliography` responde `{ references, canManage }`. Cada referencia `{ id, itemId, kind, title,
+status, fileName?, mediaType?, role, primary, citation }` apunta a un recurso de la biblioteca del curso: un material
+o un archivo de `COURSE_FILES` (R2). No hay copia ni segundo almacenamiento. `role` es `text`, `support` u `other`
+(texto, apoyo u otro). La leen quienes llegan al curso. La gestionan administración y el equipo del curso (responsable y
+colaboradores) mientras el curso está activo (403 en otro caso). `POST` recibe `{ itemId, role, citation?, primary? }`
+(201; 400 si el recurso no es de la biblioteca de este curso; 409 si ya está o está archivado). `PUT
+/api/courses/:id/bibliography/:refId` recibe `{ role, citation, primary }` y `DELETE` la quita sin tocar el recurso.
+Solo hay un libro principal por curso: debe tener el rol `text` (400) y estar publicado (409). Marcar otro lo reemplaza
+en la misma transacción. La actividad lo registra.
+
 ## Secciones y clases
 
 | Método | Ruta |
@@ -193,6 +303,22 @@ incluye `legal_signatures`.
 clases próximas a la misma hora, responde 409 con `conflicts` y no cambia nada; con `conflictReason` (3 a 300
 caracteres) guarda la asignación y registra la confirmación, que ya no se vuelve a pedir para esa persona en ese par
 de secciones.
+
+### Notas de la sección (libreta, 0049)
+
+`GET /api/sections/:id/grades[?year=]` responde `{ gradebook }`: la sección, el ciclo (el vigente o el cerrado que se
+pida), sus periodos con `weight` y si sus notas están cerradas (`locked`, `lockedAt`, `lockedBy`), los estudiantes activos
+del listado de la sección (por su id, nunca por el nombre), las notas `{ learnerId, periodId, score }`, el resultado de
+cada estudiante `{ average, letter, passed, complete }` y la configuración que aplica (`policy`). La leen quienes ven la
+sección. `PUT` recibe `{ grades: [{ learnerId, periodId, score }] }` (hasta 500): `score` de 0 a 100 con un decimal
+como máximo, o `null` para quitarla. Solo administración y quienes imparten la sección escriben (403), solo en el ciclo
+vigente (409 sin ciclo vigente) y en periodos sin cerrar (409). `POST /api/sections/:id/grades/periods/:periodId/lock`
+cierra las notas de un periodo en la sección (administración o quien imparte); `DELETE` las reabre (solo
+administración). Una nota vacía nunca cuenta como cero: el promedio usa solo los periodos con nota y, si es ponderado,
+divide entre la suma de los pesos de esos periodos; `complete` dice si todos tienen nota. La escala (`gradeScale`), la
+nota mínima (`passingGrade`), los umbrales de las letras (`letterThresholds`, mínimos de A, B, C y D) y el promedio
+(`gradeAverage`) son ajustes del curso que el programa puede fijar. Un periodo con notas no se quita del ciclo (409) y
+cerrar el ciclo congela sus notas sin promover a nadie. La actividad registra que hubo cambios, nunca las notas.
 
 ## Invitaciones por correo (ST-121, DEC-042)
 

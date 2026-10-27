@@ -10,6 +10,7 @@ import { Modal, useFeedback } from "../../ui/feedback";
 import { Icon } from "../../ui/icons";
 import { Menu } from "../../ui/Menu";
 import { Button, EmptyState, Field, PageHeader, PrimaryAction, Section, StatTiles, StatusBadge } from "../../ui/primitives";
+import { PackageIndicatorsDialog, useCoursePackages } from "../curriculum-packages";
 import { useCourse } from "./context";
 
 const levelLabel = Object.fromEntries(cognitiveLevels.map(level => [level.value, level.label])) as Record<CognitiveLevel, string>;
@@ -41,6 +42,9 @@ export function Plan() {
   const base = `/cursos/${course.id}`;
   const delivery = useDelivery(course.id, settings.attendance && course.status === "active");
   const [section, setSection] = useState("");
+  // Official curriculum packages the organization activated: the lead takes indicators from them into the plan.
+  const packages = useCoursePackages(course.id), [picking, setPicking] = useState(false);
+  const pickable = writable && !!packages.data?.canLink && packages.data.packages.length > 0;
   // Taught means completed in a finished class; a partial lesson or one not reached does not count yet (DEC-026).
   const delivered = (delivery?.sessions || []).filter(session => !section || session.groupId === section).flatMap(session => session.lessons.filter(lesson => !lesson.outcome || lesson.outcome === "completed").map(lesson => lesson.id));
   const map = coverage(curriculum, units, lessons, delivered);
@@ -102,9 +106,11 @@ export function Plan() {
   const activeUnits = map.units;
 
   return <>
+    {picking && packages.data && <PackageIndicatorsDialog courseId={course.id} version={course.version} packages={packages.data.packages} onClose={() => setPicking(false)}
+      onAdded={async (added, skipped) => { setPicking(false); await reload(); await packages.load(); toast({ message: `${added === 1 ? "Se agregó 1 indicador" : `Se agregaron ${added} indicadores`} al plan curricular${skipped ? ` (${skipped} ya estaban)` : ""}.` }); }}/>}
     <PageHeader crumbs={[{ label: "Cursos", href: "/cursos" }, { label: course.title, href: base }, { label: "Plan curricular" }]} title="Plan curricular"
       description="Qué desarrolla el curso, qué podrán demostrar los estudiantes y dónde se trabaja y evalúa cada resultado."
-      actions={writable && <Button icon="plus" onClick={() => setEditing({ kind: "competency" })}>Nueva competencia</Button>}
+      actions={writable && <>{pickable && <Button icon="library" onClick={() => setPicking(true)}>Agregar indicadores del CNB</Button>}<Button icon="plus" onClick={() => setEditing({ kind: "competency" })}>Nueva competencia</Button></>}
       primary={writable ? <PrimaryAction icon="plus" onClick={() => setEditing({ kind: "outcome" })}>Nuevo resultado</PrimaryAction> : undefined}/>
     {map.summary.total > 0 && <StatTiles className="plan-stats" items={[
       { label: "Resultados", value: map.summary.total, icon: "spark", hue: "violet" },

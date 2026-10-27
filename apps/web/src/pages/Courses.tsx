@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { AcademicProfile, Course, CourseFormat, CourseSettings, EducationLevel, EducationType, LearningUnit, Lesson, Modality, ModuleLabel, Pacing, SequenceTemplate, StudyProgram, Taxonomy } from "@happy-learners/contracts";
-import { areaLabel, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, moduleLabels, moduleNoun, pacings, resolveSettings, sequenceOf, sequenceTemplates, settingDefinitions, sourceLabel } from "@happy-learners/domain";
+import type { AcademicProfile, Course, CourseFormat, CourseSettings, EducationLevel, EducationType, LearningUnit, Lesson, Modality, Pacing, StudyProgram, Taxonomy } from "@happy-learners/contracts";
+import { areaLabel, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, pacings, resolveSettings, settingChoices, settingDefinitions, settingText, settingValue, sourceLabel } from "@happy-learners/domain";
 import type { SettingKey } from "@happy-learners/domain";
 import { api, message } from "../api";
 import { Link, useNavigation, useUnsavedChanges } from "../navigation";
@@ -139,7 +139,7 @@ export function CourseForm({ course, onSaved, cancelHref, readOnly = false }: { 
     // A new course in a program starts with the program's format and field.
     change(chosen && !course ? { programId, format: chosen.format, area: chosen.area || "" } : { programId });
   }
-  const setSetting = (key: SettingKey, value: string) => { setSettings(current => { const next = { ...current } as Record<string, unknown>; if (value === "") delete next[key]; else next[key] = value === "true" ? true : value === "false" ? false : value; return next as CourseSettings; }); setDirty(true); };
+  const setSetting = (key: SettingKey, value: string) => { setSettings(current => { const next = { ...current } as Record<string, unknown>; const parsed = settingValue(key, value); if (parsed === undefined) delete next[key]; else next[key] = parsed; return next as CourseSettings; }); setDirty(true); };
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.currentTarget)) as Record<string, string>;
@@ -152,7 +152,7 @@ export function CourseForm({ course, onSaved, cancelHref, readOnly = false }: { 
     } catch (cause) { setError(message(cause)); }
     finally { setBusy(false); }
   }
-  const valueText = (key: SettingKey, value: unknown) => key === "moduleLabel" ? moduleNoun(value as ModuleLabel).Many : key === "defaultSequence" ? sequenceOf(value as SequenceTemplate).label : value ? "Sí" : "No";
+  const valueText = settingText;
   return <form className="form-card course-form" onSubmit={save} onChange={() => setDirty(true)}>
     {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
     {readOnly && <p className="notice"><Icon name="info" size={18}/>Administración configura el curso. Si necesitas un cambio, pídeselo.</p>}
@@ -197,7 +197,7 @@ export function CourseForm({ course, onSaved, cancelHref, readOnly = false }: { 
         <ul className="settings-list">{settingDefinitions.map(definition => {
           const key = definition.key, source = resolved.source[key], locked = source === "program-locked";
           const inherited = program?.settings[key] !== undefined ? program.settings[key] : derivedSettings({ ...profile, format: dims.format })[key];
-          const options: [string, string][] = key === "moduleLabel" ? moduleLabels.map(item => [item.value, moduleNoun(item.value).Many]) : key === "defaultSequence" ? sequenceTemplates.map(item => [item.value, item.label]) : [["true", "Sí"], ["false", "No"]];
+          const options = settingChoices(key, settings[key]);
           return <li key={key} className="setting-item">
             <div><strong id={`setting-${key}`}>{definition.label}</strong><p className="muted small">{definition.description}</p></div>
             <div className="setting-control">
