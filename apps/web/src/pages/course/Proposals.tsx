@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { AcademicYear, CourseProposals, ProposalItemStatus, SectionSummary } from "@happy-learners/contracts";
-import { maxProposalItems, pagesLabel, proposalStatusLabels } from "@happy-learners/domain";
+import { lessonOutcomes, maxProposalItems, pagesLabel, proposalStatusLabels } from "@happy-learners/domain";
 import { api, message } from "../../api";
 import { Link } from "../../navigation";
 import { plural } from "../../model";
@@ -37,7 +37,7 @@ async function readBook(courseId: string, fileId: string, onPage: (page: number,
  * the indicators and the module, and following each proposal (en cola, en curso, listo, error). Proposals are drafts.
  */
 export function Proposals() {
-  const { course, reload } = useCourse();
+  const { course, reload, lessons } = useCourse();
   const { toast } = useFeedback();
   const [data, setData] = useState<CourseProposals | null>(null), [error, setError] = useState("");
   const [reading, setReading] = useState(""), [busy, setBusy] = useState(false), [formError, setFormError] = useState("");
@@ -82,6 +82,17 @@ export function Proposals() {
     try { setData(await api<CourseProposals>(`${path}/${jobId}/retry`, "POST")); toast({ message: "Las propuestas con error volvieron a la cola." }); }
     catch (cause) { toast({ tone: "error", message: message(cause) }); }
   }
+  // What the course already covers: lessons (published or draft) that work on each indicator.
+  const covered = (outcomeId: string) => {
+    const working = lessons.filter(lesson => lesson.status !== "archived" && lessonOutcomes(lesson).includes(outcomeId));
+    return { published: working.filter(lesson => (lesson.revision || 0) > 0).length, drafts: working.filter(lesson => !(lesson.revision || 0)).length };
+  };
+  const coverageText = (outcomeId: string) => {
+    const { published, drafts } = covered(outcomeId);
+    return !published && !drafts ? "Sin lección" : [published && plural(published, "lección publicada", "lecciones publicadas"), drafts && plural(drafts, "borrador", "borradores")].filter(Boolean).join(" · ");
+  };
+  const gaps = data.outcomes.filter(outcome => { const { published, drafts } = covered(outcome.id); return !published && !drafts; }).map(outcome => outcome.id);
+  const finished = data.jobs.reduce((sum, job) => sum + job.items.filter(item => item.status === "done").length, 0);
   const textReady = data.bookText === "ready";
   const needsText = !!data.book && (data.bookText === "missing" || data.bookText === "stale");
   const checks: [boolean, string][] = [
@@ -111,13 +122,19 @@ export function Proposals() {
             <Field label="Duración de cada clase (minutos)"><input type="number" min={10} max={300} value={minutes} onChange={event => setMinutes(event.target.value)} required/></Field>
           </div>
           <fieldset className="stack proposal-outcomes"><legend>Una lección por indicador (hasta {maxProposalItems})</legend>
+            <div className="button-row"><span className="muted small">{plural(gaps.length, "indicador aún no tiene", "indicadores aún no tienen")} ninguna lección.</span>
+              {gaps.length > 0 && <button type="button" className="button ghost small" onClick={() => setPicked(new Set(gaps.slice(0, maxProposalItems)))}><Icon name="check" size={16}/>Elegir los que faltan</button>}</div>
             {data.outcomes.map(outcome => <label key={outcome.id} className="package-indicator"><input type="checkbox" checked={picked.has(outcome.id)} disabled={!picked.has(outcome.id) && picked.size >= maxProposalItems}
               onChange={() => setPicked(current => { const next = new Set(current); if (next.has(outcome.id)) next.delete(outcome.id); else next.add(outcome.id); return next; })}/>
-              <span>{outcome.code && <strong>{outcome.code} </strong>}{outcome.statement}</span></label>)}
+              <span>{outcome.code && <strong>{outcome.code} </strong>}{outcome.statement}
+                <span className={`coverage-note${covered(outcome.id).published ? " is-covered" : ""}`}>{coverageText(outcome.id)}</span></span></label>)}
           </fieldset>
           <div className="button-row"><button className="button primary" disabled={!picked.size || !unitId}>{busy ? "Pidiendo…" : picked.size ? `Proponer ${plural(picked.size, "lección", "lecciones")}` : "Elige indicadores"}</button></div>
         </fieldset>
       </form>
+    </Section>}
+    {finished > 0 && <Section title="Siguiente paso">
+      <p className="small">Revisa cada borrador en el editor y publica los que apruebes. Después, en el <strong>Cronograma</strong> de la sección, usa <strong>Asignar lecciones en orden</strong>: las lecciones publicadas se reparten en las próximas clases del horario. El <Link href={`${base}/plan`}>Plan curricular</Link> muestra la cobertura actualizada.</p>
     </Section>}
     <Section title="Propuestas">
       {!data.jobs.length ? <EmptyState compact icon="spark" title="Aún no hay propuestas">Cuando pidas propuestas, aquí verás su avance: en cola, en curso, listo o error.</EmptyState>

@@ -108,8 +108,13 @@ describe("gradebook on the built Worker", () => {
     for (const displayName of ["Ana", "Beto", "Carla"]) ids.push((await read<{ id: string }>(await as(admin, `/courses/${course}/groups/${group}/learners`, "POST", { displayName }), 201)).id);
     const path = `/sections/${group}/grades`;
 
-    // Without a current school year there is nothing to grade yet.
-    expect((await read<{ gradebook: Gradebook }>(await as(admin, path))).gradebook.year).toBeNull();
+    // The demo starts with the pilot seed (0054): «Ciclo 2026» current and «Ciclo 2027» as a draft. This flow starts clean.
+    const seeded = (await read<{ years: { id: string; name: string; status: string }[] }>(await as(admin, "/academic-years"))).years;
+    expect(seeded.map(item => [item.name, item.status])).toEqual([["Ciclo 2027", "draft"], ["Ciclo 2026", "current"]]);
+    await read(await as(admin, `/academic-years/${seeded[1].id}/close`, "POST"));
+    await read(await as(admin, `/academic-years/${seeded[0].id}`, "DELETE"));
+    // Without a current school year nothing is graded: the closed year is only read.
+    expect((await read<{ gradebook: Gradebook }>(await as(admin, path))).gradebook).toMatchObject({ year: { name: "Ciclo 2026", status: "closed" }, canEdit: false });
     expect(await errorOf(await as(admin, path, "PUT", { grades: [{ learnerId: ids[0], periodId: "period-x", score: 80 }] }), 409)).toContain("No hay un ciclo lectivo vigente");
 
     const year = { name: "Ciclo 2027", from: "2027-01-11", until: "2027-06-30", periodKind: "bimester", periods: splitPeriods("2027-01-11", "2027-06-30", "bimester", 2).map((period, index) => ({ ...period, weight: index === 0 ? 1 : 3 })) };

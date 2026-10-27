@@ -10,6 +10,8 @@ import { people, programs } from "../scripts/seed/content-a.mjs";
 import { routeCourses, routePrograms } from "../scripts/seed/content-routes.mjs";
 // @ts-expect-error — plain ESM scripts without type declarations
 import { englishCourses, englishPeople, englishPrograms } from "../scripts/seed/content-english.mjs";
+// @ts-expect-error — plain ESM scripts without type declarations
+import { book, bookPages, pilotSql } from "../scripts/seed/pilot.mjs";
 
 type Seed = { id: string; title: string; program: string | null; lead: string; coTeachers: string[]; educationType: string; level: string; modality: string; pacing: string; format: string; settings: object; archived?: boolean;
   competencies: { outcomes: { id: string }[] }[]; resources: { id: string }[]; groups: { id: string; by: string }[];
@@ -109,5 +111,29 @@ describe("demo organization seed", () => {
     const a1 = levels[0].groups[0];
     expect(classLoad(a1.schedule.durationMinutes, a1.plan[0].map(id => lessons.get(id)!.duration))).toMatchObject({ planned: 80, available: 60, excess: 20, state: "over" });
     expect(classLoad(a1.schedule.durationMinutes, a1.plan[1].map(id => lessons.get(id)!.duration)).state).toBe("fits");
+  });
+});
+
+describe("school pilot seed (0054, REL-010)", () => {
+  it("is generated from scripts/seed/pilot.mjs and checked in unchanged, one statement per line, only in org-demo", () => {
+    expect(readFileSync(new URL("../database/migrations/0054_demo_pilot.sql", import.meta.url), "utf8")).toBe(pilotSql);
+    const lines = (pilotSql as string).split("\n").filter(line => line && !line.startsWith("--"));
+    expect(lines.every(line => /^(INSERT( OR IGNORE)? INTO|UPDATE) /.test(line) && line.endsWith(";"))).toBe(true);
+    expect(lines.filter(line => line.startsWith("INSERT")).every(line => line.includes("EXISTS(SELECT 1 FROM organizations WHERE id='org-demo')"))).toBe(true);
+    expect(lines.filter(line => line.startsWith("UPDATE")).every(line => line.includes("organization_id='org-demo'"))).toBe(true);
+  });
+  it("uses ids the API routes accept and a book whose text and PDF agree", () => {
+    for (const prefix of ["year", "period", "reference"]) for (const id of (pilotSql as string).match(new RegExp(`'${prefix}-[^']+'`, "g")) || []) expect(id).toMatch(new RegExp(`^'${prefix}-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'$`));
+    expect(Buffer.from(book.pdf).subarray(0, 8).toString()).toBe("%PDF-1.4");
+    expect(pilotSql).toContain(book.sha256);
+    expect(bookPages).toHaveLength(16);
+    // The book covers every indicator of the plan except operations with decimals (4.5): it only names the decimal
+    // number system next to the Maya one, so the search proposes that page and the AI review has a real gap to find.
+    expect(bookPages.join(" ").toLowerCase()).not.toContain("decimales");
+  });
+  it("only writes lessons the editor accepts", () => {
+    const lessons = [...(pilotSql as string).matchAll(/INSERT INTO lessons\([^)]*\) SELECT '[^']+','[^']+','published','((?:[^']|'')*)'/g)].map(match => JSON.parse(match[1].replaceAll("''", "'")));
+    expect(lessons.map(lesson => lesson.title)).toEqual(["Polígonos regulares e irregulares", "Perímetro de polígonos"]);
+    for (const lesson of lessons) expect(validActivities(lesson.activities)).toBe(true);
   });
 });

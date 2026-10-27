@@ -492,7 +492,7 @@ class UpgradeTests(unittest.TestCase):
         """0031 (ST-093): existing accounts keep their password; the activity is rebuilt row for row and admits account events."""
         before = self.scoped("org-demo", until=30)
         events = before.execute("SELECT * FROM activity_events ORDER BY id").fetchall()
-        demo = self.scoped("org-demo")
+        demo = self.scoped("org-demo", until=31)
         self.assertEqual(demo.execute("SELECT id,organization_id,actor_id,action,target_type,target_id,course_id,summary,occurred_at,group_id FROM activity_events ORDER BY id").fetchall(), events)
         self.assertEqual(demo.execute("SELECT count(*) FROM users WHERE must_change_password<>0").fetchone()[0], 0)
         self.assertEqual(sorted(row[0] for row in demo.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='activity_events' AND sql IS NOT NULL")),
@@ -506,8 +506,9 @@ class UpgradeTests(unittest.TestCase):
 
     def test_departures_record_a_date_and_keep_every_account(self):
         """0035 (ST-123): a departure is its own row; users, memberships and activity stay as they were."""
-        before = self.scoped("org-demo", until=-1)
-        demo = self.scoped("org-demo")
+        position = [path.name[:4] for path in sorted(pathlib.Path("database/migrations").glob("*.sql"))].index("0035")
+        before = self.scoped("org-demo", until=position)
+        demo = self.scoped("org-demo", until=position + 1)
         for table in ["users", "memberships", "activity_events", "course_members", "section_educators"]:
             self.assertEqual(demo.execute(f"SELECT count(*) FROM {table}").fetchone(), before.execute(f"SELECT count(*) FROM {table}").fetchone(), table)
         self.assertEqual(demo.execute("SELECT count(*) FROM departures").fetchone()[0], 0)
@@ -632,10 +633,13 @@ class UpgradeTests(unittest.TestCase):
         """0034 (ST-121): users gain an optional, unique e-mail; invitations keep only token hashes; the outbox records
         deliveries; the activity is rebuilt row for row and admits invitation events."""
         migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
-        before = self.scoped("org-demo", until=[path.name[:4] for path in migrations].index("0034"))
+        position = [path.name[:4] for path in migrations].index("0034")
+        before = self.scoped("org-demo", until=position)
         events = before.execute("SELECT id,organization_id,actor_id,action,target_type,target_id,course_id,summary,occurred_at,group_id FROM activity_events ORDER BY id").fetchall()
+        # The activity is rebuilt row for row by 0034 itself; later seeds may add their own events.
+        rebuilt = self.scoped("org-demo", until=position + 1)
+        self.assertEqual(rebuilt.execute("SELECT id,organization_id,actor_id,action,target_type,target_id,course_id,summary,occurred_at,group_id FROM activity_events ORDER BY id").fetchall(), events)
         demo = self.scoped("org-demo")
-        self.assertEqual(demo.execute("SELECT id,organization_id,actor_id,action,target_type,target_id,course_id,summary,occurred_at,group_id FROM activity_events ORDER BY id").fetchall(), events)
         self.assertGreaterEqual(demo.execute("SELECT count(*) FROM users WHERE email IS NOT NULL").fetchone()[0], 7)
         demo.execute("UPDATE users SET email='ana@example.test' WHERE id='user-0'")
         with self.assertRaises(sqlite3.IntegrityError):
@@ -1120,6 +1124,8 @@ class AcademicYearTests(unittest.TestCase):
         db = sqlite3.connect(":memory:")
         db.execute("PRAGMA foreign_keys=ON")
         for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            if path.name >= "0054":
+                break
             db.executescript(path.read_text())
         org = db.execute("SELECT id FROM organizations ORDER BY id LIMIT 1").fetchone()[0]
         admin = db.execute("SELECT u.id FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.role='admin' AND m.organization_id=? ORDER BY u.id LIMIT 1", (org,)).fetchone()[0]
@@ -1173,6 +1179,8 @@ class GradebookTests(unittest.TestCase):
         db = sqlite3.connect(":memory:")
         db.execute("PRAGMA foreign_keys=ON")
         for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            if path.name >= "0054":
+                break
             db.executescript(path.read_text())
         org, group, course = db.execute("SELECT organization_id,id,course_id FROM course_groups ORDER BY id LIMIT 1").fetchone()
         admin = db.execute("SELECT u.id FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.role='admin' AND m.organization_id=? ORDER BY u.id LIMIT 1", (org,)).fetchone()[0]
@@ -1216,6 +1224,8 @@ class BibliographyTests(unittest.TestCase):
         db = sqlite3.connect(":memory:")
         db.execute("PRAGMA foreign_keys=ON")
         for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            if path.name >= "0054":
+                break
             db.executescript(path.read_text())
         org, course = db.execute("SELECT organization_id,id FROM courses ORDER BY id LIMIT 1").fetchone()
         other = db.execute("SELECT id FROM courses WHERE organization_id=? AND id<>? ORDER BY id LIMIT 1", (org, course)).fetchone()[0]
@@ -1319,4 +1329,39 @@ class BookMapTests(unittest.TestCase):
                 db.execute(row, values)
         with self.assertRaises(sqlite3.IntegrityError):
             db.execute("UPDATE book_maps SET ai_status='thinking' WHERE sha256=?", ("a" * 64,))
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class DemoPilotTests(unittest.TestCase):
+    """0054: the school pilot seed only writes in org-demo and never collides with what a person already created."""
+
+    def stores(self, before=None):
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in migrations[:-1]:
+            db.executescript(path.read_text())
+        if before:
+            before(db)
+        db.executescript(migrations[-1].read_text())
+        return db
+
+    def test_the_demo_gets_the_whole_pilot(self):
+        db = self.stores()
+        self.assertEqual(db.execute("SELECT name,status FROM academic_years ORDER BY name").fetchall(), [("Ciclo 2026", "current"), ("Ciclo 2027", "draft")])
+        self.assertGreater(db.execute("SELECT count(*) FROM section_grades").fetchone()[0], 200)
+        self.assertEqual(db.execute("SELECT count(*) FROM section_period_locks").fetchone()[0], 12)
+        self.assertEqual(db.execute("SELECT count(*) FROM course_outcomes WHERE course_id='seed-course-mate6'").fetchone()[0], 8)
+        self.assertEqual(db.execute("SELECT status FROM book_texts").fetchall(), [("ready",)])
+        self.assertEqual(db.execute("SELECT count(*) FROM class_sessions WHERE group_id='seed-group-mat-6a' AND status='planned'").fetchone()[0], 14)
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_a_year_a_person_made_current_is_kept_and_nothing_fails(self):
+        def made(db):
+            db.execute("INSERT INTO academic_years(id,organization_id,name,starts_on,ends_on,period_kind,status,created_by,created_at,updated_at,activated_at) VALUES ('year-own','org-demo','Mi ciclo','2026-01-05','2026-10-30','unit','current','user-0','t','t','t')")
+            db.execute("INSERT INTO curriculum_package_activations VALUES ('org-demo','cnb-matematicas-primaria-6','2026-10-27','user-0','t')")
+        db = self.stores(made)
+        self.assertEqual(db.execute("SELECT name,status FROM academic_years ORDER BY name").fetchall(), [("Ciclo 2027", "draft"), ("Mi ciclo", "current")])
+        self.assertEqual(db.execute("SELECT count(*) FROM section_grades").fetchone()[0], 0)
+        self.assertEqual(db.execute("SELECT count(*) FROM course_outcomes WHERE course_id='seed-course-mate6'").fetchone()[0], 8)
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
