@@ -127,7 +127,7 @@ describe("HL-174 ST-128 coordinación académica on the built Worker", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ coordination: { programs: [primaria] }, changed: true });
     expect(((await json(admin, "/members")).members as { id: string; coordination: unknown }[]).find(row => row.id === coordinator)!.coordination).toEqual({ programs: [primaria] });
-    primariaCourses = ["seed-course-ciencias", "seed-course-matematicas"];
+    primariaCourses = ["seed-course-ciencias", "seed-course-mate6", "seed-course-matematicas"];
   });
 
   it("ST-128 CA3 el cambio de perfil queda en la actividad y en la auditoría, y revoca las sesiones abiertas", async () => {
@@ -160,7 +160,7 @@ describe("HL-174 ST-128 coordinación académica on the built Worker", () => {
     expect((await as(session, "/courses/seed-course-english")).status).toBe(403);
     expect((await as(session, "/courses/course-exploradores")).status).toBe(403);
     const sections = ((await json(session, "/sections")).sections as { id: string; teaches: boolean }[]);
-    expect(sections.map(item => item.id).sort()).toEqual(["seed-group-cie-4a", "seed-group-mat-3a", "seed-group-mat-3b"]);
+    expect(sections.map(item => item.id).sort()).toEqual(["seed-group-cie-4a", "seed-group-mat-3a", "seed-group-mat-3b", "seed-group-mat-6a"]);
     expect(sections.every(item => !item.teaches)).toBe(true);
     expect((await as(session, "/sections/seed-group-mat-3a")).status).toBe(200);
     expect((await as(session, "/sections/seed-group-eng-sab")).status).toBe(403);

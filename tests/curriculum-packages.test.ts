@@ -96,7 +96,8 @@ describe("curriculum packages on the built Worker", () => {
     const detail = async () => (await read<{ course: { version: number }; curriculum: Curriculum }>(await as(educator, `/courses/${course}`)));
     const path = `/courses/${course}/curriculum-packages`, pick = (codes: string[], version: number, cookie = educator) => as(cookie, `${path}/${math.id}`, "POST", { codes, version });
 
-    // Nothing is active yet: the catalog lists it inactive and courses see no package.
+    // The demo has the package active (0054): deactivated, the catalog lists it inactive and courses see no package.
+    await read(await as(admin, `/curriculum-packages/${math.id}/deactivate`, "POST"));
     expect((await read<{ packages: CurriculumPackageSummary[] }>(await as(educator, "/curriculum-packages"))).packages).toEqual([expect.objectContaining({ id: math.id, active: false, competencies: 7, indicators: 26 })]);
     expect((await read<{ packages: CoursePackageView[] }>(await as(educator, path))).packages).toEqual([]);
     expect(await errorOf(await pick(["1.1"], (await detail()).course.version), 404)).toContain("no está activo");

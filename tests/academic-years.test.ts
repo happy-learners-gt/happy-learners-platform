@@ -123,7 +123,12 @@ const errorOf = async (response: Response, status: number) => (await read<{ erro
 describe("school year on the built Worker", () => {
   it("administration creates «Ciclo 2027» with four bimestres, activates, closes and opens the next one; others only read", async () => {
     const admin = await signIn("admin-demo"), educator = await signIn("educador-demo"), external = await signIn("admin-externo");
-    expect(await read<{ years: AcademicYear[] }>(await as(educator, "/academic-years"))).toMatchObject({ years: [] });
+    // The demo starts with the pilot seed (0054): «Ciclo 2026» current and «Ciclo 2027» as a draft. This flow starts clean.
+    const seeded = (await read<{ years: AcademicYear[] }>(await as(admin, "/academic-years"))).years;
+    expect(seeded.map(item => [item.name, item.status])).toEqual([["Ciclo 2027", "draft"], ["Ciclo 2026", "current"]]);
+    await read(await as(admin, `/academic-years/${seeded[1].id}/close`, "POST"));
+    await read(await as(admin, `/academic-years/${seeded[0].id}`, "DELETE"));
+    expect((await read<{ years: AcademicYear[] }>(await as(educator, "/academic-years"))).years.map(item => item.status)).toEqual(["closed"]);
     expect(await errorOf(await as(educator, "/academic-years", "POST", { ...year2027, periods: four }), 403)).toContain("Solo administración");
     expect((await as(null, "/academic-years")).status).toBe(401);
 
@@ -158,7 +163,7 @@ describe("school year on the built Worker", () => {
     expect((await as(external, `/academic-years/${year.id}`, "PUT", { ...year2027, periods: four })).status).toBe(404);
     expect((await as(external, `/academic-years/${year.id}/close`, "POST")).status).toBe(404);
     expect((await as(educator, `/academic-years/${year.id}/close`, "POST")).status).toBe(403);
-    expect((await read<{ years: AcademicYear[] }>(await as(educator, "/academic-years"))).years.map(item => item.status)).toEqual(["current"]);
+    expect((await read<{ years: AcademicYear[] }>(await as(educator, "/academic-years"))).years.map(item => item.status)).toEqual(["current", "closed"]);
 
     // Section schedules keep working with their own dates, apart from the year.
     const course = (await read<{ id: string }>(await as(admin, "/courses", "POST", { title: "Curso del ciclo", objective: "El horario conserva sus fechas.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", area: "011", settings: { attendance: true }, programId: null, leadId: "user-educator" }), 201)).id;
