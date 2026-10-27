@@ -168,6 +168,8 @@ const header = [
   "-- package, eight indicators in its plan, two published lessons, its main book (text already read) and «6.º A» with",
   "-- upcoming classes. The book map and lesson proposals are left for a live demonstration. Only runs in org-demo.",
 ];
+/** Every name the pilot seed shows (course, units, library, section, lessons): curated demo data, not E2E leftovers. */
+export const pilotNames = ["Matemáticas 6.º primaria", ...units.map(unit => unit.name), "Geometría interactiva", BOOK.name.replace(/\.pdf$/, ""), "6.º A", ...lessons.map(lesson => lesson.title)];
 /** The migration as it is checked in, and the book's PDF with its fingerprint. */
 export const pilotSql = [...header, ...sql, ...events].join("\n") + "\n";
 export const book = { pdf, sha256, ...BOOK };
