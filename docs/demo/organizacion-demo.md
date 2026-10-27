@@ -6,6 +6,8 @@ El entorno de demostración incluye una organización completa y ficticia para r
 - **Origen:** la migración `0015_demo_organization.sql`, generada por `scripts/seed/build.mjs` desde `scripts/seed/content-*.mjs`.
 - **Garantías:** es determinista y solo escribe en la organización `org-demo`. Las pruebas comprueban que cada lección cumple las mismas reglas del editor y del servidor (`tests/seed.test.ts`, `tests/test_migrations.py`).
 
+- **Piloto escolar (1.2.0):** la migración `0054_demo_pilot.sql`, generada por `scripts/seed/pilot.mjs`, agrega el Ciclo 2026 y sus bimestres, notas en las secciones de primaria y el curso **Matemáticas 6.º primaria** con el paquete CNB, su libro principal y la sección 6.º A. El guion de 12 minutos está en [piloto-escolar.md](piloto-escolar.md).
+
 Todas las cuentas usan la contraseña **`Aprender-2026!`**. Son datos ficticios: no escribas información personal real.
 
 ## Personas

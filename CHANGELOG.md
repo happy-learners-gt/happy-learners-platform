@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.1 — 2026-10-27
+
+Demostración del piloto escolar de REL-010 (DEC-052). Migración 0054, solo en la organización de demostración.
+
+- **Proponer lecciones** muestra qué indicadores ya tienen lecciones publicadas o en borrador, ofrece **Elegir los que
+  faltan** y, al terminar, indica el siguiente paso: publicar lo aprobado y usar **Asignar lecciones en orden** en el
+  cronograma de la sección.
+- Demostración (0054): el Ciclo 2026 vigente con sus bimestres y el Ciclo 2027 en borrador; notas en las secciones de
+  primaria con los tres primeros bimestres cerrados y Ciencias en letras; el curso **Matemáticas 6.º primaria** con el
+  paquete CNB, ocho indicadores en su plan (dos con lección publicada), su libro principal ya leído y la sección 6.º A
+  con clases próximas. El seed nunca choca con un ciclo o una activación que alguien ya haya creado. Guion de 12
+  minutos en `docs/demo/piloto-escolar.md`.
+
 ## 1.2.0 — 2026-10-27
 
 Piloto escolar de REL-010 (DEC-048 a DEC-052). Migraciones 0048 a 0053, acumulativas.

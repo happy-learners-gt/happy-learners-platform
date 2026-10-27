@@ -220,7 +220,9 @@ describe("lesson proposals and the delivery PDF on the built Worker", () => {
     // The delivery PDF: only the published version, with the letterhead and the footer.
     const group = (await read<{ id: string }>(await as(admin, `/courses/${course}/groups`, "POST", { name: "Sexto A" }), 201)).id;
     await read(await as(admin, `/courses/${course}/groups/${group}/educators`, "PUT", { userIds: ["user-educator"] }));
-    const pdf = `/courses/${course}/units/${unit}/delivery.pdf?section=${group}`;
+    // The period is named so the letterhead does not depend on today's date; the demo's current year is «Ciclo 2026» (0054).
+    const cycle = (await read<{ years: { status: string; periods: { id: string; name: string }[] }[] }>(await as(educator, "/academic-years"))).years.find(item => item.status === "current")!;
+    const pdf = `/courses/${course}/units/${unit}/delivery.pdf?section=${group}&period=${cycle.periods[3].id}`;
     const response = await as(educator, pdf);
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("application/pdf");
@@ -232,7 +234,7 @@ describe("lesson proposals and the delivery PDF on the built Worker", () => {
     expect(text).not.toContain("CAMBIO SIN PUBLICAR");
     expect(text).not.toContain(drafts[1].title.slice(0, 30));
     expect(text).toContain("Docente: Educador de la demostración · Curso: Matemáticas 6.º · Sección: Sexto A");
-    expect(text).toContain("Ciclo lectivo: Sin ciclo vigente · Periodo: Sin periodo");
+    expect(text).toContain("Ciclo lectivo: Ciclo 2026 · Periodo: Cuarto bimestre");
     expect(text).toContain("Página 1 de");
     expect((await as(other, pdf)).status).toBe(403);
     expect((await as(external, pdf)).status).toBe(404);
