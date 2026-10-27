@@ -1110,3 +1110,213 @@ class ContractsMigrationTests(unittest.TestCase):
         db.execute("INSERT INTO contract_template_versions(id,organization_id,template_id,status,version,title,body_json,body_text,defaults_json,editable_json,effective_from,updated_by,updated_at,published_by,published_at) VALUES ('ctv-1',?,'ct-1','published',1,'Contrato','{\"type\":\"doc\",\"content\":[]}','Texto suficientemente largo del contrato.','{}','[]','2026-10-01',?,'t',?,'t')", (org, admin, admin))
         with self.assertRaises(sqlite3.IntegrityError):
             db.execute("INSERT INTO contracts(id,organization_id,template_version_id,engagement,title,body_text,terms_json,party_name,user_id,start_date,status,created_by,created_at,updated_at,sent_at,document_sha256) VALUES ('c-1',?,'ctv-1','services','Contrato','Texto suficientemente largo del contrato.','{}','Ana',?,'2026-11-01','sent',?,'t','t','t',?)", (org, admin, admin, "c" * 64))
+
+
+class AcademicYearTests(unittest.TestCase):
+    """0048: the organization's school year. One current year per organization, only forward transitions, a closed
+    year is read-only, only drafts are deleted and periods stay within an open year of their organization."""
+
+    def migrated(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            db.executescript(path.read_text())
+        org = db.execute("SELECT id FROM organizations ORDER BY id LIMIT 1").fetchone()[0]
+        admin = db.execute("SELECT u.id FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.role='admin' AND m.organization_id=? ORDER BY u.id LIMIT 1", (org,)).fetchone()[0]
+        return db, org, admin
+
+    def year(self, db, org, admin, id, name, status="draft"):
+        db.execute("INSERT INTO academic_years(id,organization_id,name,starts_on,ends_on,period_kind,status,created_by,created_at,updated_at,activated_at) VALUES (?,?,?,'2027-01-11','2027-10-22','bimester',?,?,'t','t',?)",
+                   (id, org, name, status, admin, None if status == "draft" else "t"))
+
+    def test_rules_of_the_school_year(self):
+        db, org, admin = self.migrated()
+        # The migration is additive and safe to run again.
+        db.executescript(pathlib.Path("database/migrations/0048_academic_years.sql").read_text())
+        self.assertEqual(db.execute("SELECT count(*) FROM academic_years").fetchone()[0], 0)
+        self.year(db, org, admin, "year-1", "Ciclo 2027")
+        db.execute("INSERT INTO academic_periods(id,organization_id,year_id,position,name,starts_on,ends_on) VALUES ('p-1',?,'year-1',1,'Primer bimestre','2027-01-11','2027-03-19')", (org,))
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "outside"):
+            db.execute("INSERT INTO academic_periods(id,organization_id,year_id,position,name,starts_on,ends_on) VALUES ('p-x',?,'year-1',2,'Fuera','2027-10-01','2027-11-30')", (org,))
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "outside"):
+            db.execute("UPDATE academic_periods SET starts_on='2026-12-01' WHERE id='p-1'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.year(db, org, admin, "year-dup", "Ciclo 2027")
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "transition"):
+            db.execute("UPDATE academic_years SET status='closed',closed_at='t' WHERE id='year-1'")
+        db.execute("UPDATE academic_years SET status='current',activated_at='t' WHERE id='year-1'")
+        # At most one current year per organization.
+        self.year(db, org, admin, "year-2", "Ciclo 2028")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE academic_years SET status='current',activated_at='t' WHERE id='year-2'")
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "only a draft"):
+            db.execute("DELETE FROM academic_years WHERE id='year-1'")
+        db.execute("UPDATE academic_years SET status='closed',closed_at='t' WHERE id='year-1'")
+        # A closed year and its periods never change.
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "read-only"):
+            db.execute("UPDATE academic_years SET name='Otro' WHERE id='year-1'")
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "read-only"):
+            db.execute("DELETE FROM academic_periods WHERE id='p-1'")
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "outside"):
+            db.execute("UPDATE academic_periods SET name='Otro' WHERE id='p-1'")
+        db.execute("UPDATE academic_years SET status='current',activated_at='t' WHERE id='year-2'")
+        db.execute("DELETE FROM academic_years WHERE id='year-2' AND status='draft'")
+        self.assertEqual(db.execute("SELECT count(*) FROM academic_years WHERE status='current'").fetchone()[0], 1)
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class GradebookTests(unittest.TestCase):
+    """0049: one optional score per roster student and period; written only in the current year while the section has
+    not locked the period; a closed year freezes its scores and a period with scores is never removed."""
+
+    def test_scores_follow_the_year_and_the_locks(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            db.executescript(path.read_text())
+        org, group, course = db.execute("SELECT organization_id,id,course_id FROM course_groups ORDER BY id LIMIT 1").fetchone()
+        admin = db.execute("SELECT u.id FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.role='admin' AND m.organization_id=? ORDER BY u.id LIMIT 1", (org,)).fetchone()[0]
+        db.execute("INSERT INTO group_learners(id,group_id,course_id,organization_id,display_name,created_at) VALUES ('l-1',?,?,?,'Ana','t')", (group, course, org))
+        self.assertEqual(db.execute("SELECT weight FROM academic_periods").fetchall(), [])
+        db.execute("INSERT INTO academic_years(id,organization_id,name,starts_on,ends_on,period_kind,status,created_by,created_at,updated_at) VALUES ('y-1',?,'Ciclo 2027','2027-01-11','2027-10-22','bimester','draft',?,'t','t')", (org, admin))
+        db.execute("INSERT INTO academic_periods(id,organization_id,year_id,position,name,starts_on,ends_on) VALUES ('p-1',?,'y-1',1,'Primer bimestre','2027-01-11','2027-03-19')", (org,))
+        self.assertEqual(db.execute("SELECT weight FROM academic_periods WHERE id='p-1'").fetchone()[0], 1)
+        grade = "INSERT INTO section_grades(id,organization_id,group_id,learner_id,period_id,score,updated_by,updated_at) VALUES (?,?,?,?,'p-1',?,?,'t')"
+        # A draft year takes no scores.
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "closed"):
+            db.execute(grade, ("g-1", org, group, "l-1", 80, admin))
+        db.execute("UPDATE academic_years SET status='current',activated_at='t' WHERE id='y-1'")
+        db.execute(grade, ("g-1", org, group, "l-1", 80.5, admin))
+        for score in (100.5, -1, 80.25):
+            with self.assertRaises(sqlite3.IntegrityError):
+                db.execute("UPDATE section_grades SET score=? WHERE id='g-1'", (score,))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(grade, ("g-2", org, group, "l-1", 70, admin))
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "has grades"):
+            db.execute("DELETE FROM academic_periods WHERE id='p-1'")
+        # A locked period and a closed year freeze the scores.
+        db.execute("INSERT INTO section_period_locks(group_id,organization_id,period_id,locked_by,locked_at) VALUES (?,?,'p-1',?,'t')", (group, org, admin))
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "closed"):
+            db.execute("UPDATE section_grades SET score=90 WHERE id='g-1'")
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "closed"):
+            db.execute("DELETE FROM section_grades WHERE id='g-1'")
+        db.execute("DELETE FROM section_period_locks")
+        db.execute("UPDATE section_grades SET score=90 WHERE id='g-1'")
+        db.execute("UPDATE academic_years SET status='closed',closed_at='t' WHERE id='y-1'")
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "closed"):
+            db.execute("UPDATE section_grades SET score=95 WHERE id='g-1'")
+        self.assertEqual(db.execute("SELECT score FROM section_grades").fetchall(), [(90.0,)])
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class BibliographyTests(unittest.TestCase):
+    """0050: a reference points to one item of its own course's library; one main book per course, with role text."""
+
+    def test_references_point_to_their_course_library(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            db.executescript(path.read_text())
+        org, course = db.execute("SELECT organization_id,id FROM courses ORDER BY id LIMIT 1").fetchone()
+        other = db.execute("SELECT id FROM courses WHERE organization_id=? AND id<>? ORDER BY id LIMIT 1", (org, course)).fetchone()[0]
+        admin = db.execute("SELECT u.id FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.role='admin' AND m.organization_id=? ORDER BY u.id LIMIT 1", (org,)).fetchone()[0]
+        for id, owner in (("m-1", course), ("m-2", course), ("m-3", other)):
+            db.execute("INSERT INTO materials(id,course_id,organization_id,title,description,kind,content,status,updated_at) VALUES (?,?,?,'Libro','','text','x','published','t')", (id, owner, org))
+        insert = "INSERT INTO course_bibliography(id,organization_id,course_id,material_id,file_id,role,is_primary,created_by,created_at,updated_at) VALUES (?,?,?,?,NULL,?,?,?,'t','t')"
+        db.execute(insert, ("r-1", org, course, "m-1", "text", 1, admin))
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "outside"):
+            db.execute(insert, ("r-x", org, course, "m-3", "text", 0, admin))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(insert, ("r-2", org, course, "m-2", "text", 1, admin))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(insert, ("r-3", org, course, "m-2", "support", 1, admin))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(insert, ("r-4", org, course, "m-1", "support", 0, admin))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO course_bibliography(id,organization_id,course_id,material_id,file_id,role,created_by,created_at,updated_at) VALUES ('r-5',?,?,NULL,NULL,'other',?,'t','t')", (org, course, admin))
+        db.execute(insert, ("r-2", org, course, "m-2", "text", 0, admin))
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "keeps its item"):
+            db.execute("UPDATE course_bibliography SET material_id='m-1' WHERE id='r-2'")
+        db.execute("UPDATE course_bibliography SET is_primary=0 WHERE id='r-1'")
+        db.execute("UPDATE course_bibliography SET is_primary=1 WHERE id='r-2'")
+        self.assertEqual(db.execute("SELECT id FROM course_bibliography WHERE is_primary=1").fetchall(), [("r-2",)])
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class CurriculumPackageTests(unittest.TestCase):
+    """0051: a package code is linked once per course; a link names exactly one plan item of its own course."""
+
+    def test_links_are_unique_and_course_scoped(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            db.executescript(path.read_text())
+        org, course = db.execute("SELECT organization_id,id FROM courses ORDER BY id LIMIT 1").fetchone()
+        other = db.execute("SELECT id FROM courses WHERE organization_id=? AND id<>? ORDER BY id LIMIT 1", (org, course)).fetchone()[0]
+        admin = db.execute("SELECT u.id FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.role='admin' AND m.organization_id=? ORDER BY u.id LIMIT 1", (org,)).fetchone()[0]
+        db.execute("INSERT INTO course_competencies(id,course_id,organization_id,name,position,updated_at) VALUES ('c-1',?,?,'1. Produce información',90,'t')", (course, org))
+        db.execute("INSERT INTO course_outcomes(id,course_id,organization_id,competency_id,statement,level,position,updated_at) VALUES ('o-1',?,?,'c-1','Identifica','remember',90,'t')", (course, org))
+        link = "INSERT INTO course_package_links(course_id,organization_id,package_id,version,kind,code,competency_id,outcome_id,linked_by,linked_at) VALUES (?,?,'cnb-x','2026-10-27',?,?,?,?,?,'t')"
+        db.execute(link, (course, org, "competency", "1", "c-1", None, admin))
+        db.execute(link, (course, org, "indicator", "1.1", None, "o-1", admin))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(link, (course, org, "indicator", "1.1", None, "o-1", admin))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(link, (other, org, "indicator", "1.1", None, "o-1", admin))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(link, (course, org, "indicator", "1.2", "c-1", None, admin))
+        db.execute("INSERT INTO curriculum_package_activations(organization_id,package_id,version,activated_by,activated_at) VALUES (?,'cnb-x','2026-10-27',?,'t')", (org, admin))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO curriculum_package_activations(organization_id,package_id,version,activated_by,activated_at) VALUES (?,'cnb-x','2026-10-28',?,'t')", (org, admin))
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class LessonProposalTests(unittest.TestCase):
+    """0052: one proposal item per idempotency key; a done item names its lesson; items stay in their course."""
+
+    def test_items_are_idempotent_and_course_scoped(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            db.executescript(path.read_text())
+        org, course = db.execute("SELECT c.organization_id,c.id FROM courses c JOIN learning_units u ON u.course_id=c.id ORDER BY c.id LIMIT 1").fetchone()
+        unit = db.execute("SELECT id FROM learning_units WHERE course_id=? LIMIT 1", (course,)).fetchone()[0]
+        other = db.execute("SELECT id FROM courses WHERE organization_id=? AND id<>? ORDER BY id LIMIT 1", (org, course)).fetchone()[0]
+        admin = db.execute("SELECT u.id FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.role='admin' AND m.organization_id=? ORDER BY u.id LIMIT 1", (org,)).fetchone()[0]
+        db.execute("INSERT INTO course_outcomes(id,course_id,organization_id,statement,level,position,updated_at) VALUES ('o-1',?,?,'Identifica','remember',90,'t')", (course, org))
+        db.execute("INSERT INTO proposal_jobs(id,organization_id,course_id,unit_id,book_file_id,sequence,minutes,generator,requested_by,created_at) VALUES ('j-1',?,?,?,'f-1','free',45,'fixture',?,'t')", (org, course, unit, admin))
+        item = "INSERT INTO proposal_items(id,job_id,organization_id,course_id,outcome_id,position,idempotency_key,status,lesson_id) VALUES (?,'j-1',?,?,'o-1',0,?,?,?)"
+        db.execute(item, ("i-1", org, course, "k-1", "queued", None))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(item, ("i-2", org, course, "k-1", "queued", None))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(item, ("i-3", org, other, "k-3", "queued", None))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE proposal_items SET status='done' WHERE id='i-1'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE proposal_items SET status='waiting' WHERE id='i-1'")
+        db.execute("UPDATE proposal_items SET status='done',lesson_id='lesson-1' WHERE id='i-1'")
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class BookMapTests(unittest.TestCase):
+    """0053: one map row per course, book (by its hash) and outcome, with known sources, states and JSON lists."""
+
+    def test_rows_are_unique_per_book_and_outcome(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            db.executescript(path.read_text())
+        org, course = db.execute("SELECT organization_id,id FROM courses ORDER BY id LIMIT 1").fetchone()
+        admin = db.execute("SELECT u.id FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.role='admin' AND m.organization_id=? ORDER BY u.id LIMIT 1", (org,)).fetchone()[0]
+        db.execute("INSERT INTO course_outcomes(id,course_id,organization_id,statement,level,position,updated_at) VALUES ('o-1',?,?,'Identifica','remember',90,'t')", (course, org))
+        row = "INSERT INTO book_maps(course_id,organization_id,file_id,sha256,outcome_id,pages,source,status,updated_by,updated_at) VALUES (?,?,'f-1',?,'o-1',?,?,?,?,'t')"
+        db.execute(row, (course, org, "a" * 64, "[2,3]", "lexical", "proposed", admin))
+        db.execute(row, (course, org, "b" * 64, "[]", "teacher", "confirmed", admin))
+        for values in ((course, org, "a" * 64, "[1]", "lexical", "proposed", admin), (course, org, "c" * 64, "{}", "lexical", "proposed", admin),
+                       (course, org, "d" * 64, "[]", "guess", "proposed", admin), (course, org, "e" * 64, "[]", "ai", "maybe", admin)):
+            with self.assertRaises(sqlite3.IntegrityError):
+                db.execute(row, values)
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE book_maps SET ai_status='thinking' WHERE sha256=?", ("a" * 64,))
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])

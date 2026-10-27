@@ -18,9 +18,10 @@ import { Timetable } from "../course/Timetable";
 import { SectionProvider, sectionCrumbs, sectionPath, useSection } from "./context";
 import { SectionProgressPage } from "./Progress";
 import { SectionWorkGroupsPage } from "./WorkGroups";
+import { SectionGradesPage } from "./Grades";
 import { classMoment } from "../../regional";
 
-const areas = ["", "clases", "estudiantes", "grupos", "horario", "avance"];
+const areas = ["", "clases", "estudiantes", "grupos", "horario", "avance", "notas"];
 type State = { status: "loading" } | { status: "error"; error: string; code: number } | { status: "ready"; section: SectionSummary; today: string };
 
 /**
@@ -64,6 +65,7 @@ function SectionWithCourse({ section, today, base, reload, area, item }: { secti
       {area === "grupos" && <SectionWorkGroupsPage/>}
       {area === "horario" && <Timetable/>}
       {area === "avance" && <SectionProgressPage/>}
+      {area === "notas" && <SectionGradesPage/>}
     </>}
   </SectionProvider></CourseProvider>;
 }
