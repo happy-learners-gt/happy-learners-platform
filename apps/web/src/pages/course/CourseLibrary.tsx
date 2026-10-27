@@ -11,12 +11,15 @@ import type { MenuItem } from "../../ui/Menu";
 import { Button, EmptyState, PageHeader, PrimaryAction } from "../../ui/primitives";
 import { legacyItem, ResourceForm, ResourcePreview } from "../resources";
 import { useCourse } from "./context";
+import { CourseBibliography, useBibliography } from "./Bibliography";
 
 export function CourseLibrary() {
   const { course, materials, legacyResources, lessons, writable, reload } = useCourse();
   const { url, navigate } = useNavigation();
   const { toast, confirm } = useFeedback();
-  const [preview, setPreview] = useState<LibraryItem | null>(null), [form, setForm] = useState<Material | "new" | null>(null);
+  const [preview, setPreview] = useState<LibraryItem | null>(null), [form, setForm] = useState<Material | "new" | null>(null), [adding, setAdding] = useState<string | null>(null);
+  const bibliography = useBibliography(course.id);
+  const referenced = new Set(bibliography.data?.references.map(reference => reference.itemId));
   const query = url.searchParams.get("q") || "", type = url.searchParams.get("tipo") || "", view = url.searchParams.get("vista") === "cuadricula" ? "grid" : "list";
   const showArchived = url.searchParams.get("archivados") === "1";
   function filter(key: string, value: string) { const next = new URL(url); if (value) next.searchParams.set(key, value); else next.searchParams.delete(key); navigate(next.pathname + next.search, true); }
@@ -30,13 +33,14 @@ export function CourseLibrary() {
     try {
       if (item.kind === "file" && item.fileId) await archiveCourseFile(course.id, item.fileId);
       else await api(`/courses/${course.id}/materials/${item.id}`, "PUT", { title: item.title, description: item.description, kind: item.kind, content: item.content, status: "archived", termIds: item.termIds, version: item.version });
-      await reload(); toast({ message: `«${item.title}» se archivó.` });
+      await reload(); await bibliography.load(); toast({ message: `«${item.title}» se archivó.` });
     } catch (error) { toast({ tone: "error", message: `${message(error)} Recarga la página e inténtalo de nuevo.` }); }
   }
   function menu(item: LibraryItem): MenuItem[] {
     return [
       { label: "Vista previa", icon: "eye", onSelect: () => setPreview(item) },
       ...(writable && !item.legacy && item.kind !== "file" ? [{ label: "Editar", icon: "edit" as const, onSelect: () => setForm(item) }] : []),
+      ...(bibliography.data?.canManage && !item.legacy && item.status !== "archived" && !referenced.has(item.fileId || item.id) ? [{ label: "Agregar a la bibliografía", icon: "library" as const, onSelect: () => setAdding(item.fileId || item.id) }] : []),
       ...(item.kind === "file" && item.fileId ? [{ label: "Descargar", icon: "download" as const, onSelect: () => { const link = document.createElement("a"); link.href = `/api/courses/${course.id}/files/${item.fileId}/content`; link.download = item.fileName || item.title; link.click(); } }] : []),
       ...(writable && !item.legacy && item.status !== "archived" ? ["separator" as const, { label: "Archivar", icon: "archive" as const, danger: true, onSelect: () => void archive(item) }] : []),
     ];
@@ -46,6 +50,7 @@ export function CourseLibrary() {
     <PageHeader crumbs={[{ label: "Cursos", href: "/cursos" }, { label: course.title, href: base }, { label: "Biblioteca del curso" }]} title="Biblioteca del curso"
       description="Textos, enlaces y documentos para usar como recursos en las actividades."
       primary={writable && items.length > 0 && <PrimaryAction icon="plus" onClick={() => setForm("new")}>Agregar recurso</PrimaryAction>}/>
+    <CourseBibliography courseId={course.id} items={materials} bibliography={bibliography} adding={adding} onAdding={setAdding}/>
     <div className="toolbar" role="group" aria-label="Filtrar recursos">
       <div className="search-field"><Icon name="search" size={18}/><label htmlFor="library-search" className="sr-only">Buscar recursos</label><input id="library-search" type="search" value={query} onChange={event => filter("q", event.target.value)} placeholder="Buscar por título o archivo"/></div>
       <label className="select-inline"><span>Tipo</span><select value={type} onChange={event => filter("tipo", event.target.value)}><option value="">Todos</option><option value="text">Texto</option><option value="link">Enlace</option><option value="file">Documento</option></select></label>
@@ -60,6 +65,6 @@ export function CourseLibrary() {
       : items.length ? <EmptyState icon="search" title="No hay recursos con esos filtros" action={<Button onClick={() => navigate(url.pathname, true)}>Limpiar filtros</Button>}>Prueba con otro tipo o con otra palabra.</EmptyState>
       : <EmptyState icon="library" title="La biblioteca del curso está vacía" action={writable && <PrimaryAction icon="plus" onClick={() => setForm("new")}>Agregar recurso</PrimaryAction>}>Agrega un texto, un enlace o un documento Office para usarlo en las lecciones.</EmptyState>}
     {preview && <ResourcePreview item={preview} lessons={usage(preview.id, lessons)} onClose={() => setPreview(null)} onEdit={writable && !preview.legacy && preview.kind !== "file" ? () => { setForm(preview); setPreview(null); } : undefined}/>}
-    {form && <ResourceForm courseId={course.id} item={form === "new" ? undefined : form} onClose={() => setForm(null)} onSaved={async text => { await reload(); setForm(null); toast({ message: text }); }}/>}
+    {form && <ResourceForm courseId={course.id} item={form === "new" ? undefined : form} onClose={() => setForm(null)} onSaved={async text => { await reload(); await bibliography.load(); setForm(null); toast({ message: text }); }}/>}
   </>;
 }

@@ -112,7 +112,7 @@ export async function accessMatrix(path: string, method: string, input: unknown,
   if (area === "matrix") {
     const [{ rows: programs }, groups, coordination, events] = await Promise.all([
       programNames(db, current.organizationId), groupsOf(db, current.organizationId), coordinators(db, current.organizationId),
-      db.prepare("SELECT e.id,COALESCE(u.display_name,u.username) AS actorName,e.action,e.subject_type AS subjectType,e.subject_id AS subjectId,e.summary,e.occurred_at AS occurredAt FROM access_events e JOIN users u ON u.id=e.actor_id WHERE e.organization_id=? ORDER BY e.occurred_at DESC,e.id LIMIT 50").bind(current.organizationId).all<AccessEvent>(),
+      db.prepare("SELECT e.id,COALESCE(u.display_name,u.username) AS actorName,e.action,e.subject_type AS subjectType,e.subject_id AS subjectId,e.summary,e.occurred_at AS occurredAt FROM access_events e JOIN users u ON u.id=e.actor_id WHERE e.organization_id=? ORDER BY e.occurred_at DESC,e.rowid DESC LIMIT 50").bind(current.organizationId).all<AccessEvent>(),
     ]);
     return reply({ areas: permissionAreas, catalog: permissionCatalog, roles: builtInRoles, reachLabels, groups, coordinators: coordination, programs, events: events.results });
   }

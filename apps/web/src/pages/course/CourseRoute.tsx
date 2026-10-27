@@ -7,13 +7,15 @@ import { CourseProvider, capabilities, courseConfiguration, useCourseLoader } fr
 import { Overview } from "./Overview";
 import { Content } from "./Content";
 import { CourseLibrary } from "./CourseLibrary";
+import { Proposals } from "./Proposals";
+import { BookMap } from "./BookMap";
 import { CourseSections } from "./Sections";
 import { Settings } from "./Settings";
 import { Plan } from "./Plan";
 import { sectionPath } from "../sections/context";
 const LessonEditor = lazy(() => import("../LessonEditor").then(module => ({ default: module.LessonEditor })));
 
-const areas = ["", "plan", "contenido", "biblioteca", "secciones", "configuracion", "lecciones"];
+const areas = ["", "plan", "contenido", "biblioteca", "secciones", "configuracion", "lecciones", "propuestas", "mapa-del-libro"];
 /** Locations from before v0.8.7, when classes, sections and schedules lived inside the course (DEC-024). */
 const sectionAreas = ["clases", "asignaciones", "horario", "grupos", "cronograma", "asistencia"];
 
@@ -49,6 +51,8 @@ export function CourseRoute({ id, area, item }: { id: string; area: string; item
       {area === "plan" && <Plan/>}
       {area === "contenido" && <Content/>}
       {area === "biblioteca" && <CourseLibrary/>}
+      {area === "propuestas" && <Proposals/>}
+      {area === "mapa-del-libro" && <BookMap/>}
       {area === "secciones" && <CourseSections/>}
       {area === "configuracion" && <Settings/>}
       {area === "lecciones" && item && <Suspense fallback={<Loading label="Abriendo editor…" lines={8}/>}><LessonEditor key={item} lessonId={item}/></Suspense>}

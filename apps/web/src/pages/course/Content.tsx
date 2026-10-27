@@ -7,6 +7,7 @@ import { courseStats, draftOf, lessonBody, plural } from "../../model";
 import { Modal, useFeedback } from "../../ui/feedback";
 import { Icon } from "../../ui/icons";
 import { LessonOutline } from "../../ui/LessonOutline";
+import { DeliveryDialog } from "./Proposals";
 import type { OutlineActions } from "../../ui/LessonOutline";
 import { Button, EmptyState, Field, PageHeader, PrimaryAction } from "../../ui/primitives";
 import { moveItem } from "../../ui/Sortable";
@@ -27,6 +28,7 @@ export function Content() {
   const [creating, setCreating] = useState(url.searchParams.get("crear") === "unidad" || (publisher && !units.length));
   const [editing, setEditing] = useState<LearningUnit | null>(null), [busy, setBusy] = useState(false);
   const [focusUnit, setFocusUnit] = useState<string>();
+  const [delivering, setDelivering] = useState(false);
   const base = `/cursos/${course.id}`;
   const stats = courseStats(units, lessons);
   const archivedCount = units.filter(unit => unit.status === "archived").length + lessons.filter(lesson => lesson.status === "archived").length;
@@ -100,9 +102,10 @@ export function Content() {
     if (ok) { form.reset(); setCreating(false); setFocusUnit(created); setTimeout(() => document.getElementById(`unidad-${created}`)?.querySelector<HTMLElement>(".add-lesson")?.focus(), 50); }
   }
   return <>
+    {delivering && <DeliveryDialog courseId={course.id} units={units.filter(unit => unit.status === "active")} onClose={() => setDelivering(false)}/>}
     <PageHeader crumbs={[{ label: "Cursos", href: "/cursos" }, { label: course.title, href: base }, { label: "Contenido" }]} title="Contenido"
       description={`${plural(stats.units, noun.one, noun.many)} · ${plural(stats.lessons, "lección", "lecciones")} · ${stats.published} publicadas`}
-      actions={units.length > 0 && <Button variant="ghost" onClick={() => setExpanded(expanded.size ? new Set() : new Set(units.map(unit => unit.id)))}>{expanded.size ? "Contraer todo" : "Expandir todo"}</Button>}
+      actions={units.length > 0 && <>{writable && <Button icon="spark" href={`${base}/propuestas`}>Proponer lecciones</Button>}<Button icon="download" onClick={() => setDelivering(true)}>PDF de entrega</Button><Button variant="ghost" onClick={() => setExpanded(expanded.size ? new Set() : new Set(units.map(unit => unit.id)))}>{expanded.size ? "Contraer todo" : "Expandir todo"}</Button></>}
       primary={publisher && units.length > 0 && <PrimaryAction icon="plus" onClick={() => creating ? document.getElementById("new-unit-name")?.focus() : setCreating(true)}>{`Crear ${noun.one}`}</PrimaryAction>}/>
     {!writable && <p className="notice"><Icon name="info" size={18}/>{course.status === "archived" ? "El curso está archivado. Administración puede restaurarlo desde Configuración." : "Consulta el contenido del curso. Su equipo docente lo prepara y su responsable lo publica."}</p>}
     {writable && !publisher && <p className="notice"><Icon name="info" size={18}/>Prepara y edita lecciones; cuando una esté lista, envíala a revisión. La persona responsable del curso la publica y organiza {noun.theMany}.</p>}

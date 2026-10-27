@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { ClassSession, SectionSchedule } from "@happy-learners/contracts";
-import { scheduleDates } from "@happy-learners/domain";
+import { scheduleDates, scheduleSuggestion } from "@happy-learners/domain";
 import { api, message } from "../../api";
 import { Link } from "../../navigation";
 import { plural, sessionDay } from "../../model";
@@ -11,6 +11,7 @@ import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Sect
 import { useCourse } from "./context";
 import { sectionCrumbs, useSection } from "../sections/context";
 import { DaysOff, useBreaks } from "../calendar";
+import { useAcademicYears } from "../academic-years";
 import { classMoment, currentRegional, differentZone, formatClock, formatClockRange, weekOrder, zoneName } from "../../regional";
 
 const addDays = (day: string, days: number) => { const date = new Date(`${day}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
@@ -116,7 +117,11 @@ function ScheduleEditor({ schedule, sessions, today, breaks, onDone }: { schedul
     ? { weekdays: schedule.weekdays, startsAt: schedule.startsAt, durationMinutes: String(schedule.durationMinutes), from: schedule.from, until: schedule.until }
     : { weekdays: [], startsAt: "08:00", durationMinutes: "45", from: today, until: addMonths(today, 3) });
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
-  const set = (patch: Partial<Values>) => setValues(current => ({ ...current, ...patch }));
+  // A new schedule suggests the current school year's dates; they stay the section's own and can be changed.
+  const { years } = useAcademicYears(), datesTouched = useRef(!!schedule);
+  const set = (patch: Partial<Values>) => { if ("from" in patch || "until" in patch) datesTouched.current = true; setValues(current => ({ ...current, ...patch })); };
+  const currentYear = years?.find(year => year.status === "current"), suggestion = scheduleSuggestion(currentYear, today);
+  useEffect(() => { if (suggestion && !datesTouched.current) setValues(current => ({ ...current, ...suggestion })); }, [suggestion?.from, suggestion?.until]);
   const path = `/courses/${course.id}/groups/${section.id}/schedule`;
   const minutes = Number(values.durationMinutes) || 0;
   const valid = values.weekdays.length > 0 && values.from && values.until && values.until >= values.from && minutes >= 5;
@@ -156,6 +161,7 @@ function ScheduleEditor({ schedule, sessions, today, breaks, onDone }: { schedul
         </div>
         <div className="period-shortcuts" role="group" aria-label="Duración del periodo">
           <span className="muted small">Periodo de</span>
+          {currentYear && suggestion && <button type="button" className="chip-button" aria-pressed={values.from === suggestion.from && values.until === suggestion.until} onClick={() => set(suggestion)}>{currentYear.name}</button>}
           {[[1, "1 mes"], [3, "3 meses"], [6, "6 meses"], [10, "10 meses"]].map(([months, label]) => <button key={label} type="button" className="chip-button" aria-pressed={values.from ? values.until === addDays(addMonths(values.from, months as number), -1) : false} onClick={() => set({ until: addDays(addMonths(values.from || today, months as number), -1) })}>{label}</button>)}
         </div>
         <div className="schedule-preview" role="status">
