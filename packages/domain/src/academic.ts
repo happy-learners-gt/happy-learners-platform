@@ -1,5 +1,7 @@
 import type { AcademicProfile, Course, CourseFormat, CourseSettings, EducationLevel, EducationType, Modality, ModuleLabel, Pacing, SequenceTemplate, StudyProgram } from "@happy-learners/contracts";
 import { cleanText, record } from "./courses";
+import { defaultThresholds, gradeAverages, gradeScales, isGradeAverage, isGradeScale, isLetterThresholds, isPassingGrade, passingChoices, thresholdPresets, thresholdsText } from "./gradebook";
+import { sequenceOf, sequenceTemplates } from "./sequences";
 
 /**
  * Academic model. A course is described with standard dimensions instead of free labels:
@@ -89,6 +91,10 @@ export const settingDefinitions: { key: SettingKey; label: string; description: 
   { key: "workGroups", label: "Grupos de trabajo", description: "Formar grupos de estudiantes dentro de cada sección y asignarlos a las actividades en parejas o en equipos. Requiere secciones." },
   { key: "outcomesRequired", label: "Publicar exige resultados de aprendizaje", description: "Una lección solo se publica si trabaja al menos un resultado del curso." },
   { key: "assessmentRequired", label: "Publicar exige comprobar lo aprendido", description: "Una lección solo se publica si incluye una pregunta o una actividad de evaluación." },
+  { key: "gradeScale", label: "Escala de las notas", description: "Cómo se leen las notas de la libreta: de 0 a 100 o con letras de la A a la F." },
+  { key: "passingGrade", label: "Nota mínima para aprobar", description: "El promedio desde el que una persona aprueba el curso." },
+  { key: "letterThresholds", label: "Umbrales de las letras", description: "La nota mínima de la A, la B, la C y la D; por debajo de la D es F. Solo se usan con la escala de letras." },
+  { key: "gradeAverage", label: "Promedio de los periodos", description: "Promedio simple o ponderado por el peso de cada periodo del ciclo lectivo. Un periodo sin nota no cuenta como cero." },
 ];
 const sequences: SequenceTemplate[] = ["free", "start-develop-close", "five-e", "ppp", "workshop"];
 
@@ -101,6 +107,10 @@ export function derivedSettings(profile: AcademicProfile & { format: CourseForma
     workGroups: profile.modality !== "online",
     outcomesRequired: profile.educationType === "formal",
     assessmentRequired: profile.educationType === "formal",
+    gradeScale: "numeric_100",
+    passingGrade: 60,
+    letterThresholds: defaultThresholds,
+    gradeAverage: "simple",
   };
 }
 export type SettingSource = "course" | "program" | "program-locked" | "derived";
@@ -136,7 +146,41 @@ export function settingsInput(value: unknown): CourseSettings | null {
   for (const key of ["attendance", "workGroups", "outcomesRequired", "assessmentRequired"] as const) {
     if (v[key] !== undefined) { if (typeof v[key] !== "boolean") return null; out[key] = v[key]; }
   }
+  if (v.gradeScale !== undefined) { if (!isGradeScale(v.gradeScale)) return null; out.gradeScale = v.gradeScale; }
+  if (v.passingGrade !== undefined) { if (!isPassingGrade(v.passingGrade)) return null; out.passingGrade = v.passingGrade; }
+  if (v.letterThresholds !== undefined) { if (!isLetterThresholds(v.letterThresholds)) return null; out.letterThresholds = [...v.letterThresholds]; }
+  if (v.gradeAverage !== undefined) { if (!isGradeAverage(v.gradeAverage)) return null; out.gradeAverage = v.gradeAverage; }
   return out;
+}
+
+/** The options a setting offers in a select, as [value, label]; a current value outside them is kept as an option. */
+export function settingChoices(key: SettingKey, current?: unknown): [string, string][] {
+  const choices: [string, string][] = key === "moduleLabel" ? moduleLabels.map(item => [item.value, moduleNoun(item.value).Many])
+    : key === "defaultSequence" ? sequenceTemplates.map(item => [item.value, item.label])
+    : key === "gradeScale" ? gradeScales.map(item => [item.value, item.label])
+    : key === "gradeAverage" ? gradeAverages.map(item => [item.value, item.label])
+    : key === "passingGrade" ? passingChoices.map(value => [String(value), String(value)])
+    : key === "letterThresholds" ? thresholdPresets.map(value => [String(value), thresholdsText(value)])
+    : [["true", "Sí"], ["false", "No"]];
+  if (current !== undefined && !choices.some(([value]) => value === String(current))) choices.push([String(current), settingText(key, current)]);
+  return choices;
+}
+/** How a setting's value reads. */
+export function settingText(key: SettingKey, value: unknown): string {
+  if (key === "moduleLabel") return moduleNoun(value as ModuleLabel).Many;
+  if (key === "defaultSequence") return sequenceOf(value as SequenceTemplate).label;
+  if (key === "gradeScale") return gradeScales.find(item => item.value === value)?.label || String(value);
+  if (key === "gradeAverage") return gradeAverages.find(item => item.value === value)?.label || String(value);
+  if (key === "passingGrade") return String(value);
+  if (key === "letterThresholds") return isLetterThresholds(value) ? thresholdsText(value) : String(value);
+  return value ? "Sí" : "No";
+}
+/** A select's text back to the setting's value; undefined for "" (no value of its own). */
+export function settingValue(key: SettingKey, text: string): unknown {
+  if (text === "") return undefined;
+  if (key === "passingGrade") return Number(text);
+  if (key === "letterThresholds") return text.split(",").map(Number);
+  return text === "true" ? true : text === "false" ? false : text;
 }
 const areaCodes = new Set(knowledgeAreas.flatMap(area => [area.code, ...area.fields.map(field => field.code)]));
 /** Formal education always has a level; "Sin nivel" only describes non-formal education. */

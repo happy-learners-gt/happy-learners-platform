@@ -46,8 +46,16 @@ import preferencesMigration from "../../../database/migrations/0044_preferences.
 import contractsMigration from "../../../database/migrations/0045_contracts.sql";
 import lifecycleMigration from "../../../database/migrations/0046_demo_educator_lifecycle.sql";
 import demoAvailabilityMigration from "../../../database/migrations/0047_demo_availability.sql";
+import academicYearsMigration from "../../../database/migrations/0048_academic_years.sql";
+import gradebookMigration from "../../../database/migrations/0049_gradebook.sql";
+import bibliographyMigration from "../../../database/migrations/0050_course_bibliography.sql";
+import packagesMigration from "../../../database/migrations/0051_curriculum_packages.sql";
+import proposalsMigration from "../../../database/migrations/0052_lesson_proposals.sql";
+import bookMapMigration from "../../../database/migrations/0053_book_map.sql";
 import { organizationIds } from "@happy-learners/domain";
 import { exportStore, importStore, RestoreError, type Backup } from "./backup";
+import { processProposals } from "./proposals";
+import { processBookMaps } from "./book-map";
 
 type Statement = { sql: string; values: (string | number | null)[] };
 /**
@@ -84,6 +92,25 @@ export class OrganizationStore extends DurableObject<Env> {
       JOIN course_members cm ON cm.course_id=c.id AND cm.organization_id=c.organization_id AND cm.user_id=s.user_id
       WHERE s.token_hash=? AND s.user_id=? AND s.expires_at>?` , values: [organizationId, courseId, lessonId, tokenHash, userId, Date.now()] }]);
     return result[0].length === 1;
+  }
+
+  /** Wakes the organization's background work (lesson proposals) as soon as possible; an earlier alarm is kept. */
+  async schedule(scope: string) {
+    await this.query(scope, []);
+    const current = await this.ctx.storage.getAlarm();
+    if (current === null || current > Date.now()) await this.ctx.storage.setAlarm(Date.now());
+  }
+  /**
+   * Background work runs here, never inside a request: each wake processes one small batch of lesson proposals and
+   * schedules the next while work remains. Alarms are retried by the platform if this throws.
+   */
+  async alarm() {
+    const scope = this.ctx.storage.sql.exec<{ organization_id: string }>("SELECT organization_id FROM schema_migrations LIMIT 1").toArray()[0]?.organization_id;
+    if (!scope) return;
+    const db = new Database(this, scope);
+    const proposals = await processProposals(db, this.env, scope), maps = await processBookMaps(db, this.env, scope);
+    const more = proposals || maps;
+    if (more) await this.ctx.storage.setAlarm(Date.now() + 1000);
   }
 
   async query(scope: string, statements: Statement[], guard?: Statement): Promise<Record<string, SqlStorageValue>[][]> {
@@ -150,6 +177,12 @@ export class OrganizationStore extends DurableObject<Env> {
       if (!applied.length || applied[0].version < 45) { this.ctx.storage.sql.exec(contractsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (45,?)", scope); }
       if (!applied.length || applied[0].version < 46) { runScript(this.ctx.storage.sql, lifecycleMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (46,?)", scope); }
       if (!applied.length || applied[0].version < 47) { this.ctx.storage.sql.exec(demoAvailabilityMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (47,?)", scope); }
+      if (!applied.length || applied[0].version < 48) { this.ctx.storage.sql.exec(academicYearsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (48,?)", scope); }
+      if (!applied.length || applied[0].version < 49) { this.ctx.storage.sql.exec(gradebookMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (49,?)", scope); }
+      if (!applied.length || applied[0].version < 50) { this.ctx.storage.sql.exec(bibliographyMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (50,?)", scope); }
+      if (!applied.length || applied[0].version < 51) { this.ctx.storage.sql.exec(packagesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (51,?)", scope); }
+      if (!applied.length || applied[0].version < 52) { this.ctx.storage.sql.exec(proposalsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (52,?)", scope); }
+      if (!applied.length || applied[0].version < 53) { this.ctx.storage.sql.exec(bookMapMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (53,?)", scope); }
       // Compare-and-write plus dependent writes belong to one SQLite transaction.
       if (guard && !this.ctx.storage.sql.exec(guard.sql, ...guard.values).toArray().length) return [];
       return statements.map(statement => this.ctx.storage.sql.exec(statement.sql, ...statement.values).toArray());
@@ -164,8 +197,10 @@ export class Prepared {
   async first<T>() { return (await this.all<T>()).results[0] || null; }
   async run() { await this.db.execute([this]); }
 }
+/** What a Database runs on: the organization's Durable Object, through its stub or, inside it (alarms), itself. */
+type Store = Pick<OrganizationStore, "query" | "exportData" | "importData">;
 export class Database {
-  constructor(private stub: DurableObjectStub<OrganizationStore>, private scope: string) {}
+  constructor(private stub: DurableObjectStub<OrganizationStore> | Store, private scope: string) {}
   prepare(sql: string) { return new Prepared(this, sql); }
   execute(statements: Prepared[]) { return this.stub.query(this.scope, statements.map(({ sql, values }) => ({ sql, values }))); }
   batch(statements: Prepared[]) { return this.execute(statements); }

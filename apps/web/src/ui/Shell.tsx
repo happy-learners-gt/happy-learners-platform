@@ -160,6 +160,7 @@ function Sidebar() {
       { href: `${base}/horario`, label: "Horario", icon: "clock", hue: "violet", active: area === "horario" },
       { href: `${base}/estudiantes`, label: "Estudiantes", icon: "users", hue: "pink", active: area === "estudiantes" },
     ];
+    pages.push({ href: `${base}/notas`, label: "Notas", icon: "table", hue: "amber", active: area === "notas" });
     const settings = settingsOf(courses?.find(item => item.id === section.courseId));
     if (section.workGroups ?? (settings?.attendance && settings.workGroups)) pages.push({ href: `${base}/grupos`, label: "Grupos", icon: "team", hue: "teal", active: area === "grupos" });
     return <Node key={section.id} id={key} href={base} label={section.name} detail={section.status === "archived" ? "Cerrada" : undefined} open={open.has(key)} current={here} region={here ? "Navegación de la sección" : undefined}
