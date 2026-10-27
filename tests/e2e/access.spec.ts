@@ -69,9 +69,11 @@ test("HL-174 ST-128 ST-135: administration assigns coordination of one program, 
     const cards = page.locator("article.course-card");
     await expect(cards.getByRole("link", { name: "Ciencias Naturales 4.º primaria", exact: true })).toBeVisible();
     await expect(cards.getByRole("link", { name: "Matemáticas 3.º primaria", exact: true })).toBeVisible();
+    // The school pilot (0054) adds Matemáticas 6.º primaria to the same program.
+    await expect(cards.getByRole("link", { name: "Matemáticas 6.º primaria", exact: true })).toBeVisible();
     await expect(cards.getByRole("link", { name: "Exploradores", exact: true })).toHaveCount(0);
     await expect(cards.getByRole("link", { name: "English Explorers A1", exact: true })).toHaveCount(0);
-    await expect(cards).toHaveCount(2);
+    await expect(cards).toHaveCount(3);
     expect((await coordinator.get("/api/courses/seed-course-english")).status()).toBe(403);
     await page.goto(`/cursos/seed-course-ciencias/lecciones/${lessonId}`);
     await expect(page.getByLabel("Título de la lección")).toHaveValue(title);
