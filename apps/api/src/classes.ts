@@ -1,5 +1,5 @@
-import type { CalendarBreak, ClassLesson, ClassLessonPlan, ClassResource, ClassSession, ClassStatus, CourseAccess, Lesson, Material, Member, Pacing, Resource, SectionSchedule, StudentClass, StudentPathModule, StudentSpace } from "@happy-learners/contracts";
-import { acceptsAttendance, breakInput, cancelPlanInput, carryOver, classActions, classPlanInput, classStatusLabels, completionInput, groupCodePattern, inSessionFilter, lessonsInOrder, maxClassLessons, localDay, nextClassStatus, normalizeGroupCode, resourceIdsOf, scheduleDates, scheduleInput, scheduleSummary, seesSection, sessionFilterAllowed, sessionFilterInput, teachesSection, upcomingClasses } from "@happy-learners/domain";
+import type { CalendarBreak, ClassLesson, ClassLessonPlan, ClassResource, ClassSession, ClassStatus, CourseAccess, Lesson, Material, Member, Pacing, Resource, ScheduleMeeting, SectionSchedule, StudentClass, StudentPathModule, StudentSpace } from "@happy-learners/contracts";
+import { acceptsAttendance, breakInput, cancelPlanInput, carryOver, classActions, classPlanInput, classStatusLabels, completionInput, groupCodePattern, inSessionFilter, lessonsInOrder, meetingOn, maxClassLessons, localDay, nextClassStatus, normalizeGroupCode, resourceIdsOf, scheduleDates, scheduleInput, scheduleSummary, seesSection, sessionFilterAllowed, sessionFilterInput, teachesSection, upcomingClasses } from "@happy-learners/domain";
 import { tokenPattern, tokenPrefix } from "@happy-learners/domain";
 import type { ClassAction } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
@@ -313,9 +313,11 @@ export async function myClasses(current: Member, db: Database) {
 }
 
 type Group = { id: string; name: string };
-const scheduleColumns = "schedule_weekdays AS weekdays,schedule_starts_at AS startsAt,schedule_duration AS durationMinutes,schedule_from AS \"from\",schedule_until AS until";
-type StoredSchedule = { weekdays: string | null; startsAt: string | null; durationMinutes: number | null; from: string | null; until: string | null };
-export const scheduleOf = (row: StoredSchedule) => row.weekdays && row.startsAt && row.durationMinutes && row.from && row.until ? { weekdays: row.weekdays.split(",").map(Number), startsAt: row.startsAt, durationMinutes: row.durationMinutes, from: row.from, until: row.until } : null;
+const scheduleColumns = "schedule_weekdays AS weekdays,schedule_starts_at AS startsAt,schedule_duration AS durationMinutes,schedule_from AS \"from\",schedule_until AS until,schedule_meetings AS meetings";
+type StoredSchedule = { weekdays: string | null; startsAt: string | null; durationMinutes: number | null; from: string | null; until: string | null; meetings?: string | null };
+/** The stored schedule, with each day's own time when the section has them (1.2.4). */
+export const scheduleOf = (row: StoredSchedule): SectionSchedule | null => row.weekdays && row.startsAt && row.durationMinutes && row.from && row.until
+  ? { weekdays: row.weekdays.split(",").map(Number), startsAt: row.startsAt, durationMinutes: row.durationMinutes, from: row.from, until: row.until, ...(row.meetings ? { meetings: JSON.parse(row.meetings) as ScheduleMeeting[] } : {}) } : null;
 
 /**
  * PUT|DELETE /api/courses/:id/groups/:gid/schedule — saving the section's schedule generates its classes for the
@@ -351,12 +353,12 @@ async function applySchedule(current: Member, db: Database, courseId: string, gr
   const planFor = (id: string) => plans[ordered.findIndex(row => row.id === id)] ?? { lessonIds: [], notes: "" };
   const same = (column: string) => `${column} IS ?`;
   const ok = await db.guardedBatch(
-    db.prepare(`SELECT id FROM course_groups WHERE id=? AND status='active' AND ${["schedule_weekdays", "schedule_starts_at", "schedule_duration", "schedule_from", "schedule_until"].map(same).join(" AND ")}`).bind(group.id, before?.weekdays ?? null, before?.startsAt ?? null, before?.durationMinutes ?? null, before?.from ?? null, before?.until ?? null), [
-      db.prepare("UPDATE course_groups SET schedule_weekdays=?,schedule_starts_at=?,schedule_duration=?,schedule_from=?,schedule_until=? WHERE id=?").bind(schedule ? schedule.weekdays.join(",") : null, schedule?.startsAt ?? null, schedule?.durationMinutes ?? null, schedule?.from ?? null, schedule?.until ?? null, group.id),
+    db.prepare(`SELECT id FROM course_groups WHERE id=? AND status='active' AND ${["schedule_weekdays", "schedule_starts_at", "schedule_duration", "schedule_from", "schedule_until", "schedule_meetings"].map(same).join(" AND ")}`).bind(group.id, before?.weekdays ?? null, before?.startsAt ?? null, before?.durationMinutes ?? null, before?.from ?? null, before?.until ?? null, before?.meetings ?? null), [
+      db.prepare("UPDATE course_groups SET schedule_weekdays=?,schedule_starts_at=?,schedule_duration=?,schedule_from=?,schedule_until=?,schedule_meetings=? WHERE id=?").bind(schedule ? schedule.weekdays.join(",") : null, schedule?.startsAt ?? null, schedule?.durationMinutes ?? null, schedule?.from ?? null, schedule?.until ?? null, schedule?.meetings ? JSON.stringify(schedule.meetings) : null, group.id),
       ...removed.flatMap(row => [db.prepare("DELETE FROM class_session_lessons WHERE session_id=?").bind(row.id), db.prepare("DELETE FROM class_session_resources WHERE session_id=?").bind(row.id), db.prepare("DELETE FROM class_sessions WHERE id=? AND status='planned'").bind(row.id)]),
-      ...kept.flatMap(row => [db.prepare("UPDATE class_sessions SET starts_at=?,duration_minutes=?,lesson_id=?,notes=?,version=version+1,updated_at=? WHERE id=? AND status='planned'").bind(schedule!.startsAt, schedule!.durationMinutes, planFor(row.id).lessonIds[0] ?? null, planFor(row.id).notes, now, row.id), ...planLessons(db, row.id, planFor(row.id).lessonIds)]),
+      ...kept.flatMap(row => [db.prepare("UPDATE class_sessions SET starts_at=?,duration_minutes=?,lesson_id=?,notes=?,version=version+1,updated_at=? WHERE id=? AND status='planned'").bind(meetingOn(schedule!, row.sessionDate).startsAt, meetingOn(schedule!, row.sessionDate).durationMinutes, planFor(row.id).lessonIds[0] ?? null, planFor(row.id).notes, now, row.id), ...planLessons(db, row.id, planFor(row.id).lessonIds)]),
       ...added.flatMap(row => [db.prepare("INSERT INTO class_sessions(id,group_id,course_id,organization_id,lesson_id,session_date,starts_at,duration_minutes,notes,status,origin,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,'planned','schedule',?,?)")
-        .bind(row.id, group.id, courseId, current.organizationId, planFor(row.id).lessonIds[0] ?? null, row.sessionDate, schedule!.startsAt, schedule!.durationMinutes, planFor(row.id).notes, now, now), ...planLessons(db, row.id, planFor(row.id).lessonIds)]),
+        .bind(row.id, group.id, courseId, current.organizationId, planFor(row.id).lessonIds[0] ?? null, row.sessionDate, meetingOn(schedule!, row.sessionDate).startsAt, meetingOn(schedule!, row.sessionDate).durationMinutes, planFor(row.id).notes, now, now), ...planLessons(db, row.id, planFor(row.id).lessonIds)]),
       event(db, current, { action: "updated", targetType: "group", targetId: group.id, courseId, summary: reason ? `${reason} en «${group.name}»: ${ordered.length} clases pendientes` : schedule ? `Configuró el horario de «${group.name}»: ${scheduleSummary(schedule)}, ${ordered.length} clases pendientes` : `Quitó el horario de «${group.name}» y sus ${removed.length} clases pendientes` }),
     ]);
   return ok ? { classes: ordered.length, added: added.length, removed: removed.length } : null;

@@ -55,6 +55,8 @@ import bookMapMigration from "../../../database/migrations/0053_book_map.sql";
 import demoPilotMigration from "../../../database/migrations/0054_demo_pilot.sql";
 import assessmentPlansMigration from "../../../database/migrations/0055_assessment_plans.sql";
 import demoGradebookMigration from "../../../database/migrations/0056_demo_gradebook.sql";
+import academicCalendarMigration from "../../../database/migrations/0057_academic_calendar.sql";
+import demoCalendarMigration from "../../../database/migrations/0058_demo_calendar.sql";
 import { organizationIds } from "@happy-learners/domain";
 import { exportStore, importStore, RestoreError, type Backup } from "./backup";
 import { processProposals } from "./proposals";
@@ -189,6 +191,8 @@ export class OrganizationStore extends DurableObject<Env> {
       if (!applied.length || applied[0].version < 54) { runScript(this.ctx.storage.sql, demoPilotMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (54,?)", scope); }
       if (!applied.length || applied[0].version < 55) { this.ctx.storage.sql.exec(assessmentPlansMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (55,?)", scope); }
       if (!applied.length || applied[0].version < 56) { runScript(this.ctx.storage.sql, demoGradebookMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (56,?)", scope); }
+      if (!applied.length || applied[0].version < 57) { this.ctx.storage.sql.exec(academicCalendarMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (57,?)", scope); }
+      if (!applied.length || applied[0].version < 58) { this.ctx.storage.sql.exec(demoCalendarMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (58,?)", scope); }
       // Compare-and-write plus dependent writes belong to one SQLite transaction.
       if (guard && !this.ctx.storage.sql.exec(guard.sql, ...guard.values).toArray().length) return [];
       return statements.map(statement => this.ctx.storage.sql.exec(statement.sql, ...statement.values).toArray());

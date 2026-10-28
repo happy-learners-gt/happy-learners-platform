@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.4 — 2026-10-28
+
+Calendario académico de REL-010 (migraciones 0057 y 0058).
+
+- **Jornadas y periodos de clase** en Organización: la hora de entrada, la duración de cada periodo, el tiempo entre
+  periodos y los recesos (recreo, refacción, almuerzo) generan los bloques del día, con plantillas matutina, vespertina
+  y universitaria.
+- El **Horario** de una sección admite **una hora por día**, y cada día se puede tomar de los periodos de la jornada (un
+  periodo doble es una clase más larga). Las clases generadas toman la hora de su día; los horarios existentes siguen
+  igual.
+- El **Ciclo lectivo** reparte sus periodos dejando **días de vacaciones entre periodos**, muestra en una sola vista los
+  periodos, las vacaciones y los días sin clase, y marca las vacaciones como días sin clase de toda la organización.
+- Demostración: «Jornada matutina» de Colegio Horizonte.
+
 ## 1.2.3 — 2026-10-28
 
 Notas profesionales de REL-010 (migraciones 0055 y 0056).

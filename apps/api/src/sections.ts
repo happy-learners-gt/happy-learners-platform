@@ -15,7 +15,7 @@ const reply = (data: unknown, status = 200) => Response.json(data, { status });
 const visible = "g.organization_id=? AND (?=1 OR g.course_id IN (SELECT value FROM json_each(?)) OR EXISTS(SELECT 1 FROM section_educators e WHERE e.group_id=g.id AND e.user_id=?))";
 const wideCourses = (db: Database, current: Member) => scopedCourses(db, current, ["classes.view", "sections.assign"]);
 
-type Row = { id: string; courseId: string; name: string; status: "active" | "archived"; accessCode: string | null; weekdays: string | null; startsAt: string | null; durationMinutes: number | null; from: string | null; until: string | null; courseTitle: string; courseStatus: "active" | "archived"; pacing: Pacing; teaches: number };
+type Row = { id: string; courseId: string; name: string; status: "active" | "archived"; accessCode: string | null; weekdays: string | null; startsAt: string | null; durationMinutes: number | null; from: string | null; until: string | null; meetings: string | null; courseTitle: string; courseStatus: "active" | "archived"; pacing: Pacing; teaches: number };
 type ClassRow = { id: string; groupId: string; status: ClassStatus; sessionDate: string; startsAt: string | null; marked: number; attended: number };
 
 /**
@@ -29,7 +29,7 @@ export async function sections(path: string, current: Member, db: Database) {
   const inScope = `IN (SELECT g.id FROM course_groups g WHERE ${visible}${id ? " AND g.id=?" : ""})`;
   const bound = id ? [...scope, id] : scope;
   const [groups, learners, classes, planned, published, openings, educators, progressRows] = await db.batch([
-    db.prepare(`SELECT g.id,g.course_id AS courseId,g.name,g.status,g.access_code AS accessCode,g.schedule_weekdays AS weekdays,g.schedule_starts_at AS startsAt,g.schedule_duration AS durationMinutes,g.schedule_from AS "from",g.schedule_until AS until,
+    db.prepare(`SELECT g.id,g.course_id AS courseId,g.name,g.status,g.access_code AS accessCode,g.schedule_weekdays AS weekdays,g.schedule_starts_at AS startsAt,g.schedule_duration AS durationMinutes,g.schedule_from AS "from",g.schedule_until AS until,g.schedule_meetings AS meetings,
       c.title AS courseTitle,c.status AS courseStatus,COALESCE(sp.pacing,c.pacing) AS pacing,EXISTS(SELECT 1 FROM section_educators e WHERE e.group_id=g.id AND e.user_id=?) AS teaches
       FROM course_groups g JOIN courses c ON c.id=g.course_id AND c.organization_id=g.organization_id LEFT JOIN study_programs sp ON sp.id=c.program_id WHERE ${visible}${id ? " AND g.id=?" : ""} ORDER BY c.title,g.status,g.name,g.created_at`).bind(current.id, ...bound),
     db.prepare(`SELECT group_id AS groupId,id FROM group_learners WHERE status='active' AND group_id ${inScope}`).bind(...bound),
@@ -49,7 +49,7 @@ export async function sections(path: string, current: Member, db: Database) {
     lessonsOf.set(row.sessionId, [...lessonsOf.get(row.sessionId) || [], row.lessonId]);
     if (row.outcome !== "partial" && row.outcome !== "not_reached") completedOf.set(row.sessionId, [...completedOf.get(row.sessionId) || [], row.lessonId]);
   }
-  const list: SectionSummary[] = groups.map(({ weekdays, startsAt, durationMinutes, from, until, courseTitle, courseStatus, teaches, pacing, ...group }) => {
+  const list: SectionSummary[] = groups.map(({ weekdays, startsAt, durationMinutes, from, until, meetings, courseTitle, courseStatus, teaches, pacing, ...group }) => {
     // A tu ritmo: the section has no classes to follow, only how far each student got.
     const own = pacing === "scheduled" ? classes.filter(row => row.groupId === group.id) : [];
     const next = own.find(row => row.status === "in_progress") || own.find(row => row.status === "planned" && row.sessionDate >= today) || null;
@@ -60,7 +60,7 @@ export async function sections(path: string, current: Member, db: Database) {
     for (const row of mine) if (row.completed) completed.set(row.learnerId, new Set([...completed.get(row.learnerId) || [], row.lessonId]));
     const path = pathIndicators(lessonIds, completed, new Set(mine.map(row => row.learnerId)), learnerIds);
     return {
-      ...group, pacing, learnerCount: indicators.learners, schedule: pacing === "scheduled" ? scheduleOf({ weekdays, startsAt, durationMinutes, from, until }) : null,
+      ...group, pacing, learnerCount: indicators.learners, schedule: pacing === "scheduled" ? scheduleOf({ weekdays, startsAt, durationMinutes, from, until, meetings }) : null,
       educators: educators.filter(row => row.groupId === group.id).map(({ groupId: _, ...person }) => person),
       course: { id: group.courseId, title: courseTitle, status: courseStatus },
       indicators: { ...indicators, ...path, openings: Number(openings.find(row => row.groupId === group.id)?.total || 0) },

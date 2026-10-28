@@ -33,6 +33,7 @@ import { onboarding, onboardingPending } from "./onboarding";
 import { professional, professionalMethods } from "./professional";
 import { contractMethods, contracts } from "./contracts";
 import { academicYearMethods, academicYearsApi } from "./academic-years";
+import { bellScheduleMethods, bellSchedulesApi } from "./bell-schedules";
 import { gradebookMethods, grades } from "./gradebook";
 import { bibliography, bibliographyMethods } from "./bibliography";
 import { curriculumPackagesApi, packageMethods } from "./curriculum-packages";
@@ -103,6 +104,8 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   const contractAllowed = contractMethods(path);
   // The organization's school year and its periods read a JSON body; activating, closing and opening the next carry none.
   const academicYearAllowed = academicYearMethods(path);
+  // The organization's bell schedules (jornadas); creating and editing read a JSON body.
+  const bellAllowed = bellScheduleMethods(path);
   // The section's gradebook: saving scores and the plan read a JSON body, and so does returning a period; the rest carry none.
   const gradebookAllowed = gradebookMethods(path);
   // The course's bibliography; its POST and PUT bodies are read with the other course routes.
@@ -123,6 +126,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (method === "PUT" && notificationMethods(path)) input = await body(request);
   if (professionalAllowed && ["POST", "PUT"].includes(method) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   if (contractAllowed && ["POST", "PUT"].includes(method) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
+  if (bellAllowed && ["POST", "PUT"].includes(method)) input = await body(request);
   if (academicYearAllowed && ["POST", "PUT"].includes(method) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   if (gradebookAllowed && (method === "PUT" || (method === "POST" && request.headers.get("content-type")?.startsWith("application/json")))) input = await body(request);
   // DEC-046: publishing a legal document may carry the date from which the version applies.
@@ -230,6 +234,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (professionalAllowed) methods[path] = professionalAllowed;
   if (contractAllowed) methods[path] = contractAllowed;
   if (academicYearAllowed) methods[path] = academicYearAllowed;
+  if (bellAllowed) methods[path] = bellAllowed;
   if (gradebookAllowed) methods[path] = gradebookAllowed;
   if (bibliographyAllowed) methods[path] = bibliographyAllowed;
   if (packageAllowed) methods[path] = packageAllowed;
@@ -355,6 +360,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (professionalAllowed) return professional(path, method, input, url, current, db);
   if (contractAllowed) return contracts(path, method, input, current, db);
   if (academicYearAllowed) return academicYearsApi(path, method, input, current, db);
+  if (bellAllowed) return bellSchedulesApi(path, method, input, current, db);
   if (/^\/api\/(taxonomy|vocabularies|terms)(\/|$)/.test(path)) return taxonomy(path, method, input, current, db);
   if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions)(\/|$)/.test(path)) return classroom(path, method, input, current, db, url.searchParams, notifier);
   if (/^\/api\/courses\/[a-z0-9-]+\/duplicate$/.test(path)) return duplicateCourse(path.split("/")[3], current, db, env.COURSE_FILES);

@@ -1753,3 +1753,31 @@ a.tab { display: inline-flex; align-items: center; text-decoration: none; }
 .rotate-down { transform: rotate(-90deg); }
 .plan-total .tone-ok { color: var(--color-success); }
 .plan-total .tone-bad { color: var(--color-danger); }
+
+/* Academic calendar (1.2.4): the year with its vacations, jornadas and per-day meetings. */
+.year-calendar li.is-gap { color: var(--color-ink-soft); font-size: 0.875rem; }
+.year-calendar .calendar-chip { display: inline-block; margin-left: var(--space-2); padding: 0 var(--space-2); border-radius: 999px; background: var(--color-warning-soft); font-size: 0.75rem; }
+.year-gaps-action { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-2); }
+.period-gap { display: flex; align-items: center; gap: var(--space-1); margin: 0; }
+.gap-field { display: inline-flex; align-items: center; gap: var(--space-2); font-size: 0.875rem; }
+.gap-field input:not([type=checkbox]):not([type=radio]):not([type=file]) { width: 72px; min-width: 0; }
+.jornada-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); }
+.jornada-timeline { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.jornada-block { display: grid; padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); border: 1px solid var(--color-border); font-size: 0.8125rem; min-width: 92px; }
+.jornada-block.is-class { background: var(--color-primary-soft); border-color: var(--color-primary-line); }
+.jornada-block.is-break { background: var(--color-warning-soft); }
+.jornada-time { font-variant-numeric: tabular-nums; font-weight: 600; }
+.jornada-break { align-items: end; }
+.jornada-preview { padding: var(--space-3); border-radius: var(--radius-md); background: var(--color-surface-sunken); }
+.schedule-mode { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); }
+.schedule-mode label { display: inline-flex; align-items: center; gap: var(--space-2); }
+.schedule-jornada { margin-left: auto; }
+.meeting-table { width: 100%; border-collapse: collapse; }
+.meeting-table th, .meeting-table td { padding: var(--space-1) var(--space-2); text-align: left; vertical-align: middle; }
+.meeting-table input:not([type=checkbox]):not([type=radio]):not([type=file]).meeting-minutes { width: 64px; min-width: 0; }
+.meeting-table td input:not([type=checkbox]):not([type=radio]):not([type=file])[type=time] { width: 7.5rem; min-width: 0; }
+.block-picker { display: inline-flex; gap: var(--space-1); align-items: center; }
+.block-picker select { width: auto; }
+.meeting-table-wrap { overflow-x: auto; }
+.block-picker select { max-width: 7.5rem; }
+.meeting-table input[type=time] { width: 7.5rem; min-width: 0; }

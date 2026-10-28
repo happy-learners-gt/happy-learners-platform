@@ -6,8 +6,8 @@ import { createServer } from "node:net";
 import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { AcademicYear } from "../packages/contracts/src/index";
-import { academicYearInput, academicYearTransition, activationBlocker, nextAcademicYear, nextYearDay, periodName, scheduleSuggestion, splitPeriods } from "../packages/domain/src/index";
+import type { AcademicYear, BellSchedule, ClassSession } from "../packages/contracts/src/index";
+import { academicYearInput, academicYearTransition, activationBlocker, bellBlocks, bellScheduleInput, meetingFromBlocks, meetingOn, meetingsOf, nextAcademicYear, nextYearDay, periodGaps, periodName, scheduleInput, scheduleSummary, scheduleSuggestion, splitPeriods } from "../packages/domain/src/index";
 
 // The organization's school year (ciclo lectivo) and its periods: draft → current → closed, one current year per
 // organization, periods within the year and without overlaps, and the next year opened empty with the same pattern.
@@ -187,4 +187,68 @@ describe("school year on the built Worker", () => {
     expect(section.schedule).toMatchObject(schedule);
     expect((await read<{ year: AcademicYear }>(await as(admin, `/academic-years/${next.id}/activate`, "POST"))).year.status).toBe("current");
   }, 30_000); // The whole life of a year in one flow: room for slow runners.
+
+  it("jornadas give the periods and breaks of a day, and a section meets at a different time each day (1.2.4)", async () => {
+    const admin = await signIn("admin-demo"), educator = await signIn("educador-demo"), external = await signIn("admin-externo");
+    const jornada = { name: "Jornada de prueba", weekdays: [1, 2, 3, 4, 5], config: { startsAt: "07:30", periodMinutes: 40, passingMinutes: 5, periods: 4, breaks: [{ after: 2, minutes: 30, label: "Recreo" }] } };
+    expect(await errorOf(await as(educator, "/bell-schedules", "POST", jornada), 403)).toContain("Solo administración");
+    expect(await errorOf(await as(admin, "/bell-schedules", "POST", { ...jornada, config: { ...jornada.config, breaks: [{ after: 4, minutes: 30, label: "Recreo" }] } }), 400)).toContain("antes del último");
+    const { schedules } = await read<{ schedules: BellSchedule[] }>(await as(admin, "/bell-schedules", "POST", jornada), 201);
+    const created = schedules.find(item => item.name === "Jornada de prueba")!;
+    expect(created.blocks.map(block => `${block.label} ${block.startsAt}-${block.endsAt}`)).toEqual(["Periodo 1 07:30-08:10", "Periodo 2 08:15-08:55", "Recreo 08:55-09:25", "Periodo 3 09:25-10:05", "Periodo 4 10:10-10:50"]);
+    expect(await errorOf(await as(admin, "/bell-schedules", "POST", { ...jornada, name: "jornada de PRUEBA" }), 409)).toContain("Ya hay una jornada");
+    const edited = (await read<{ schedules: BellSchedule[] }>(await as(admin, `/bell-schedules/${created.id}`, "PUT", { ...jornada, config: { ...jornada.config, passingMinutes: 0 } }))).schedules.find(item => item.id === created.id)!;
+    expect(edited.blocks[1].startsAt).toBe("08:10");
+    expect((await read<{ schedules: BellSchedule[] }>(await as(educator, "/bell-schedules"))).schedules.some(item => item.id === created.id)).toBe(true);
+    expect((await read<{ schedules: BellSchedule[] }>(await as(external, "/bell-schedules"))).schedules).toEqual([]);
+    expect((await as(external, `/bell-schedules/${created.id}`, "DELETE")).status).toBe(404);
+
+    // A double period on Monday (periods 1–2) and a single one on Wednesday (period 3): each class takes its day's time.
+    const course = (await read<{ id: string }>(await as(admin, "/courses", "POST", { title: "Curso con jornada", objective: "Clases a distinta hora cada día.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", area: "011", settings: { attendance: true }, programId: null, leadId: "user-educator" }), 201)).id;
+    const group = (await read<{ id: string }>(await as(admin, `/courses/${course}/groups`, "POST", { name: "Segundo B" }), 201)).id;
+    const double = meetingFromBlocks(edited.blocks, "p1", "p2")!, single = meetingFromBlocks(edited.blocks, "p3", "p3")!;
+    const path = `/courses/${course}/groups/${group}/schedule`;
+    expect(await errorOf(await as(admin, path, "PUT", { from: "2030-11-04", until: "2030-11-15", meetings: [{ weekday: 1, ...double }, { weekday: 1, ...single }] }), 400)).toContain("una sola clase por día");
+    expect((await read<{ classes: number }>(await as(admin, path, "PUT", { from: "2030-11-04", until: "2030-11-15", meetings: [{ weekday: 3, ...single }, { weekday: 1, ...double }] }))).classes).toBe(4);
+    const { sessions } = await read<{ sessions: ClassSession[] }>(await as(admin, `/courses/${course}/sessions`));
+    expect(sessions.filter(item => item.groupId === group).map(item => [item.sessionDate, item.startsAt, item.durationMinutes]).sort((a, b) => String(a[0]).localeCompare(String(b[0])))).toEqual([
+      ["2030-11-04", "07:30", 80], ["2030-11-06", "09:20", 40], ["2030-11-11", "07:30", 80], ["2030-11-13", "09:20", 40]]);
+    const { section } = await read<{ section: { schedule: { weekdays: number[]; startsAt: string; meetings: unknown[] } } }>(await as(admin, `/sections/${group}`));
+    expect(section.schedule).toMatchObject({ weekdays: [1, 3], startsAt: "07:30", meetings: [{ weekday: 1, startsAt: "07:30", durationMinutes: 80 }, { weekday: 3, startsAt: "09:20", durationMinutes: 40 }] });
+    // Back to one time for every day: the meetings go away and the pending classes move to the new time.
+    await read(await as(admin, path, "PUT", { weekdays: [1, 3], startsAt: "10:00", durationMinutes: 45, from: "2030-11-04", until: "2030-11-15" }));
+    expect((await read<{ section: { schedule: Record<string, unknown> } }>(await as(admin, `/sections/${group}`))).section.schedule.meetings).toBeUndefined();
+    expect((await read<{ sessions: ClassSession[] }>(await as(admin, `/courses/${course}/sessions`))).sessions.filter(item => item.groupId === group).every(item => item.startsAt === "10:00" && item.durationMinutes === 45)).toBe(true);
+    await read(await as(admin, `/bell-schedules/${created.id}`, "DELETE"));
+  }, 30_000);
+});
+
+describe("academic calendar rules (1.2.4)", () => {
+  it("builds a jornada from entry, period length, passing time and breaks, and validates it", () => {
+    const config = { startsAt: "07:00", periodMinutes: 90, passingMinutes: 10, periods: 3, breaks: [{ after: 2, minutes: 60, label: "Almuerzo" }] };
+    expect(bellBlocks(config).map(block => [block.kind, block.startsAt, block.endsAt])).toEqual([["class", "07:00", "08:30"], ["class", "08:40", "10:10"], ["break", "10:10", "11:10"], ["class", "11:10", "12:40"]]);
+    expect(bellScheduleInput({ name: "  Mañana ", weekdays: [5, 1], config })).toEqual({ name: "Mañana", weekdays: [1, 5], config });
+    for (const [bad, message] of [[{ periodMinutes: 10 }, "entre 20 y 180"], [{ passingMinutes: 40 }, "de 0 a 30"], [{ periods: 0 }, "de 1 a 14"], [{ startsAt: "7:00" }, "HH:MM"], [{ startsAt: "22:00" }, "medianoche"], [{ breaks: [{ after: 1, minutes: 20, label: "" }] }, "nombre"]] as const)
+      expect(bellScheduleInput({ name: "X", weekdays: [1], config: { ...config, ...bad } }), message).toMatchObject({ error: expect.stringContaining(message) });
+    expect(meetingFromBlocks(bellBlocks(config), "p1", "p3")).toEqual({ startsAt: "07:00", durationMinutes: 340 });
+    expect(meetingFromBlocks(bellBlocks(config), "p2", "p1")).toBeNull();
+  });
+
+  it("a section meets at its own time each day, and the same time for all days stays the simple form", () => {
+    const meetings = [{ weekday: 3, startsAt: "10:00", durationMinutes: 40 }, { weekday: 1, startsAt: "07:30", durationMinutes: 80 }];
+    const schedule = scheduleInput({ from: "2026-11-02", until: "2026-11-27", meetings });
+    expect(schedule).toEqual({ weekdays: [1, 3], startsAt: "07:30", durationMinutes: 80, from: "2026-11-02", until: "2026-11-27", meetings: [meetings[1], meetings[0]] });
+    if ("error" in schedule) throw new Error(schedule.error);
+    expect(meetingOn(schedule, "2026-11-04")).toEqual({ startsAt: "10:00", durationMinutes: 40 });
+    expect(scheduleSummary(schedule)).toBe("lun 07:30 · 80 min, mié 10:00 · 40 min");
+    expect(scheduleInput({ from: "2026-11-02", until: "2026-11-27", meetings: meetings.map(item => ({ ...item, startsAt: "08:00", durationMinutes: 45 })) })).not.toHaveProperty("meetings");
+    expect(meetingsOf({ weekdays: [3, 1], startsAt: "08:00", durationMinutes: 45 }).map(item => item.weekday)).toEqual([1, 3]);
+  });
+
+  it("splits a year leaving vacations between periods and lists those gaps", () => {
+    const periods = splitPeriods("2027-01-11", "2027-10-29", "bimester", 4, 14);
+    expect(periods.map(period => [period.from, period.until])).toEqual([["2027-01-11", "2027-03-13"], ["2027-03-28", "2027-05-29"], ["2027-06-13", "2027-08-13"], ["2027-08-28", "2027-10-29"]]);
+    expect(periodGaps(periods).map(gap => gap.days)).toEqual([14, 14, 14]);
+    expect(periodGaps(splitPeriods("2027-01-11", "2027-10-29", "bimester"))).toEqual([]);
+  });
 });

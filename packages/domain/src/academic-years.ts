@@ -92,13 +92,26 @@ export function activationBlocker(year: { status: AcademicYearStatus; periods: u
   return null;
 }
 
-/** Divides a year into `count` consecutive periods of about the same length, named after the kind. */
-export function splitPeriods(from: string, until: string, kind: PeriodKind, count = periodKindOf(kind).count): PeriodDraft[] {
-  const start = dayNumber(from), total = dayNumber(until) - start + 1, parts = Math.max(1, Math.min(count, maxPeriods, total));
+/**
+ * Divides a year into `count` periods of about the same length, named after the kind. `gapDays` leaves that many days
+ * between one period and the next (vacations), taken from the year; without it the periods are consecutive.
+ */
+export function splitPeriods(from: string, until: string, kind: PeriodKind, count = periodKindOf(kind).count, gapDays = 0): PeriodDraft[] {
+  const start = dayNumber(from), span = dayNumber(until) - start + 1, parts = Math.max(1, Math.min(count, maxPeriods, span));
+  const gap = Math.max(0, Math.min(Math.trunc(gapDays) || 0, Math.floor((span - parts) / Math.max(1, parts - 1)))), total = span - gap * (parts - 1);
   return Array.from({ length: parts }, (_, index) => ({
     id: null, name: periodName(kind, index + 1), weight: 1,
-    from: dayOf(start + Math.floor(index * total / parts)), until: dayOf(start + Math.floor((index + 1) * total / parts) - 1),
+    from: dayOf(start + index * gap + Math.floor(index * total / parts)), until: dayOf(start + index * gap + Math.floor((index + 1) * total / parts) - 1),
   }));
+}
+export const maxGapDays = 60;
+/** The days between consecutive periods (vacations): from the day after one ends to the day before the next starts. */
+export function periodGaps(periods: { name: string; from: string; until: string }[]) {
+  const sorted = [...periods].sort((a, b) => a.from.localeCompare(b.from));
+  return sorted.slice(1).flatMap((period, index) => {
+    const previous = sorted[index], from = dayOf(dayNumber(previous.until) + 1), until = dayOf(dayNumber(period.from) - 1);
+    return from <= until ? [{ after: previous.name, before: period.name, from, until, days: dayNumber(until) - dayNumber(from) + 1 }] : [];
+  });
 }
 
 /** The same calendar day a year later; 29 February becomes 28 February. */
