@@ -14,13 +14,14 @@ import { DaysOff, useBreaks } from "../calendar";
 import { useAcademicYears } from "../academic-years";
 import { useBellSchedules } from "../bell-schedules";
 import { classMoment, currentRegional, differentZone, formatClock, formatClockRange, weekOrder, zoneName } from "../../regional";
+import { useSession } from "../../session";
 
 const addDays = (day: string, days: number) => { const date = new Date(`${day}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
 const addMonths = (day: string, months: number) => { const date = new Date(`${day}T00:00:00Z`); date.setUTCMonth(date.getUTCMonth() + months); return date.toISOString().slice(0, 10); };
 const endTime = (start: string, minutes: number) => { const [hours, mins] = start.split(":").map(Number), total = hours * 60 + mins + minutes; return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`; };
 const lower = (text: string) => text.charAt(0).toLocaleLowerCase("es") + text.slice(1);
 const durations = [30, 40, 45, 50, 60, 80, 90, 120];
-type Values = { weekdays: number[]; startsAt: string; durationMinutes: string; from: string; until: string; perDay: boolean; times: Record<number, { startsAt: string; durationMinutes: string }> };
+type Values = { weekdays: number[]; startsAt: string; durationMinutes: string; from: string; until: string; periodId: string; perDay: boolean; times: Record<number, { startsAt: string; durationMinutes: string }> };
 /** Each day's time: «Lunes 07:30–09:00, miércoles 10:00–10:40». */
 const meetingsText = (schedule: SectionSchedule) => meetingsOf(schedule).map((item, index) => `${index ? lower(dayList([item.weekday])) : dayList([item.weekday])} ${formatClockRange(item.startsAt, endTime(item.startsAt, item.durationMinutes))}`).join(", ");
 
@@ -47,6 +48,7 @@ export function dayList(days: number[], style: "long" | "short" = "long") {
  */
 export function Timetable() {
   const { course, configurable } = useCourse();
+  const { member } = useSession();
   const { section, base, reload } = useSection();
   const [sessions, setSessions] = useState<ClassSession[] | null>(null), [today, setToday] = useState(""), [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
@@ -60,6 +62,8 @@ export function Timetable() {
   }
   useEffect(() => { if (course.status === "active") void load(); }, [course.id, section.id]);
   const schedule = section.schedule, writable = configurable && section.status === "active";
+  const calendarGrant = member.permissions?.grants["sections.assign"] || member.permissions?.coordination;
+  const calendarWritable = section.status === "active" && (member.role === "admin" || !!calendarGrant && ("all" in calendarGrant || !!course.programId && calendarGrant.programs.includes(course.programId)));
   const refresh = async () => { await Promise.all([load(), reload(), breaks.load()]); };
   const header = <PageHeader crumbs={sectionCrumbs(section, { label: "Horario" })} title="Horario"
     description={schedule ? <>{schedule.meetings?.length ? meetingsText(schedule) : <>{dayList(schedule.weekdays)}, de {formatClock(schedule.startsAt)} a {formatClock(endTime(schedule.startsAt, schedule.durationMinutes))}</>}{zoneHint(schedule.startsAt, today)}. {writable ? "Al cambiarlo, las clases pendientes se reprograman solas." : "Administración lo configura; tú planificas cada clase en el cronograma."}</>
@@ -79,7 +83,7 @@ export function Timetable() {
           : <EmptyState icon="clock" title="La sección aún no tiene horario">Cuando administración lo configure, sus clases aparecerán en el <Link href={`${base}/clases`}>cronograma</Link>. También puedes agregar clases a mano desde ahí.</EmptyState>}
       </div>
       <div className="dashboard-side">
-        <DaysOff section={section} writable={writable} data={breaks} onChanged={async () => { await Promise.all([load(), reload()]); }}/>
+        <DaysOff section={section} writable={calendarWritable} data={breaks} onChanged={async () => { await Promise.all([load(), reload()]); }}/>
       </div>
     </div>
   </>;
@@ -117,9 +121,9 @@ function ScheduleEditor({ schedule, sessions, today, breaks, onDone }: { schedul
   const { section } = useSection();
   const { toast, confirm } = useFeedback();
   const [values, setValues] = useState<Values>(() => schedule
-    ? { weekdays: schedule.weekdays, startsAt: schedule.startsAt, durationMinutes: String(schedule.durationMinutes), from: schedule.from, until: schedule.until, perDay: !!schedule.meetings?.length,
+    ? { weekdays: schedule.weekdays, startsAt: schedule.startsAt, durationMinutes: String(schedule.durationMinutes), from: schedule.from, until: schedule.until, periodId: schedule.periodId || "", perDay: !!schedule.meetings?.length,
       times: Object.fromEntries(meetingsOf(schedule).map(item => [item.weekday, { startsAt: item.startsAt, durationMinutes: String(item.durationMinutes) }])) }
-    : { weekdays: [], startsAt: "08:00", durationMinutes: "45", from: today, until: addMonths(today, 3), perDay: false, times: {} });
+    : { weekdays: [], startsAt: "08:00", durationMinutes: "45", from: today, until: addMonths(today, 3), periodId: "", perDay: false, times: {} });
   const { schedules: jornadas } = useBellSchedules();
   const [jornadaId, setJornadaId] = useState("");
   const jornada = jornadas?.find(item => item.id === jornadaId) || null;
@@ -128,8 +132,9 @@ function ScheduleEditor({ schedule, sessions, today, breaks, onDone }: { schedul
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   // A new schedule suggests the current school year's dates; they stay the section's own and can be changed.
   const { years } = useAcademicYears(), datesTouched = useRef(!!schedule);
-  const set = (patch: Partial<Values>) => { if ("from" in patch || "until" in patch) datesTouched.current = true; setValues(current => ({ ...current, ...patch })); };
-  const currentYear = years?.find(year => year.status === "current"), suggestion = scheduleSuggestion(currentYear, today);
+  const set = (patch: Partial<Values>) => { if ("from" in patch || "until" in patch) datesTouched.current = true; setValues(current => ({ ...current, ...(("from" in patch || "until" in patch) && !("periodId" in patch) ? { periodId: "" } : {}), ...patch })); };
+  const currentYear = years?.find(year => year.status === "current" && year.programId === course.programId)
+    || years?.find(year => year.status === "current" && !year.programId), suggestion = scheduleSuggestion(currentYear, today);
   useEffect(() => { if (suggestion && !datesTouched.current) setValues(current => ({ ...current, ...suggestion })); }, [suggestion?.from, suggestion?.until]);
   const path = `/courses/${course.id}/groups/${section.id}/schedule`;
   const minutes = Number(values.durationMinutes) || 0;
@@ -145,7 +150,7 @@ function ScheduleEditor({ schedule, sessions, today, breaks, onDone }: { schedul
     try {
       const { perDay: _, times: __, ...single } = values;
       const body = values.perDay
-        ? { from: values.from, until: values.until, meetings: values.weekdays.map(day => ({ weekday: day, startsAt: timeOf(day).startsAt, durationMinutes: Number(timeOf(day).durationMinutes) })) }
+        ? { from: values.from, until: values.until, ...(values.periodId ? { periodId: values.periodId } : {}), meetings: values.weekdays.map(day => ({ weekday: day, startsAt: timeOf(day).startsAt, durationMinutes: Number(timeOf(day).durationMinutes) })) }
         : { ...single, durationMinutes: minutes };
       const result = await api<{ classes: number }>(path, "PUT", body);
       toast({ message: `Horario guardado: ${plural(result.classes, "clase pendiente", "clases pendientes")} en el cronograma.` });
@@ -187,6 +192,10 @@ function ScheduleEditor({ schedule, sessions, today, breaks, onDone }: { schedul
                 <td className="muted">{length >= 5 && time.startsAt ? endTime(time.startsAt, length) : "—"}</td>
               </tr>;
             })}</tbody></table></div>}
+        {currentYear?.periods.length ? <Field label="Seguir un periodo" hint="Usa exactamente sus fechas y conserva el vínculo con el ciclo vigente."><select value={values.periodId} onChange={event => {
+          const period = currentYear.periods.find(item => item.id === event.target.value);
+          set(period ? { periodId: period.id, from: period.from, until: period.until } : { periodId: "" });
+        }}><option value="">Fechas propias de la sección</option>{currentYear.periods.map(period => <option key={period.id} value={period.id}>{currentYear.name} · {period.name}</option>)}</select></Field> : null}
         <div className="field-row">
           <Field label="Desde"><input type="date" value={values.from} onChange={event => set({ from: event.target.value, ...(values.until && event.target.value > values.until ? { until: addMonths(event.target.value, 3) } : {}) })} required/></Field>
           <Field label="Hasta"><input type="date" value={values.until} min={values.from} onChange={event => set({ until: event.target.value })} required/></Field>

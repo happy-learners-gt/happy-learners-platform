@@ -79,7 +79,8 @@ programa. Los días sin clase siguen siendo compatibles con `/api/calendar` (DEC
 
 ## Calendario institucional
 
-`GET /api/calendars` devuelve los calendarios de organización, programa y sección junto con las categorías base.
+`GET /api/calendars` devuelve los calendarios de organización, programa y sección junto con las categorías base; cada
+calendario incluye sus `rules`, para que la interfaz pueda describirlas, editarlas y calcular su vista previa local.
 `GET /api/calendars/view?from=YYYY-MM-DD&until=YYYY-MM-DD` devuelve los eventos de la organización; `program` suma los
 del programa y `section` suma los de su programa y sección. Cada evento indica su calendario, categoría y nivel de
 origen. Un evento omitido (`status: "skipped"`) permanece visible, pero no suspende clases.

@@ -209,7 +209,7 @@ export type DateRuleOccurrence = {
 };
 export type CalendarScope = "organization" | "program" | "section";
 export interface CalendarCategory { id: string; key: string; label: string; noClassDefault: boolean; builtin: boolean }
-export interface InstitutionalCalendar { id: string; scope: CalendarScope; scopeId: string | null; name: string; categories?: CalendarCategory[] }
+export interface InstitutionalCalendar { id: string; scope: CalendarScope; scopeId: string | null; name: string; categories?: CalendarCategory[]; rules?: InstitutionalCalendarRule[] }
 export interface InstitutionalCalendarRule {
   id: string; calendarId: string; categoryId: string; rule: DateRule; noClass: boolean; createdAt?: string; updatedAt?: string;
 }

@@ -106,6 +106,8 @@ describe("institutional calendar on the built Worker", () => {
     expect((await as(external, `/calendars/${organization.id}/templates/guatemala`, "POST")).status).toBe(404);
     expect((await read<{ added: number }>(await as(admin, `/calendars/${organization.id}/templates/guatemala`, "POST"))).added).toBe(13);
     expect((await read<{ added: number }>(await as(admin, `/calendars/${organization.id}/templates/guatemala`, "POST"))).added).toBe(0);
+    const withRules = await read<{ calendars: { id: string; rules: { rule: { title: string } }[] }[] }>(await as(admin, "/calendars"));
+    expect(withRules.calendars.find(item => item.id === organization.id)!.rules).toHaveLength(13);
     const preview = await read<{ plan: { create: unknown[] } }>(await as(admin, `/calendars/${organization.id}/years/2027/generate?preview=1`, "POST"));
     expect(preview.plan.create).toHaveLength(13);
     expect((await read<{ applied: { created: number } }>(await as(admin, `/calendars/${organization.id}/years/2027/generate`, "POST"))).applied.created).toBe(13);

@@ -27,6 +27,7 @@ import { ConsentGate, PrivacyPage } from "./pages/legal";
 import { ProfileReviewsPage, TeamDirectory, TeamProfilePage } from "./pages/professional";
 import { HoursPage } from "./pages/hours";
 import { OnboardingWizard } from "./pages/onboarding";
+import { InstitutionalCalendarPage } from "./pages/institutional-calendar";
 import { ConfirmEmail } from "./pages/account";
 import { isAccountSection, MyAccountPage } from "./pages/my-account";
 import { applyAppearance, appearanceOf } from "./appearance";
@@ -159,6 +160,7 @@ function page(first: string, second: string | undefined, url: URL) {
     case "inicio": return <Home/>;
     case "cursos": return second === "nuevo" ? <CreateCourse/> : <CourseList/>;
     case "agenda": return <Agenda/>;
+    case "calendario": return <InstitutionalCalendarPage/>;
     case "secciones": return <Redirect to="/agenda"/>;
     case "biblioteca": return <Library/>;
     case "buscar": return <Search/>;
