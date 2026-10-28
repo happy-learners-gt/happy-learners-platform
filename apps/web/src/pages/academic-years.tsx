@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { AcademicYear, PeriodKind } from "@happy-learners/contracts";
-import { academicYearLabels, periodKindOf, periodKinds, splitPeriods } from "@happy-learners/domain";
+import type { AcademicYear, CalendarBreak, PeriodKind } from "@happy-learners/contracts";
+import { academicYearLabels, maxGapDays, periodGaps, periodKindOf, periodKinds, splitPeriods } from "@happy-learners/domain";
 import { api, message } from "../api";
 import { plural, sessionDay } from "../model";
 import { Modal, useFeedback } from "../ui/feedback";
@@ -35,6 +35,23 @@ export function AcademicYears() {
   const { toast, confirm } = useFeedback();
   const { years, error, load } = useAcademicYears();
   const [editing, setEditing] = useState<AcademicYear | "new" | null>(null);
+  const [breaks, setBreaks] = useState<CalendarBreak[]>([]), [marking, setMarking] = useState("");
+  const loadBreaks = useCallback(() => api<{ breaks: CalendarBreak[] }>("/calendar").then(result => setBreaks(result.breaks.filter(item => !item.groupId)), () => setBreaks([])), []);
+  useEffect(() => { void loadBreaks(); }, [loadBreaks]);
+  // The vacations between periods that no organization-wide day without class covers yet.
+  const uncovered = (year: AcademicYear) => periodGaps(year.periods).filter(gap => !breaks.some(item => item.from <= gap.from && gap.until <= item.until));
+  async function markGaps(year: AcademicYear) {
+    const gaps = uncovered(year);
+    if (!await confirm({ title: "¿Marcar las vacaciones como días sin clase?", body: <p>{plural(gaps.length, "intervalo", "intervalos")} entre periodos de «{year.name}» quedan sin clase para toda la organización. Las clases pendientes de esos días pasan, con sus lecciones, a las siguientes fechas de cada sección.</p>, confirm: "Marcar sin clase" })) return;
+    setMarking(year.id);
+    try {
+      let moved = 0;
+      for (const gap of gaps) moved += (await api<{ removed: number }>("/calendar", "POST", { title: `Vacaciones entre ${gap.after.toLocaleLowerCase("es")} y ${gap.before.toLocaleLowerCase("es")}`, from: gap.from, until: gap.until })).removed;
+      toast({ message: `${plural(gaps.length, "intervalo marcado", "intervalos marcados")} sin clase${moved ? `; ${plural(moved, "clase pendiente se movió", "clases pendientes se movieron")}` : ""}.` });
+      await loadBreaks();
+    } catch (cause) { toast({ tone: "error", message: message(cause) }); await loadBreaks(); }
+    finally { setMarking(""); }
+  }
   async function act(year: AcademicYear, action: "activate" | "close" | "next" | "delete") {
     const questions = {
       activate: { title: `¿Activar «${year.name}»?`, body: <p>Pasa a ser el ciclo vigente de la organización. Al configurar el horario de una sección se sugerirán sus fechas.</p>, confirm: "Activar ciclo" },
@@ -70,7 +87,11 @@ export function AcademicYears() {
           <StatusBadge tone={tones[year.status]}>{academicYearLabels[year.status]}</StatusBadge>
           <Menu label={`Acciones de ${year.name}`} items={actions(year)}/>
         </div>
-        {year.periods.length > 0 && <ol className="period-list" aria-label={`Periodos de ${year.name}`}>{year.periods.map(period => <li key={period.id}><strong>{period.name}</strong> <span className="muted">{span(period)}</span></li>)}</ol>}
+        {year.periods.length > 0 && <YearCalendar year={year} breaks={breaks}/>}
+        {year.status !== "closed" && uncovered(year).length > 0 && <div className="year-gaps-action">
+          <span className="muted small">{plural(uncovered(year).length, "intervalo entre periodos aún tiene", "intervalos entre periodos aún tienen")} clase.</span>
+          <button type="button" className="button ghost small" disabled={!!marking} onClick={() => void markGaps(year)}><Icon name="calendar" size={16}/>{marking === year.id ? "Marcando…" : "Marcar las vacaciones sin clase"}</button>
+        </div>}
       </li>)}</ul>}
     {editing && <YearDialog year={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={async saved => { setEditing(null); toast({ message: `«${saved.name}» se guardó.` }); await load(); }}/>}
   </Section>;
@@ -84,12 +105,12 @@ function YearDialog({ year, onClose, onSaved }: { year: AcademicYear | null; onC
   const { confirm } = useFeedback();
   const [values, setValues] = useState({ name: year?.name || "", from: year?.from || "", until: year?.until || "", periodKind: year?.periodKind || "bimester" as PeriodKind });
   const [periods, setPeriods] = useState<Row[]>(() => (year?.periods || []).map(period => row(period)));
-  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [busy, setBusy] = useState(false), [error, setError] = useState(""), [gap, setGap] = useState("0");
   const kind = periodKindOf(values.periodKind);
   const setPeriod = (key: string, patch: Partial<Row>) => setPeriods(current => current.map(item => item.key === key ? { ...item, ...patch } : item));
   async function divide() {
     if (periods.length && !await confirm({ title: "¿Reemplazar los periodos?", body: <p>Los periodos actuales se sustituyen por {plural(kind.count, kind.label.toLocaleLowerCase("es"), kind.plural)} de duración parecida.</p>, confirm: "Reemplazar" })) return;
-    setPeriods(splitPeriods(values.from, values.until, values.periodKind).map(period => row(period)));
+    setPeriods(splitPeriods(values.from, values.until, values.periodKind, kind.count, Number(gap) || 0).map(period => row(period)));
   }
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
@@ -120,7 +141,9 @@ function YearDialog({ year, onClose, onSaved }: { year: AcademicYear | null; onC
             <Field label="Peso"><input type="number" inputMode="numeric" min={1} max={100} step={1} value={period.weight} onChange={event => setPeriod(period.key, { weight: event.target.value })} required/></Field>
             <button type="button" className="icon-button" aria-label={`Quitar ${period.name || `el periodo ${index + 1}`}`} onClick={() => setPeriods(periods.filter(item => item.key !== period.key))}><Icon name="close" size={16}/></button>
           </div>) : <p className="muted small">Sin periodos. Reparte el ciclo automáticamente o agrégalos uno por uno.</p>}
+          {periodGaps(periods.filter(item => item.from && item.until)).map(item => <p key={item.from} className="muted small period-gap"><Icon name="sun" size={14}/>Entre {item.after.toLocaleLowerCase("es")} y {item.before.toLocaleLowerCase("es")}: {plural(item.days, "día", "días")} de vacaciones ({span(item)}).</p>)}
           <div className="button-row">
+            <label className="gap-field"><span>Días de vacaciones entre periodos</span><input type="number" inputMode="numeric" min={0} max={maxGapDays} step={1} value={gap} onChange={event => setGap(event.target.value)}/></label>
             <button type="button" className="button secondary small" disabled={!datesReady} onClick={() => void divide()}><Icon name="grid" size={16}/>Repartir en {plural(kind.count, kind.label.toLocaleLowerCase("es"), kind.plural)}</button>
             <button type="button" className="button ghost small" disabled={periods.length >= 12} onClick={() => setPeriods([...periods, row({ id: null, name: "", from: "", until: "", weight: 1 })])}><Icon name="plus" size={16}/>Agregar periodo</button>
           </div>
@@ -129,4 +152,18 @@ function YearDialog({ year, onClose, onSaved }: { year: AcademicYear | null; onC
       </fieldset>
     </form>
   </Modal>;
+}
+
+/**
+ * The year in one list: its periods in order, the vacations between them and the organization's days without class
+ * that fall inside each period.
+ */
+function YearCalendar({ year, breaks }: { year: AcademicYear; breaks: CalendarBreak[] }) {
+  const gaps = periodGaps(year.periods);
+  const items = [
+    ...year.periods.map(period => ({ key: period.id, from: period.from, node: <><strong>{period.name}</strong> <span className="muted">{span(period)}</span>
+      {breaks.filter(item => item.from <= period.until && item.until >= period.from).map(item => <span key={item.id} className="calendar-chip">{item.title}: {item.from === item.until ? sessionDay(item.from, "short") : span(item)}</span>)}</> })),
+    ...gaps.map(gap => ({ key: `gap-${gap.from}`, from: gap.from, gap: true, node: <span className="muted"><Icon name="sun" size={14}/> Vacaciones · {plural(gap.days, "día", "días")} ({span(gap)}){breaks.some(item => item.from <= gap.from && gap.until <= item.until) ? " · sin clase" : ""}</span> })),
+  ].sort((a, b) => a.from.localeCompare(b.from));
+  return <ol className="period-list year-calendar" aria-label={`Calendario de ${year.name}`}>{items.map(item => <li key={item.key} className={"gap" in item ? "is-gap" : undefined}>{item.node}</li>)}</ol>;
 }

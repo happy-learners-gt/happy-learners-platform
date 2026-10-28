@@ -46,6 +46,7 @@ it("shows the school year with its periods in Organización and divides a new on
     if (input === "/api/organization") return Response.json({ organization: { id: "org-demo", name: "Escuela", timezone: "America/Guatemala", configured: true } });
     if (input === "/api/academic-years") return Response.json({ years: [year], today: "2026-10-26" });
     if (input.startsWith("/api/calendar")) return Response.json({ breaks: [], today: "2026-10-26" });
+    if (input === "/api/bell-schedules") return Response.json({ schedules: [] });
     return Response.json({});
   }));
   history.replaceState(null, "", "/organizacion");
@@ -53,16 +54,31 @@ it("shows the school year with its periods in Organización and divides a new on
   expect(await screen.findByRole("heading", { name: "Ciclo lectivo" })).toBeTruthy();
   expect(await screen.findByText("Ciclo 2027")).toBeTruthy();
   expect(screen.getByText("Vigente")).toBeTruthy();
-  expect(screen.getByRole("list", { name: "Periodos de Ciclo 2027" }).querySelectorAll("li")).toHaveLength(4);
+  expect(screen.getByRole("list", { name: "Calendario de Ciclo 2027" }).querySelectorAll("li")).toHaveLength(4);
   fireEvent.click(screen.getByRole("button", { name: "Nuevo ciclo" }));
   const dialog = await screen.findByRole("dialog", { name: "Nuevo ciclo lectivo" });
   const divide = screen.getByRole("button", { name: "Repartir en 4 bimestres" }) as HTMLButtonElement;
   expect(divide.disabled).toBe(true);
   fireEvent.change(screen.getByLabelText("Inicio del ciclo"), { target: { value: "2028-01-10" } });
   fireEvent.change(screen.getByLabelText("Fin del ciclo"), { target: { value: "2028-10-20" } });
+  fireEvent.change(screen.getByLabelText("Días de vacaciones entre periodos"), { target: { value: "14" } });
   fireEvent.click(divide);
   expect((screen.getByLabelText("Nombre del periodo 4") as HTMLInputElement).value).toBe("Cuarto bimestre");
   expect(dialog.querySelectorAll(".period-row")).toHaveLength(4);
+  // The vacations between periods read right under them.
+  expect(within(dialog).getAllByText(/14 días de vacaciones/)).toHaveLength(3);
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
+  // Jornadas: a template, the passing time and a break give the day's blocks before saving.
+  fireEvent.click(await screen.findByRole("button", { name: "Nueva jornada" }));
+  const jornada = await screen.findByRole("dialog", { name: "Nueva jornada" });
+  const preview = within(jornada).getByRole("list", { name: "Vista previa de la jornada" });
+  expect(preview.querySelectorAll(".is-class")).toHaveLength(8);
+  expect(within(preview).getByText("07:30–08:10")).toBeTruthy();
+  fireEvent.change(within(jornada).getByLabelText("Tiempo entre periodos"), { target: { value: "0" } });
+  expect(within(preview).getByText("08:10–08:50")).toBeTruthy();
+  fireEvent.change(within(jornada).getByLabelText("Duración del periodo"), { target: { value: "10" } });
+  expect(within(jornada).getByText("Cada periodo dura entre 20 y 180 minutos.")).toBeTruthy();
+  expect((within(jornada).getByRole("button", { name: "Crear jornada" }) as HTMLButtonElement).disabled).toBe(true);
 });
 it("shows a section's gradebook with letters, the partial result and saves only the changed scores", async () => {
   const member = { id: "user-educator", username: "educador-demo", role: "educator", organizationId: "org-demo", permissions: { admin: false, coordination: null, grants: {} } };

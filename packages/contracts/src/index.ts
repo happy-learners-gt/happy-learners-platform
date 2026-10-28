@@ -173,7 +173,16 @@ export interface Material {
   fileId?: string; fileName?: string; mediaType?: string; sizeBytes?: number; sha256?: string;
 }
 /** A weekly class time of a section and the period it applies to; days use 0 for Sunday (ST-099). */
-export interface SectionSchedule { weekdays: number[]; startsAt: string; durationMinutes: number; from: string; until: string }
+export interface SectionSchedule { weekdays: number[]; startsAt: string; durationMinutes: number; from: string; until: string; meetings?: ScheduleMeeting[] }
+/** A weekly meeting with its own time (1.2.4): when present, each class day takes its time from here. */
+export interface ScheduleMeeting { weekday: number; startsAt: string; durationMinutes: number }
+/** A bell schedule (jornada) of the organization: its class periods and breaks, generated from its configuration (1.2.4). */
+export interface BellSchedule {
+  id: string; name: string; weekdays: number[];
+  config: { startsAt: string; periodMinutes: number; passingMinutes: number; periods: number; breaks: { after: number; minutes: number; label: string }[] };
+  blocks: { key: string; kind: "class" | "break"; label: string; startsAt: string; endsAt: string }[];
+  updatedAt: string;
+}
 /**
  * The organization's school year (ciclo lectivo) and its periods. Independent of each section's schedule, which only
  * takes its dates as a suggestion; days without class remain the calendar breaks of DEC-026.

@@ -1280,6 +1280,31 @@ class AssessmentPlanTests(unittest.TestCase):
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
 
 
+class AcademicCalendarTests(unittest.TestCase):
+    """0057: jornadas keep their configuration and blocks as JSON, one name per organization; a section may store a
+    time per day as a JSON array next to its single-time columns. 0058 gives the demo its morning jornada."""
+
+    def test_jornadas_and_meetings(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            db.executescript(path.read_text())
+        org, group = db.execute("SELECT organization_id,id FROM course_groups WHERE organization_id='org-demo' ORDER BY id LIMIT 1").fetchone()
+        self.assertEqual(db.execute("SELECT name,json_array_length(blocks) FROM bell_schedules").fetchall(), [("Jornada matutina", 10)])
+        insert = "INSERT INTO bell_schedules(id,organization_id,name,weekdays,config,blocks,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,'user-0','t','t')"
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(insert, ("bell-2", org, "JORNADA MATUTINA", "1", "{}", "[]"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(insert, ("bell-3", org, "Otra", "1", "no es json", "[]"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(insert, ("bell-4", org, "Otra", "lunes", "{}", "[]"))
+        db.execute(insert, ("bell-5", org, "Vespertina", "1,2,3", "{}", "[]"))
+        db.execute("UPDATE course_groups SET schedule_meetings=? WHERE id=?", ('[{"weekday":1,"startsAt":"07:30","durationMinutes":80}]', group))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE course_groups SET schedule_meetings='{}' WHERE id=?", (group,))
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
 class BibliographyTests(unittest.TestCase):
     """0050: a reference points to one item of its own course's library; one main book per course, with role text."""
 

@@ -15,6 +15,7 @@ import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Sect
 import type { Tone } from "../ui/primitives";
 import { DaysOff } from "./calendar";
 import { AcademicYears } from "./academic-years";
+import { BellSchedules } from "./bell-schedules";
 import { CurriculumPackages } from "./curriculum-packages";
 import { ProgramPathDialog } from "./programPath";
 import { DepartureDialog, departureDay } from "./departure";
@@ -78,6 +79,7 @@ function OrganizationForm() {
       </fieldset>
     </form>
     <AcademicYears/>
+    <BellSchedules/>
     <DaysOff writable/>
     <Section title="Respaldo" action={<a className="button secondary small" href="/api/organization/backup" download><Icon name="download" size={16}/>Descargar respaldo</a>}>
       <p className="muted">Una copia en JSON de los cursos, las lecciones, las secciones, el calendario y los registros de la organización. No incluye contraseñas, sesiones ni el contenido de los documentos subidos. Guárdala en un lugar privado: contiene los nombres de los estudiantes.</p>
