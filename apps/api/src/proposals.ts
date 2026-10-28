@@ -117,34 +117,42 @@ export async function proposals(path: string, method: string, input: unknown, cu
 
   if (state.blockers.length || !state.book || state.bookText !== "ready") return reply({ error: state.blockers[0] || "Lee primero el texto del libro principal.", blockers: state.blockers }, 409);
   const value = input && typeof input === "object" ? input as Record<string, unknown> : {};
-  const unit = state.units.find(item => item.id === value.unitId);
-  if (!unit) return reply({ error: "Elige el módulo que recibirá las lecciones." }, 400);
+  // «plan»: each lesson goes to the module whose plan works on its indicator (the first active one), or the first
+  // module when no module plans it; otherwise, every lesson goes to the module chosen.
+  const byPlan = value.unitId === "plan", chosen = state.units.find(item => item.id === value.unitId);
+  if (!byPlan && !chosen) return reply({ error: "Elige el módulo que recibirá las lecciones." }, 400);
   const ids = value.outcomeIds;
   if (!Array.isArray(ids) || !ids.length || ids.length > maxProposalItems || new Set(ids).size !== ids.length || ids.some(id => !state.outcomes.some(outcome => outcome.id === id))) return reply({ error: `Elige de 1 a ${maxProposalItems} indicadores activos del plan curricular.` }, 400);
   const minutes = value.minutes === undefined ? 45 : Number(value.minutes);
   if (!Number.isInteger(minutes) || minutes < 10 || minutes > 300) return reply({ error: "La duración de cada clase va de 10 a 300 minutos." }, 400);
+  const planned = byPlan ? (await db.prepare("SELECT o.outcome_id AS outcomeId,o.unit_id AS unitId FROM unit_outcomes o JOIN learning_units u ON u.id=o.unit_id WHERE o.course_id=? AND u.status='active' ORDER BY u.position,u.id").bind(courseId).all<{ outcomeId: string; unitId: string }>()).results : [];
+  const unitOf = (outcomeId: string) => chosen || state.units.find(item => item.id === planned.find(row => row.outcomeId === outcomeId)?.unitId) || state.units[0];
 
   // The book's pages that match each outcome, found now so the person sees where each lesson will come from.
   const pages = (await db.prepare("SELECT page,text FROM book_pages WHERE file_id=? ORDER BY page").bind(state.book.fileId).all<{ page: number; text: string }>()).results;
   const contents = await contentsOf(db, courseId), confirmed = await confirmedMap(db, courseId, state.book.sha256);
-  const job = `proposal-${crypto.randomUUID()}`, generator = state.generator!;
+  const generator = state.generator!;
   const items = await Promise.all((ids as string[]).map(async (outcomeId, position) => {
-    const outcome = state.outcomes.find(item => item.id === outcomeId)!;
+    const outcome = state.outcomes.find(item => item.id === outcomeId)!, unit = unitOf(outcomeId);
     // The team's confirmed map wins over the search; an empty, confirmed list means the book does not cover it.
     const found = confirmed.get(outcomeId) ?? relevantPages([outcome.statement, ...(contents.get(outcomeId) || [])].join(" "), pages).map(page => page.page);
     // Retrying the same request (same outcome, module, book, instructions and generator) never makes a second lesson.
     const key = await digest([courseId, unit.id, outcomeId, state.book!.sha256, proposalPromptVersion, generator, minutes, found.join(",")].join("|"));
-    return { id: `item-${crypto.randomUUID()}`, outcomeId, position, key, pages: found };
+    return { id: `item-${crypto.randomUUID()}`, outcomeId, position, key, pages: found, unit };
   }));
   const existing = new Set((await db.prepare(`SELECT idempotency_key AS key FROM proposal_items WHERE idempotency_key IN (${items.map(() => "?").join(",")})`).bind(...items.map(item => item.key)).all<{ key: string }>()).results.map(row => row.key));
   const fresh = items.filter(item => !existing.has(item.key));
   if (!fresh.length) return reply({ error: "Esas lecciones ya se propusieron con este libro. Revisa los borradores o reintenta las que tuvieron error.", ...(await view()) }, 409);
+  // One job per module: each job's lessons are drafts of that module.
+  const groups = [...new Map(fresh.map(item => [item.unit.id, item.unit])).values()].map(unit => ({ unit, job: `proposal-${crypto.randomUUID()}`, items: fresh.filter(item => item.unit.id === unit.id) }));
   await db.batch([
-    db.prepare("INSERT INTO proposal_jobs(id,organization_id,course_id,unit_id,book_file_id,sequence,minutes,generator,requested_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(job, current.organizationId, courseId, unit.id, state.book.fileId, state.sequenceId, minutes, generator, current.id, now),
-    ...fresh.map((item, index) => db.prepare("INSERT INTO proposal_items(id,job_id,organization_id,course_id,outcome_id,position,idempotency_key,status,error,pages) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(idempotency_key) DO NOTHING")
-      .bind(item.id, job, current.organizationId, courseId, item.outcomeId, index, item.key, item.pages.length ? "queued" : "error", item.pages.length ? null : confirmed.has(item.outcomeId) ? "En el mapa del libro marcaron que el libro no trata este indicador." : "El libro principal no parece tratar este indicador: no se encontraron páginas.", JSON.stringify(item.pages))),
+    ...groups.flatMap(({ unit, job, items: own }) => [
+      db.prepare("INSERT INTO proposal_jobs(id,organization_id,course_id,unit_id,book_file_id,sequence,minutes,generator,requested_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(job, current.organizationId, courseId, unit.id, state.book!.fileId, state.sequenceId, minutes, generator, current.id, now),
+      ...own.map((item, index) => db.prepare("INSERT INTO proposal_items(id,job_id,organization_id,course_id,outcome_id,position,idempotency_key,status,error,pages) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(idempotency_key) DO NOTHING")
+        .bind(item.id, job, current.organizationId, courseId, item.outcomeId, index, item.key, item.pages.length ? "queued" : "error", item.pages.length ? null : confirmed.has(item.outcomeId) ? "En el mapa del libro marcaron que el libro no trata este indicador." : "El libro principal no parece tratar este indicador: no se encontraron páginas.", JSON.stringify(item.pages))),
+    ]),
     db.prepare("INSERT INTO activity_events(id,organization_id,actor_id,action,target_type,target_id,course_id,group_id,summary,occurred_at) VALUES (?,?,?,'planned','course',?,?,NULL,?,?)")
-      .bind(`event-${crypto.randomUUID()}`, current.organizationId, current.id, courseId, courseId, `Pidió ${fresh.length === 1 ? "1 propuesta de lección" : `${fresh.length} propuestas de lecciones`} para «${unit.name}»`, now),
+      .bind(`event-${crypto.randomUUID()}`, current.organizationId, current.id, courseId, courseId, `Pidió ${fresh.length === 1 ? "1 propuesta de lección" : `${fresh.length} propuestas de lecciones`} para ${groups.map(group => `«${group.unit.name}»`).join(", ")}`.slice(0, 240), now),
   ]);
   await wake();
   return reply({ ...(await view()), skipped: items.length - fresh.length }, 202);
@@ -215,6 +223,8 @@ async function propose(item: Item, db: Database, env: Env) {
   const lesson = {
     id, title: draft.title, objective: draft.objective, program: item.unitName, courseId: item.courseId, courseUnitId: item.unitId, duration: lessonMinutes({ activities: draft.activities }),
     materials: [], reflection: "¿Qué aprendiste y cómo lo aplicarías?", activities: draft.activities, publishedAt: "", sequence: item.sequence, outcomeIds: [item.outcomeId],
+    // Provenance travels with the lesson: the editor and the content say it is a proposal until a person publishes it.
+    generated: { source: generator.kind, model: generator.kind === "openai" ? settings!.model : "fixture", pages, indicator: outcome[0].code, at: new Date().toISOString() },
     shareCode: sharePrefix(item.organizationId) + crypto.randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase(),
   };
   // The draft and the item's state are one transaction: a retried or concurrent wake never writes a second lesson.

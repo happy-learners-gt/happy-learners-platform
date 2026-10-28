@@ -192,23 +192,31 @@ describe("lesson proposals and the delivery PDF on the built Worker", () => {
     // Asking: one item per indicator; the one the book does not cover fails at once and says why.
     expect((await as(other, path)).status).toBe(403);
     expect((await as(external, path)).status).toBe(404);
-    const asked = await read<CourseProposals>(await as(educator, path, "POST", { unitId: unit, outcomeIds: [polygons, perimeter, calendar], minutes: 45 }), 202);
-    expect(asked.jobs[0].items.map(item => [item.outcomeId, item.pages, item.status])).toEqual([[polygons, [2], "queued"], [perimeter, [2, 3], "queued"], [calendar, [], "error"]]);
+    // «Según el plan curricular»: perimeter is planned in a second module; the others go to the first one.
+    const measures = (await read<{ id: string }>(await as(educator, `/courses/${course}/units`, "POST", { version: await version(), name: "Unidad de medidas", objective: "Perímetro y área", status: "active" }), 201)).id;
+    await read(await as(educator, `/courses/${course}/units/${measures}/outcomes`, "PUT", { version: await version(), outcomeIds: [perimeter] }));
+    const asked = await read<CourseProposals>(await as(educator, path, "POST", { unitId: "plan", outcomeIds: [polygons, perimeter, calendar], minutes: 45 }), 202);
+    expect(asked.jobs.map(job => [job.unitId, job.items.map(item => [item.outcomeId, item.pages, item.status])]).sort()).toEqual([
+      [measures, [[perimeter, [2, 3], "queued"]]], [unit, [[polygons, [2], "queued"], [calendar, [], "error"]]]].sort());
     const done = await settled(educator, path);
-    const items = done.jobs[0].items;
+    const items = [polygons, perimeter, calendar].map(id => done.jobs.flatMap(job => job.items).find(item => item.outcomeId === id)!);
     expect(items.map(item => item.status)).toEqual(["done", "done", "error"]);
     expect(items[2].error).toContain("no parece tratar este indicador");
 
     // The drafts are ordinary lessons of the module: draft status, the outcome, the sequence's moments and the book.
-    const drafts = (await read<{ lessons: Lesson[] }>(await as(educator, `/lessons?course=${course}&drafts=1`))).lessons;
-    expect(drafts.map(lesson => [lesson.id, lesson.status])).toEqual([[items[0].lessonId, "draft"], [items[1].lessonId, "draft"]]);
+    const listed = (await read<{ lessons: Lesson[] }>(await as(educator, `/lessons?course=${course}&drafts=1`))).lessons;
+    expect(listed).toHaveLength(2);
+    const drafts = [items[0], items[1]].map(item => listed.find(lesson => lesson.id === item.lessonId)!);
+    expect(drafts.map(lesson => [lesson.status, lesson.courseUnitId])).toEqual([["draft", unit], ["draft", measures]]);
     expect(drafts[1].outcomeIds).toEqual([perimeter]);
     expect(drafts[1].activities.map(activity => activity.phase)).toEqual(["start", "develop", "close"]);
     expect(JSON.stringify(drafts[1].activities)).toContain(file.id);
+    // Each proposal says where it came from (DEC-052): generator, model, pages, indicator and when.
+    expect(drafts[1].generated).toMatchObject({ source: "fixture", model: "fixture", pages: [2, 3], indicator: "1.2" });
 
     // Asking again for the same lessons never duplicates them; a failure with no pages is not retried.
-    expect(await errorOf(await as(educator, path, "POST", { unitId: unit, outcomeIds: [polygons, perimeter] }), 409)).toContain("ya se propusieron");
-    expect(await errorOf(await as(educator, `${path}/${done.jobs[0].id}/retry`, "POST"), 409)).toContain("No hay propuestas");
+    expect(await errorOf(await as(educator, path, "POST", { unitId: "plan", outcomeIds: [polygons, perimeter] }), 409)).toContain("ya se propusieron");
+    expect(await errorOf(await as(educator, `${path}/${done.jobs.find(job => job.unitId === unit)!.id}/retry`, "POST"), 409)).toContain("No hay propuestas");
     expect((await read<{ lessons: Lesson[] }>(await as(educator, `/lessons?course=${course}&drafts=1`))).lessons).toHaveLength(2);
 
     // Review and publication are the existing ones: the lead publishes the first draft, then edits it again.
@@ -216,6 +224,8 @@ describe("lesson proposals and the delivery PDF on the built Worker", () => {
     await read(await as(educator, `/lessons/${first.id}/publish`, "POST"));
     const current = (await read<{ lesson: Lesson & { draftVersion: number } }>(await as(educator, `/lessons/${first.id}?draft=1`))).lesson;
     await read(await as(educator, `/lessons/${first.id}`, "PUT", { ...current, courseUnitId: unit, title: "CAMBIO SIN PUBLICAR", instructions: "", draftVersion: current.draftVersion }));
+    // Editing through the regular API keeps the provenance.
+    expect((await read<{ lesson: Lesson }>(await as(educator, `/lessons/${first.id}?draft=1`))).lesson.generated).toMatchObject({ source: "fixture", indicator: "1.1" });
 
     // The delivery PDF: only the published version, with the letterhead and the footer.
     const group = (await read<{ id: string }>(await as(admin, `/courses/${course}/groups`, "POST", { name: "Sexto A" }), 201)).id;
