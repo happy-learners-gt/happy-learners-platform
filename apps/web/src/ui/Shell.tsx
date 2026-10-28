@@ -138,6 +138,7 @@ function Sidebar() {
       {page({ href: base, label: "Resumen", icon: "overview", hue: "violet", active: area === "" }, 16)}
       {page({ href: `${base}/contenido`, label: "Contenido", icon: "content", hue: "sky", active: area === "contenido" }, 16)}
       {page({ href: `${base}/plan`, label: "Plan curricular", icon: "spark", hue: "green", active: area === "plan" }, 16)}
+      {page({ href: `${base}/asistente`, label: "Planificar con IA", icon: "sparkles", hue: "violet", active: area === "asistente" }, 16)}
       {page({ href: `${base}/biblioteca`, label: "Biblioteca del curso", icon: "library", hue: "teal", active: area === "biblioteca" }, 16)}
       {(attendance || listed.length > 0) && <Node id={key} href={href} label="Secciones" icon="users" hue="pink" size={16} open={open.has(key)} active={path === href} current={course.id === current?.courseId}
         toggleLabel={`Mostrar las secciones de ${course.title}`} onToggle={() => toggle(key)} onSelect={select(key, href)}

@@ -200,7 +200,7 @@ function Cell({ item, unitId, unitName, lessons, delivered, writable, onToggle }
 function GapAction({ item, lessons, base, writable, onCreate }: { item: OutcomeCoverage; lessons: Lesson[]; base: string; writable: boolean; onCreate: () => void }) {
   const { noun } = useCourse();
   const gap = item.gaps.includes("no-lesson") ? "no-lesson" : item.gaps[0];
-  if (gap === "no-lesson") return <div className="gap-action"><span className="gap-text"><Icon name="alert" size={14}/>{item.units.length ? "Ninguna lección lo trabaja" : `Sin ${noun.one} ni lecciones`}</span>{writable && <button type="button" className="button secondary small" onClick={onCreate}><Icon name="plus" size={16}/>Crear lección</button>}</div>;
+  if (gap === "no-lesson") return <div className="gap-action"><span className="gap-text"><Icon name="alert" size={14}/>{item.units.length ? "Ninguna lección lo trabaja" : `Sin ${noun.one} ni lecciones`}</span>{writable && <><Link className="button secondary small" href={`${base}/asistente?paso=propuestas&indicador=${item.outcome.id}`}><Icon name="sparkles" size={16}/>Proponer con IA</Link><button type="button" className="button ghost small" onClick={onCreate}><Icon name="plus" size={16}/>Crear lección</button></>}</div>;
   if (gap === "no-assessment") {
     const lesson = lessons.find(item2 => item2.id === item.lessons[0]);
     return <div className="gap-action"><span className="gap-text"><Icon name="info" size={14}/>Se trabaja pero no se comprueba</span>{writable && lesson && <Link className="button secondary small" href={`${base}/lecciones/${lesson.id}`}>Agregar evaluación en «{lesson.title}»</Link>}</div>;

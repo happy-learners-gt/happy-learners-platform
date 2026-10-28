@@ -99,8 +99,12 @@ export interface Activity {
   outcomeIds?: string[];
   type?: "text" | "resource" | "question"; instructions: string; richContent?: RichTextDocument; resourceId?: string; options?: string[]; answer?: number;
 }
+/** Where a proposed lesson came from (DEC-052): the generator, its model, the book's pages, the indicator and when. */
+export interface LessonProvenance { source: "openai" | "fixture"; model: string; pages: number[]; indicator: string | null; at: string }
 export interface Lesson {
   id: string; title: string; program: string; duration: number; objective: string;
+  /** Present on lessons proposed by the assistant: shown until a person reviews and publishes them. */
+  generated?: LessonProvenance;
   materials: string[]; activities: Activity[];
   reflection: string; publishedAt: string;
   unitId?: string; position?: number; status?: "draft" | "published" | "archived";

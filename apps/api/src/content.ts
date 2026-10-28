@@ -180,6 +180,8 @@ export async function content(url: URL, method: string, input: unknown, current:
   const old = row ? JSON.parse(row.content) as Lesson : null;
   const lid = id || `lesson-${crypto.randomUUID()}`;
   const lesson: Lesson = { id: lid, title: v.title.trim(), objective: v.objective.trim(), program: unit.name, ...(generic ? { courseId: unit.courseId, courseUnitId: unit.id } : { unitId: unit.id }), duration: typeof v.duration === "number" && v.duration > 0 && v.duration <= 300 ? v.duration : 20, materials: old?.materials || [], reflection: old?.reflection || "¿Qué aprendiste y cómo lo aplicarías?", activities: [{ title: "Instrucciones", minutes: 20, instructions: v.instructions }], publishedAt: old?.publishedAt || "", shareCode: old?.shareCode || sharePrefix(current.organizationId) + crypto.randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase() };
+  // A proposed lesson keeps where it came from (DEC-052) through every edit; clients cannot set or change it.
+  if (old?.generated) lesson.generated = old.generated;
   // The didactic sequence is a known template or, when not sent, the one the lesson already had.
   const sequence = sequenceTemplates.some(template => template.value === v.sequence) ? v.sequence as Lesson["sequence"] : old?.sequence;
   if (sequence) lesson.sequence = sequence;

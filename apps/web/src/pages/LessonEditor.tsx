@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { Activity, ActivityBlock, LearningOutcome, Lesson, Material, Resource, RichTextDocument, SequenceTemplate } from "@happy-learners/contracts";
-import { blockKinds, formatMinutes, groupings, lessonMinutes, outcomeCodes, phaseOf, publishChecklist, purposes, resourceIdsOf, sequenceOf, sequenceTemplates, studentActivities, suggestedResources } from "@happy-learners/domain";
+import { blockKinds, pagesLabel, formatMinutes, groupings, lessonMinutes, outcomeCodes, phaseOf, publishChecklist, purposes, resourceIdsOf, sequenceOf, sequenceTemplates, studentActivities, suggestedResources } from "@happy-learners/domain";
 import type { CheckItem } from "@happy-learners/domain";
 import type { Phase } from "@happy-learners/domain";
 import type { Editor } from "@tiptap/react";
@@ -315,6 +315,8 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
   }
   async function publish() {
     if (!await ready("publicar")) return;
+    // An AI proposal is published once a person says they reviewed it (DEC-052).
+    if (lesson?.generated && !lesson.revision && !await confirm({ title: "¿Revisaste esta propuesta de IA?", body: <p>Publícala solo si revisaste sus actividades, su pregunta de evaluación y las páginas del libro que cita.</p>, confirm: "La revisé, publicar" })) return;
     setPublishing(true);
     try {
       if (!await flush()) throw new Error("No pudimos guardar los últimos cambios.");
@@ -405,6 +407,7 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     <header className="editor-header">
       <Breadcrumbs items={[{ label: "Cursos", href: "/cursos" }, { label: course.title, href: base }, { label: "Contenido", href: `${base}/contenido` }, ...(unit ? [{ label: unit.name, href: `${base}/contenido#unidad-${unit.id}` }] : []), { label: draft.title || "Lección sin título" }]}/>
       <h1 className="sr-only">Editar lección: {draft.title}</h1>
+      {lesson.generated && !lesson.revision && <p className="notice ai-notice"><Icon name="sparkles" size={18}/><span><strong>Propuesta de IA.</strong> {lesson.generated.source === "openai" ? `Generada con OpenAI (${lesson.generated.model})` : "Generada con el generador de prueba"} a partir del libro principal ({pagesLabel(lesson.generated.pages)}){lesson.generated.indicator ? ` para el indicador ${lesson.generated.indicator}` : ""}. Revisa y ajusta las actividades antes de publicarla.</span></p>}
       <div className="editor-title-row">
         <textarea className="title-input" aria-label="Título de la lección" rows={1} value={draft.title} maxLength={160} readOnly={!writable} onKeyDown={event => { if (event.key === "Enter") event.preventDefault(); }} onChange={event => update({ title: event.target.value.replace(/\s*\n\s*/g, " ") })} placeholder="Título de la lección"/>
         <div className="editor-actions">
