@@ -14,6 +14,8 @@ import { englishCourses, englishPeople, englishPrograms } from "../scripts/seed/
 import { book, bookPages, pilotSql } from "../scripts/seed/pilot.mjs";
 // @ts-expect-error — plain ESM scripts without type declarations
 import { gradebookActivities, gradebookSql } from "../scripts/seed/gradebook.mjs";
+// @ts-expect-error — plain ESM scripts without type declarations
+import { calendarSql } from "../scripts/seed/calendar.mjs";
 
 type Seed = { id: string; title: string; program: string | null; lead: string; coTeachers: string[]; educationType: string; level: string; modality: string; pacing: string; format: string; settings: object; archived?: boolean;
   competencies: { outcomes: { id: string }[] }[]; resources: { id: string }[]; groups: { id: string; by: string }[];
@@ -150,5 +152,15 @@ describe("professional gradebook seed (0056, 1.2.3)", () => {
     expect(lines.filter(line => line.startsWith("DELETE"))).toEqual([expect.stringMatching(/^DELETE FROM section_grades WHERE group_id='seed-group-mat-6a' AND period_id='period-[a-f0-9-]{36}' AND id LIKE 'seed-grade-%' AND updated_at='2026-10-23T20:00:00.000Z' AND EXISTS/)]);
     expect((gradebookActivities as { points: number }[]).reduce((sum, item) => sum + item.points, 0)).toBe(100);
     for (const id of (gradebookSql as string).match(/'assessment-[^']+'/g) || []) expect(id).toMatch(/^'assessment-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'$/);
+  });
+});
+
+describe("academic calendar seed (0058, 1.2.4)", () => {
+  it("is generated from scripts/seed/calendar.mjs and checked in unchanged, only in org-demo", () => {
+    expect(readFileSync(new URL("../database/migrations/0058_demo_calendar.sql", import.meta.url), "utf8")).toBe(calendarSql);
+    const lines = (calendarSql as string).split("\n").filter(line => line && !line.startsWith("--"));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^INSERT INTO bell_schedules\(.*WHERE EXISTS\(SELECT 1 FROM organizations WHERE id='org-demo'\) AND NOT EXISTS/);
+    expect(lines[0]).toMatch(/'bell-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'/);
   });
 });

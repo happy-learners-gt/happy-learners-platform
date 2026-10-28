@@ -114,13 +114,13 @@ async function educatorsOf(db: Database, courseId: string, organizationId: strin
 
 /** The sections of a course the person sees, with their educators, students and schedule; one of them when an id is given. */
 async function groupsOf(db: Database, courseId: string, organizationId: string, access: CourseAccess, only?: string) {
-  const groups = await db.prepare(`SELECT g.id,g.course_id AS courseId,g.name,g.status,g.access_code AS accessCode,g.schedule_weekdays AS weekdays,g.schedule_starts_at AS startsAt,g.schedule_duration AS durationMinutes,g.schedule_from AS "from",g.schedule_until AS until,count(l.id) AS learnerCount FROM course_groups g LEFT JOIN group_learners l ON l.group_id=g.id AND l.status='active' WHERE g.course_id=? AND g.organization_id=?${only ? " AND g.id=?" : ""} GROUP BY g.id ORDER BY g.status,g.name,g.created_at`).bind(courseId, organizationId, ...(only ? [only] : [])).all<Omit<ClassGroup, "educators"> & Parameters<typeof scheduleOf>[0]>();
+  const groups = await db.prepare(`SELECT g.id,g.course_id AS courseId,g.name,g.status,g.access_code AS accessCode,g.schedule_weekdays AS weekdays,g.schedule_starts_at AS startsAt,g.schedule_duration AS durationMinutes,g.schedule_from AS "from",g.schedule_until AS until,g.schedule_meetings AS meetings,count(l.id) AS learnerCount FROM course_groups g LEFT JOIN group_learners l ON l.group_id=g.id AND l.status='active' WHERE g.course_id=? AND g.organization_id=?${only ? " AND g.id=?" : ""} GROUP BY g.id ORDER BY g.status,g.name,g.created_at`).bind(courseId, organizationId, ...(only ? [only] : [])).all<Omit<ClassGroup, "educators"> & Parameters<typeof scheduleOf>[0]>();
   const learners = await db.prepare(`SELECT id,group_id AS groupId,display_name AS displayName,status FROM group_learners WHERE course_id=? AND organization_id=? AND status='active'${only ? " AND group_id=?" : ""} ORDER BY display_name,id`).bind(courseId, organizationId, ...(only ? [only] : [])).all<GroupLearner>();
   const educators = await educatorsOf(db, courseId, organizationId);
   const seen = groups.results.filter(group => seesSection(access, group.id));
   // Schedule conflicts name other courses' sections: only those who configure sections see them.
   const conflicts = access.configure || access.educators ? await educatorConflicts(db, organizationId, seen.filter(group => group.status === "active").map(group => group.id), await todayFor(db, organizationId)) : [];
-  return seen.map(({ weekdays, startsAt, durationMinutes, from, until, ...group }) => ({ ...group, schedule: scheduleOf({ weekdays, startsAt, durationMinutes, from, until }),
+  return seen.map(({ weekdays, startsAt, durationMinutes, from, until, meetings, ...group }) => ({ ...group, schedule: scheduleOf({ weekdays, startsAt, durationMinutes, from, until, meetings }),
     educators: educators.filter(item => item.groupId === group.id).map(({ groupId: _, ...item }) => {
       const own = conflicts.filter(conflict => conflict.groupId === group.id && conflict.userId === item.userId);
       return own.length ? { ...item, conflicts: own } : item;

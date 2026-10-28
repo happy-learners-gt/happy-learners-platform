@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import type { ClassSession, SectionSchedule } from "@happy-learners/contracts";
-import { scheduleDates, scheduleSuggestion } from "@happy-learners/domain";
+import type { BellSchedule, ClassSession, SectionSchedule } from "@happy-learners/contracts";
+import { meetingFromBlocks, meetingsOf, scheduleDates, scheduleSuggestion } from "@happy-learners/domain";
 import { api, message } from "../../api";
 import { Link } from "../../navigation";
 import { plural, sessionDay } from "../../model";
@@ -12,6 +12,7 @@ import { useCourse } from "./context";
 import { sectionCrumbs, useSection } from "../sections/context";
 import { DaysOff, useBreaks } from "../calendar";
 import { useAcademicYears } from "../academic-years";
+import { useBellSchedules } from "../bell-schedules";
 import { classMoment, currentRegional, differentZone, formatClock, formatClockRange, weekOrder, zoneName } from "../../regional";
 
 const addDays = (day: string, days: number) => { const date = new Date(`${day}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
@@ -19,7 +20,9 @@ const addMonths = (day: string, months: number) => { const date = new Date(`${da
 const endTime = (start: string, minutes: number) => { const [hours, mins] = start.split(":").map(Number), total = hours * 60 + mins + minutes; return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`; };
 const lower = (text: string) => text.charAt(0).toLocaleLowerCase("es") + text.slice(1);
 const durations = [30, 40, 45, 50, 60, 80, 90, 120];
-type Values = { weekdays: number[]; startsAt: string; durationMinutes: string; from: string; until: string };
+type Values = { weekdays: number[]; startsAt: string; durationMinutes: string; from: string; until: string; perDay: boolean; times: Record<number, { startsAt: string; durationMinutes: string }> };
+/** Each day's time: «Lunes 07:30–09:00, miércoles 10:00–10:40». */
+const meetingsText = (schedule: SectionSchedule) => meetingsOf(schedule).map((item, index) => `${index ? lower(dayList([item.weekday])) : dayList([item.weekday])} ${formatClockRange(item.startsAt, endTime(item.startsAt, item.durationMinutes))}`).join(", ");
 
 /**
  * ST-160: a weekly schedule is set in the organization's zone (DEC-035). When the person reads another zone, the
@@ -59,7 +62,7 @@ export function Timetable() {
   const schedule = section.schedule, writable = configurable && section.status === "active";
   const refresh = async () => { await Promise.all([load(), reload(), breaks.load()]); };
   const header = <PageHeader crumbs={sectionCrumbs(section, { label: "Horario" })} title="Horario"
-    description={schedule ? <>{dayList(schedule.weekdays)}, de {formatClock(schedule.startsAt)} a {formatClock(endTime(schedule.startsAt, schedule.durationMinutes))}{zoneHint(schedule.startsAt, today)}. {writable ? "Al cambiarlo, las clases pendientes se reprograman solas." : "Administración lo configura; tú planificas cada clase en el cronograma."}</>
+    description={schedule ? <>{schedule.meetings?.length ? meetingsText(schedule) : <>{dayList(schedule.weekdays)}, de {formatClock(schedule.startsAt)} a {formatClock(endTime(schedule.startsAt, schedule.durationMinutes))}</>}{zoneHint(schedule.startsAt, today)}. {writable ? "Al cambiarlo, las clases pendientes se reprograman solas." : "Administración lo configura; tú planificas cada clase en el cronograma."}</>
       : writable ? "Elige los días, la hora y el periodo. Las clases de la sección se programan solas." : "Administración configura el horario de la sección; tú planificas cada clase en el cronograma."}
     primary={writable && schedule && !editing && sessions && <PrimaryAction icon="edit" onClick={() => setEditing(true)}>Editar horario</PrimaryAction>}/>;
   if (course.status !== "active") return <>{header}<EmptyState icon="archive" title="Curso archivado">El horario vuelve a estar disponible cuando administración restaura el curso.</EmptyState></>;
@@ -89,11 +92,11 @@ function ScheduleSummary({ schedule, sessions, today, base }: { schedule: Sectio
   const taught = sessions.filter(session => session.status === "completed").length;
   const ended = schedule.until < today, next = section.next;
   return <Section title={`Semana de ${section.name}`} className="timetable" action={<Link href={`${base}/clases`} className="section-link">Ver cronograma</Link>}>
-    <Week days={schedule.weekdays} time={formatClockRange(schedule.startsAt, endTime(schedule.startsAt, schedule.durationMinutes))}/>
+    <Week days={schedule.weekdays} time={formatClockRange(schedule.startsAt, endTime(schedule.startsAt, schedule.durationMinutes))} times={schedule.meetings?.length ? Object.fromEntries(schedule.meetings.map(item => [item.weekday, formatClockRange(item.startsAt, endTime(item.startsAt, item.durationMinutes))])) : undefined}/>
     {ended && <p className="notice"><Icon name="info" size={18}/>El periodo terminó el {lower(sessionDay(schedule.until))}. Para seguir con clases, se programa un nuevo periodo.</p>}
     <dl className="schedule-facts">
       <div><dt>Periodo</dt><dd>{sessionDay(schedule.from, "short")} – {sessionDay(schedule.until, "short")}</dd></div>
-      <div><dt>Duración</dt><dd>{schedule.durationMinutes} min por clase</dd></div>
+      <div><dt>Duración</dt><dd>{schedule.meetings?.length ? meetingsOf(schedule).map(item => `${item.durationMinutes}`).join(" / ") + " min según el día" : `${schedule.durationMinutes} min por clase`}</dd></div>
       <div><dt>Próxima clase</dt><dd>{next ? (() => { const when = classMoment(next.sessionDate, next.startsAt); return <Link href={`${base}/clases/${next.id}`}>{sessionDay(when.day, "short")}{when.clock ? `, ${when.clock}` : ""}</Link>; })() : "Sin clases próximas"}</dd></div>
       <div><dt>Clases</dt><dd>{plural(pending.length, "pendiente", "pendientes")} · {plural(taught, "impartida", "impartidas")}</dd></div>
     </dl>
@@ -101,10 +104,10 @@ function ScheduleSummary({ schedule, sessions, today, base }: { schedule: Sectio
 }
 
 /** Monday to Sunday, with the class days marked and their time. */
-function Week({ days, time }: { days: number[]; time?: string }) {
+function Week({ days, time, times }: { days: number[]; time?: string; times?: Record<number, string> }) {
   return <ol className="week-strip" aria-label="Días de clase">{weekOrder().map(([day, name, short]) => {
     const on = days.includes(day);
-    return <li key={day} className={on ? "is-on" : undefined}><abbr title={name}>{short}</abbr>{on ? <span>{time}</span> : <span className="sr-only">sin clase</span>}<span className="sr-only">{on ? `: ${name}, clase` : `: ${name}`}</span></li>;
+    return <li key={day} className={on ? "is-on" : undefined}><abbr title={name}>{short}</abbr>{on ? <span>{times?.[day] ?? time}</span> : <span className="sr-only">sin clase</span>}<span className="sr-only">{on ? `: ${name}, clase` : `: ${name}`}</span></li>;
   })}</ol>;
 }
 
@@ -114,8 +117,14 @@ function ScheduleEditor({ schedule, sessions, today, breaks, onDone }: { schedul
   const { section } = useSection();
   const { toast, confirm } = useFeedback();
   const [values, setValues] = useState<Values>(() => schedule
-    ? { weekdays: schedule.weekdays, startsAt: schedule.startsAt, durationMinutes: String(schedule.durationMinutes), from: schedule.from, until: schedule.until }
-    : { weekdays: [], startsAt: "08:00", durationMinutes: "45", from: today, until: addMonths(today, 3) });
+    ? { weekdays: schedule.weekdays, startsAt: schedule.startsAt, durationMinutes: String(schedule.durationMinutes), from: schedule.from, until: schedule.until, perDay: !!schedule.meetings?.length,
+      times: Object.fromEntries(meetingsOf(schedule).map(item => [item.weekday, { startsAt: item.startsAt, durationMinutes: String(item.durationMinutes) }])) }
+    : { weekdays: [], startsAt: "08:00", durationMinutes: "45", from: today, until: addMonths(today, 3), perDay: false, times: {} });
+  const { schedules: jornadas } = useBellSchedules();
+  const [jornadaId, setJornadaId] = useState("");
+  const jornada = jornadas?.find(item => item.id === jornadaId) || null;
+  const timeOf = (day: number) => values.times[day] || { startsAt: values.startsAt, durationMinutes: values.durationMinutes };
+  const setTime = (day: number, patch: Partial<{ startsAt: string; durationMinutes: string }>) => setValues(current => ({ ...current, times: { ...current.times, [day]: { ...(current.times[day] || { startsAt: current.startsAt, durationMinutes: current.durationMinutes }), ...patch } } }));
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   // A new schedule suggests the current school year's dates; they stay the section's own and can be changed.
   const { years } = useAcademicYears(), datesTouched = useRef(!!schedule);
@@ -124,7 +133,8 @@ function ScheduleEditor({ schedule, sessions, today, breaks, onDone }: { schedul
   useEffect(() => { if (suggestion && !datesTouched.current) setValues(current => ({ ...current, ...suggestion })); }, [suggestion?.from, suggestion?.until]);
   const path = `/courses/${course.id}/groups/${section.id}/schedule`;
   const minutes = Number(values.durationMinutes) || 0;
-  const valid = values.weekdays.length > 0 && values.from && values.until && values.until >= values.from && minutes >= 5;
+  const perDayValid = !values.perDay || values.weekdays.every(day => /^\d{2}:\d{2}$/.test(timeOf(day).startsAt) && Number(timeOf(day).durationMinutes) >= 5);
+  const valid = values.weekdays.length > 0 && values.from && values.until && values.until >= values.from && minutes >= 5 && perDayValid;
   const dates = valid ? scheduleDates(values, today) : [], kept = valid ? scheduleDates(values, today, breaks) : [];
   const skipped = dates.length - kept.length;
   const pending = sessions.filter(session => session.origin === "schedule" && session.status === "planned" && session.sessionDate >= today).length;
@@ -133,7 +143,11 @@ function ScheduleEditor({ schedule, sessions, today, breaks, onDone }: { schedul
     event.preventDefault();
     setBusy(true); setError("");
     try {
-      const result = await api<{ classes: number }>(path, "PUT", { ...values, durationMinutes: minutes });
+      const { perDay: _, times: __, ...single } = values;
+      const body = values.perDay
+        ? { from: values.from, until: values.until, meetings: values.weekdays.map(day => ({ weekday: day, startsAt: timeOf(day).startsAt, durationMinutes: Number(timeOf(day).durationMinutes) })) }
+        : { ...single, durationMinutes: minutes };
+      const result = await api<{ classes: number }>(path, "PUT", body);
       toast({ message: `Horario guardado: ${plural(result.classes, "clase pendiente", "clases pendientes")} en el cronograma.` });
       await onDone(true);
     } catch (cause) { setError(message(cause)); setBusy(false); }
@@ -151,10 +165,28 @@ function ScheduleEditor({ schedule, sessions, today, breaks, onDone }: { schedul
         <fieldset className="day-toggles"><legend>¿Qué días hay clase?</legend>
           {weekOrder().map(([day, name, short]) => <label key={day} title={name}><input type="checkbox" checked={values.weekdays.includes(day)} aria-label={name} onChange={() => set({ weekdays: values.weekdays.includes(day) ? values.weekdays.filter(value => value !== day) : [...values.weekdays, day] })}/><span aria-hidden="true">{short}</span></label>)}
         </fieldset>
-        <div className="field-row">
+        <div className="schedule-mode" role="radiogroup" aria-label="Hora de las clases">
+          <label><input type="radio" name="schedule-mode" checked={!values.perDay} onChange={() => set({ perDay: false })}/>La misma hora todos los días</label>
+          <label><input type="radio" name="schedule-mode" checked={values.perDay} onChange={() => set({ perDay: true })}/>Una hora por día</label>
+          {!!jornadas?.length && <label className="schedule-jornada"><span>Periodos de la jornada</span><select value={jornadaId} onChange={event => setJornadaId(event.target.value)}><option value="">Sin jornada</option>{jornadas.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
+        </div>
+        {!values.perDay ? <div className="field-row">
+          {jornada && <BlockPicker jornada={jornada} label="Periodos" onPick={meeting => set({ startsAt: meeting.startsAt, durationMinutes: String(meeting.durationMinutes) })}/>}
           <Field label="Hora" hint={minutes ? `Termina a las ${endTime(values.startsAt || "00:00", minutes)}.` : undefined}><input type="time" value={values.startsAt} onChange={event => set({ startsAt: event.target.value })} required/></Field>
           <Field label="Duración"><select value={values.durationMinutes} onChange={event => set({ durationMinutes: event.target.value })}>{options.map(value => <option key={value} value={value}>{value < 60 || value % 60 ? `${value} min` : `${value / 60} h`}</option>)}</select></Field>
         </div>
+          : !values.weekdays.length ? <p className="muted small">Elige los días de clase para darle a cada uno su hora.</p>
+          : <div className="meeting-table-wrap"><table className="meeting-table"><thead><tr><th scope="col">Día</th>{jornada && <th scope="col">Periodos</th>}<th scope="col">Hora</th><th scope="col">Minutos</th><th scope="col">Termina</th></tr></thead>
+            <tbody>{weekOrder().filter(([day]) => values.weekdays.includes(day)).map(([day, name]) => {
+              const time = timeOf(day), length = Number(time.durationMinutes) || 0;
+              return <tr key={day}>
+                <th scope="row">{name}</th>
+                {jornada && <td><BlockPicker jornada={jornada} label={`Periodos del ${lower(name)}`} onPick={meeting => setTime(day, { startsAt: meeting.startsAt, durationMinutes: String(meeting.durationMinutes) })}/></td>}
+                <td><input type="time" aria-label={`Hora del ${lower(name)}`} value={time.startsAt} onChange={event => setTime(day, { startsAt: event.target.value })} required/></td>
+                <td><input type="number" className="meeting-minutes" aria-label={`Minutos del ${lower(name)}`} min={5} max={480} step={5} value={time.durationMinutes} onChange={event => setTime(day, { durationMinutes: event.target.value })}/></td>
+                <td className="muted">{length >= 5 && time.startsAt ? endTime(time.startsAt, length) : "—"}</td>
+              </tr>;
+            })}</tbody></table></div>}
         <div className="field-row">
           <Field label="Desde"><input type="date" value={values.from} onChange={event => set({ from: event.target.value, ...(values.until && event.target.value > values.until ? { until: addMonths(event.target.value, 3) } : {}) })} required/></Field>
           <Field label="Hasta"><input type="date" value={values.until} min={values.from} onChange={event => set({ until: event.target.value })} required/></Field>
@@ -169,7 +201,7 @@ function ScheduleEditor({ schedule, sessions, today, breaks, onDone }: { schedul
           {!values.weekdays.length ? <p>Elige al menos un día de clase.</p>
             : !valid ? <p>Revisa el periodo: la fecha final va después de la inicial.</p>
             : <div>
-              <p><strong>{kept.length ? plural(kept.length, "clase", "clases") : "Ninguna clase"}</strong>{kept.length ? <>: {lower(dayList(values.weekdays))} de {formatClock(values.startsAt)} a {formatClock(endTime(values.startsAt, minutes))}, del {lower(sessionDay(kept[0], "short"))} al {lower(sessionDay(kept[kept.length - 1], "short"))}.</> : " en el periodo elegido a partir de hoy."}</p>
+              <p><strong>{kept.length ? plural(kept.length, "clase", "clases") : "Ninguna clase"}</strong>{kept.length ? <>: {values.perDay ? lower(values.weekdays.length ? weekOrder().filter(([day]) => values.weekdays.includes(day)).map(([day, name]) => `${lower(name)} ${formatClock(timeOf(day).startsAt)}`).join(", ") : "") : <>{lower(dayList(values.weekdays))} de {formatClock(values.startsAt)} a {formatClock(endTime(values.startsAt, minutes))}</>}, del {lower(sessionDay(kept[0], "short"))} al {lower(sessionDay(kept[kept.length - 1], "short"))}.</> : " en el periodo elegido a partir de hoy."}</p>
               {skipped > 0 && <p className="muted small">{plural(skipped, "día cae", "días caen")} en días sin clase y no se programa{skipped === 1 ? "" : "n"}.</p>}
               {schedule && pending > 0 && <p className="muted small">Se reprograman {plural(pending, "clase pendiente", "clases pendientes")} del horario actual; sus lecciones pasan, en orden, a las nuevas fechas. Lo impartido, en curso, cancelado o agregado a mano no cambia.</p>}
             </div>}
@@ -195,10 +227,32 @@ export function WeekGrid({ title, sections }: { title: string; sections: WeekSec
     <h2 id="week-title">{title}</h2>
     {differentZone() && <p className="muted small">Horario semanal en la hora de la organización ({zoneName(currentRegional().organizationTimezone)}).</p>}
     <div className="timetable-grid" style={{ ["--days" as string]: days.length }}>{days.map(([day, name]) => {
-      const slots = scheduled.filter(section => section.schedule!.weekdays.includes(day)).sort((a, b) => a.schedule!.startsAt.localeCompare(b.schedule!.startsAt));
+      const at = (section: WeekSection) => meetingsOf(section.schedule!).find(item => item.weekday === day)!;
+      const slots = scheduled.filter(section => section.schedule!.weekdays.includes(day)).sort((a, b) => at(a).startsAt.localeCompare(at(b).startsAt));
       return <div key={day} className="timetable-day"><h3>{name}</h3>
-        {slots.length ? <ul>{slots.map(section => <li key={section.id}><Link href={section.href}><strong>{formatClock(section.schedule!.startsAt)}</strong><span>{section.name}</span><span className="muted small">{section.detail ? `${section.detail} · ` : ""}{section.schedule!.durationMinutes} min</span></Link></li>)}</ul> : <p className="muted small">Sin clases</p>}
+        {slots.length ? <ul>{slots.map(section => <li key={section.id}><Link href={section.href}><strong>{formatClock(at(section).startsAt)}</strong><span>{section.name}</span><span className="muted small">{section.detail ? `${section.detail} · ` : ""}{at(section).durationMinutes} min</span></Link></li>)}</ul> : <p className="muted small">Sin clases</p>}
       </div>;
     })}</div>
   </section>;
+}
+
+/** «Periodo 3» reads «P3» in the narrow pickers; the full name stays in Organización. */
+const short = (label: string) => label.replace(/^Periodo (\d+)$/, "P$1");
+/** Picks consecutive class periods of a jornada (from the start of one to the end of another); a double period becomes one longer class. */
+function BlockPicker({ jornada, label, onPick }: { jornada: BellSchedule; label: string; onPick: (meeting: { startsAt: string; durationMinutes: number }) => void }) {
+  const classes = jornada.blocks.filter(block => block.kind === "class");
+  const [from, setFrom] = useState(""), [to, setTo] = useState("");
+  function pick(start: string, end: string) {
+    setFrom(start); setTo(end);
+    const meeting = start && end ? meetingFromBlocks(jornada.blocks, start, end) : null;
+    if (meeting) onPick(meeting);
+  }
+  return <span className="block-picker" role="group" aria-label={label}>
+    <select aria-label={`${label}: desde`} value={from} onChange={event => { const start = event.target.value; const end = to && classes.findIndex(item => item.key === to) >= classes.findIndex(item => item.key === start) ? to : start; pick(start, end); }}>
+      <option value="">Desde…</option>{classes.map(block => <option key={block.key} value={block.key}>{short(block.label)} · {block.startsAt}</option>)}
+    </select>
+    <select aria-label={`${label}: hasta`} value={to} disabled={!from} onChange={event => pick(from, event.target.value)}>
+      {classes.filter((_, index) => index >= classes.findIndex(item => item.key === from)).map(block => <option key={block.key} value={block.key}>{short(block.label)} · {block.endsAt}</option>)}
+    </select>
+  </span>;
 }
