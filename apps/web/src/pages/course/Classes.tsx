@@ -466,7 +466,7 @@ function FinishDialog({ lessons, busy, correcting, onClose, onFinish }: { lesson
     <form className="stack" onSubmit={submit}>
       <fieldset disabled={busy} className="stack">
         <p className="muted">{correcting ? "Cambia lo que se registró de cada lección. Las demás clases no cambian." : "Indica hasta dónde llegó la clase con cada lección. Solo las lecciones completadas cuentan como impartidas en el plan curricular."}</p>
-        <ol className="outcome-list">{lessons.map((lesson, index) => <li key={lesson.id}>
+        <ol className="outcome-list class-outcomes">{lessons.map((lesson, index) => <li key={lesson.id}>
           <span className="roster-number" aria-hidden="true">{index + 1}</span>
           <div className="outcome-lesson"><strong id={`outcome-${lesson.id}`}>{lesson.title}</strong><span className="muted small">{outcomeHint[outcomes[lesson.id]]}</span></div>
           <div className="mark-group" role="radiogroup" aria-labelledby={`outcome-${lesson.id}`}>

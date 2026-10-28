@@ -222,6 +222,6 @@ export function CreateCourse() {
   if (member.role !== "admin") return <><PageHeader title="Crear curso" crumbs={[{ label: "Cursos", href: "/cursos" }, { label: "Crear curso" }]}/><EmptyState icon="shield" title="Administración crea los cursos" action={<Link href="/cursos" className="button primary">Ver mis cursos</Link>}>Administración crea cada curso, sus secciones y su horario, y asigna a su equipo docente.</EmptyState></>;
   return <>
     <PageHeader title="Crear curso" crumbs={[{ label: "Cursos", href: "/cursos" }, { label: "Crear curso" }]} description="Empieza por el nombre, el propósito, el tipo de curso y su responsable. Después creas sus secciones, su horario y asignas a quienes las imparten."/>
-    <div className="reading"><CourseForm cancelHref="/cursos" onSaved={id => { toast({ message: "Curso creado. Desde su resumen creas sus secciones y asignas a quienes las imparten." }); navigate(`/cursos/${id}`); }}/></div>
+    <div><CourseForm cancelHref="/cursos" onSaved={id => { toast({ message: "Curso creado. Desde su resumen creas sus secciones y asignas a quienes las imparten." }); navigate(`/cursos/${id}`); }}/></div>
   </>;
 }
