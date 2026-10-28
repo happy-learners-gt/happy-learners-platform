@@ -100,7 +100,6 @@ describe("institutional calendar on the built Worker", () => {
     const catalog = await read<{ calendars: { id: string; scope: string; scopeId: string | null }[]; categories: { id: string; key: string }[] }>(await as(admin, "/calendars"));
     const organization = catalog.calendars.find(item => item.scope === "organization")!;
     const programCalendar = catalog.calendars.find(item => item.scope === "program")!;
-    const holiday = catalog.categories.find(item => item.key === "holiday")!;
     const noClass = catalog.categories.find(item => item.key === "no-class")!;
 
     expect((await as(educator, `/calendars/${organization.id}/templates/guatemala`, "POST")).status).toBe(403);
@@ -137,6 +136,9 @@ describe("institutional calendar on the built Worker", () => {
       categoryId: noClass.id, title: "Asueto del programa", from: "2027-05-10", until: "2027-05-10", noClass: true,
     }), 201);
     expect(added.removed).toBe(1);
+    // A program's day without class leaves the sections of other courses alone.
+    expect((await read<{ sessions: { groupId: string; sessionDate: string }[] }>(await as(admin, `/courses/${otherCourse}/sessions`))).sessions.filter(item => item.groupId === otherGroup).map(item => item.sessionDate)).toContain("2027-05-10");
+    expect((await read<{ sessions: { groupId: string; sessionDate: string }[] }>(await as(admin, `/courses/${programCourse}/sessions`))).sessions.filter(item => item.groupId === programGroup).map(item => item.sessionDate)).not.toContain("2027-05-10");
 
     const legacy = await read<{ break: { id: string } }>(await as(admin, "/calendar", "POST", { title: "Compatibilidad", from: "2027-05-17", until: "2027-05-17", groupId: otherGroup }), 201);
     expect((await read<{ breaks: { id: string }[] }>(await as(admin, `/calendar?section=${otherGroup}`))).breaks.some(item => item.id === legacy.break.id)).toBe(true);
@@ -148,6 +150,5 @@ describe("institutional calendar on the built Worker", () => {
       periodId: year.year.periods[0].id, weekdays: [1], startsAt: "08:00", durationMinutes: 45,
     }));
     expect(periodSchedule.schedule).toMatchObject({ from: "2028-01-10", until: "2028-06-30", periodId: year.year.periods[0].id });
-    expect(holiday.id).toContain("holiday");
   }, 45_000);
 });
