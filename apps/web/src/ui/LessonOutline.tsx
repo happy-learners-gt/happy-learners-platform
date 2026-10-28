@@ -12,10 +12,11 @@ import { StatusBadge } from "./primitives";
 import type { Tone } from "./primitives";
 
 export const stateTone: Record<LessonState, Tone> = { draft: "warning", published: "success", changes: "info", archived: "neutral" };
-export function LessonBadge({ lesson }: { lesson: Pick<Lesson, "status" | "revision" | "hasDraft" | "review"> }) {
+export function LessonBadge({ lesson }: { lesson: Pick<Lesson, "status" | "revision" | "hasDraft" | "review" | "generated"> }) {
   const state = lessonState(lesson);
   return <>
     <StatusBadge tone={stateTone[state]}>{lessonStateLabel[state]}</StatusBadge>
+    {lesson.generated && !lesson.revision && state !== "archived" && <StatusBadge tone="info">Propuesta de IA</StatusBadge>}
     {lesson.review && state !== "archived" && <StatusBadge tone={lesson.review.status === "pending" ? "info" : "warning"}>{lesson.review.status === "pending" ? "En revisión" : "Devuelta"}</StatusBadge>}
   </>;
 }
@@ -51,6 +52,8 @@ export type OutlineActions = {
   duplicateLesson: (lesson: Lesson) => void;
   previewLesson: (lesson: Lesson) => void;
   openLesson: (lesson: Lesson) => void;
+  /** Opens «Planificar con IA» with this module chosen for the proposals. */
+  proposeForUnit?: (unit: LearningUnit) => void;
 };
 
 /** writable: the team creates, renames and duplicates lessons. organize: the lead also orders and archives modules and lessons. */
@@ -83,6 +86,7 @@ export function LessonOutline({ courseId, units, lessons, writable, organize, sh
           ...(!archived ? [{ label: "Renombrar", icon: "edit" as const, onSelect: () => setRenaming(unit.id) }, { label: "Editar nombre y objetivo", icon: "text" as const, onSelect: () => actions.editUnit(unit) }, { label: "Nueva lección", icon: "plus" as const, onSelect: () => { setExpanded(new Set([...expanded, unit.id])); setCreating(unit.id); } }] : []),
           { label: "Mover arriba", icon: "chevronUp", onSelect: () => actions.moveUnit(unit, position - 1), disabled: position === 0 },
           { label: "Mover abajo", icon: "chevronDown", onSelect: () => actions.moveUnit(unit, position + 1), disabled: position === units.length - 1 },
+          ...(!archived && actions.proposeForUnit ? ["separator" as const, { label: "Proponer lecciones con IA", icon: "sparkles" as const, onSelect: () => actions.proposeForUnit!(unit) }] : []),
           "separator",
           { label: archived ? `Restaurar ${noun.one}` : `Archivar ${noun.one}`, icon: "archive", onSelect: () => actions.archiveUnit(unit), danger: !archived },
         ]}/>}

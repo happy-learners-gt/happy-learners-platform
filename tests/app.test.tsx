@@ -183,75 +183,64 @@ it("lets the course's lead pick CNB indicators for the curriculum plan, with tho
   expect(await screen.findByText("Se agregaron 2 indicadores al plan curricular.")).toBeTruthy();
   expect(posted).toEqual([{ codes: ["1.2", "6.4"], version: 7 }]);
 });
-it("shows what a course needs before proposing lessons, the fixture generator, and each proposal's state", async () => {
+it("guides «Planificar con IA» step by step: review of an AI proposal, coverage gaps preselected and the verified map", async () => {
   const member = { id: "user-educator", username: "educador-demo", role: "educator", organizationId: "org-demo", permissions: { admin: false, coordination: null, grants: {} } };
   const course = { id: "course-1", title: "Matemáticas 6.º", objective: "Resolver problemas.", educationType: "formal", level: "primary", modality: "in-person", pacing: "self-paced", format: "subject", settings: { attendance: false }, status: "active", version: 3, updatedAt: "t",
     access: { role: "lead", assigned: [], configure: false, edit: true, publish: true, review: true, team: false, educators: false, sections: "assigned" } };
-  const proposals = { outcomes: [{ id: "outcome-1", statement: "Identifica características de polígonos regulares e irregulares.", code: "1.1" }, { id: "outcome-2", statement: "Describe aplicaciones del calendario maya agrícola y sagrado", code: "7.3" }],
-    units: [{ id: "unit-1", name: "Unidad 1" }], sequence: { id: "start-develop-close", label: "Inicio · Desarrollo · Cierre" }, bookText: "ready", generator: "fixture", blockers: [],
-    book: { fileId: "course-file-1", title: "Libro de Matemáticas 6", pages: 120, sha256: "a".repeat(64) }, canPropose: true,
-    jobs: [{ id: "proposal-1", unitId: "unit-1", unitName: "Unidad 1", generator: "fixture", createdAt: "2026-10-27T15:00:00Z", requestedBy: "Educador de la demostración", items: [
-      { id: "item-1", outcomeId: "outcome-1", statement: "Identifica características de polígonos regulares e irregulares.", status: "done", error: null, pages: [12, 13], lessonId: "lesson-9", lessonTitle: "1.1 · Polígonos" },
-      { id: "item-2", outcomeId: "outcome-2", statement: "Describe aplicaciones del calendario maya agrícola y sagrado", status: "error", error: "El libro principal no parece tratar este indicador: no se encontraron páginas.", pages: [], lessonId: null, lessonTitle: null },
-    ] }] };
-  vi.stubGlobal("fetch", vi.fn(async (input: string) => {
-    if (input === "/api/session") return Response.json({ member, pending: [] });
-    if (input === "/api/organization") return Response.json({ organization: { id: "org-demo", name: "Escuela", timezone: "America/Guatemala", configured: true } });
-    if (input === "/api/courses/course-1") return Response.json({ course, units: [], curriculum: { competencies: [], outcomes: [] } });
-    if (input === "/api/courses/course-1/proposals") return Response.json(proposals);
-    if (input.startsWith("/api/lessons")) return Response.json({ lessons: [] });
-    if (input.endsWith("/materials")) return Response.json({ materials: [] });
-    if (input === "/api/resources") return Response.json({ resources: [] });
-    if (input === "/api/programs") return Response.json({ programs: [] });
-    return Response.json({});
-  }));
-  history.replaceState(null, "", "/cursos/course-1/propuestas");
-  render(<App/>);
-  expect(await screen.findByRole("heading", { level: 1, name: "Proponer lecciones" })).toBeTruthy();
-  expect(await screen.findByText(/Generador de prueba local \(fixture\): propuestas de ejemplo sin IA/)).toBeTruthy();
-  expect(screen.getByText(/Texto del libro leído \(120 páginas\)/)).toBeTruthy();
-  expect(screen.getByRole("link", { name: "1.1 · Polígonos" }).getAttribute("href")).toBe("/cursos/course-1/lecciones/lesson-9");
-  expect(screen.getByText("Listo")).toBeTruthy();
-  expect(screen.getByText(/Libro, pp\. 12–13/)).toBeTruthy();
-  expect(screen.getByText(/no parece tratar este indicador/)).toBeTruthy();
-  // A failure without pages in the book cannot be retried: the book does not cover that indicator.
-  expect(screen.queryByRole("button", { name: "Reintentar las que tuvieron error" })).toBeNull();
-  expect((screen.getByRole("button", { name: "Elige indicadores" }) as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.click(screen.getByRole("checkbox", { name: /Identifica características de polígonos/ }));
-  expect(screen.getByRole("button", { name: "Proponer 1 lección" })).toBeTruthy();
-});
-it("shows the book map: pages with verified quotes, sources and states, and lets the team correct an indicator", async () => {
-  const member = { id: "user-educator", username: "educador-demo", role: "educator", organizationId: "org-demo", permissions: { admin: false, coordination: null, grants: {} } };
-  const course = { id: "course-1", title: "Matemáticas 6.º", objective: "Resolver problemas.", educationType: "formal", level: "primary", modality: "in-person", pacing: "self-paced", format: "subject", settings: { attendance: false }, status: "active", version: 3, updatedAt: "t",
-    access: { role: "lead", assigned: [], configure: false, edit: true, publish: true, review: true, team: false, educators: false, sections: "assigned" } };
-  const row = (patch: Record<string, unknown>) => ({ candidates: [{ page: 2, score: 4 }, { page: 3, score: 9 }], pages: [], evidence: [], source: "lexical", status: "proposed", aiStatus: "none", aiError: null, ...patch });
-  const map = { book: { title: "Libro de Matemáticas 6", pages: 120 }, bookText: "ready", mapper: "openai", canEdit: true, summary: { total: 2, mapped: 2, confirmed: 1, uncovered: 1 }, outcomes: [
-    row({ outcomeId: "outcome-1", code: "1.2", statement: "Calcula perímetro y área de diferentes polígonos y del círculo.", pages: [3], evidence: [{ page: 3, quote: "El perímetro de un polígono es la suma de sus lados." }], source: "ai" }),
-    row({ outcomeId: "outcome-2", code: "7.3", statement: "Describe aplicaciones del calendario maya agrícola y sagrado", candidates: [], status: "confirmed", source: "teacher" }),
+  const outcomes = [{ id: "outcome-1", statement: "Identifica características de polígonos regulares e irregulares.", code: "1.1" }, { id: "outcome-2", statement: "Calcula el área y volumen de sólidos geométricos.", code: "1.4" }, { id: "outcome-3", statement: "Realiza cálculos aritméticos con decimales", code: "4.5" }];
+  const proposals = { outcomes, units: [{ id: "unit-1", name: "Unidad 1" }], sequence: { id: "start-develop-close", label: "Inicio · Desarrollo · Cierre" }, bookText: "ready", generator: "openai", blockers: [],
+    book: { fileId: "course-file-1", title: "Libro de Matemáticas 6", pages: 16, sha256: "a".repeat(64) }, canPropose: true, jobs: [] };
+  const row = (patch: Record<string, unknown>) => ({ candidates: [], pages: [], evidence: [], source: "ai", status: "confirmed", aiStatus: "done", aiError: null, ...patch });
+  const map = { book: { title: "Libro de Matemáticas 6", pages: 16 }, bookText: "ready", mapper: "openai", canEdit: true, summary: { total: 3, mapped: 3, confirmed: 3, uncovered: 1 }, outcomes: [
+    row({ outcomeId: "outcome-1", code: "1.1", statement: outcomes[0].statement, pages: [2], evidence: [{ page: 2, quote: "Un polígono es regular cuando todos sus lados y ángulos son iguales." }] }),
+    row({ outcomeId: "outcome-2", code: "1.4", statement: outcomes[1].statement, pages: [7] }), row({ outcomeId: "outcome-3", code: "4.5", statement: outcomes[2].statement }),
   ] };
-  const sent: unknown[] = [];
+  const draft = { id: "lesson-9", title: "Área y volumen de prismas", objective: "Calcular el área total y el volumen de prismas.", program: "Unidad 1", courseId: "course-1", courseUnitId: "unit-1", duration: 45, materials: [], reflection: "", publishedAt: "", status: "draft", revision: 0, sequence: "start-develop-close", outcomeIds: ["outcome-2"],
+    generated: { source: "openai", model: "gpt-5.6-luna", pages: [7], indicator: "1.4", at: "2026-10-27T18:00:00Z" },
+    activities: [{ id: "a1", position: 0, title: "Recordamos", minutes: 10, phase: "start", purpose: "explore", instructions: "", blocks: [{ id: "b1", kind: "text", instructions: "Observa una caja y cuenta sus caras." }] },
+      { id: "a2", position: 1, title: "Comprobamos", minutes: 35, phase: "close", purpose: "assess", instructions: "", blocks: [{ id: "b2", kind: "question", instructions: "¿Cuál es el volumen de un cubo de 2 cm?", options: ["8 cm³", "6 cm³"], answer: 0 }] }] };
+  const published: string[] = [], asked: unknown[] = [];
   vi.stubGlobal("fetch", vi.fn(async (input: string, init?: RequestInit) => {
     if (input === "/api/session") return Response.json({ member, pending: [] });
     if (input === "/api/organization") return Response.json({ organization: { id: "org-demo", name: "Escuela", timezone: "America/Guatemala", configured: true } });
     if (input === "/api/courses/course-1") return Response.json({ course, units: [], curriculum: { competencies: [], outcomes: [] } });
-    if (input === "/api/courses/course-1/book-map/outcomes/outcome-1") { sent.push(JSON.parse(String(init!.body))); return Response.json({ ...map, outcomes: [{ ...map.outcomes[0], pages: [3, 4], status: "confirmed", source: "teacher" }, map.outcomes[1]] }); }
+    if (input === "/api/courses/course-1/proposals" && init?.method === "POST") { asked.push(JSON.parse(String(init.body))); return Response.json({ ...proposals, jobs: [{ id: "proposal-1", unitId: "unit-1", unitName: "Unidad 1", generator: "openai", createdAt: "2026-10-27T18:00:00Z", requestedBy: "Lucía", items: [] }], skipped: 0 }, { status: 202 }); }
+    if (input === "/api/courses/course-1/proposals") return Response.json(proposals);
     if (input === "/api/courses/course-1/book-map") return Response.json(map);
-    if (input.startsWith("/api/lessons")) return Response.json({ lessons: [] });
+    if (input === "/api/lessons/lesson-9/publish") { published.push(String(init?.method)); return Response.json({ lesson: { ...draft, revision: 1 } }); }
+    if (input.startsWith("/api/lessons")) return Response.json({ lessons: published.length ? [{ ...draft, revision: 1, status: "published" }] : [draft] });
     if (input.endsWith("/materials")) return Response.json({ materials: [] });
     if (input === "/api/resources") return Response.json({ resources: [] });
     if (input === "/api/programs") return Response.json({ programs: [] });
     return Response.json({});
   }));
-  history.replaceState(null, "", "/cursos/course-1/mapa-del-libro");
+  // The former page of 1.2.0 leads to the assistant.
+  history.replaceState(null, "", "/cursos/course-1/propuestas");
   render(<App/>);
-  expect(await screen.findByRole("region", { name: "Mapa del libro" })).toBeTruthy();
-  expect(screen.getByText("p. 3: «El perímetro de un polígono es la suma de sus lados.»")).toBeTruthy();
-  expect(screen.getByText("Revisado con IA")).toBeTruthy();
-  expect(screen.getByText("Por confirmar")).toBeTruthy();
+  expect(await screen.findByRole("heading", { level: 1, name: "Planificar con IA" })).toBeTruthy();
+  expect(location.pathname + location.search).toBe("/cursos/course-1/asistente?paso=propuestas");
+  // Proposals: the two indicators without lessons come preselected; the covered one says so.
+  expect((await screen.findByRole("checkbox", { name: /polígonos/ }) as HTMLInputElement).checked).toBe(true);
+  expect((screen.getByRole("checkbox", { name: /sólidos geométricos/ }) as HTMLInputElement).checked).toBe(false);
+  expect(screen.getByText("1 borrador")).toBeTruthy();
+  // The main action submits the chosen gaps.
+  fireEvent.click(screen.getByRole("button", { name: "Proponer 2 lecciones" }));
+  expect(await screen.findByText(/Se pidieron/)).toBeTruthy();
+  expect(asked).toEqual([{ unitId: "plan", outcomeIds: ["outcome-1", "outcome-3"], minutes: 45 }]);
+  // Review: the AI proposal with its activities, its question and where it came from.
+  fireEvent.click(screen.getByRole("tab", { name: /Revisión/ }));
+  expect(await screen.findByText("Área y volumen de prismas")).toBeTruthy();
+  expect(screen.getByText("Propuesta de IA")).toBeTruthy();
+  expect(screen.getByText(/¿Cuál es el volumen de un cubo de 2 cm\?/)).toBeTruthy();
+  expect(screen.getByText(/OpenAI \(gpt-5\.6-luna\) · libro, p\. 7/)).toBeTruthy();
+  // The map: verified quotes and «the book does not cover it».
+  fireEvent.click(screen.getByRole("tab", { name: /Mapa del libro/ }));
+  expect(await screen.findByText(/p\. 2: «Un polígono es regular/)).toBeTruthy();
   expect(screen.getByText("El libro no lo trata")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Revisar con IA" })).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("Páginas de 1.2"), { target: { value: "3-4" } });
-  fireEvent.click(screen.getAllByRole("button", { name: "Confirmar" })[0]);
-  expect(await screen.findByText("Páginas de 1.2 confirmadas.")).toBeTruthy();
-  expect(sent).toEqual([{ pages: "3-4" }]);
+  // Publishing a proposal asks to confirm it was reviewed.
+  fireEvent.click(screen.getByRole("tab", { name: /Revisión/ }));
+  fireEvent.click(await screen.findByRole("button", { name: "Publicar" }));
+  fireEvent.click(await screen.findByRole("button", { name: "La revisé, publicar" }));
+  expect(await screen.findByText("«Área y volumen de prismas» se publicó.")).toBeTruthy();
+  expect(published).toEqual(["POST"]);
 });

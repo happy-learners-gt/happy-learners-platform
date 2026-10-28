@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.2 — 2026-10-28
+
+Asistente de planificación con IA de REL-010 (DEC-052).
+
+- **Planificar con IA**, en el menú de cada curso, reúne el flujo en cinco pasos con una acción principal cada uno:
+  **Libro**, **Mapa del libro**, **Propuestas**, **Revisión** y **Calendario**. El paso actual sigue el estado del
+  curso; las páginas «Proponer lecciones» y «Mapa del libro» de la 1.2.0 llevan a sus pasos.
+- Las propuestas van, por omisión, al módulo donde el plan curricular trabaja cada indicador, y los indicadores sin
+  lección vienen elegidos.
+- **Revisión** muestra cada propuesta con sus actividades, su pregunta de evaluación y su procedencia (modelo, páginas
+  del libro e indicador), y permite publicarla, abrirla en el editor o descartarla. Publicar una propuesta pide
+  confirmar que se revisó.
+- Las lecciones propuestas dicen «Propuesta de IA» en el contenido y en el editor hasta que alguien las publica.
+- El Plan curricular ofrece **Proponer con IA** en cada indicador sin lección y el Contenido, **Proponer lecciones con
+  IA** en el menú de cada módulo.
+
 ## 1.2.1 — 2026-10-27
 
 Demostración del piloto escolar de REL-010 (DEC-052). Migración 0054, solo en la organización de demostración.
