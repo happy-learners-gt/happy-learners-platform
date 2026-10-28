@@ -22,6 +22,7 @@ export type { InvitationDetails, MailMessage, MailResult, MailSender, MailStatus
 export type { ModuleLesson } from "./navigation";
 export { isCalendarDay, weekdays, scheduleInput, scheduleDates, breakInput, breakOn, carryOver, scheduleSummary, lessonsInOrder, periodWeek, classSequence, maxScheduleDays, maxScheduledClasses, meetingOn, meetingsOf } from "./schedule";
 export type { ScheduleMeeting, SectionSchedule } from "./schedule";
+export { easterSunday, ruleInput, occurrences, nextYearRules, ruleSummary, guatemalaTemplate } from "./calendar-rules";
 export { bellBlocks, bellLength, bellScheduleInput, bellTemplates, clockOf, daysText, maxBellPeriods, maxBellSchedules, meetingFromBlocks, minutesOf } from "./bell-schedules";
 export type { BellBlock, BellBreak, BellConfig, BellScheduleDraft } from "./bell-schedules";
 export { acceptsAttendance, cancelPlanInput, classActions, classPlanInput, classStatusLabels, completionInput, inSessionFilter, lessonOutcomeLabels, maxClassLessons, groupCodePattern, localDay, newGroupCode, nextClassStatus, normalizeGroupCode, sessionFilterAllowed, sessionFilterInput, upcomingClasses } from "./classes";
