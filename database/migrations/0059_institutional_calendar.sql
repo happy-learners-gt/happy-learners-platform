@@ -96,7 +96,9 @@ INSERT INTO calendar_events(id,calendar_id,organization_id,category_id,title,sta
 SELECT 'event-'||b.id,
        CASE WHEN b.group_id IS NULL THEN 'calendar-organization-'||b.organization_id ELSE 'calendar-section-'||b.group_id END,
        b.organization_id,'category-no-class-'||b.organization_id,b.title,b.starts_on,b.ends_on,'full',1,NULL,NULL,'active',
-       b.created_by,b.created_at,b.created_at
+       -- created_by was optional in calendar_breaks: an old row without it is attributed to an administrator of its organization.
+       COALESCE(b.created_by,(SELECT m.user_id FROM memberships m WHERE m.organization_id=b.organization_id AND m.role='admin' ORDER BY m.user_id LIMIT 1)),
+       b.created_at,b.created_at
 FROM calendar_breaks b;
 
 -- A program may have its own current cycle alongside the organization's current cycle.

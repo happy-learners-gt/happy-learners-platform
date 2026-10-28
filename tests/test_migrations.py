@@ -58,6 +58,7 @@ class UpgradeTests(unittest.TestCase):
         # Demo assignments point to a published lesson of the group's own course.
         rows = db.execute("SELECT a.assigned_revision,l.revision,u.course_id,a.course_id FROM lesson_assignments a JOIN lessons l ON l.id=a.lesson_id JOIN learning_units u ON u.id=l.course_unit_id").fetchall()
         self.assertGreater(len(rows), 0)
+        self.assertEqual(db.execute("SELECT e.created_by FROM calendar_events e JOIN memberships m ON m.user_id=e.created_by WHERE e.id='event-break-anonymous' AND m.role='admin'").fetchone() is not None, True)
         self.assertTrue(all(assigned == revision and unit_course == course for assigned, revision, unit_course, course in rows))
         group = db.execute("SELECT id,course_id FROM course_groups WHERE id='group-demo-class'").fetchone()
         lesson = db.execute("SELECT id FROM lessons LIMIT 1").fetchone()[0]
@@ -1472,6 +1473,8 @@ class InstitutionalCalendarTests(unittest.TestCase):
         user = db.execute("SELECT user_id FROM memberships WHERE organization_id=? AND role='admin' LIMIT 1", (org,)).fetchone()[0]
         db.execute("INSERT INTO calendar_breaks VALUES ('break-organization',?,NULL,'Asueto','2027-05-01','2027-05-01',?,'t')", (org, user))
         db.execute("INSERT INTO calendar_breaks VALUES ('break-section',?,?,'Actividad','2027-06-01','2027-06-02',?,'t')", (org, group_id, user))
+        # created_by was optional in 0023: a break without it still migrates, attributed to an administrator.
+        db.execute("INSERT INTO calendar_breaks VALUES ('break-anonymous',?,NULL,'Sin autor','2027-07-01','2027-07-01',NULL,'t')", (org,))
         db.executescript(institutional.read_text())
         return db
 
@@ -1481,6 +1484,7 @@ class InstitutionalCalendarTests(unittest.TestCase):
           FROM calendar_breaks b JOIN calendar_events e ON e.id='event-'||b.id
           JOIN calendars c ON c.id=e.calendar_id ORDER BY b.id""").fetchall()
         self.assertGreater(len(rows), 0)
+        self.assertEqual(db.execute("SELECT e.created_by FROM calendar_events e JOIN memberships m ON m.user_id=e.created_by WHERE e.id='event-break-anonymous' AND m.role='admin'").fetchone() is not None, True)
         for _, group_id, scope, scope_id, no_class, category_id in rows:
             self.assertEqual((scope, scope_id), ("section", group_id) if group_id else ("organization", None))
             self.assertEqual(no_class, 1)
