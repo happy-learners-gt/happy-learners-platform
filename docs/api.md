@@ -305,6 +305,20 @@ en la misma transacción. La actividad lo registra.
 | GET, PUT | `/api/courses/:id/sessions/:session`, `…/attendance` · PUT `…/outcomes` |
 | POST | `/api/courses/:id/sessions/:session/start`, `…/complete`, `…/cancel`, `…/restore` |
 
+`PUT …/schedule` recibe `{ weekdays, startsAt, durationMinutes, from, until }` (la misma hora cada día) o, desde la
+1.2.4, `{ meetings: [{ weekday, startsAt, durationMinutes }], from, until }` con una hora por día (una clase por día:
+un periodo doble es una clase más larga). Si todas las reuniones coinciden se guarda la forma simple; si no, el horario
+devuelve `meetings` y `startsAt`/`durationMinutes` repiten la primera reunión de la semana. Cada clase generada toma la
+hora de su día.
+
+**Jornadas (0057).** `GET /api/bell-schedules` lista las jornadas de la organización para todas las personas: `{ id,
+name, weekdays, config: { startsAt, periodMinutes, passingMinutes, periods, breaks: [{ after, minutes, label }] },
+blocks }`. Los `blocks` (periodos de clase y recesos con su hora) se generan en el servidor: tras cada periodo va el
+receso que se haya puesto después de él o el tiempo entre periodos. Solo administración crea (`POST`), edita (`PUT
+/api/bell-schedules/:id`) y quita (`DELETE`) jornadas: periodos de 20 a 180 minutos, de 0 a 30 entre periodos, hasta
+14 periodos y recesos de 5 a 120 minutos antes del último periodo, terminando antes de la medianoche (400); un nombre
+por organización (409). Quitar una jornada no cambia los horarios de las secciones.
+
 `PUT …/educators` recibe `{ userIds, conflictReason? }`. Si una persona agregada imparte otra sección activa con
 clases próximas a la misma hora, responde 409 con `conflicts` y no cambia nada; con `conflictReason` (3 a 300
 caracteres) guarda la asignación y registra la confirmación, que ya no se vuelve a pedir para esa persona en ese par

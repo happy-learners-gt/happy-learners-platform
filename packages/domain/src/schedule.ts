@@ -11,11 +11,41 @@ export function isCalendarDay(value: unknown): value is string {
 export const weekdays = [[1, "Lunes", "lun"], [2, "Martes", "mar"], [3, "Miércoles", "mié"], [4, "Jueves", "jue"], [5, "Viernes", "vie"], [6, "Sábado", "sáb"], [0, "Domingo", "dom"]] as const;
 export const maxScheduleDays = 366, maxScheduledClasses = 400;
 
-export type SectionSchedule = { weekdays: number[]; startsAt: string; durationMinutes: number; from: string; until: string };
+/** One weekly meeting of a section (1.2.4): its day, start and length. At most one per day; a double period is one meeting. */
+export type ScheduleMeeting = { weekday: number; startsAt: string; durationMinutes: number };
+/**
+ * A section's weekly schedule. `startsAt` and `durationMinutes` are the same every day unless `meetings` gives each
+ * day its own; then they repeat the first meeting of the week, for readers that only know one time.
+ */
+export type SectionSchedule = { weekdays: number[]; startsAt: string; durationMinutes: number; from: string; until: string; meetings?: ScheduleMeeting[] };
+const clock = /^([01]\d|2[0-3]):[0-5]\d$/;
+const weekPosition = (day: number) => (day + 6) % 7;
 
-/** Validates a section's weekly schedule. Returns the clean schedule or a message that says what to fix. */
+/**
+ * Validates a section's weekly schedule: one time for every class day ({ weekdays, startsAt, durationMinutes }) or a
+ * time per day ({ meetings }). Returns the clean schedule or a message that says what to fix. Meetings that all share
+ * the same time become the single-time form.
+ */
 export function scheduleInput(input: unknown): SectionSchedule | { error: string } {
   const value = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  if (value.meetings !== undefined && value.meetings !== null) {
+    if (!Array.isArray(value.meetings) || !value.meetings.length) return { error: "Elige al menos un día de la semana." };
+    const meetings: ScheduleMeeting[] = [];
+    for (const raw of value.meetings) {
+      const item = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+      const duration = Number(item.durationMinutes);
+      if (!Number.isInteger(item.weekday) || (item.weekday as number) < 0 || (item.weekday as number) > 6) return { error: "Elige al menos un día de la semana." };
+      if (typeof item.startsAt !== "string" || !clock.test(item.startsAt)) return { error: "Escribe la hora de inicio con el formato HH:MM." };
+      if (!Number.isInteger(duration) || duration < 5 || duration > 480) return { error: "La duración debe estar entre 5 y 480 minutos." };
+      meetings.push({ weekday: item.weekday as number, startsAt: item.startsAt, durationMinutes: duration });
+    }
+    if (new Set(meetings.map(item => item.weekday)).size !== meetings.length) return { error: "La sección tiene una sola clase por día: une los bloques seguidos en una clase más larga." };
+    meetings.sort((a, b) => weekPosition(a.weekday) - weekPosition(b.weekday));
+    const base = scheduleInput({ ...value, meetings: undefined, weekdays: meetings.map(item => item.weekday), startsAt: meetings[0].startsAt, durationMinutes: meetings[0].durationMinutes });
+    if ("error" in base) return base;
+    const varies = meetings.some(item => item.startsAt !== meetings[0].startsAt || item.durationMinutes !== meetings[0].durationMinutes);
+    return varies ? { ...base, meetings } : base;
+  }
   const days = value.weekdays;
   if (!Array.isArray(days) || !days.length || days.some(day => !Number.isInteger(day) || day < 0 || day > 6) || new Set(days).size !== days.length) return { error: "Elige al menos un día de la semana." };
   if (typeof value.startsAt !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value.startsAt)) return { error: "Escribe la hora de inicio con el formato HH:MM." };
@@ -66,8 +96,20 @@ export function carryOver(next: string[], unfinished: string[], later: string[],
   return { lessons: lessons.slice(0, limit), left: lessons.slice(limit) };
 }
 
-/** "lun y mié, 08:00 · 45 min" */
-export function scheduleSummary(schedule: Pick<SectionSchedule, "weekdays" | "startsAt" | "durationMinutes">) {
+/** The time of the class on a day of the schedule. */
+export function meetingOn(schedule: Pick<SectionSchedule, "startsAt" | "durationMinutes" | "meetings">, day: string): { startsAt: string; durationMinutes: number } {
+  const weekday = new Date(`${day}T00:00:00Z`).getUTCDay();
+  const meeting = schedule.meetings?.find(item => item.weekday === weekday);
+  return meeting ? { startsAt: meeting.startsAt, durationMinutes: meeting.durationMinutes } : { startsAt: schedule.startsAt, durationMinutes: schedule.durationMinutes };
+}
+/** Every meeting of the week, from Monday: the per-day ones or the single time on each class day. */
+export function meetingsOf(schedule: Pick<SectionSchedule, "weekdays" | "startsAt" | "durationMinutes" | "meetings">): ScheduleMeeting[] {
+  return schedule.meetings?.length ? schedule.meetings : [...schedule.weekdays].sort((a, b) => weekPosition(a) - weekPosition(b)).map(weekday => ({ weekday, startsAt: schedule.startsAt, durationMinutes: schedule.durationMinutes }));
+}
+
+/** "lun y mié, 08:00 · 45 min", or each day with its time when they differ: "lun 07:30 · 80 min, mié 10:00 · 40 min". */
+export function scheduleSummary(schedule: Pick<SectionSchedule, "weekdays" | "startsAt" | "durationMinutes" | "meetings">) {
+  if (schedule.meetings?.length) return schedule.meetings.map(item => `${weekdays.find(([day]) => day === item.weekday)![2]} ${item.startsAt} · ${item.durationMinutes} min`).join(", ");
   const names = weekdays.filter(([day]) => schedule.weekdays.includes(day)).map(([, , short]) => short);
   const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} y ${names[names.length - 1]}` : names[0];
   return `${list}, ${schedule.startsAt} · ${schedule.durationMinutes} min`;
