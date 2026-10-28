@@ -7,7 +7,7 @@ import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Gradebook } from "../packages/contracts/src/index";
-import { averageOf, gradeResult, letterOf, scoreInput, settingChoices, settingsInput, settingValue, splitPeriods } from "../packages/domain/src/index";
+import { assessmentTemplates, averageOf, csvFile, gradeResult, gradeStatistics, letterOf, pastedCells, pdfFile, periodFromPlan, planTotal, pointsInput, scoreInput, settingChoices, settingsInput, settingValue, splitPeriods } from "../packages/domain/src/index";
 import type { GradingPolicy } from "../packages/domain/src/index";
 
 // The minimal gradebook (libreta): one optional score per student of the section's roster and period of the school
@@ -98,6 +98,42 @@ async function as(cookie: string | null, path: string, method = "GET", data?: un
 const read = async <T = Record<string, unknown>>(response: Response, status = 200) => { const text = await response.text(); expect(response.status, text).toBe(status); return JSON.parse(text) as T; };
 const errorOf = async (response: Response, status: number) => (await read<{ error: string }>(response, status)).error;
 
+describe("assessment plan rules", () => {
+  it("every template adds up to 100 and points stay within the activity", () => {
+    for (const template of assessmentTemplates) expect(planTotal(template.activities), template.id).toBe(100);
+    expect(pointsInput("19,5", 20)).toBe(19.5);
+    expect(pointsInput(20, 20)).toBe(20);
+    expect(pointsInput("", 20)).toBeNull();
+    for (const bad of [20.5, -1, "abc", 1.25]) expect(pointsInput(bad, 20), String(bad)).toBeUndefined();
+  });
+
+  it("the period is the sum earned so far, says how many points were graded and whether every activity has a score", () => {
+    const plan = [{ id: "a", points: 30 }, { id: "b", points: 30 }, { id: "c", points: 40 }];
+    expect(periodFromPlan(plan, new Map())).toEqual({ score: null, graded: 0, complete: false });
+    expect(periodFromPlan(plan, new Map([["a", 25], ["b", 0]]))).toEqual({ score: 25, graded: 60, complete: false });
+    expect(periodFromPlan(plan, new Map([["a", 25], ["b", 27.5], ["c", 33]]))).toEqual({ score: 85.5, graded: 100, complete: true });
+  });
+
+  it("statistics count who passes, the bands of ten points and who is at risk", () => {
+    const stats = gradeStatistics([{ learnerId: "a", score: 95 }, { learnerId: "b", score: 62 }, { learnerId: "c", score: 40 }, { learnerId: "d", score: null }], 60);
+    expect(stats).toMatchObject({ count: 3, missing: 1, average: 65.7, median: 62, highest: 95, lowest: 40, passed: 2, failed: 1 });
+    expect(stats.bands.map(band => band.count)).toEqual([1, 0, 0, 1, 1]);
+    expect(stats.atRisk).toEqual([{ learnerId: "c", score: 40, failing: true }, { learnerId: "b", score: 62, failing: false }]);
+  });
+
+  it("reads cells pasted from a spreadsheet and writes a CSV that spreadsheets open safely", () => {
+    expect(pastedCells("18\t20\r\n15,5\t\n")).toEqual([["18", "20"], ["15,5", ""]]);
+    expect(pastedCells("18;20")).toEqual([["18", "20"]]);
+    expect(csvFile([["Estudiante", "Nota"], ["=HYPERLINK()", 85.5], ["Pérez, Ana", null]])).toBe("\uFEFFEstudiante,Nota\r\n'=HYPERLINK(),85.5\r\n\"Pérez, Ana\",\r\n");
+  });
+
+  it("the PDF writer lays out table rows in columns and starts a block on a new page", () => {
+    const file = pdfFile({ title: "Boleta", header: ["Escuela"], footer: "Pie", blocks: [{ text: "Ana", bold: true }, { text: "Periodo\tNota", columns: [0, 300] }, { text: "Beto", pageBreak: true }] });
+    expect(file).toContain("/Count 2");
+    expect(file).toMatch(/356\.00 [0-9.]+ Td \(Nota\) Tj/);
+  });
+});
+
 describe("gradebook on the built Worker", () => {
   it("in a section with three students and two bimestres, administration and the section's educator record scores and see who passes", async () => {
     const admin = await signIn("admin-demo"), educator = await signIn("educador-demo"), other = await signIn("carlos.mejia"), external = await signIn("admin-externo");
@@ -121,7 +157,7 @@ describe("gradebook on the built Worker", () => {
     const created = (await read<{ year: { id: string } }>(await as(admin, "/academic-years", "POST", year), 201)).year;
     await read(await as(admin, `/academic-years/${created.id}/activate`, "POST"));
     const book = (await read<{ gradebook: Gradebook }>(await as(educator, path))).gradebook;
-    expect(book).toMatchObject({ year: { name: "Ciclo 2027", status: "current" }, canEdit: true, canLock: true, canUnlock: false, policy: { scale: "numeric_100", passingGrade: 60, average: "simple" } });
+    expect(book).toMatchObject({ year: { name: "Ciclo 2027", status: "current" }, canEdit: true, canSubmit: true, canLock: false, canUnlock: false, policy: { scale: "numeric_100", passingGrade: 60, average: "simple" } });
     expect(book.learners.map(learner => learner.name)).toEqual(["Ana", "Beto", "Carla"]);
     const [first, second] = book.periods.map(period => period.id);
 
@@ -150,9 +186,14 @@ describe("gradebook on the built Worker", () => {
     const cleared = (await read<{ gradebook: Gradebook }>(await as(admin, path, "PUT", { grades: [{ learnerId: ids[1], periodId: first, score: null }] }))).gradebook;
     expect(cleared.results[1]).toMatchObject({ average: null, passed: null });
 
-    // Locking a period stops edits; only administration reopens it.
-    const locked = (await read<{ gradebook: Gradebook }>(await as(educator, `${path}/periods/${first}/lock`, "POST"))).gradebook;
-    expect(locked.periods[0]).toMatchObject({ locked: true, lockedBy: "Educador de la demostración" });
+    // Closing with review: the educator hands the period in (no more edits), administration approves and closes it.
+    expect(await errorOf(await as(educator, `${path}/periods/${first}/lock`, "POST"), 403)).toContain("Entrégalo para revisión");
+    const handed = (await read<{ gradebook: Gradebook }>(await as(educator, `${path}/periods/${first}/submit`, "POST"))).gradebook;
+    expect(handed.reviews).toEqual([expect.objectContaining({ periodId: first, status: "submitted", submittedBy: "Educador de la demostración" })]);
+    expect(await errorOf(await as(educator, path, "PUT", { grades: [{ learnerId: ids[2], periodId: first, score: 90 }] }), 409)).toContain("entregado a revisión");
+    const locked = (await read<{ gradebook: Gradebook }>(await as(admin, `${path}/periods/${first}/lock`, "POST"))).gradebook;
+    expect(locked.periods[0]).toMatchObject({ locked: true, lockedBy: expect.any(String) });
+    expect(locked.reviews[0]).toMatchObject({ status: "approved", reviewedBy: expect.any(String) });
     expect(await errorOf(await as(educator, path, "PUT", { grades: [{ learnerId: ids[2], periodId: first, score: 90 }] }), 409)).toContain("están cerradas");
     expect(await errorOf(await as(educator, `${path}/periods/${first}/lock`, "DELETE"), 403)).toContain("Solo administración");
     await read(await as(admin, `${path}/periods/${first}/lock`, "DELETE"));
@@ -167,13 +208,15 @@ describe("gradebook on the built Worker", () => {
     await read(await as(admin, `/members/${coordinatorId}/coordination`, "PUT", { enabled: true, scope: { all: true } }));
     const coordinator = await signIn("instructor-demo");
     const readOnly = (await read<{ gradebook: Gradebook }>(await as(coordinator, path))).gradebook;
-    expect(readOnly).toMatchObject({ canEdit: false, canLock: false, canUnlock: false });
+    // Coordination approves and returns, but never writes scores.
+    expect(readOnly).toMatchObject({ canEdit: false, canSubmit: false, canLock: true, canUnlock: false });
     expect(readOnly.grades).toHaveLength(3);
     expect(await errorOf(await as(coordinator, path, "PUT", { grades: [{ learnerId: ids[2], periodId: first, score: 10 }] }), 403)).toContain("Solo administración y quienes imparten");
 
     // The activity says that scores changed, never which ones.
     const { events } = await read<{ events: { summary: string }[] }>(await as(admin, "/activity?limit=50"));
-    expect(events.map(item => item.summary)).toContain("Cerró las notas de «Primer bimestre» en «Quinto A»");
+    expect(events.map(item => item.summary)).toContain("Aprobó y cerró las notas de «Primer bimestre» en «Quinto A»");
+    expect(events.map(item => item.summary)).toContain("Entregó las notas de «Primer bimestre» en «Quinto A» para revisión");
     expect(events.some(item => /\b(80|70|50)\b/.test(item.summary))).toBe(false);
 
     // A period with scores is not removed from the year; closing the year keeps the scores and freezes them.
@@ -188,4 +231,76 @@ describe("gradebook on the built Worker", () => {
     // Closing the year promotes nobody: the roster is the same.
     expect((await read<{ gradebook: Gradebook }>(await as(admin, path))).gradebook.learners).toHaveLength(3);
   }, 30_000); // One flow from the empty gradebook to the closed year: room for slow runners.
+
+  it("an assessment plan adds up to 100: the period score is the points earned so far, with comments, history, review and report cards", async () => {
+    const admin = await signIn("admin-demo"), educator = await signIn("educador-demo");
+    const course = (await read<{ id: string }>(await as(admin, "/courses", "POST", { title: "Curso con plan de evaluación", objective: "Calcular la nota con zona y examen.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", area: "011", settings: { attendance: true }, programId: null, leadId: "user-educator" }), 201)).id;
+    const group = (await read<{ id: string }>(await as(admin, `/courses/${course}/groups`, "POST", { name: "Sexto B" }), 201)).id;
+    await read(await as(admin, `/courses/${course}/groups/${group}/educators`, "PUT", { userIds: ["user-educator"] }));
+    const ids: string[] = [];
+    for (const displayName of ["Ana", "Beto", "Carla"]) ids.push((await read<{ id: string }>(await as(admin, `/courses/${course}/groups/${group}/learners`, "POST", { displayName }), 201)).id);
+    const created = (await read<{ year: { id: string } }>(await as(admin, "/academic-years", "POST", { name: "Ciclo 2028", from: "2028-01-10", until: "2028-06-30", periodKind: "bimester", periods: splitPeriods("2028-01-10", "2028-06-30", "bimester", 2) }), 201)).year;
+    await read(await as(admin, `/academic-years/${created.id}/activate`, "POST"));
+    const path = `/sections/${group}/grades`;
+    const [first, second] = (await read<{ gradebook: Gradebook }>(await as(educator, path))).gradebook.periods.map(period => period.id);
+    const plan = `${path}/periods/${first}/plan`;
+
+    // The plan: up to 100 points, validated; an incomplete plan is not handed in.
+    expect(await errorOf(await as(educator, plan, "PUT", { activities: [{ title: "Examen", kind: "exam", points: 60 }, { title: "Proyecto", kind: "project", points: 50 }] }), 400)).toContain("no puede pasar de 100");
+    expect(await errorOf(await as(educator, plan, "PUT", { activities: [{ title: "Examen", kind: "examen", points: 60 }] }), 400)).toContain("Elige el tipo");
+    let book = (await read<{ gradebook: Gradebook }>(await as(educator, plan, "PUT", { activities: [{ title: "Tareas", kind: "task", points: 20 }, { title: "Proyecto", kind: "project", points: 20 }, { title: "Examen del periodo", kind: "exam", points: 40, dueOn: "2028-03-10" }] }))).gradebook;
+    expect(book.activities.map(item => [item.title, item.points, item.position])).toEqual([["Tareas", 20, 0], ["Proyecto", 20, 1], ["Examen del periodo", 40, 2]]);
+    expect(await errorOf(await as(educator, `${path}/periods/${first}/submit`, "POST"), 409)).toContain("suma 80 puntos");
+    const [tasks, project, exam] = book.activities.map(item => item.id);
+    book = (await read<{ gradebook: Gradebook }>(await as(educator, plan, "PUT", { activities: [...book.activities.map(({ id, title, kind, points, dueOn }) => ({ id, title, kind, points, dueOn })), { title: "Participación", kind: "participation", points: 20 }] }))).gradebook;
+    expect(book.activities.map(item => item.id).slice(0, 3)).toEqual([tasks, project, exam]);
+
+    // Points per activity, never above its maximum; the period score is their sum and is not written by hand.
+    expect(await errorOf(await as(educator, path, "PUT", { scores: [{ activityId: tasks, learnerId: ids[0], points: 21 }] }), 400)).toContain("van de 0 a 20");
+    expect(await errorOf(await as(educator, path, "PUT", { grades: [{ learnerId: ids[0], periodId: first, score: 90 }] }), 400)).toContain("se calcula con su plan");
+    book = (await read<{ gradebook: Gradebook }>(await as(educator, path, "PUT", {
+      scores: [{ activityId: tasks, learnerId: ids[0], points: 18 }, { activityId: project, learnerId: ids[0], points: "19,5" }, { activityId: exam, learnerId: ids[0], points: 35 }, { activityId: tasks, learnerId: ids[1], points: 10 }],
+      comments: [{ learnerId: ids[0], periodId: first, body: "Excelente proyecto." }],
+    }))).gradebook;
+    expect(book.grades.filter(grade => grade.periodId === first).map(grade => [grade.learnerId, grade.score]).sort()).toEqual([[ids[0], 72.5], [ids[1], 10]].sort());
+    expect(book.comments).toEqual([expect.objectContaining({ learnerId: ids[0], periodId: first, body: "Excelente proyecto.", updatedBy: "Educador de la demostración" })]);
+    book = (await read<{ gradebook: Gradebook }>(await as(educator, path, "PUT", { scores: [{ activityId: tasks, learnerId: ids[1], points: null }] }))).gradebook;
+    expect(book.grades.some(grade => grade.learnerId === ids[1])).toBe(false);
+
+    // History: who changed which score, from what to what.
+    const { changes } = await read<{ changes: { activity: string | null; before: number | null; after: number | null; by: string }[] }>(await as(educator, `${path}/history?learner=${ids[1]}`));
+    expect(changes.map(item => [item.activity, item.before, item.after])).toEqual([["Tareas", 10, null], ["Tareas", null, 10]]);
+    expect((await as(educator, `${path}/history?learner=learner-otro`)).status).toBe(404);
+
+    // Activities with scores stay and their points do not drop below a score; a period with scores typed by hand keeps that mode.
+    const current = book.activities.filter(item => item.periodId === first).map(({ id, title, kind, points, dueOn }) => ({ id, title, kind, points, dueOn }));
+    expect(await errorOf(await as(educator, plan, "PUT", { activities: current.filter(item => item.id !== exam) }), 409)).toContain("ya tiene punteos");
+    expect(await errorOf(await as(educator, plan, "PUT", { activities: current.map(item => item.id === exam ? { ...item, points: 30 } : item) }), 409)).toContain("no pueden ser menos");
+    await read(await as(educator, path, "PUT", { grades: [{ learnerId: ids[2], periodId: second, score: 70 }] }));
+    expect(await errorOf(await as(educator, `${path}/periods/${second}/plan`, "PUT", { activities: [{ title: "Examen", kind: "exam", points: 100 }] }), 409)).toContain("ya tiene notas registradas sin plan");
+
+    // Handing in freezes the period and its plan; coordination or administration returns it with a note or approves it.
+    await read(await as(educator, `${path}/periods/${first}/submit`, "POST"));
+    expect(await errorOf(await as(educator, plan, "PUT", { activities: current }), 409)).toContain("cerrado o entregado en «Sexto B»");
+    expect(await errorOf(await as(educator, `${path}/periods/${first}/return`, "POST", { note: "Revisa a Beto." }), 403)).toContain("Solo coordinación y administración");
+    expect(await errorOf(await as(admin, `${path}/periods/${first}/return`, "POST", { note: "" }), 400)).toContain("Explica qué revisar");
+    book = (await read<{ gradebook: Gradebook }>(await as(admin, `${path}/periods/${first}/return`, "POST", { note: "Falta el punteo de Beto." }))).gradebook;
+    expect(book.reviews[0]).toMatchObject({ status: "returned", note: "Falta el punteo de Beto." });
+    await read(await as(educator, path, "PUT", { scores: [{ activityId: tasks, learnerId: ids[1], points: 15 }] }));
+    await read(await as(educator, `${path}/periods/${first}/submit`, "POST"));
+    book = (await read<{ gradebook: Gradebook }>(await as(admin, `${path}/periods/${first}/lock`, "POST"))).gradebook;
+    expect(book.periods[0].locked).toBe(true);
+    expect(await errorOf(await as(educator, path, "PUT", { scores: [{ activityId: tasks, learnerId: ids[1], points: 16 }] }), 409)).toContain("están cerradas");
+
+    // Report cards: the whole section or one student, as a PDF.
+    const pdf = await as(educator, `${path}/report.pdf`);
+    expect(pdf.status).toBe(200);
+    expect(pdf.headers.get("content-type")).toBe("application/pdf");
+    const text = await pdf.text();
+    expect(text.startsWith("%PDF-1.4")).toBe(true);
+    for (const expected of ["(Ana)", "(Beto)", "(Carla)", "Excelente proyecto.", "Examen del periodo"]) expect(text).toContain(expected);
+    expect((await as(educator, `${path}/report.pdf?learner=${ids[0]}`)).status).toBe(200);
+    expect((await as(educator, `${path}/report.pdf?learner=learner-otro`)).status).toBe(404);
+    expect((await as(await signIn("admin-externo"), `${path}/report.pdf`)).status).toBe(404);
+  }, 30_000);
 });

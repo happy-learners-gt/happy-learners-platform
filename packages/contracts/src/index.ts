@@ -250,9 +250,23 @@ export interface Gradebook {
   grades: GradeEntry[];
   results: GradeResult[];
   policy: { scale: GradeScale; passingGrade: number; letterThresholds: LetterThresholds; average: GradeAverage };
-  /** Writes the scores of open periods; locks a period; reopens it (administration only). */
-  canEdit: boolean; canLock: boolean; canUnlock: boolean;
+  /** The course's assessment plan for the year's periods (shared by its sections), its scores in this section and comments. */
+  activities: AssessmentActivity[];
+  scores: AssessmentScore[];
+  comments: GradeComment[];
+  /** Where each period is in its closing: handed in, returned or approved. Absent while it is open. */
+  reviews: PeriodReview[];
+  /** Writes the scores of open periods and edits the plan; hands a period in; approves and closes it (administration and coordination); reopens it (administration only). */
+  canEdit: boolean; canLock: boolean; canUnlock: boolean; canSubmit: boolean;
 }
+/** An evaluation activity of a course's assessment plan for a period: its points add up to the period's 100. */
+export type AssessmentKind = "task" | "project" | "quiz" | "exam" | "participation" | "other";
+export interface AssessmentActivity { id: string; periodId: string; position: number; title: string; kind: AssessmentKind; points: number; dueOn: string | null }
+export interface AssessmentScore { activityId: string; learnerId: string; points: number }
+export interface GradeComment { learnerId: string; periodId: string; body: string; updatedAt: string; updatedBy: string }
+export interface PeriodReview { periodId: string; status: "submitted" | "returned" | "approved"; note: string | null; submittedBy: string; submittedAt: string; reviewedBy: string | null; reviewedAt: string | null }
+/** One change of a score: the period's score or an activity's points, before and after (null is empty). */
+export interface GradeChange { id: string; learnerId: string; periodId: string; activityId: string | null; activity: string | null; before: number | null; after: number | null; by: string; at: string }
 /** A section of a course: the students assigned to it, its access code and its schedule (ST-026, ST-099). */
 export interface ClassGroup { id: string; courseId: string; name: string; status: "active" | "archived"; learnerCount: number; accessCode?: string | null; schedule?: SectionSchedule | null; educators: SectionEducator[] }
 /** How far a section has come with its course, from its own records only (DEC-024). */

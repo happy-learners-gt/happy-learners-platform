@@ -1,84 +1,132 @@
-import { useCallback, useEffect, useState } from "react";
-import type { FormEvent } from "react";
-import type { Gradebook, GradeResult } from "@happy-learners/contracts";
-import { letterOf, scoreInput, settingText, thresholdsText } from "@happy-learners/domain";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ClipboardEvent, FormEvent, KeyboardEvent } from "react";
+import type { Gradebook, GradebookPeriod, GradeResult } from "@happy-learners/contracts";
+import { assessmentKindLabel, csvFile, gradeStatistics, letterOf, pastedCells, periodFromPlan, planTotal, pointsInput, scoreInput, settingText, thresholdsText } from "@happy-learners/domain";
 import { api, message } from "../../api";
-import { Link, useUnsavedChanges } from "../../navigation";
+import { Link, useNavigation, useUnsavedChanges } from "../../navigation";
 import { plural, sessionDay } from "../../model";
-import { useFeedback } from "../../ui/feedback";
+import { Modal, useFeedback } from "../../ui/feedback";
 import { Icon } from "../../ui/icons";
-import { Menu } from "../../ui/Menu";
-import { EmptyState, ErrorState, Loading, PageHeader, Section, StatusBadge } from "../../ui/primitives";
+import { Button, EmptyState, ErrorState, Loading, PageHeader, PrimaryAction, Section, StatTiles, StatusBadge } from "../../ui/primitives";
+import { Tabs } from "../../ui/Tabs";
 import { currentRegional } from "../../regional";
 import { useCourse } from "../course/context";
 import { sectionCrumbs, useSection } from "./context";
+import { GradePlanDialog } from "./GradePlan";
+import { GradeStudentDrawer } from "./GradeStudent";
 
-const key = (learnerId: string, periodId: string) => `${learnerId}:${periodId}`;
 const number = (value: number) => new Intl.NumberFormat(currentRegional().locale, { maximumFractionDigits: 1 }).format(value);
+const summary = "resumen";
+type Column = { id: string; kind: "grade" | "score"; title: string; detail: string; max: number };
+type PeriodState = "open" | "submitted" | "returned" | "closed";
+const stateLabels: Record<PeriodState, string> = { open: "Abierto", submitted: "En revisión", returned: "Devuelto", closed: "Cerrado" };
+const stateTones = { open: "neutral", submitted: "info", returned: "warning", closed: "success" } as const;
 
-function ResultBadge({ result }: { result?: GradeResult }) {
+function ResultBadge({ result }: { result?: Pick<GradeResult, "passed" | "complete"> }) {
   if (!result || result.passed === null) return <span className="muted">Sin notas</span>;
   return <StatusBadge tone={result.passed ? "success" : "danger"}>{result.passed ? "Aprueba" : "No aprueba"}{result.complete ? "" : " (parcial)"}</StatusBadge>;
 }
 
+/** Downloads a file from the API, keeping the name the server gives it. */
+async function download(path: string, fallback: string) {
+  const response = await fetch(`/api${path}`, { credentials: "same-origin" });
+  if (!response.ok) throw new Error(((await response.json().catch(() => ({}))) as { error?: string }).error || "No se pudo generar el archivo.");
+  save(await response.blob(), /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") || "")?.[1] || fallback);
+}
+function save(blob: Blob, name: string) {
+  const link = document.createElement("a"), href = URL.createObjectURL(blob);
+  link.href = href; link.download = name; link.click();
+  setTimeout(() => URL.revokeObjectURL(href), 10_000);
+}
+const slug = (text: string) => text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+/** The whole year as a spreadsheet: each period's activities and score, the average and the result. */
+function gradebookCsv(book: Gradebook) {
+  const header = ["Estudiante"], rows = book.learners.map(learner => [learner.name] as (string | number | null)[]);
+  for (const period of book.periods) {
+    const plan = book.activities.filter(item => item.periodId === period.id);
+    for (const activity of plan) {
+      header.push(`${period.name} · ${activity.title} (${number(activity.points)})`);
+      book.learners.forEach((learner, index) => rows[index].push(book.scores.find(score => score.activityId === activity.id && score.learnerId === learner.id)?.points ?? null));
+    }
+    header.push(`${period.name} · Nota`, `${period.name} · Comentario`);
+    book.learners.forEach((learner, index) => rows[index].push(
+      book.grades.find(grade => grade.learnerId === learner.id && grade.periodId === period.id)?.score ?? null,
+      book.comments.find(comment => comment.learnerId === learner.id && comment.periodId === period.id)?.body ?? null));
+  }
+  header.push("Promedio", "Resultado");
+  book.learners.forEach((learner, index) => {
+    const result = book.results.find(item => item.learnerId === learner.id);
+    rows[index].push(result?.average ?? null, !result || result.passed === null ? "Sin notas" : `${result.passed ? "Aprueba" : "No aprueba"}${result.complete ? "" : " (parcial)"}`);
+  });
+  return csvFile([header, ...rows]);
+}
+
 /**
- * /secciones/:id/notas — the section's gradebook (libreta): one optional score per student and period of the school
- * year, the average the course's settings ask for and whether it passes. Administration and the section's educators
- * write scores and lock a period; only administration reopens it. A missing score is not a zero.
+ * /secciones/:id/notas — the section's gradebook (libreta). A tab per period of the school year with its grid: the
+ * course's assessment plan (activities with points that add up to 100) or a single score per student, the period's
+ * statistics, comments and history per student, and the closing review (hand in, return, approve). The summary tab
+ * shows each period, the average and the result. Report cards come as a PDF, and the whole year as a CSV.
  */
 export function SectionGradesPage() {
   const { section } = useSection();
   const { course } = useCourse();
+  const { url, navigate } = useNavigation();
   const { toast, confirm } = useFeedback();
   const [data, setData] = useState<Gradebook | null>(null), [error, setError] = useState(""), [year, setYear] = useState("");
-  const [edits, setEdits] = useState<Record<string, string>>({}), [busy, setBusy] = useState(false), [formError, setFormError] = useState("");
+  const [edits, setEdits] = useState<Record<string, string>>({}), [busy, setBusy] = useState(""), [formError, setFormError] = useState("");
+  const [planning, setPlanning] = useState(false), [student, setStudent] = useState(""), [returning, setReturning] = useState(false);
+  const grid = useRef<HTMLTableElement>(null);
   const dirty = Object.keys(edits).length > 0;
   useUnsavedChanges(dirty);
   const load = useCallback(() => api<{ gradebook: Gradebook }>(`/sections/${section.id}/grades${year ? `?year=${year}` : ""}`)
     .then(result => { setData(result.gradebook); setError(""); setEdits({}); }, cause => setError(message(cause))), [section.id, year]);
   useEffect(() => { void load(); }, [load]);
   const crumbs = sectionCrumbs(section, { label: "Notas" });
-  const header = <PageHeader crumbs={crumbs} title="Notas" description="Una nota opcional por estudiante y periodo del ciclo lectivo. Un periodo sin nota no cuenta como cero."/>;
+  const update = (book: Gradebook) => { setData(book); setEdits({}); setFormError(""); };
+  async function exportCsv() {
+    if (!data) return;
+    save(new Blob([gradebookCsv(data)], { type: "text/csv;charset=utf-8" }), `notas-${slug(`${section.name}-${data.year?.name || ""}`)}.csv`);
+  }
+  async function reports(learnerId?: string) {
+    setBusy("report");
+    try { await download(`/sections/${section.id}/grades/report.pdf?${new URLSearchParams({ ...(data?.year ? { year: data.year.id } : {}), ...(learnerId ? { learner: learnerId } : {}) })}`, "boleta.pdf"); }
+    catch (cause) { toast({ tone: "error", message: message(cause) }); }
+    finally { setBusy(""); }
+  }
+  const ready = !!data?.year && data.learners.length > 0;
+  const header = <PageHeader crumbs={crumbs} title="Notas" description="El plan de evaluación de cada periodo, los punteos de cada estudiante, la revisión de cierre y las boletas. Un periodo sin nota no cuenta como cero."
+    actions={ready && <>
+      <Button icon="download" onClick={() => void exportCsv()}>Exportar CSV</Button>
+      <Button icon="file" busy={busy === "report"} disabled={!!busy} onClick={() => void reports()}>{busy === "report" ? "Generando…" : "Boletas en PDF"}</Button>
+    </>}/>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
   if (!data) return <>{header}<Loading label="Cargando notas…" lines={6}/></>;
   if (!data.year) return <>{header}<EmptyState icon="calendar" title="Aún no hay un ciclo lectivo vigente">Administración define el ciclo y sus periodos en <Link href="/organizacion">Organización</Link>. Cuando lo active, aquí podrás registrar las notas.</EmptyState></>;
 
   const { policy, periods, learners } = data;
   const letters = policy.scale === "letters_af";
-  const stored = new Map(data.grades.map(grade => [key(grade.learnerId, grade.periodId), grade.score]));
-  const results = new Map(data.results.map(result => [result.learnerId, result]));
-  const valueOf = (learnerId: string, periodId: string) => edits[key(learnerId, periodId)] ?? (stored.has(key(learnerId, periodId)) ? String(stored.get(key(learnerId, periodId))) : "");
-  const invalid = Object.values(edits).some(value => scoreInput(value) === undefined);
-  function edit(learnerId: string, periodId: string, value: string) {
-    const id = key(learnerId, periodId), original = stored.has(id) ? String(stored.get(id)) : "";
-    setEdits(current => { const next = { ...current }; if (value.trim() === original) delete next[id]; else next[id] = value; return next; });
-  }
-  async function save(event: FormEvent) {
-    event.preventDefault(); setBusy(true); setFormError("");
-    try {
-      const grades = Object.entries(edits).map(([id, value]) => { const [learnerId, periodId] = id.split(":"); return { learnerId, periodId, score: scoreInput(value) ?? null }; });
-      const result = await api<{ gradebook: Gradebook }>(`/sections/${section.id}/grades`, "PUT", { grades });
-      setData(result.gradebook); setEdits({});
-      toast({ message: `Notas guardadas: ${plural(grades.length, "cambio", "cambios")}.` });
-    } catch (cause) { setFormError(message(cause)); }
-    finally { setBusy(false); }
-  }
-  async function lock(period: Gradebook["periods"][number], close: boolean) {
-    if (dirty) { toast({ tone: "error", message: "Guarda o descarta tus cambios antes de cerrar o reabrir un periodo." }); return; }
-    if (!await confirm(close
-      ? { title: `¿Cerrar las notas de «${period.name}»?`, body: <p>Nadie podrá cambiar las notas de este periodo en «{section.name}». Solo administración puede reabrirlas.</p>, confirm: "Cerrar notas" }
-      : { title: `¿Reabrir las notas de «${period.name}»?`, body: <p>Quienes imparten la sección podrán cambiarlas de nuevo.</p>, confirm: "Reabrir notas" })) return;
-    try {
-      const result = await api<{ gradebook: Gradebook }>(`/sections/${section.id}/grades/periods/${period.id}/lock`, close ? "POST" : "DELETE");
-      setData(result.gradebook);
-      toast({ message: close ? `Las notas de «${period.name}» quedaron cerradas.` : `Las notas de «${period.name}» se reabrieron.` });
-    } catch (cause) { toast({ tone: "error", message: message(cause) }); }
-  }
-  const passing = data.results.filter(result => result.passed).length, failing = data.results.filter(result => result.passed === false).length;
+  const today = new Date().toISOString().slice(0, 10);
+  const requested = url.searchParams.get("periodo");
+  const view = requested === summary || periods.some(period => period.id === requested) ? requested!
+    : (periods.find(period => period.from <= today && today <= period.until && !period.locked) || periods.find(period => !period.locked))?.id || summary;
+  const go = (next: string) => {
+    if (dirty) { toast({ tone: "error", message: "Guarda o descarta tus cambios antes de cambiar de periodo." }); return; }
+    const target = new URL(url); target.searchParams.set("periodo", next); navigate(target.pathname + target.search, true);
+  };
+  const stateOf = (period: GradebookPeriod): PeriodState => {
+    if (period.locked) return "closed";
+    const review = data.reviews.find(item => item.periodId === period.id);
+    return review?.status === "submitted" ? "submitted" : review?.status === "returned" ? "returned" : "open";
+  };
+  const tabs = [
+    ...periods.map(period => ({ value: period.id, label: period.name, badge: stateOf(period) !== "open" && <span className={`tab-badge state-${stateOf(period)}`}>{stateLabels[stateOf(period)]}</span> })),
+    { value: summary, label: "Resumen del ciclo" },
+  ];
   return <>
     {header}
     <Section title={`${data.year.name}${data.year.status === "closed" ? " (cerrado)" : ""}`} action={data.years.length > 1 && <label><span className="sr-only">Ciclo lectivo</span>
-      <select value={data.year.id} onChange={event => { if (!dirty) setYear(event.target.value); }} disabled={dirty}>{data.years.map(item => <option key={item.id} value={item.id}>{item.name}{item.status === "closed" ? " (cerrado)" : ""}</option>)}</select></label>}>
+      <select value={data.year.id} onChange={event => { if (!dirty) { setYear(event.target.value); } }} disabled={dirty}>{data.years.map(item => <option key={item.id} value={item.id}>{item.name}{item.status === "closed" ? " (cerrado)" : ""}</option>)}</select></label>}>
       <p className="muted small grade-policy">
         {settingText("gradeScale", policy.scale)} · Aprueba con {policy.passingGrade} · {settingText("gradeAverage", policy.average)}{letters ? ` · ${thresholdsText(policy.letterThresholds)}` : ""}.{" "}
         {course.status === "active" && <Link href={`/cursos/${course.id}/configuracion`}>Configuración del curso</Link>}
@@ -86,50 +134,251 @@ export function SectionGradesPage() {
       {data.year.status === "closed" && <p className="notice"><Icon name="info" size={18}/>El ciclo está cerrado: sus notas se consultan, pero ya no cambian.</p>}
       {!periods.length ? <p className="muted">El ciclo no tiene periodos.</p>
         : !learners.length ? <EmptyState compact icon="users" title="La sección aún no tiene estudiantes" action={<Link className="button secondary small" href={`/secciones/${section.id}/estudiantes`}>Ver estudiantes</Link>}>Agrega estudiantes a la lista de la sección para registrar sus notas.</EmptyState>
-        : <form onSubmit={save} className="stack">
-          {formError && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{formError}</p>}
-          <div className="coverage-scroll" role="region" aria-label={`Notas de ${section.name}`} tabIndex={0}>
-            <table className="coverage-table grades-table">
-              <thead><tr>
-                <th scope="col">Estudiante</th>
-                {periods.map(period => <th scope="col" key={period.id}>
-                  <div className="grade-head">
-                    <span>{period.name}{policy.average === "weighted" && <span className="muted"> · peso {period.weight}</span>}</span>
-                    {period.lockedAt && <span className="grade-lock" title={`Cerró ${period.lockedBy || "administración"} el ${sessionDay(period.lockedAt.slice(0, 10), "short")}`}><Icon name="shield" size={14}/>Cerrado</span>}
-                    {((data.canLock && !period.locked) || (data.canUnlock && period.lockedAt)) && <Menu label={`Acciones de ${period.name}`} items={period.locked
-                      ? [{ label: "Reabrir notas", icon: "undo", onSelect: () => void lock(period, false) }]
-                      : [{ label: "Cerrar notas", icon: "shield", onSelect: () => void lock(period, true) }]}/>}
-                  </div>
-                </th>)}
-                <th scope="col">Promedio</th>
-                <th scope="col">Resultado</th>
-              </tr></thead>
-              <tbody>{learners.map(learner => {
-                const result = results.get(learner.id);
-                return <tr key={learner.id}>
-                  <th scope="row">{learner.name}</th>
-                  {periods.map(period => {
-                    const value = valueOf(learner.id, period.id), parsed = scoreInput(value), editable = data.canEdit && !period.locked;
-                    return <td key={period.id} className="grade-cell">
-                      {editable
-                        ? <input type="text" inputMode="decimal" className="grade-input" value={value} aria-label={`Nota de ${learner.name} en ${period.name}`} aria-invalid={parsed === undefined} onChange={event => edit(learner.id, period.id, event.target.value)}/>
-                        : <span>{value === "" ? <span className="muted">—</span> : number(Number(value))}</span>}
-                      {letters && typeof parsed === "number" && <span className="grade-letter" aria-label={`letra ${letterOf(parsed, policy.letterThresholds)}`}>{letterOf(parsed, policy.letterThresholds)}</span>}
-                    </td>;
-                  })}
-                  <td>{result?.average === null || !result ? <span className="muted">—</span> : <strong>{number(result.average)}{result.letter ? ` (${result.letter})` : ""}</strong>}</td>
-                  <td><ResultBadge result={result}/></td>
-                </tr>;
-              })}</tbody>
-            </table>
-          </div>
-          <p className="muted small">{plural(passing, "estudiante aprueba", "estudiantes aprueban")} y {plural(failing, "no aprueba", "no aprueban")} con las notas registradas.</p>
-          {data.canEdit && <div className="button-row">
-            <button className="button primary" disabled={!dirty || invalid || busy}>{busy ? "Guardando…" : "Guardar notas"}</button>
-            {dirty && <button type="button" className="button ghost" onClick={() => { setEdits({}); setFormError(""); }}>Descartar cambios</button>}
-            {invalid && <span className="muted small" role="status">Las notas van de 0 a 100, con un decimal como máximo.</span>}
-          </div>}
-        </form>}
+        : <Tabs label="Periodos del ciclo" value={view} onChange={go} items={tabs}>
+          {view === summary ? <YearSummary book={data} onStudent={setStudent}/> : periodGrid()}
+        </Tabs>}
     </Section>
+    {planning && view !== summary && <GradePlanDialog book={data} periodId={view} sectionId={section.id} onClose={() => setPlanning(false)} onSaved={book => { update(book); setPlanning(false); toast({ message: "Plan de evaluación guardado." }); }}/>}
+    {student && <GradeStudentDrawer book={data} learnerId={student} periodId={view === summary ? (periods.find(period => !period.locked) || periods[periods.length - 1]).id : view}
+      editable={data.canEdit && view !== summary && ["open", "returned"].includes(stateOf(periods.find(period => period.id === view)!))}
+      onSaved={book => { update(book); toast({ message: "Comentario guardado." }); }} onReport={() => void reports(student)} onClose={() => setStudent("")}/>}
+    {returning && view !== summary && <ReturnDialog sectionId={section.id} period={periods.find(period => period.id === view)!} onClose={() => setReturning(false)} onSaved={book => { update(book); setReturning(false); toast({ message: "El periodo se devolvió a la sección." }); }}/>}
   </>;
+
+  // Called as a function, not rendered as a component: the grid keeps its inputs (and their focus) between renders.
+  function periodGrid() {
+    const period = periods.find(item => item.id === view)!;
+    const state = stateOf(period), review = data!.reviews.find(item => item.periodId === period.id);
+    const plan = data!.activities.filter(item => item.periodId === period.id);
+    const planned = plan.length > 0, total = planTotal(plan);
+    const editable = data!.canEdit && (state === "open" || state === "returned");
+    const columns: Column[] = planned
+      ? plan.map(item => ({ id: item.id, kind: "score", title: item.title, detail: `${assessmentKindLabel(item.kind)} · ${number(item.points)} pts`, max: item.points }))
+      : [{ id: period.id, kind: "grade", title: "Nota del periodo", detail: "De 0 a 100", max: 100 }];
+    const key = (learnerId: string, column: Column) => `${column.kind}:${learnerId}:${column.id}`;
+    const stored = (learnerId: string, column: Column) => {
+      const value = column.kind === "grade" ? data!.grades.find(grade => grade.learnerId === learnerId && grade.periodId === column.id)?.score : data!.scores.find(score => score.learnerId === learnerId && score.activityId === column.id)?.points;
+      return value === undefined ? "" : String(value);
+    };
+    const valueOf = (learnerId: string, column: Column) => edits[key(learnerId, column)] ?? stored(learnerId, column);
+    const parse = (value: string, column: Column) => column.kind === "grade" ? scoreInput(value) : pointsInput(value, column.max);
+    // The period's score as it would be with the unsaved changes.
+    const periodOf = (learnerId: string) => {
+      if (!planned) { const value = parse(valueOf(learnerId, columns[0]), columns[0]); return { score: typeof value === "number" ? value : null, graded: 100, complete: typeof value === "number" }; }
+      const earned = new Map<string, number>();
+      for (const column of columns) { const value = parse(valueOf(learnerId, column), column); if (typeof value === "number") earned.set(column.id, value); }
+      return periodFromPlan(plan, earned);
+    };
+    const scores = learners.map(learner => ({ learnerId: learner.id, ...periodOf(learner.id) }));
+    // While the plan is under way, each student is judged by the share of the points graded so far: 42 of 60 is 70.
+    const standing = (item: { score: number | null; graded: number; complete: boolean }) => item.score === null ? null : item.complete || !planned || !item.graded ? item.score : Math.round(item.score / item.graded * 1000) / 10;
+    const partial = planned && scores.some(item => item.score !== null && !item.complete);
+    const stats = gradeStatistics(scores.map(item => ({ learnerId: item.learnerId, score: standing(item) })), policy.passingGrade);
+    const invalid = Object.entries(edits).some(([id, value]) => { const column = columns.find(item => id.endsWith(`:${item.id}`)); return !column || parse(value, column) === undefined; });
+    const changed = Object.keys(edits).length;
+    function edit(learnerId: string, column: Column, value: string) {
+      const id = key(learnerId, column), original = stored(learnerId, column);
+      setEdits(current => { const next = { ...current }; if (value.trim() === original) delete next[id]; else next[id] = value.trim() === "" ? "" : value; return next; });
+    }
+    function focus(row: number, column: number) {
+      const target = grid.current?.querySelector<HTMLInputElement>(`[data-cell="${row}:${column}"]`);
+      if (target) { target.focus(); target.select(); return true; }
+      return false;
+    }
+    function onKey(event: KeyboardEvent<HTMLInputElement>, row: number, column: number) {
+      const input = event.currentTarget, atStart = input.selectionStart === 0 && input.selectionEnd === 0, atEnd = input.selectionStart === input.value.length;
+      const moves: Record<string, [number, number] | null> = {
+        ArrowDown: [row + 1, column], ArrowUp: [row - 1, column], Enter: event.shiftKey ? [row - 1, column] : [row + 1, column],
+        ArrowRight: atEnd ? [row, column + 1] : null, ArrowLeft: atStart ? [row, column - 1] : null,
+      };
+      const next = moves[event.key];
+      if (next && focus(...next)) event.preventDefault();
+      else if (event.key === "Enter") event.preventDefault();
+    }
+    // Cells copied from a spreadsheet fill the grid from the focused cell, right and down.
+    function onPaste(event: ClipboardEvent<HTMLInputElement>, row: number, column: number) {
+      const text = event.clipboardData.getData("text");
+      if (!/[\t\n]/.test(text.trim())) return;
+      event.preventDefault();
+      let count = 0;
+      pastedCells(text).forEach((cells, i) => cells.forEach((value, j) => {
+        const learner = learners[row + i], target = columns[column + j];
+        if (learner && target) { edit(learner.id, target, value); count++; }
+      }));
+      toast({ message: `Se pegaron ${plural(count, "celda", "celdas")}. Revísalas y guarda.` });
+    }
+    async function submitGrades(event: FormEvent) {
+      event.preventDefault(); setBusy("save"); setFormError("");
+      try {
+        const entries = Object.entries(edits).map(([id, value]) => { const [kind, learnerId, columnId] = id.split(":"); return { kind, learnerId, columnId, value }; });
+        const body = {
+          grades: entries.filter(entry => entry.kind === "grade").map(entry => ({ learnerId: entry.learnerId, periodId: entry.columnId, score: scoreInput(entry.value) ?? null })),
+          scores: entries.filter(entry => entry.kind === "score").map(entry => ({ learnerId: entry.learnerId, activityId: entry.columnId, points: pointsInput(entry.value, 100) ?? null })),
+        };
+        const result = await api<{ gradebook: Gradebook }>(`/sections/${section.id}/grades`, "PUT", body);
+        update(result.gradebook);
+        toast({ message: `Notas guardadas: ${plural(entries.length, "cambio", "cambios")}.` });
+      } catch (cause) { setFormError(message(cause)); }
+      finally { setBusy(""); }
+    }
+    async function act(kind: "submit" | "lock" | "unlock") {
+      if (dirty) { toast({ tone: "error", message: "Guarda o descarta tus cambios antes de entregar, aprobar o reabrir el periodo." }); return; }
+      const missing = scores.filter(item => !item.complete).length;
+      const dialogs = {
+        submit: { title: `¿Entregar las notas de «${period.name}»?`, body: <p>Coordinación las revisará y las aprobará o te las devolverá con comentarios. Mientras tanto no cambian.{missing ? ` Ojo: ${plural(missing, "estudiante no tiene", "estudiantes no tienen")} todas sus notas.` : ""}</p>, confirm: "Entregar para revisión" },
+        lock: { title: `¿Aprobar y cerrar «${period.name}»?`, body: <p>Nadie podrá cambiar las notas de este periodo en «{section.name}». Solo administración puede reabrirlas.{missing ? ` ${plural(missing, "estudiante no tiene", "estudiantes no tienen")} todas sus notas.` : ""}</p>, confirm: "Aprobar y cerrar" },
+        unlock: { title: `¿Reabrir las notas de «${period.name}»?`, body: <p>Quienes imparten la sección podrán cambiarlas de nuevo y tendrán que entregarlas otra vez.</p>, confirm: "Reabrir notas" },
+      };
+      if (!await confirm(dialogs[kind])) return;
+      setBusy(kind);
+      try {
+        const path = `/sections/${section.id}/grades/periods/${period.id}/${kind === "submit" ? "submit" : "lock"}`;
+        update((await api<{ gradebook: Gradebook }>(path, kind === "unlock" ? "DELETE" : "POST")).gradebook);
+        toast({ message: kind === "submit" ? `«${period.name}» quedó entregado para revisión.` : kind === "lock" ? `«${period.name}» quedó aprobado y cerrado.` : `«${period.name}» se reabrió.` });
+      } catch (cause) { toast({ tone: "error", message: message(cause) }); }
+      finally { setBusy(""); }
+    }
+    const resultOf = (item: { score: number | null; graded: number; complete: boolean }) => { const value = standing(item); return { passed: value === null ? null : value >= policy.passingGrade, complete: item.complete }; };
+    return <div className="stack">
+      <div className="grade-status">
+        <StatusBadge tone={stateTones[state]}>{stateLabels[state]}</StatusBadge>
+        <span className="muted small">
+          {state === "closed" && period.lockedAt && `Aprobó ${period.lockedBy || "administración"} el ${sessionDay(period.lockedAt.slice(0, 10), "short")}.`}
+          {state === "submitted" && review && `Entregó ${review.submittedBy} el ${sessionDay(review.submittedAt.slice(0, 10), "short")}. Coordinación lo revisa.`}
+          {state === "returned" && review && `Lo devolvió ${review.reviewedBy || "coordinación"}: «${review.note}»`}
+          {state === "open" && `${sessionDay(period.from, "short")} – ${sessionDay(period.until, "short")}`}
+        </span>
+        <div className="grade-status-actions">
+          {data!.canSubmit && (state === "open" || state === "returned") && <Button icon="send" disabled={!!busy || (planned && total !== 100)} title={planned && total !== 100 ? "El plan debe sumar 100 puntos." : undefined} onClick={() => void act("submit")}>Entregar para revisión</Button>}
+          {data!.canLock && state === "submitted" && <Button variant="ghost" icon="undo" disabled={!!busy} onClick={() => setReturning(true)}>Devolver</Button>}
+          {data!.canLock && state !== "closed" && <Button icon="shield" disabled={!!busy} onClick={() => void act("lock")}>Aprobar y cerrar</Button>}
+          {data!.canUnlock && state === "closed" && period.lockedAt && <Button variant="ghost" icon="undo" disabled={!!busy} onClick={() => void act("unlock")}>Reabrir</Button>}
+        </div>
+      </div>
+      <div className="grade-plan-line">
+        <Icon name="list" size={18}/>
+        {planned
+          ? <span><strong>Plan de evaluación:</strong> {plural(plan.length, "actividad", "actividades")} · {number(total)} de 100 puntos{total !== 100 && <span className="muted"> (incompleto)</span>}</span>
+          : <span className="muted">Sin plan de evaluación: registras una nota de 0 a 100 por estudiante. Con un plan, la nota es la suma de la zona y el examen.</span>}
+        {editable && <Button variant="ghost" icon={planned ? "edit" : "plus"} className="small" onClick={() => { if (dirty) toast({ tone: "error", message: "Guarda o descarta tus cambios antes de editar el plan." }); else setPlanning(true); }}>{planned ? "Editar el plan" : "Crear plan de evaluación"}</Button>}
+      </div>
+      <PeriodStats stats={stats} names={new Map(learners.map(learner => [learner.id, learner.name]))} passing={policy.passingGrade}/>
+      {partial && <p className="muted small">Mientras falten actividades, las cifras y el resultado comparan lo ganado con lo evaluado hasta ahora (por ejemplo, 42 de 60 cuenta como 70).</p>}
+      <form onSubmit={submitGrades} className="stack">
+        {formError && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{formError}</p>}
+        <div className="coverage-scroll" role="region" aria-label={`Notas de ${section.name} en ${period.name}`} tabIndex={0}>
+          <table ref={grid} className="coverage-table grades-table">
+            <thead><tr>
+              <th scope="col">Estudiante</th>
+              {columns.map(column => <th scope="col" key={column.id} className="grade-column"><span className="grade-column-title">{column.title}</span><span className="muted grade-column-detail">{column.detail}</span></th>)}
+              <th scope="col">{planned ? "Nota del periodo" : "Resultado"}</th>
+              {planned && <th scope="col">Resultado</th>}
+              <th scope="col"><span className="sr-only">Detalle</span></th>
+            </tr></thead>
+            <tbody>{learners.map((learner, row) => {
+              const item = scores[row], comment = data!.comments.some(entry => entry.learnerId === learner.id && entry.periodId === period.id);
+              return <tr key={learner.id}>
+                <th scope="row">{learner.name}</th>
+                {columns.map((column, index) => {
+                  const value = valueOf(learner.id, column), parsed = parse(value, column), changedCell = key(learner.id, column) in edits;
+                  return <td key={column.id} className={`grade-cell${changedCell ? " grade-dirty" : ""}`}>
+                    {editable
+                      ? <input type="text" inputMode="decimal" className="grade-input" value={value} data-cell={`${row}:${index}`} aria-label={`${column.title} de ${learner.name}`} aria-invalid={parsed === undefined}
+                        onChange={event => edit(learner.id, column, event.target.value)} onKeyDown={event => onKey(event, row, index)} onPaste={event => onPaste(event, row, index)} onFocus={event => event.currentTarget.select()}/>
+                      : <span>{value === "" ? <span className="muted">—</span> : number(Number(value))}</span>}
+                    {!planned && letters && typeof parsed === "number" && <span className="grade-letter" aria-label={`letra ${letterOf(parsed, policy.letterThresholds)}`}>{letterOf(parsed, policy.letterThresholds)}</span>}
+                  </td>;
+                })}
+                {planned && <td className="grade-total">{item.score === null ? <span className="muted">—</span> : <><strong>{number(item.score)}{letters ? ` (${letterOf(item.score, policy.letterThresholds)})` : ""}</strong>{!item.complete && <span className="muted small"> de {number(item.graded)}</span>}</>}</td>}
+                <td><ResultBadge result={resultOf(item)}/></td>
+                <td><button type="button" className={`icon-button${comment ? " has-comment" : ""}`} aria-label={`Detalle de ${learner.name}${comment ? " (tiene comentario)" : ""}`} onClick={() => setStudent(learner.id)}><Icon name={comment ? "text" : "more"} size={18}/></button></td>
+              </tr>;
+            })}</tbody>
+          </table>
+        </div>
+        {editable && <p className="muted small">Flechas e Intro para moverte entre celdas. Puedes pegar varias celdas copiadas de una hoja de cálculo.</p>}
+        {editable && <div className="button-row grade-save">
+          <PrimaryAction type="submit" icon="check" busy={busy === "save"} disabled={!dirty || invalid || !!busy}>{busy === "save" ? "Guardando…" : dirty ? `Guardar ${plural(changed, "cambio", "cambios")}` : "Guardar notas"}</PrimaryAction>
+          {dirty && <button type="button" className="button ghost" onClick={() => { setEdits({}); setFormError(""); }}>Descartar cambios</button>}
+          {invalid && <span className="muted small" role="status">{planned ? "Cada punteo va de 0 a los puntos de su actividad, con un decimal como máximo." : "Las notas van de 0 a 100, con un decimal como máximo."}</span>}
+        </div>}
+      </form>
+    </div>;
+  }
+}
+
+type Stats = ReturnType<typeof gradeStatistics>;
+/** The period's figures: average, who passes, the distribution in bands of ten points and who is at risk. */
+function PeriodStats({ stats, names, passing }: { stats: Stats; names: Map<string, string>; passing: number }) {
+  const widest = Math.max(1, ...stats.bands.map(band => band.count));
+  return <div className="grade-stats">
+    <StatTiles items={[
+      { label: "Promedio", value: stats.average === null ? "—" : number(stats.average), icon: "grid", hue: "violet" },
+      { label: "Aprueban", value: stats.passed, icon: "check", hue: "green" },
+      { label: "No aprueban", value: stats.failed, icon: "alert", hue: "coral" },
+      { label: "Sin nota", value: stats.missing, icon: "clock", hue: "amber" },
+    ]}/>
+    {stats.count > 0 && <div className="grade-distribution" aria-label="Distribución de notas">
+      {stats.bands.map(band => <div key={band.from} className="grade-band">
+        <span className="muted small">{band.from === 0 ? `< ${band.until + 0.1}` : `${band.from}–${Math.floor(band.until)}`}</span>
+        <span className="grade-band-bar"><span className={band.from < passing ? "below" : ""} style={{ width: `${(band.count / widest) * 100}%` }}/></span>
+        <span className="small">{band.count}</span>
+      </div>)}
+    </div>}
+    {stats.atRisk.length > 0 && <details className="grade-risk">
+      <summary>{plural(stats.atRisk.length, "estudiante en riesgo", "estudiantes en riesgo")} (debajo de {passing} o a menos de 5 puntos)</summary>
+      <ul>{stats.atRisk.map(item => <li key={item.learnerId}>{names.get(item.learnerId)}: <strong>{number(item.score)}</strong>{item.failing ? " · no aprueba" : " · cerca del mínimo"}</li>)}</ul>
+    </details>}
+  </div>;
+}
+
+/** The year at a glance: each period's score, the average and the result, read-only. */
+function YearSummary({ book, onStudent }: { book: Gradebook; onStudent: (id: string) => void }) {
+  const { policy, periods, learners } = book;
+  const results = new Map(book.results.map(result => [result.learnerId, result]));
+  const stats = gradeStatistics(book.results.map(result => ({ learnerId: result.learnerId, score: result.average })), policy.passingGrade);
+  return <div className="stack">
+    <PeriodStats stats={stats} names={new Map(learners.map(learner => [learner.id, learner.name]))} passing={policy.passingGrade}/>
+    <div className="coverage-scroll" role="region" aria-label={`Resumen del ciclo de ${book.section.name}`} tabIndex={0}>
+      <table className="coverage-table grades-table">
+        <thead><tr>
+          <th scope="col">Estudiante</th>
+          {periods.map(period => <th scope="col" key={period.id}>{period.name}{policy.average === "weighted" && <span className="muted"> · peso {period.weight}</span>}</th>)}
+          <th scope="col">Promedio</th><th scope="col">Resultado</th><th scope="col"><span className="sr-only">Detalle</span></th>
+        </tr></thead>
+        <tbody>{learners.map(learner => {
+          const result = results.get(learner.id);
+          return <tr key={learner.id}>
+            <th scope="row">{learner.name}</th>
+            {periods.map(period => { const score = book.grades.find(grade => grade.learnerId === learner.id && grade.periodId === period.id)?.score; return <td key={period.id}>{score === undefined ? <span className="muted">—</span> : <>{number(score)}{policy.scale === "letters_af" && <span className="grade-letter">{letterOf(score, policy.letterThresholds)}</span>}</>}</td>; })}
+            <td>{!result || result.average === null ? <span className="muted">—</span> : <strong>{number(result.average)}{result.letter ? ` (${result.letter})` : ""}</strong>}</td>
+            <td><ResultBadge result={result}/></td>
+            <td><button type="button" className="icon-button" aria-label={`Detalle de ${learner.name}`} onClick={() => onStudent(learner.id)}><Icon name="more" size={18}/></button></td>
+          </tr>;
+        })}</tbody>
+      </table>
+    </div>
+  </div>;
+}
+
+/** Returns a handed-in period with a note that says what to review. */
+function ReturnDialog({ sectionId, period, onSaved, onClose }: { sectionId: string; period: GradebookPeriod; onSaved: (book: Gradebook) => void; onClose: () => void }) {
+  const [note, setNote] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  async function send(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError("");
+    try { onSaved((await api<{ gradebook: Gradebook }>(`/sections/${sectionId}/grades/periods/${period.id}/return`, "POST", { note: note.trim() })).gradebook); }
+    catch (cause) { setError(message(cause)); }
+    finally { setBusy(false); }
+  }
+  return <Modal title={`Devolver «${period.name}»`} onClose={onClose}>
+    <form className="stack" onSubmit={send} aria-label={`Devolver ${period.name}`}>
+      <p className="muted small">La sección podrá corregir sus notas y entregarlas de nuevo. Tu nota queda a la vista de quienes la imparten.</p>
+      {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
+      <textarea rows={4} maxLength={600} value={note} aria-label="Qué revisar" placeholder="Por ejemplo: faltan los punteos del examen de dos estudiantes." onChange={event => setNote(event.target.value)}/>
+      <div className="button-row">
+        <PrimaryAction type="submit" icon="undo" busy={busy} disabled={busy || !note.trim()}>Devolver a la sección</PrimaryAction>
+        <button type="button" className="button ghost" onClick={onClose}>Cancelar</button>
+      </div>
+    </form>
+  </Modal>;
 }

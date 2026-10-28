@@ -119,7 +119,7 @@ export async function academicYearsApi(path: string, method: string, input: unkn
   if (draft.periods.some(period => period.id && !own.has(period.id))) return reply({ error: "Revisa los periodos: uno no es de este ciclo." }, 400);
   // A period where grades were recorded stays (0049).
   const kept = new Set(draft.periods.map(period => period.id)), removed = found.periods.filter(period => !kept.has(period.id));
-  const graded = removed.length ? await db.prepare(`SELECT p.name FROM academic_periods p WHERE p.id IN (${removed.map(() => "?").join(",")}) AND EXISTS (SELECT 1 FROM section_grades g WHERE g.period_id=p.id) LIMIT 1`).bind(...removed.map(period => period.id)).first<{ name: string }>() : null;
+  const graded = removed.length ? await db.prepare(`SELECT p.name FROM academic_periods p WHERE p.id IN (${removed.map(() => "?").join(",")}) AND (EXISTS (SELECT 1 FROM section_grades g WHERE g.period_id=p.id) OR EXISTS (SELECT 1 FROM assessment_activities a WHERE a.period_id=p.id)) LIMIT 1`).bind(...removed.map(period => period.id)).first<{ name: string }>() : null;
   if (graded) return reply({ error: `«${graded.name}» ya tiene notas registradas: no se puede quitar.` }, 409);
   if (await nameTaken(db, current.organizationId, draft.name, id)) return duplicateName(draft.name);
   const status: AcademicYearStatus = found.status;

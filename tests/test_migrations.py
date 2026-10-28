@@ -1217,6 +1217,69 @@ class GradebookTests(unittest.TestCase):
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
 
 
+class AssessmentPlanTests(unittest.TestCase):
+    """0055: a course's assessment plan per period, points within each activity, frozen with the period's lock and the
+    year; activities with scores stay; comments; an append-only history; and the period's closing review."""
+
+    def test_plans_scores_history_and_reviews(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            if path.name.startswith("0054"):
+                continue
+            db.executescript(path.read_text())
+        org, group, course = db.execute("SELECT organization_id,id,course_id FROM course_groups ORDER BY id LIMIT 1").fetchone()
+        admin = db.execute("SELECT u.id FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.role='admin' AND m.organization_id=? ORDER BY u.id LIMIT 1", (org,)).fetchone()[0]
+        db.execute("INSERT INTO group_learners(id,group_id,course_id,organization_id,display_name,created_at) VALUES ('l-1',?,?,?,'Ana','t')", (group, course, org))
+        db.execute("INSERT INTO academic_years(id,organization_id,name,starts_on,ends_on,period_kind,status,created_by,created_at,updated_at) VALUES ('y-1',?,'Ciclo 2027','2027-01-11','2027-10-22','bimester','draft',?,'t','t')", (org, admin))
+        db.execute("INSERT INTO academic_periods(id,organization_id,year_id,position,name,starts_on,ends_on) VALUES ('p-1',?,'y-1',1,'Primer bimestre','2027-01-11','2027-03-19')", (org,))
+        activity = "INSERT INTO assessment_activities(id,organization_id,course_id,period_id,position,title,kind,points,due_on,created_by,created_at,updated_at) VALUES (?,?,?,'p-1',?,?,?,?,NULL,?,'t','t')"
+        # A plan belongs to a period of the current year.
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "closed"):
+            db.execute(activity, ("a-1", org, course, 0, "Tareas", "task", 30, admin))
+        db.execute("UPDATE academic_years SET status='current',activated_at='t' WHERE id='y-1'")
+        db.execute(activity, ("a-1", org, course, 0, "Tareas", "task", 30, admin))
+        for bad in ((0, "task"), (100.5, "task"), (30.25, "task"), (30, "homework")):
+            with self.assertRaises(sqlite3.IntegrityError):
+                db.execute(activity, ("a-x", org, course, 1, "Mal", bad[1], bad[0], admin))
+        score = "INSERT INTO assessment_scores(activity_id,organization_id,group_id,learner_id,points,updated_by,updated_at) VALUES ('a-1',?,?,'l-1',?,?,'t')"
+        # Points never exceed the activity's.
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "closed"):
+            db.execute(score, (org, group, 31, admin))
+        db.execute(score, (org, group, 25.5, admin))
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "higher scores"):
+            db.execute("UPDATE assessment_activities SET points=20 WHERE id='a-1'")
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "has scores"):
+            db.execute("DELETE FROM assessment_activities WHERE id='a-1'")
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "has grades"):
+            db.execute("DELETE FROM academic_periods WHERE id='p-1'")
+        # The section's lock and a closed year freeze the scores.
+        db.execute("INSERT INTO section_period_locks(group_id,organization_id,period_id,locked_by,locked_at) VALUES (?,?,'p-1',?,'t')", (group, org, admin))
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "closed"):
+            db.execute("UPDATE assessment_scores SET points=20")
+        db.execute("DELETE FROM section_period_locks")
+        db.execute("UPDATE assessment_scores SET points=28")
+        # Comments within 600 characters; the history only grows.
+        comment = "INSERT INTO section_grade_comments(learner_id,period_id,group_id,organization_id,body,updated_by,updated_at) VALUES ('l-1','p-1',?,?,?,?,'t')"
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(comment, (group, org, "x" * 601, admin))
+        db.execute(comment, (group, org, "Muy bien.", admin))
+        db.execute("INSERT INTO section_grade_history(id,organization_id,group_id,learner_id,period_id,activity_id,before,after,changed_by,changed_at) VALUES ('h-1',?,?,'l-1','p-1','a-1',NULL,25.5,?,'t')", (org, group, admin))
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "append-only"):
+            db.execute("UPDATE section_grade_history SET after=30")
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "append-only"):
+            db.execute("DELETE FROM section_grade_history")
+        review = "INSERT INTO section_period_reviews(group_id,organization_id,period_id,status,note,submitted_by,submitted_at) VALUES (?,?,'p-1',?,NULL,?,'t')"
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(review, (group, org, "pending", admin))
+        db.execute(review, (group, org, "submitted", admin))
+        db.execute("UPDATE academic_years SET status='closed',closed_at='t' WHERE id='y-1'")
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "closed"):
+            db.execute("UPDATE assessment_scores SET points=29")
+        self.assertEqual(db.execute("SELECT points FROM assessment_scores").fetchall(), [(28.0,)])
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
 class BibliographyTests(unittest.TestCase):
     """0050: a reference points to one item of its own course's library; one main book per course, with role text."""
 
@@ -1339,11 +1402,14 @@ class DemoPilotTests(unittest.TestCase):
         migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
         db = sqlite3.connect(":memory:")
         db.execute("PRAGMA foreign_keys=ON")
-        for path in migrations[:-1]:
+        pilot = next(index for index, path in enumerate(migrations) if path.name.startswith("0054"))
+        for path in migrations[:pilot]:
             db.executescript(path.read_text())
         if before:
             before(db)
-        db.executescript(migrations[-1].read_text())
+        # The pilot and every later migration (the gradebook seed builds on it and steps aside the same way).
+        for path in migrations[pilot:]:
+            db.executescript(path.read_text())
         return db
 
     def test_the_demo_gets_the_whole_pilot(self):

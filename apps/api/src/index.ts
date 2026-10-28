@@ -103,7 +103,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   const contractAllowed = contractMethods(path);
   // The organization's school year and its periods read a JSON body; activating, closing and opening the next carry none.
   const academicYearAllowed = academicYearMethods(path);
-  // The section's gradebook: saving scores reads a JSON body; locking and reopening a period carry none.
+  // The section's gradebook: saving scores and the plan read a JSON body, and so does returning a period; the rest carry none.
   const gradebookAllowed = gradebookMethods(path);
   // The course's bibliography; its POST and PUT bodies are read with the other course routes.
   const bibliographyAllowed = bibliographyMethods(path);
@@ -124,7 +124,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (professionalAllowed && ["POST", "PUT"].includes(method) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   if (contractAllowed && ["POST", "PUT"].includes(method) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   if (academicYearAllowed && ["POST", "PUT"].includes(method) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
-  if (gradebookAllowed && method === "PUT") input = await body(request);
+  if (gradebookAllowed && (method === "PUT" || (method === "POST" && request.headers.get("content-type")?.startsWith("application/json")))) input = await body(request);
   // DEC-046: publishing a legal document may carry the date from which the version applies.
   if (method === "POST" && /^\/api\/legal\/documents\/[a-z]+\/publish$/.test(path) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   // ST-158, ST-159: a change of e-mail and a closure request.
