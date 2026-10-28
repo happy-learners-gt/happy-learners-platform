@@ -404,7 +404,7 @@ export async function reapplyCalendar(
   return { sections, removed, added };
 }
 
-const breakColumns = "e.id,CASE WHEN c.scope='section' THEN c.scope_id END AS groupId,e.title,e.starts_on AS \"from\",e.ends_on AS until,e.part,e.no_class AS noClass,e.rule_id AS ruleId,e.year,e.status,e.calendar_id AS calendarId,e.category_id AS categoryId";
+const breakColumns = "e.id,CASE WHEN c.scope='section' THEN c.scope_id END AS groupId,e.title,e.starts_on AS \"from\",e.ends_on AS until,e.part,e.no_class AS noClass,e.rule_id AS ruleId,e.year,e.status,e.calendar_id AS calendarId,e.category_id AS categoryId,c.scope,c.name AS calendarName";
 /** Effective no-class dates for a section: organization, its program and the section itself. */
 export async function breaksOf(db: Database, organizationId: string, groupId: string, schedule?: SectionSchedule) {
   const rows = (await db.prepare(`SELECT ${breakColumns} FROM calendar_events e JOIN calendars c ON c.id=e.calendar_id
@@ -412,7 +412,7 @@ export async function breaksOf(db: Database, organizationId: string, groupId: st
     WHERE e.organization_id=? AND (c.scope='organization' OR (c.scope='program' AND c.scope_id=co.program_id) OR (c.scope='section' AND c.scope_id=g.id))
     ORDER BY e.starts_on,e.ends_on`).bind(groupId, organizationId).all<InstitutionalCalendarEvent & { groupId: string | null }>()).results
     .map(row => ({ ...row, noClass: !!row.noClass }));
-  if (!schedule) return rows.filter(row => row.noClass && row.status === "active").map(row => ({ id: row.id, groupId: row.groupId, title: row.title, from: row.from, until: row.until, part: row.part }));
+  if (!schedule) return rows.filter(row => row.noClass && row.status === "active").map(row => ({ id: row.id, groupId: row.groupId, title: row.title, from: row.from, until: row.until, part: row.part, scope: row.scope, calendarName: row.calendarName, calendarId: row.calendarId, categoryId: row.categoryId }));
   return noClassDays(rows, { from: schedule.from, until: schedule.until, schedule });
 }
 
@@ -427,7 +427,11 @@ export async function calendar(path: string, method: string, input: unknown, url
     const section = url.searchParams.get("section");
     const source = section ? await breaksOf(db, current.organizationId, section) : (await db.prepare(`SELECT ${breakColumns} FROM calendar_events e JOIN calendars c ON c.id=e.calendar_id
       WHERE e.organization_id=? AND c.scope='organization' AND e.no_class=1 AND e.status='active' ORDER BY e.starts_on,e.ends_on`).bind(current.organizationId).all<CalendarBreak>()).results;
-    const rows = source.map(row => ({ id: row.id, groupId: "groupId" in row ? row.groupId : null, title: row.title, from: row.from, until: row.until }));
+    const rows = source.map(row => {
+      const detail = row as typeof row & { scope?: string; calendarName?: string; calendarId?: string; categoryId?: string };
+      return { id: row.id, groupId: "groupId" in row ? row.groupId : null, title: row.title, from: row.from, until: row.until,
+        ...(detail.scope ? { scope: detail.scope, calendarName: detail.calendarName, calendarId: detail.calendarId, categoryId: detail.categoryId } : {}) };
+    });
     return reply({ breaks: rows, today: await todayFor(db, current.organizationId) });
   }
   if (current.role !== "admin") return reply({ error: "Solo administración define los días sin clase." }, 403);

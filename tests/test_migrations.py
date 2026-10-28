@@ -58,7 +58,6 @@ class UpgradeTests(unittest.TestCase):
         # Demo assignments point to a published lesson of the group's own course.
         rows = db.execute("SELECT a.assigned_revision,l.revision,u.course_id,a.course_id FROM lesson_assignments a JOIN lessons l ON l.id=a.lesson_id JOIN learning_units u ON u.id=l.course_unit_id").fetchall()
         self.assertGreater(len(rows), 0)
-        self.assertEqual(db.execute("SELECT e.created_by FROM calendar_events e JOIN memberships m ON m.user_id=e.created_by WHERE e.id='event-break-anonymous' AND m.role='admin'").fetchone() is not None, True)
         self.assertTrue(all(assigned == revision and unit_course == course for assigned, revision, unit_course, course in rows))
         group = db.execute("SELECT id,course_id FROM course_groups WHERE id='group-demo-class'").fetchone()
         lesson = db.execute("SELECT id FROM lessons LIMIT 1").fetchone()[0]

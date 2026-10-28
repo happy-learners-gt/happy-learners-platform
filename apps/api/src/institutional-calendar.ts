@@ -238,7 +238,7 @@ export async function institutionalCalendars(path: string, method: string, input
     await ensureCalendars(db, current.organizationId);
     const calendars = (await db.prepare(`SELECT ${calendarColumns} FROM calendars WHERE organization_id=? ORDER BY CASE scope WHEN 'organization' THEN 0 WHEN 'program' THEN 1 ELSE 2 END,name`)
       .bind(current.organizationId).all<InstitutionalCalendar>()).results;
-    return reply({ calendars, categories: await categories(db, current.organizationId) });
+    return reply({ calendars: await Promise.all(calendars.map(async calendar => ({ ...calendar, rules: await rulesOf(db, current.organizationId, calendar.id) }))), categories: await categories(db, current.organizationId) });
   }
   if (path === "/api/calendars/view") {
     const from = url.searchParams.get("from"), until = url.searchParams.get("until");
