@@ -9,6 +9,7 @@ import { useWorkspace } from "../workspace";
 import { Icon } from "./icons";
 import type { IconName } from "./icons";
 import type { Hue } from "../model";
+import { useTableLabels } from "./responsiveTables";
 import { Menu } from "./Menu";
 import { Bell } from "./Bell";
 import { Modal, useFeedback } from "./feedback";
@@ -25,7 +26,8 @@ export function Brand() {
 export function AppShell({ children }: { children: ReactNode }) {
   const { url } = useNavigation();
   const [open, setOpen] = useState(false);
-  const panel = useRef<HTMLElement>(null), toggle = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLElement>(null), toggle = useRef<HTMLButtonElement>(null), main = useRef<HTMLElement>(null);
+  useTableLabels(main);
   useEffect(() => { setOpen(false); }, [url.pathname]);
   useEffect(() => {
     if (!open) return;
@@ -40,7 +42,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="app-body">
       <aside id="app-sidebar" ref={panel} className="sidebar"><Sidebar/></aside>
       {open && <div className="drawer-backdrop" aria-hidden="true" onClick={() => setOpen(false)}/>}
-      <main id="main" tabIndex={-1} className="main"><ContractBanner/><AgreementBanner/>{children}</main>
+      <main id="main" ref={main} tabIndex={-1} className="main"><ContractBanner/><AgreementBanner/>{children}</main>
     </div>
   </div>;
 }

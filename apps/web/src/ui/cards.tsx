@@ -20,17 +20,17 @@ export function CourseCard({ course, program, stats, menu }: { course: Course; p
     <div className="course-card-top">
       <span className="course-avatar" aria-hidden="true">{course.title.trim().charAt(0).toUpperCase()}</span>
       <div className="course-card-title">
-        <h3><Link href={href} className="card-link">{course.title}</Link></h3>
+        <h3 title={course.title}><Link href={href} className="card-link">{course.title}</Link></h3>
         <p className="course-card-meta">{stats ? `${plural(stats.units, noun.one, noun.many)} · ${plural(stats.lessons, "lección", "lecciones")}` : "Cargando contenido…"}</p>
         {course.status === "archived" && <StatusBadge>Archivado</StatusBadge>}
       </div>
       {menu && <Menu label={`Acciones del curso ${course.title}`} items={menu}/>}
     </div>
     <ul className="course-facets" aria-label="Configuración académica">
-      {program && <li className="is-program">{program.name}</li>}
+      {program && <li className="is-program" title={program.name}>{program.name}</li>}
       <li>{labelOf.format(course.format)}</li>
       {level !== "unspecified" && <li>{labelOf.level(level)}</li>}
-      {course.area && <li>{areaLabel(course.area)}</li>}
+      {course.area && <li title={areaLabel(course.area)}>{areaLabel(course.area)}</li>}
     </ul>
     {course.objective && <p className="course-card-objective">{course.objective}</p>}
     {course.team && <TeamLine team={course.team}/>}

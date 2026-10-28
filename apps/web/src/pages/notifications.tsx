@@ -152,7 +152,7 @@ export function NotificationsAdmin() {
   if (member.role !== "admin") return <><PageHeader title="Notificaciones"/><EmptyState icon="shield" title="Esta sección es para administración">Elige qué avisos recibes en Preferencias.</EmptyState></>;
   return <>
     <PageHeader title="Notificaciones" description="Qué avisos por correo son obligatorios y el registro de cada envío: destinatario, motivo y estado."/>
-    <div className="reading stack"><Policy/><SentLog/></div>
+    <div className="stack"><Policy/><SentLog/></div>
   </>;
 }
 

@@ -105,24 +105,43 @@ function ProfileEditor({ initial, reload }: { initial: MyProfessionalProfile; re
   const [visible, setVisible] = useState<Tab>("identity"), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [errors, setErrors] = useState<Record<string, string>>({}), [alert, setAlert] = useState("");
   const [preview, setPreview] = useState(false), [photo, setPhoto] = useState(initial.photoVersion);
   useUnsavedChanges(dirty);
+  // Scroll-spy: the active section is the last one whose top has passed under the sticky bars. A section chosen in the
+  // bar stays active through the smooth scroll and until the person scrolls again (wheel, touch or keys), so the
+  // highlight never jumps back to the section the page passes or stops near.
+  const pinned = useRef<Tab | null>(null);
   useEffect(() => {
-    const nodes = tabs.map(item => document.getElementById(`profile-${item.value}`)).filter((node): node is HTMLElement => !!node);
-    if (!nodes.length) return;
-    const observer = new IntersectionObserver(entries => {
-      const seen = entries.filter(entry => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-      const id = seen?.target.id.replace("profile-", "") as Tab | undefined;
-      if (id) setVisible(id);
-    }, { rootMargin: "-25% 0px -55% 0px", threshold: [0.15, 0.4, 0.7] });
-    for (const node of nodes) observer.observe(node);
-    return () => observer.disconnect();
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      if (pinned.current) return;
+      const nodes = tabs.map(item => document.getElementById(`profile-${item.value}`)).filter((node): node is HTMLElement => !!node);
+      if (!nodes.length) return;
+      const line = (document.querySelector(".profile-anchors")?.getBoundingClientRect().bottom ?? 0) + 24;
+      let active = nodes[0];
+      for (const node of nodes) if (node.getBoundingClientRect().top <= line) active = node;
+      // At the end of the page the last section may never reach the line: it is the active one.
+      if (innerHeight + scrollY >= document.documentElement.scrollHeight - 2) active = nodes[nodes.length - 1];
+      setVisible(active.id.replace("profile-", "") as Tab);
+    };
+    const onScroll = () => { if (!frame) frame = requestAnimationFrame(update); };
+    const release = () => { pinned.current = null; };
+    const keys = (event: globalThis.KeyboardEvent) => { if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) release(); };
+    addEventListener("scroll", onScroll, { passive: true });
+    addEventListener("wheel", release, { passive: true }); addEventListener("touchstart", release, { passive: true }); addEventListener("keydown", keys);
+    update();
+    return () => {
+      cancelAnimationFrame(frame);
+      removeEventListener("scroll", onScroll); removeEventListener("wheel", release); removeEventListener("touchstart", release); removeEventListener("keydown", keys);
+    };
   }, []);
   const accept = (next: MyProfessionalProfile) => { setProfile(next); setDraft(next.draft); setVisibility(next.visibility); setAccount(accountOf(next)); setDirty(false); setErrors({}); setAlert(""); };
   const patch = (value: Partial<ProfessionalProfile>) => { setDraft(current => ({ ...current, ...value })); setDirty(true); };
   const patchAccount = (value: Partial<Account>) => { setAccount(current => ({ ...current, ...value })); setDirty(true); };
   const err = (path: string) => errors[path];
   const go = (section: Tab) => {
-    setVisible(section);
-    document.getElementById(`profile-${section}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setVisible(section); pinned.current = section;
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document.getElementById(`profile-${section}`)?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
   };
   // Credentials save on their own: refresh the status, completeness and list without touching unsaved edits.
   const refresh = () => { api<{ profile: MyProfessionalProfile }>("/me/profile").then(result => setProfile(result.profile)).catch(() => reload()); };
@@ -722,8 +741,8 @@ export function TeamProfilePage({ id }: { id: string }) {
   return <>
     <PageHeader title={state.profile.displayName} crumbs={crumbs} meta={state.status !== "published" || !state.active ? <StatusBadge tone="neutral">{!state.active ? "Sin acceso" : profileStatusLabels[state.status]}</StatusBadge> : undefined}
       actions={id === member.id ? <Link className="button secondary" href="/mi-cuenta/perfil"><Icon name="edit" size={18}/>Editar mi perfil</Link> : undefined}/>
-    {state.status === "hidden" && <p className="message-bar warning reading"><Icon name="alert" size={18}/>Este perfil está oculto: solo lo ven la persona y administración.</p>}
-    <div className="reading"><ProfileCard profile={state.profile} level={2}/></div>
+    {state.status === "hidden" && <p className="message-bar warning"><Icon name="alert" size={18}/>Este perfil está oculto: solo lo ven la persona y administración.</p>}
+    <div><ProfileCard profile={state.profile} level={2}/></div>
     <p className="muted small reading">Versión {state.profile.version}, publicada {timeAgo(state.profile.publishedAt)}. Así lo ve el equipo; los estudiantes ven solo lo que la persona comparte con ellos.</p>
   </>;
 }
@@ -760,7 +779,7 @@ export function ProfileReviewsPage() {
         </li>)}</ul>}
       </Section>
       <Section title={`Credenciales por verificar (${queue.credentials.length})`}>
-        {!queue.credentials.length ? <p className="muted">No hay credenciales esperando verificación.</p> : <div className="table-card" role="region" aria-label="Credenciales por verificar" tabIndex={0}><table>
+        {!queue.credentials.length ? <p className="muted">No hay credenciales esperando verificación.</p> : <div className="table-card" role="region" aria-label="Credenciales por verificar" tabIndex={0}><table className="members-table">
           <thead><tr><th scope="col">Persona</th><th scope="col">Credencial</th><th scope="col">Emisión</th><th scope="col">Comprobación</th><th scope="col"><span className="sr-only">Acciones</span></th></tr></thead>
           <tbody>{queue.credentials.map(({ userId, name, credential }) => <tr key={credential.id}>
             <th scope="row">{name}</th>
