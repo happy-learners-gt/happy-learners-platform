@@ -1456,3 +1456,52 @@ class DemoPilotTests(unittest.TestCase):
         self.assertEqual(db.execute("SELECT count(*) FROM section_grades").fetchone()[0], 0)
         self.assertEqual(db.execute("SELECT count(*) FROM course_outcomes WHERE course_id='seed-course-mate6'").fetchone()[0], 8)
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class InstitutionalCalendarTests(unittest.TestCase):
+    """0059: legacy breaks become scoped events and current cycles are unique per organization or program."""
+
+    def migrated(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        migrations = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        institutional = next(path for path in migrations if path.name.startswith("0059_"))
+        for path in migrations[:migrations.index(institutional)]:
+            db.executescript(path.read_text())
+        org, group_id = db.execute("SELECT organization_id,id FROM course_groups ORDER BY id LIMIT 1").fetchone()
+        user = db.execute("SELECT user_id FROM memberships WHERE organization_id=? AND role='admin' LIMIT 1", (org,)).fetchone()[0]
+        db.execute("INSERT INTO calendar_breaks VALUES ('break-organization',?,NULL,'Asueto','2027-05-01','2027-05-01',?,'t')", (org, user))
+        db.execute("INSERT INTO calendar_breaks VALUES ('break-section',?,?,'Actividad','2027-06-01','2027-06-02',?,'t')", (org, group_id, user))
+        db.executescript(institutional.read_text())
+        return db
+
+    def test_legacy_breaks_are_migrated_to_the_right_calendar(self):
+        db = self.migrated()
+        rows = db.execute("""SELECT b.id,b.group_id,c.scope,c.scope_id,e.no_class,e.category_id
+          FROM calendar_breaks b JOIN calendar_events e ON e.id='event-'||b.id
+          JOIN calendars c ON c.id=e.calendar_id ORDER BY b.id""").fetchall()
+        self.assertGreater(len(rows), 0)
+        for _, group_id, scope, scope_id, no_class, category_id in rows:
+            self.assertEqual((scope, scope_id), ("section", group_id) if group_id else ("organization", None))
+            self.assertEqual(no_class, 1)
+            self.assertTrue(category_id.startswith("category-no-class-"))
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_calendar_scopes_and_current_cycles_are_unique(self):
+        db = self.migrated()
+        org = "org-demo"
+        program = db.execute("SELECT id FROM study_programs WHERE organization_id=? ORDER BY id LIMIT 1", (org,)).fetchone()[0]
+        user = db.execute("SELECT user_id FROM memberships WHERE organization_id=? AND role='admin' LIMIT 1", (org,)).fetchone()[0]
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO calendars VALUES ('calendar-duplicate',?,'organization',NULL,'Otro','t','t')", (org,))
+        db.execute("""INSERT INTO academic_years(id,organization_id,name,starts_on,ends_on,period_kind,status,created_by,
+          created_at,updated_at,activated_at,program_id)
+          VALUES ('year-program',?,'Ciclo propio 2026','2026-01-01','2026-12-01','semester','current',?,'t','t','t',?)""",
+          (org, user, program))
+        self.assertEqual(db.execute("SELECT count(*) FROM academic_years WHERE status='current'").fetchone()[0], 2)
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("""INSERT INTO academic_years(id,organization_id,name,starts_on,ends_on,period_kind,status,created_by,
+              created_at,updated_at,activated_at,program_id)
+              VALUES ('year-org-duplicate',?,'Otro ciclo vigente','2026-01-01','2026-12-01','semester','current',?,'t','t','t',NULL)""",
+              (org, user))
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
