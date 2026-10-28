@@ -176,6 +176,37 @@ export interface Material {
 export interface SectionSchedule { weekdays: number[]; startsAt: string; durationMinutes: number; from: string; until: string; meetings?: ScheduleMeeting[] }
 /** A weekly meeting with its own time (1.2.4): when present, each class day takes its time from here. */
 export interface ScheduleMeeting { weekday: number; startsAt: string; durationMinutes: number }
+/** A reusable calendar rule. Weekdays use 0 for Sunday, as section schedules do. */
+export type DateRule = {
+  id: string;
+  title: string;
+  anchor:
+    | { kind: "fixed"; month: number; day: number }
+    | { kind: "nth-weekday"; month: number; weekday: 0 | 1 | 2 | 3 | 4 | 5 | 6; n: 1 | 2 | 3 | 4 | 5 | -1 }
+    | { kind: "easter"; offset: number }
+    | { kind: "relative"; to: string; offset: number; weekday?: 0 | 1 | 2 | 3 | 4 | 5 | 6 }
+    | { kind: "once"; date: string };
+  days?: number;
+  part?: "full" | "morning" | "afternoon";
+  shift?: {
+    when: (0 | 1 | 2 | 3 | 4 | 5 | 6)[];
+    to: "previous" | "next" | "nearest";
+    onto: (0 | 1 | 2 | 3 | 4 | 5 | 6)[];
+  };
+  fromYear?: number;
+  untilYear?: number;
+  exceptYears?: number[];
+  onlyYear?: number;
+};
+/** One concrete date or date range produced by a calendar rule. */
+export type DateRuleOccurrence = {
+  ruleId: string;
+  title: string;
+  from: string;
+  until: string;
+  part: "full" | "morning" | "afternoon";
+  shiftedFrom: string | null;
+};
 /** A bell schedule (jornada) of the organization: its class periods and breaks, generated from its configuration (1.2.4). */
 export interface BellSchedule {
   id: string; name: string; weekdays: number[];
