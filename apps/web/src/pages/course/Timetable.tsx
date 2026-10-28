@@ -165,9 +165,9 @@ function ScheduleEditor({ schedule, sessions, today, breaks, onDone }: { schedul
         <fieldset className="day-toggles"><legend>¿Qué días hay clase?</legend>
           {weekOrder().map(([day, name, short]) => <label key={day} title={name}><input type="checkbox" checked={values.weekdays.includes(day)} aria-label={name} onChange={() => set({ weekdays: values.weekdays.includes(day) ? values.weekdays.filter(value => value !== day) : [...values.weekdays, day] })}/><span aria-hidden="true">{short}</span></label>)}
         </fieldset>
-        <div className="schedule-mode" role="radiogroup" aria-label="Hora de las clases">
-          <label><input type="radio" name="schedule-mode" checked={!values.perDay} onChange={() => set({ perDay: false })}/>La misma hora todos los días</label>
-          <label><input type="radio" name="schedule-mode" checked={values.perDay} onChange={() => set({ perDay: true })}/>Una hora por día</label>
+        <div className="schedule-mode" role="radiogroup" aria-label="Días con el mismo inicio o distinto">
+          <label><input type="radio" name="schedule-mode" checked={!values.perDay} onChange={() => set({ perDay: false })}/>Igual todos los días</label>
+          <label><input type="radio" name="schedule-mode" checked={values.perDay} onChange={() => set({ perDay: true })}/>Distinto según el día</label>
           {!!jornadas?.length && <label className="schedule-jornada"><span>Periodos de la jornada</span><select value={jornadaId} onChange={event => setJornadaId(event.target.value)}><option value="">Sin jornada</option>{jornadas.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
         </div>
         {!values.perDay ? <div className="field-row">
