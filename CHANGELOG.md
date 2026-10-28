@@ -16,6 +16,8 @@ Auditoría de diseño y consistencia de REL-010 (`docs/handoff/2026-10-28-audito
 - En el teléfono, las tablas de lista (Educadores, Mi cuenta, Horas, Contratos…) se leen como tarjetas con la etiqueta
   de cada dato, los filtros forman una rejilla pareja y el título de cada módulo de Contenido ya no se parte.
 - Los avisos con un enlace se leen como una sola frase.
+- Los iconos quedan centrados en sus fondos de color (mosaicos de cifras, estados vacíos, recursos, avatares, marcas y
+  el menú lateral): el margen pensado para un icono antes de un texto los desplazaba.
 - Guardia de regresión `tests/e2e/layout.spec.ts` en escritorio y en móvil.
 
 ## 1.2.4 — 2026-10-28
