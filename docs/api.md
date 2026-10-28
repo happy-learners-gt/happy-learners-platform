@@ -211,6 +211,12 @@ sha256, pages: [{ page, text }] }`, hasta 1000 páginas y 8 MiB. El servidor nun
   impide duplicar una lección: pedir lo mismo otra vez responde 409;
 - `POST …/proposals/:job/retry` devuelve a la cola los elementos con error que tienen páginas.
 
+**Colocación y procedencia (1.2.2).** Con `unitId: "plan"`, cada lección va al módulo activo cuyo plan trabaja su
+indicador (o al primero, si ninguno lo planifica), con un trabajo por módulo. Cada lección propuesta guarda `generated`
+(`source`, `model`, `pages`, `indicator`, `at`), que se conserva al editarla y que ningún cliente puede fijar; la
+interfaz la presenta como «Propuesta de IA» hasta que alguien la publica. La interfaz es «Planificar con IA»
+(`/cursos/:id/asistente`), con los pasos Libro, Mapa del libro, Propuestas, Revisión y Calendario.
+
 **Ejecución.** Nunca ocurre en un request. La alarma del Durable Object de la organización procesa lotes de 3 elementos
 (`queued → running → done | error`). En una sola transacción crea la lección en borrador y marca el elemento `done`.
 Un elemento interrumpido vuelve a la cola a los 10 minutos.

@@ -25,7 +25,7 @@ test("main routes have no WCAG 2.2 A/AA violations detectable by axe", async ({ 
   const section = active!.id;
   for (const [label, path] of [
     ["inicio", "/inicio"], ["agenda", "/agenda"], ["sección", `/secciones/${section}`], ["estudiantes", `/secciones/${section}/estudiantes`], ["cursos", "/cursos"], ["nuevo curso", "/cursos/nuevo"], ["resumen", "/cursos/course-exploradores"], ["plan curricular", "/cursos/course-exploradores/plan"],
-    ["contenido", "/cursos/course-exploradores/contenido"], ["editor", "/cursos/course-exploradores/lecciones/greetings-and-introductions"],
+    ["contenido", "/cursos/course-exploradores/contenido"], ["planificar con IA", "/cursos/course-exploradores/asistente"], ["notas", `/secciones/${section}/notas`], ["editor", "/cursos/course-exploradores/lecciones/greetings-and-introductions"],
     ["vista previa", "/cursos/course-exploradores/lecciones/greetings-and-introductions?vista=previa"], ["biblioteca del curso", "/cursos/course-exploradores/biblioteca"],
     ["secciones del curso", "/cursos/course-exploradores/secciones"], ["horario", `/secciones/${section}/horario`], ["cronograma", `/secciones/${section}/clases`], ["clase", `/secciones/${section}/clases/${active!.next!.id}`], ["configuración", "/cursos/course-exploradores/configuracion"],
     ["biblioteca", "/biblioteca"], ["buscar", "/buscar?q=greet"], ["ayuda", "/ayuda"], ["guía de estilo", "/guia-de-estilo"], ["mi perfil", "/mi-cuenta/perfil"], ["cuenta", "/mi-cuenta/cuenta"], ["preferencias", "/mi-cuenta/preferencias"], ["preferencias · apariencia", "/mi-cuenta/preferencias#apariencia"], ["notificaciones", "/mi-cuenta/notificaciones"], ["expediente", "/mi-cuenta/expediente"], ["contratos", "/mi-cuenta/contratos"],

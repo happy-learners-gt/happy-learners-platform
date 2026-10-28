@@ -609,6 +609,16 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: dialog-in
 .book-map .map-edit input.map-pages { width: 120px; min-width: 0; }
 .coverage-note { display: block; font-size: var(--text-xs); color: var(--color-warning); }
 .coverage-note.is-covered { color: var(--color-success); }
+/* Planificar con IA: review cards and the AI notice. */
+.tab-done { display: inline-flex; margin-left: var(--space-1); color: var(--color-success); vertical-align: middle; }
+.tab-badge { margin-left: var(--space-1); padding: 0 6px; border-radius: var(--radius-pill); background: var(--color-primary-soft); color: var(--color-primary-ink); font-size: var(--text-xs); }
+.ai-review-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.ai-review-card { display: grid; gap: var(--space-2); padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-xs); }
+.ai-review-head { display: flex; align-items: start; justify-content: space-between; gap: var(--space-3); }
+.ai-review-head > div { display: grid; gap: 2px; min-width: 0; }
+.ai-review-activities { margin: 0; padding-left: var(--space-5); display: grid; gap: var(--space-2); }
+.ai-review-activities li { display: grid; gap: 2px; }
+.ai-notice { align-items: flex-start; }
 .readiness { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); font-size: var(--text-sm); }
 .readiness li { display: flex; align-items: center; gap: var(--space-2); }
 .readiness li.is-ok { color: var(--color-success); }
