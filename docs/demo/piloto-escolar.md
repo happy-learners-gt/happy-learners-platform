@@ -1,6 +1,6 @@
 # Demostración del piloto escolar (12 minutos)
 
-Guion para presentar la versión 1.2.0 en la organización de demostración «Colegio Horizonte». El momento central es
+Guion para presentar la versión 1.2.2 en la organización de demostración «Colegio Horizonte». El momento central es
 **Planificar con IA**: del libro de texto y los indicadores del CNB a lecciones con actividades, revisadas y
 planificadas en el calendario de la sección. Los datos vienen de la migración 0054 (`scripts/seed/pilot.mjs`).
 
@@ -25,7 +25,7 @@ planificadas en el calendario de la sección. Los datos vienen de la migración 
 | 3:30 | **Biblioteca del curso** | **Bibliografía**: el libro principal (PDF) y un recurso de apoyo. |
 | 4:00 | **Planificar con IA** (menú del curso) | Los cinco pasos: Libro, Mapa del libro, Propuestas, Revisión y Calendario. En **Libro** todo está en verde: indicadores, secuencia didáctica, libro leído, módulos y generador. |
 | 4:30 | Paso **Mapa del libro** | **Buscar en el libro** (instantáneo) y **Revisar con IA** (unos 20 segundos para 8 indicadores). Mientras corre: la IA solo acepta una página si cita una frase que está de verdad en ella. Mostrar las citas y el indicador **4.5 (decimales)**: el libro solo menciona el «sistema decimal» junto a la numeración maya, la IA concluye que **no lo trata** y eso es un hueco del libro que coordinación debe saber. **Confirmar todo**. |
-| 6:30 | Paso **Propuestas** | Los 6 indicadores sin lección ya vienen elegidos; módulo «Unidad 1», 45 minutos, **Proponer 6 lecciones** (unos 40 segundos; el avance se ve en vivo: en cola, en curso, listo). Mientras corre: cada propuesta usa solo las páginas confirmadas, sigue los momentos de la secuencia del curso, incluye una pregunta de evaluación y queda en borrador; nada se publica solo. El 4.5 termina con «el libro no trata este indicador» en lugar de inventar. |
+| 6:30 | Paso **Propuestas** | Los 6 indicadores sin lección ya vienen elegidos; módulo «Según el plan curricular» (cada lección va al módulo que trabaja su indicador), 45 minutos, **Proponer 6 lecciones** (unos 40 segundos; el avance se ve en vivo: en cola, en curso, listo). Mientras corre: cada propuesta usa solo las páginas confirmadas, sigue los momentos de la secuencia del curso, incluye una pregunta de evaluación y queda en borrador; nada se publica solo. El 4.5 termina con «el libro no trata este indicador» en lugar de inventar. |
 | 8:30 | Paso **Revisión** | Cada propuesta con sus actividades por momento, la pregunta de evaluación y su procedencia (modelo, páginas del libro). Abrir una en el editor (aviso «Propuesta de IA»), cambiar una frase y volver; **Publicar** pide confirmar que se revisó. Publicar dos o tres más. |
 | 10:00 | Paso **Calendario** | Sección 6.º A, **Asignar lecciones en orden** y **Ver el cronograma**: las lecciones publicadas quedaron en las próximas clases. Volver al **Plan curricular**: la cobertura subió. |
 | 11:00 | **Notas** de 3.º A y de Ciencias 4.º A | Bimestres cerrados, promedio, «Aprueba (parcial)» cuando falta una nota (un periodo vacío no es cero) y Ciencias leyendo en letras A–F. |
