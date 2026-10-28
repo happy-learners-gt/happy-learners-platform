@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.2.5 — 2026-10-28
+
+Auditoría de diseño y consistencia de REL-010 (`docs/handoff/2026-10-28-auditoria-diseno.md`).
+
+- Todas las páginas usan el ancho completo: Organización, Cuenta, Preferencias, Notificaciones, Configuración del curso,
+  Crear curso y Ayuda dejaron de ocupar una fracción de la pantalla.
+- En el teléfono desaparecen los espacios vacíos entre migas, título, descripción y acciones de cada página (por
+  ejemplo, en Cronograma, Cursos y Configuración académica).
+- Los menús ⋯ se abren siempre dentro de la pantalla (se alinean, se desplazan o se abren hacia arriba según el
+  espacio) y ya no saltan de línea: en programas, resultados del plan y módulos quedan al final de su fila.
+- **Mi perfil:** elegir Identidad, Sobre mí u otra sección ya no regresa a la anterior.
+- Textos largos, etiquetas y badges ya no rompen las tarjetas: títulos recortados a dos líneas con el texto completo al
+  pasar el puntero, etiquetas sin salto y badges que no se aplastan.
+- En el teléfono, las tablas de lista (Educadores, Mi cuenta, Horas, Contratos…) se leen como tarjetas con la etiqueta
+  de cada dato, los filtros forman una rejilla pareja y el título de cada módulo de Contenido ya no se parte.
+- Los avisos con un enlace se leen como una sola frase.
+- Los iconos quedan centrados en sus fondos de color (mosaicos de cifras, estados vacíos, recursos, avatares, marcas y
+  el menú lateral): el margen pensado para un icono antes de un texto los desplazaba.
+- Guardia de regresión `tests/e2e/layout.spec.ts` en escritorio y en móvil.
+
 ## 1.2.4 — 2026-10-28
 
 Calendario académico de REL-010 (migraciones 0057 y 0058).

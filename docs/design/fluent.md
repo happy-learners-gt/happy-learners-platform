@@ -62,7 +62,31 @@ No se usa `@fluentui/react-components`. Los componentes propios ya cumplen WAI-A
 6. **Accesibilidad:** contraste de texto ≥ 4,5:1, foco visible, nombres accesibles en controles con solo icono, tamaño táctil ≥ 44 px en `pointer: coarse` y orden de tabulación lógico. Agrega la ruta a `tests/e2e/accessibility.spec.ts` para que axe la revise con WCAG 2.2 A/AA.
 7. **Ordenar:** una lista que se reordena usa `SortHandle` de `ui/Sortable.tsx`: el asa con el ícono Fluent «reordenar» se arrastra con puntero o dedo y, enfocada, responde a flecha arriba y abajo, Inicio y Fin. Su nombre accesible dice qué se mueve y en qué lugar está; los menús ofrecen «Mover arriba» y «Mover abajo».
 8. **Navegación:** el menú lateral es uno solo, un árbol como el Tree de Fluent: **Cursos**, cada curso con sus páginas y, dentro de **Secciones**, cada sección con las suyas. `AppShell` se monta una vez y solo cambia el contenido; el menú no se vuelve a crear al navegar. Cada fila es una superficie con el nombre, el **+** y el chevron en columnas fijas; ambos son botones sutiles: el chevron apunta abajo cerrado y arriba abierto, y el **+** aparece con el puntero, el foco o el nivel abierto (siempre en táctil). Elegir el nombre abre su página y despliega el nivel; en su propia página, elegirlo pliega y despliega cada vez; el chevron solo pliega o despliega. Los niveles no se sangran: cada grupo abierto es una superficie redondeada con `--tree-tint`, que se suma en cada nivel, y los estados de puntero usan tintes translúcidos (`--tree-hover`, `--tree-pressed`) para verse igual a cualquier profundidad. Un curso y una sección abiertos a la vez. El nivel se despliega animando su altura (`grid-template-rows`), sin desmontarlo. Una página nueva de un curso o de una sección se agrega a `coursePages` o `sectionNode` en `ui/Shell.tsx`; no se crea otro menú ni otra barra de pestañas.
-9. **Revisa en la guía:** si el módulo introduce un patrón nuevo, agrégalo a `pages/StyleGuide.tsx`.
+9. **Diseño de página (1.2.5):** guía completa y hallazgos en `docs/handoff/2026-10-28-auditoria-diseno.md`.
+   - **Ancho:** el contenido ocupa toda la columna (`--content-max`). Ninguna página limita su ancho con `.reading` u
+     otro `max-width`; la medida de lectura (≈ 80 caracteres) se aplica a los párrafos dentro de las superficies.
+   - **Diseño acorde al espacio:** formularios en `form-grid-12` con cada campo a la anchura de su contenido; listas de
+     tarjetas en una rejilla automática (`card-grid`, `template-grid`); filtros en una rejilla pareja (`facet-bar`), y en
+     el teléfono en dos columnas con controles a todo lo ancho.
+   - **Filas y tarjetas con acciones:** rejilla `[contenido 1fr] [meta auto] [⋯ auto]`. El título tiene una base
+     mínima (no se aplasta antes de envolver), se recorta a dos líneas con el texto completo en `title`, y el menú ⋯
+     nunca salta de línea: en el teléfono queda arriba a la derecha y lo demás baja.
+   - **Menús:** `Menu` se dibuja en un portal con posición fija y detección de colisión (`floatingPosition`): se alinea
+     al final del disparador, usa el lado contrario o se desplaza para quedar a 8 px del borde, y se voltea hacia arriba
+     si no cabe abajo. Dentro de un diálogo se dibuja en el diálogo (capa superior).
+   - **Texto:** badges y etiquetas sin salto de línea (`nowrap`; las etiquetas largas se recortan); textos de usuario con
+     `overflow-wrap: anywhere`. Avisos y alertas (`.notice`, `.form-alert`) fluyen como texto: un enlace dentro de la
+     frase no la parte en columnas.
+   - **Tablas:** las de lista (`.members-table`) se apilan como tarjetas en el teléfono con la etiqueta de cada columna,
+     que `ui/responsiveTables.ts` toma del encabezado; las matrices (notas, cobertura, permisos, avisos) conservan la
+     rejilla y se desplazan de lado.
+   - **Cabecera:** `PageHeader` usa una rejilla; en pantallas angostas título, descripción y acciones se apilan con el
+     espaciado de la escala. Nunca uses `flex-basis` para un ancho en un contenedor que pase a columna: se vuelve alto.
+   - **Navegación por secciones (scroll-spy):** la sección activa es la última cuyo inicio pasó bajo las barras fijas;
+     al elegir una se mantiene hasta que la persona desplaza la página, y las secciones tienen `scroll-margin-top`.
+   - **Guardia:** `tests/e2e/layout.spec.ts` comprueba estas reglas en escritorio y en móvil (desborde, cabecera,
+     menús al final de su fila y dentro de la pantalla, ancho completo y navegación del perfil).
+10. **Revisa en la guía:** si el módulo introduce un patrón nuevo, agrégalo a `pages/StyleGuide.tsx`.
 
 ## Ejemplos
 

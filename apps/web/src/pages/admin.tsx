@@ -63,7 +63,7 @@ function OrganizationForm() {
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
       <fieldset disabled={busy} className="stack">
         <div className="form-grid-12">
-          <div className="form-span-12"><Field label="Nombre de la organización" hint="En la demostración usa un nombre ficticio."><input name="name" required minLength={3} maxLength={80} defaultValue={organization?.name || ""}/></Field></div>
+          <div className="form-span-6"><Field label="Nombre de la organización" hint="En la demostración usa un nombre ficticio."><input name="name" required minLength={3} maxLength={80} defaultValue={organization?.name || ""}/></Field></div>
           <div className="form-span-4"><Field label="Zona horaria" hint={`Hora local: ${new Intl.DateTimeFormat(currentRegional().locale, { timeZone: zone, hour: "numeric", minute: "2-digit", hourCycle: currentRegional().hourCycle }).format(new Date())} (${utcOffset(zone)}).`}>
             <select name="timezone" value={zone} onChange={event => setZone(event.target.value)}>
               {zones.map(group => <optgroup key={group.region} label={group.region}>{group.zones.map(item => <option key={item.id} value={item.id}>{item.id} ({item.offset})</option>)}</optgroup>)}
