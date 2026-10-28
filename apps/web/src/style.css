@@ -1802,11 +1802,13 @@ section.panel[id^="profile-"] { scroll-margin-top: calc(var(--topbar-h) + var(--
 
 /* On phones, filters form an even two-column grid with full-width controls; search and segmented choices take a row. */
 @media (max-width: 639px) {
-  .toolbar, .facet-bar, .class-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2) var(--space-3); align-items: end; }
+  .toolbar, .facet-bar, .class-filters, .contract-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2) var(--space-3); align-items: end; }
   .toolbar > .search-field, .toolbar > .segmented, .toolbar > .toolbar-count, .facet-bar > .button { grid-column: 1 / -1; }
   .toolbar .select-inline, .facet-bar .facet { display: grid; gap: 4px; min-width: 0; }
   .toolbar .select-inline select, .facet-bar .facet select, .class-filters .field input, .class-filters .field select { width: 100%; min-width: 0; }
   .class-filters .field { min-width: 0; }
+  .contract-filters .onboarding-filter { display: grid; gap: 4px; min-width: 0; }
+  .contract-filters .onboarding-filter select { width: 100%; min-width: 0; }
 }
 
 /* List tables stack into cards on phones (labels from responsiveTables.ts); actions stay in the top-right corner. */
