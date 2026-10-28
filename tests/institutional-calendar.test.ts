@@ -126,6 +126,9 @@ describe("institutional calendar on the built Worker", () => {
     const otherCourse = (await read<{ id: string }>(await as(admin, "/courses", "POST", courseInput("Curso fuera del programa", null)), 201)).id;
     const programGroup = (await read<{ id: string }>(await as(admin, `/courses/${programCourse}/groups`, "POST", { name: "Programa A" }), 201)).id;
     const otherGroup = (await read<{ id: string }>(await as(admin, `/courses/${otherCourse}/groups`, "POST", { name: "General B" }), 201)).id;
+    const programGradebook = (await read<{ gradebook: { year: { id: string }; years: { id: string }[] } }>(await as(admin, `/sections/${programGroup}/grades`))).gradebook;
+    expect(programGradebook.year.id).toBe(year.year.id);
+    expect(programGradebook.years.map(item => item.id)).toContain(year.year.id);
     const schedule = { weekdays: [1], startsAt: "08:00", durationMinutes: 45, from: "2027-05-03", until: "2027-05-31" };
     expect((await read<{ classes: number }>(await as(admin, `/courses/${programCourse}/groups/${programGroup}/schedule`, "PUT", schedule))).classes).toBe(5);
     expect((await read<{ classes: number }>(await as(admin, `/courses/${otherCourse}/groups/${otherGroup}/schedule`, "PUT", schedule))).classes).toBe(5);
