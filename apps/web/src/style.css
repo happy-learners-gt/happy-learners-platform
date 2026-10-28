@@ -42,8 +42,8 @@ code, kbd { font-family: var(--font-mono); font-size: .85em; background: var(--c
 .stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 .stack-lg { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
 .reading { max-width: var(--reading-max); }
-/* Long text keeps a readable measure inside full-width surfaces; the surface itself never narrows the page. */
-.prose p, .prose li, .panel > p, .panel > .muted, .empty-state p { max-width: 80ch; }
+/* Only long-form reading (Help) keeps a measure; descriptions in pages, panels and cards use the full width. */
+.prose p, .prose li { max-width: 80ch; }
 .prose { display: grid; gap: var(--space-3); color: var(--color-ink-soft); font-size: var(--text-base); line-height: var(--leading-reading); }
 .prose h2 { margin-top: var(--space-4); font-size: var(--text-md); }
 .prose ol, .prose ul { padding-left: var(--space-6); display: grid; gap: var(--space-2); }
@@ -188,7 +188,7 @@ li[data-drop=after]::before { bottom: -2px; }
 .page-header-text { display: grid; gap: 6px; min-width: 0; align-content: start; }
 .page-header-title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
 .page-header-title h1 { margin: 0; }
-.page-description { max-width: 60ch; color: var(--color-muted); font-size: var(--text-base); }
+.page-description { color: var(--color-muted); font-size: var(--text-base); }
 .page-meta { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 .page-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); flex-wrap: wrap; }
 @media (max-width: 1023px) { .page-header-row { grid-template-columns: minmax(0, 1fr); } .page-actions { justify-content: flex-start; } }
@@ -678,7 +678,7 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: dialog-in
 .setting-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-3) 0; border-top: 1px solid var(--color-border); }
 .setting-row:first-of-type { border-top: 0; }
 .setting-row h3 { font-family: var(--font-sans); font-size: var(--text-base); margin-bottom: 2px; }
-.setting-row p { max-width: 52ch; font-size: var(--text-sm); }
+.setting-row p { font-size: var(--text-sm); }
 .danger-zone { border-color: color-mix(in srgb, var(--color-danger) 30%, transparent); }
 .table-card { position: relative; max-width: 100%; min-width: 0; overflow-x: auto; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-xs); }
 table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }

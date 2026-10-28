@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.6 — 2026-10-29
+
+- Las descripciones de páginas, paneles y tarjetas usan todo el ancho disponible (solo la Ayuda conserva una medida de
+  lectura). Plan 1.3 en `docs/handoff/2026-10-29-plan-v1.3.md`.
+
 ## 1.2.5 — 2026-10-28
 
 Auditoría de diseño y consistencia de REL-010 (`docs/handoff/2026-10-28-auditoria-diseno.md`).
