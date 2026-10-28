@@ -53,6 +53,8 @@ import packagesMigration from "../../../database/migrations/0051_curriculum_pack
 import proposalsMigration from "../../../database/migrations/0052_lesson_proposals.sql";
 import bookMapMigration from "../../../database/migrations/0053_book_map.sql";
 import demoPilotMigration from "../../../database/migrations/0054_demo_pilot.sql";
+import assessmentPlansMigration from "../../../database/migrations/0055_assessment_plans.sql";
+import demoGradebookMigration from "../../../database/migrations/0056_demo_gradebook.sql";
 import { organizationIds } from "@happy-learners/domain";
 import { exportStore, importStore, RestoreError, type Backup } from "./backup";
 import { processProposals } from "./proposals";
@@ -185,6 +187,8 @@ export class OrganizationStore extends DurableObject<Env> {
       if (!applied.length || applied[0].version < 52) { this.ctx.storage.sql.exec(proposalsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (52,?)", scope); }
       if (!applied.length || applied[0].version < 53) { this.ctx.storage.sql.exec(bookMapMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (53,?)", scope); }
       if (!applied.length || applied[0].version < 54) { runScript(this.ctx.storage.sql, demoPilotMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (54,?)", scope); }
+      if (!applied.length || applied[0].version < 55) { this.ctx.storage.sql.exec(assessmentPlansMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (55,?)", scope); }
+      if (!applied.length || applied[0].version < 56) { runScript(this.ctx.storage.sql, demoGradebookMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (56,?)", scope); }
       // Compare-and-write plus dependent writes belong to one SQLite transaction.
       if (guard && !this.ctx.storage.sql.exec(guard.sql, ...guard.values).toArray().length) return [];
       return statements.map(statement => this.ctx.storage.sql.exec(statement.sql, ...statement.values).toArray());

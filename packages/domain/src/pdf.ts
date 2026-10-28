@@ -3,7 +3,11 @@
  * WinAnsi encoding (Spanish accents, ñ, ¿ ¡, curly quotes and dashes), word wrapping, and a header and a footer on
  * every page. Everything is plain ASCII in the file, so it can be checked byte by byte. No dependency.
  */
-export type PdfBlock = { text: string; bold?: boolean; size?: number; indent?: number; space?: number };
+/**
+ * A paragraph. `columns` lays out a table row instead: the text's tab-separated cells start at those offsets and do not
+ * wrap. `pageBreak` starts the block on a new page.
+ */
+export type PdfBlock = { text: string; bold?: boolean; size?: number; indent?: number; space?: number; columns?: number[]; pageBreak?: boolean };
 export type PdfDocument = { title: string; header: string[]; footer: string; blocks: PdfBlock[] };
 
 const width = 595.28, height = 841.89, margin = 56, bodySize = 10.5;
@@ -61,7 +65,15 @@ export function pdfFile(document: PdfDocument): string {
   let y = headerBottom - 8;
   for (const block of document.blocks) {
     const size = block.size || bodySize, indent = block.indent || 0, leading = size * 1.35;
+    if (block.pageBreak && pages[pages.length - 1].length) { pages.push([]); y = headerBottom - 8; }
     y -= block.space ?? 0;
+    if (block.columns) {
+      if (y - leading < bottom) { pages.push([]); y = headerBottom - 8; }
+      y -= leading;
+      const cells = block.text.split("\t");
+      block.columns.forEach((offset, index) => { if (cells[index]) pages[pages.length - 1].push({ text: cells[index], bold: !!block.bold, size, x: margin + indent + offset, y }); });
+      continue;
+    }
     for (const line of wrap(block.text, size, width - margin * 2 - indent, block.bold)) {
       if (y - leading < bottom) { pages.push([]); y = headerBottom - 8; }
       y -= leading;

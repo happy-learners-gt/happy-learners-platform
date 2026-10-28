@@ -319,12 +319,39 @@ cada estudiante `{ average, letter, passed, complete }` y la configuración que 
 sección. `PUT` recibe `{ grades: [{ learnerId, periodId, score }] }` (hasta 500): `score` de 0 a 100 con un decimal
 como máximo, o `null` para quitarla. Solo administración y quienes imparten la sección escriben (403), solo en el ciclo
 vigente (409 sin ciclo vigente) y en periodos sin cerrar (409). `POST /api/sections/:id/grades/periods/:periodId/lock`
-cierra las notas de un periodo en la sección (administración o quien imparte); `DELETE` las reabre (solo
-administración). Una nota vacía nunca cuenta como cero: el promedio usa solo los periodos con nota y, si es ponderado,
+aprueba y cierra las notas de un periodo en la sección (desde 1.2.3, coordinación o administración; quien imparte lo
+entrega para revisión); `DELETE` las reabre (solo administración). Una nota vacía nunca cuenta como cero: el promedio usa solo los periodos con nota y, si es ponderado,
 divide entre la suma de los pesos de esos periodos; `complete` dice si todos tienen nota. La escala (`gradeScale`), la
 nota mínima (`passingGrade`), los umbrales de las letras (`letterThresholds`, mínimos de A, B, C y D) y el promedio
 (`gradeAverage`) son ajustes del curso que el programa puede fijar. Un periodo con notas no se quita del ciclo (409) y
 cerrar el ciclo congela sus notas sin promover a nadie. La actividad registra que hubo cambios, nunca las notas.
+
+### Plan de evaluación, revisión de cierre y boletas (0055, 1.2.3)
+
+El `gradebook` incluye además el plan de evaluación del curso para los periodos del ciclo (`activities`: `{ id, periodId,
+position, title, kind, points, dueOn }`, con `kind` entre `task`, `project`, `quiz`, `exam`, `participation` y `other`),
+los punteos de la sección (`scores`: `{ activityId, learnerId, points }`), los comentarios (`comments`), la revisión de
+cada periodo (`reviews`: `submitted`, `returned` con su `note` o `approved`) y `canSubmit`.
+
+- `PUT /api/sections/:id/grades/periods/:periodId/plan` recibe `{ activities: [{ id?, title, kind, points, dueOn? }] }`
+  (hasta 20, en orden) y reemplaza el plan del curso para ese periodo: lo comparten todas sus secciones. Los puntos van
+  de 0,1 a 100 con un decimal y suman como máximo 100 (400). No cambia si alguna sección del curso tiene el periodo
+  cerrado o entregado (409), una actividad con punteos no se quita ni baja de su punteo más alto (409), y no se crea si
+  el periodo ya tiene notas escritas sin plan (409).
+- `PUT /api/sections/:id/grades` acepta, además de `grades`, `scores: [{ activityId, learnerId, points }]` (de 0 a los
+  puntos de la actividad, o `null`) y `comments: [{ learnerId, periodId, body }]` (hasta 600 caracteres; vacío lo quita),
+  hasta 500 cambios entre todos. En un periodo con plan, la nota es la suma de los puntos ganados hasta ahora y no se
+  escribe a mano (400). Ningún cambio entra en un periodo entregado (409) o cerrado (409). Cada cambio de una nota o de un
+  punteo queda en el historial.
+- `GET /api/sections/:id/grades/history?learner=` responde `{ changes }` del estudiante: periodo, actividad, antes,
+  después, quién y cuándo (los 200 más recientes).
+- `POST …/periods/:periodId/submit` entrega el periodo para revisión (quien imparte o administración; el plan, si lo
+  hay, debe sumar 100). `POST …/periods/:periodId/return` con `{ note }` lo devuelve, y `POST …/periods/:periodId/lock`
+  lo aprueba y lo cierra: ambos son de coordinación (con `sections.assign` en el curso) o administración. `DELETE
+  …/lock` lo reabre (solo administración).
+- `GET /api/sections/:id/grades/report.pdf[?year=&learner=]` es la boleta en PDF: una página por estudiante con cada
+  periodo, sus actividades, el comentario, el promedio, el resultado y los espacios para firmas. Dice que es informativa
+  y no sustituye el certificado oficial del Ministerio de Educación.
 
 ## Invitaciones por correo (ST-121, DEC-042)
 
