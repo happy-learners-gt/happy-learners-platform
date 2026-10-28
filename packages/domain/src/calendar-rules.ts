@@ -217,24 +217,24 @@ export function occurrences(rules: DateRule[], year: number): DateRuleOccurrence
 }
 
 /**
- * Keeps reusable rules for another year. An explicit one-year rule or one whose end predates the latest explicit
- * year represented by this set has expired; with no represented year, bounded recurring rules remain reusable.
+ * The rules to copy into the year after `year`: one-year rules stay behind, and so do rules whose validity ends
+ * before the next year. Recurring rules carry over as rules (not as dates).
  */
-export function nextYearRules(rules: DateRule[]) {
-  const representedYears = rules.flatMap(rule => [
-    ...(rule.onlyYear === undefined ? [] : [rule.onlyYear]),
-    ...(rule.anchor.kind === "once" ? [Number(rule.anchor.date.slice(0, 4))] : []),
-  ]);
-  const currentYear = representedYears.length ? Math.max(...representedYears) : null;
-  return rules.filter(rule => rule.onlyYear === undefined && (currentYear === null || rule.untilYear === undefined || rule.untilYear > currentYear));
+export function nextYearRules(rules: DateRule[], year: number) {
+  const next = year + 1;
+  return rules.filter(rule => rule.onlyYear === undefined && (rule.untilYear === undefined || rule.untilYear >= next)
+    && !(rule.anchor.kind === "once" && Number(rule.anchor.date.slice(0, 4)) < next));
 }
 
 const list = (items: string[]) => items.length < 2 ? items[0] : `${items.slice(0, -1).join(", ")} o ${items.at(-1)}`;
 const amountBeforeAfter = (amount: number, subject: string) => amount === 0 ? subject
   : `${Math.abs(amount)} ${Math.abs(amount) === 1 ? "día" : "días"} ${amount < 0 ? "antes" : "después"} de ${subject}`;
 
-/** A concise Spanish description of a rule. */
-export function ruleSummary(rule: DateRule) {
+/**
+ * A concise Spanish description of a rule. `titles` names the rules a relative rule points to (by id); without it the
+ * id is shown.
+ */
+export function ruleSummary(rule: DateRule, titles: Record<string, string> = {}) {
   const anchor = rule.anchor;
   let summary: string;
   if (anchor.kind === "fixed") summary = `${anchor.day} de ${months[anchor.month - 1]}`;
@@ -243,9 +243,12 @@ export function ruleSummary(rule: DateRule) {
     : `${ordinals[anchor.n]} ${weekdays[anchor.weekday]} de ${months[anchor.month - 1]}`;
   else if (anchor.kind === "easter") summary = amountBeforeAfter(anchor.offset, "Pascua");
   else if (anchor.kind === "relative") {
-    const base = amountBeforeAfter(anchor.offset, anchor.to);
-    summary = anchor.weekday === undefined ? base : `Primer ${weekdays[anchor.weekday]} en o después de ${base.toLowerCase()}`;
-  } else summary = anchor.date;
+    const base = amountBeforeAfter(anchor.offset, `«${titles[anchor.to] || anchor.to}»`);
+    summary = anchor.weekday === undefined ? base.charAt(0).toUpperCase() + base.slice(1) : `Primer ${weekdays[anchor.weekday]} a partir de ${anchor.offset ? base : `«${titles[anchor.to] || anchor.to}»`}`;
+  } else {
+    const [y, m, d] = anchor.date.split("-").map(Number);
+    summary = `${d} de ${months[m - 1]} de ${y}`;
+  }
   if (rule.shift) {
     const when = list(rule.shift.when.map(day => weekdays[day]));
     const onto = list(rule.shift.onto.map(day => weekdays[day]));

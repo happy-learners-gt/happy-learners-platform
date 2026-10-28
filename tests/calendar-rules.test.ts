@@ -61,7 +61,9 @@ describe("calendar date rules", () => {
     ];
     expect(occurrences(rules, 2026).map(item => item.ruleId)).toEqual(["once-in-year", "valid"]);
     expect(occurrences(rules, 2027).map(item => item.ruleId)).toEqual(["except", "valid"]);
-    expect(nextYearRules(rules).map(item => item.id)).toEqual(["valid", "except"]);
+    expect(nextYearRules(rules, 2026).map(item => item.id)).toEqual(["valid", "except"]);
+    expect(nextYearRules(rules, 2027).map(item => item.id)).toEqual(["except"]);
+    expect(nextYearRules([{ id: "visit", title: "Visita", anchor: { kind: "once", date: "2026-10-28" } }], 2026)).toEqual([]);
   });
 
   it("keeps duration and half-day information", () => {
@@ -125,8 +127,10 @@ describe("calendar date rules", () => {
     expect(ruleSummary({ id: "nth", title: "Nth", anchor: { kind: "nth-weekday", month: 11, weekday: 4, n: 2 } })).toBe("Segundo jueves de noviembre");
     expect(ruleSummary({ id: "last", title: "Last", anchor: { kind: "nth-weekday", month: 5, weekday: 5, n: -1 } })).toBe("Último viernes de mayo");
     expect(ruleSummary({ id: "easter", title: "Easter", anchor: { kind: "easter", offset: -2 } })).toBe("2 días antes de Pascua");
-    expect(ruleSummary({ id: "relative", title: "Relative", anchor: { kind: "relative", to: "Pascua", offset: 1, weekday: 1 } })).toBe("Primer lunes en o después de 1 día después de pascua");
-    expect(ruleSummary({ id: "once", title: "Once", anchor: { kind: "once", date: "2026-10-28" } })).toBe("2026-10-28");
+    expect(ruleSummary({ id: "relative", title: "Relative", anchor: { kind: "relative", to: "easter", offset: 1, weekday: 1 } }, { easter: "Domingo de Pascua" })).toBe("Primer lunes a partir de 1 día después de «Domingo de Pascua»");
+    expect(ruleSummary({ id: "monday", title: "Monday", anchor: { kind: "relative", to: "easter", offset: 0, weekday: 1 } }, { easter: "Domingo de Pascua" })).toBe("Primer lunes a partir de «Domingo de Pascua»");
+    expect(ruleSummary({ id: "after", title: "After", anchor: { kind: "relative", to: "easter", offset: 7 } })).toBe("7 días después de «easter»");
+    expect(ruleSummary({ id: "once", title: "Once", anchor: { kind: "once", date: "2026-10-28" } })).toBe("28 de octubre de 2026");
     expect(ruleSummary(fixed({ shift: { when: [6, 0], to: "next", onto: [1] } }))).toBe("15 de septiembre; si cae sábado o domingo, el lunes siguiente");
   });
 });
