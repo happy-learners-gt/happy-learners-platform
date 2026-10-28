@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.2.3 — 2026-10-28
+
+Notas profesionales de REL-010 (migraciones 0055 y 0056).
+
+- **Plan de evaluación** por curso y periodo: actividades (tareas, proyecto, pruebas cortas, examen, participación…)
+  con sus puntos, que suman 100. Plantillas «Zona 60 y examen 40», «Zona 70 y examen 30» y «Por proyectos», y copia
+  del plan de otro periodo. La nota del periodo es la suma de lo ganado; mientras falten actividades, el resultado
+  compara lo ganado con lo evaluado.
+- **Notas** de la sección con una pestaña por periodo y un **Resumen del ciclo**: cuadrícula con flechas e Intro, pegar
+  celdas desde una hoja de cálculo, cambios sin guardar resaltados, y el detalle de cada estudiante con su comentario y
+  el historial de cambios (quién, cuándo, antes y después).
+- **Estadísticas** del periodo y del ciclo: promedio, aprobados, sin nota, distribución por rangos y estudiantes en
+  riesgo.
+- **Revisión de cierre**: quien imparte entrega el periodo; coordinación o administración lo aprueba y lo cierra, o lo
+  devuelve con una nota. Solo administración lo reabre.
+- **Boletas en PDF** de la sección o de un estudiante, y el ciclo completo en **CSV**.
+- Demostración: plan del cuarto bimestre de Matemáticas 6.º con la zona de 6.º A, 3.º A entregado para revisión y 3.º B
+  devuelto.
+
 ## 1.2.2 — 2026-10-28
 
 Asistente de planificación con IA de REL-010 (DEC-052).

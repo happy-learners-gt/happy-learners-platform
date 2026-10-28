@@ -12,6 +12,8 @@ import { routeCourses, routePrograms } from "../scripts/seed/content-routes.mjs"
 import { englishCourses, englishPeople, englishPrograms } from "../scripts/seed/content-english.mjs";
 // @ts-expect-error — plain ESM scripts without type declarations
 import { book, bookPages, pilotSql } from "../scripts/seed/pilot.mjs";
+// @ts-expect-error — plain ESM scripts without type declarations
+import { gradebookActivities, gradebookSql } from "../scripts/seed/gradebook.mjs";
 
 type Seed = { id: string; title: string; program: string | null; lead: string; coTeachers: string[]; educationType: string; level: string; modality: string; pacing: string; format: string; settings: object; archived?: boolean;
   competencies: { outcomes: { id: string }[] }[]; resources: { id: string }[]; groups: { id: string; by: string }[];
@@ -135,5 +137,18 @@ describe("school pilot seed (0054, REL-010)", () => {
     const lessons = [...(pilotSql as string).matchAll(/INSERT INTO lessons\([^)]*\) SELECT '[^']+','[^']+','published','((?:[^']|'')*)'/g)].map(match => JSON.parse(match[1].replaceAll("''", "'")));
     expect(lessons.map(lesson => lesson.title)).toEqual(["Polígonos regulares e irregulares", "Perímetro de polígonos"]);
     for (const lesson of lessons) expect(validActivities(lesson.activities)).toBe(true);
+  });
+});
+
+describe("professional gradebook seed (0056, 1.2.3)", () => {
+  it("is generated from scripts/seed/gradebook.mjs and checked in unchanged, only in org-demo, with a plan of 100 points", () => {
+    expect(readFileSync(new URL("../database/migrations/0056_demo_gradebook.sql", import.meta.url), "utf8")).toBe(gradebookSql);
+    const lines = (gradebookSql as string).split("\n").filter(line => line && !line.startsWith("--"));
+    expect(lines.every(line => /^(INSERT INTO|DELETE FROM) /.test(line) && line.endsWith(";"))).toBe(true);
+    expect(lines.filter(line => line.startsWith("INSERT")).every(line => line.includes("EXISTS(SELECT 1 FROM organizations WHERE id='org-demo')"))).toBe(true);
+    // The only rows it removes are the pilot's own fourth-bimestre scores of «6.º A», once its plan exists.
+    expect(lines.filter(line => line.startsWith("DELETE"))).toEqual([expect.stringMatching(/^DELETE FROM section_grades WHERE group_id='seed-group-mat-6a' AND period_id='period-[a-f0-9-]{36}' AND id LIKE 'seed-grade-%' AND updated_at='2026-10-23T20:00:00.000Z' AND EXISTS/)]);
+    expect((gradebookActivities as { points: number }[]).reduce((sum, item) => sum + item.points, 0)).toBe(100);
+    for (const id of (gradebookSql as string).match(/'assessment-[^']+'/g) || []) expect(id).toMatch(/^'assessment-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'$/);
   });
 });

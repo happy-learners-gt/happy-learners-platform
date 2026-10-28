@@ -150,8 +150,8 @@ export { closeReasonInput, compensationAllowed, compensationKinds, compensationL
 export type { ContractVariable } from "./contracts";
 export { academicYearEditable, academicYearInput, academicYearLabels, academicYearStatuses, academicYearTransition, activationBlocker, isPeriodKind, maxPeriods, nextAcademicYear, nextYearDay, periodKindOf, periodKinds, periodName, scheduleSuggestion, splitPeriods } from "./academic-years";
 export type { AcademicYearAction, AcademicYearDraft, PeriodDraft } from "./academic-years";
-export { averageOf, defaultThresholds, gradeAverages, gradeResult, gradeScales, isLetterThresholds, letterOf, maxGradeChanges, passingChoices, scoreInput, thresholdPresets, thresholdsText } from "./gradebook";
-export type { GradingPolicy } from "./gradebook";
+export { assessmentKindLabel, assessmentKinds, assessmentTemplates, averageOf, csvFile, defaultThresholds, gradeAverages, gradeResult, gradeScales, gradeStatistics, isAssessmentKind, isLetterThresholds, letterOf, maxAssessmentActivities, maxCommentLength, maxGradeChanges, passingChoices, pastedCells, periodFromPlan, planTotal, pointsInput, scoreInput, thresholdPresets, thresholdsText } from "./gradebook";
+export type { GradingPolicy, PlannedActivity } from "./gradebook";
 export { bibliographyRoleLabel, bibliographyRoles, isBibliographyRole, maxCitation, maxReferences, primaryBlocker, referenceInput } from "./bibliography";
 export { competencyDescription, competencyName, curriculumPackages, indicatorEvidence, linkPlan, maxPickedIndicators, packageOf, packageProblems, packageSummary } from "./curriculum-packages";
 export type { CurriculumPackage, PackageCompetency, PackageIndicator } from "./curriculum-packages";

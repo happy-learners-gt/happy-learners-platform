@@ -1720,3 +1720,36 @@ a.tab { display: inline-flex; align-items: center; text-decoration: none; }
 .bell-footer { padding: var(--space-2) var(--space-4); border-top: 1px solid var(--color-border); }
 .bell-footer a { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
 @media (forced-colors: active) { .bell-count { border: 1px solid CanvasText; } .bell-list .is-unread a::before { background: CanvasText; } }
+
+/* Professional gradebook (1.2.3): period status, plan line, statistics, grid and plan editor. */
+.grade-status { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.grade-status-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-left: auto; }
+.grade-plan-line { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; color: var(--color-ink); }
+.grade-stats { display: grid; gap: var(--space-3); }
+.grade-distribution { display: grid; gap: var(--space-1); max-width: 420px; }
+.grade-band { display: grid; grid-template-columns: 64px 1fr 32px; align-items: center; gap: var(--space-2); }
+.grade-band-bar { height: 10px; border-radius: 999px; background: var(--color-surface-muted); overflow: hidden; }
+.grade-band-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--color-success); }
+.grade-band-bar > span.below { background: var(--color-danger); }
+.grade-risk summary { cursor: pointer; font-weight: 600; }
+.grade-risk ul { margin: var(--space-2) 0 0; padding-left: var(--space-5); }
+.grades-table th.grade-column { min-width: 96px; vertical-align: bottom; }
+.grade-column-title { display: block; text-transform: none; letter-spacing: 0; }
+.grade-column-detail { display: block; font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 0.75rem; }
+.grades-table td.grade-dirty { background: var(--color-warning-soft); }
+.grade-total { white-space: nowrap; }
+.icon-button.has-comment { color: var(--color-primary); }
+.grade-save { padding-top: var(--space-2); }
+.grade-history { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.grade-history li { display: grid; gap: 2px; padding-bottom: var(--space-2); border-bottom: 1px solid var(--color-border); }
+.tab-badge.state-submitted, .tab-badge.state-returned, .tab-badge.state-closed { margin-left: var(--space-2); font-size: 0.75rem; }
+.plan-start select { width: auto; }
+.plan-table { width: 100%; border-collapse: collapse; }
+.plan-table th { text-align: left; font-size: 0.8125rem; color: var(--color-ink-soft); padding: var(--space-1) var(--space-2); }
+.plan-table td { padding: var(--space-1) var(--space-2); vertical-align: middle; }
+.plan-table td input:not([type=checkbox]):not([type=radio]):not([type=file]).plan-points { width: 72px; min-width: 0; text-align: right; }
+.plan-actions { white-space: nowrap; }
+.rotate-up { transform: rotate(90deg); }
+.rotate-down { transform: rotate(-90deg); }
+.plan-total .tone-ok { color: var(--color-success); }
+.plan-total .tone-bad { color: var(--color-danger); }
