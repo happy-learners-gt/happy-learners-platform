@@ -17,14 +17,14 @@ export function Settings() {
   const crumbs = [{ label: "Cursos", href: "/cursos" }, { label: course.title, href: base }, { label: "Configuración" }];
   if (!access.configure) return <>
     <PageHeader crumbs={crumbs} title="Configuración" description="Nombre, objetivo, configuración académica, comportamiento y equipo docente del curso. Administración los gestiona."/>
-    <div className="reading stack-lg">
+    <div className="stack-lg">
       <CourseForm key={course.version} course={course} cancelHref={base} readOnly onSaved={() => undefined}/>
       {assignsTeam ? <TeamEditor/> : <TeamView/>}
     </div>
   </>;
   return <>
     <PageHeader crumbs={crumbs} title="Configuración" description="Nombre, objetivo, configuración académica, comportamiento y equipo docente del curso."/>
-    <div className="reading stack-lg">
+    <div className="stack-lg">
       {archived ? <p className="notice">Restaura el curso para cambiar su configuración y su equipo.</p>
         : <><CourseForm key={course.version} course={course} cancelHref={base} onSaved={async () => { await reload(); toast({ message: "Cambios del curso guardados." }); }}/><TeamEditor/></>}
       <Section title="Copiar o archivar" className="danger-zone">

@@ -10,6 +10,9 @@ const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 async function audit(page: Page, label: string) {
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(400);
+  // Measure the page at rest at its top: a control the previous step left scrolled under the sticky top bar shows a
+  // few pixels that axe's target-size check reads as a target crowded by the bar's buttons, an artifact of the scroll.
+  await page.evaluate(() => scrollTo(0, 0));
   const { violations } = await new AxeBuilder({ page }).withTags(wcag).analyze();
   expect(violations.map(item => `${label}: ${item.id} · ${item.nodes.map(node => node.target.join(" ")).slice(0, 3).join(" | ")}`)).toEqual([]);
 }

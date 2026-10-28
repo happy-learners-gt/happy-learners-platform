@@ -69,7 +69,7 @@ export function ProfileForm({ profile, onSaved }: { profile: StaffProfile; onSav
     catch (cause) { toast({ tone: "error", message: message(cause) }); }
     finally { setPhotoBusy(false); }
   }
-  return <div className="reading stack">
+  return <div className="stack">
     <section className="panel profile-photo-panel" aria-labelledby="photo-title">
       <div className="panel-header"><h2 id="photo-title">Foto</h2></div>
       <div className="profile-photo-row">
