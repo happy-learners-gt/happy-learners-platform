@@ -7,7 +7,7 @@ import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { calendarFeed, escapeText, feedWindow, foldLine, zonedInstant, type FeedClass } from "../packages/domain/src/index";
-import { nextClassDays } from "./class-days";
+import { nextClassDays, type NoClassSpan } from "./class-days";
 
 /** Splits a feed into content lines (unfolded) after checking its physical form: CRLF, ≤ 75 octets per line. */
 function parse(ics: string) {
@@ -156,7 +156,7 @@ async function scheduledSection(admin: ReturnType<typeof client>, leadId: string
 describe("ST-125 subscription link in the local Worker", () => {
   it("criteria 1-3: the feed lists only the educator's classes, follows cancellations and reschedules, and regenerating stops the old link", async () => {
     const admin = client(await login("admin-demo")), educator = client(await login("educador-demo")), other = client(await login("instructor-demo"));
-    const days = await nextClassDays(async () => (await admin.get("/api/calendar")).body, 6);
+    const days = await nextClassDays(async () => (await admin.get("/api/calendar")).body as { breaks?: NoClassSpan[]; today: string }, 6);
     const mine = await scheduledSection(admin, "user-educator", "propia", days);
     const theirs = await scheduledSection(admin, "user-1", "ajena", days);
 
