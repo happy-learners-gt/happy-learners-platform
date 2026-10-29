@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { AcademicProfile, Contract, ContractPhase, CourseFormat, EffectivePreferences, CourseSettings, EducationLevel, EducationType, Member, Modality, OnboardingPerson, Organization, Pacing, StudyProgram, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
-import { accountInput, areaLabel, contractPhaseLabels, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, pacings, settingChoices, settingDefinitions, settingText, settingValue, suggestedLocales, timezoneGroups, utcOffset } from "@happy-learners/domain";
+import { accountInput, areaLabel, contractPhaseLabels, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, pacings, settingChoices, settingDefinitions, visibleSettingDefinitions, settingText, settingValue, suggestedLocales, timezoneGroups, utcOffset } from "@happy-learners/domain";
 import type { SettingKey } from "@happy-learners/domain";
 import { plural } from "../model";
 import { Avatar } from "../ui/progress";
@@ -363,7 +363,7 @@ function ProgramDialog({ item, onClose, onSave }: { item?: StudyProgram; onClose
       </div>
       <fieldset className="config-section"><legend>Ajustes para sus cursos</legend>
         <p className="muted small">Sin valor, cada curso usa lo que corresponde a su tipo. Con valor, es el punto de partida de sus cursos; si lo fijas, ningún curso del programa puede cambiarlo.</p>
-        <ul className="settings-list">{settingDefinitions.map(definition => {
+        <ul className="settings-list">{visibleSettingDefinitions.map(definition => {
           const key = definition.key;
           const options = settingChoices(key, settings[key]);
           return <li key={key} className="setting-item">

@@ -30,7 +30,7 @@ export type { BellBlock, BellBreak, BellConfig, BellScheduleDraft } from "./bell
 export { acceptsAttendance, cancelPlanInput, classActions, classPlanInput, classStatusLabels, completionInput, inSessionFilter, lessonOutcomeLabels, maxClassLessons, groupCodePattern, localDay, newGroupCode, nextClassStatus, normalizeGroupCode, sessionFilterAllowed, sessionFilterInput, upcomingClasses } from "./classes";
 export type { ClassAction, ClassPlan, SessionFilter } from "./classes";
 export { materialInput, record, cleanText, validTermIds, completeOrder } from "./courses";
-export { educationTypes, educationLevels, knowledgeAreas, areaLabel, courseFormats, modalities, pacings, moduleLabels, moduleNoun, settingDefinitions, derivedSettings, sourceLabel, effectiveProfile, resolveSettings, settingsInput, settingChoices, settingText, settingValue, profileInput, courseInput, programInput, coursePresets, labelOf } from "./academic";
+export { educationTypes, educationLevels, knowledgeAreas, areaLabel, courseFormats, modalities, pacings, moduleLabels, moduleNoun, settingDefinitions, visibleSettingDefinitions, derivedSettings, sourceLabel, effectiveProfile, resolveSettings, settingsInput, settingChoices, settingText, settingValue, profileInput, courseInput, programInput, coursePresets, labelOf } from "./academic";
 export type { ModuleNoun, SettingKey, SettingSource } from "./academic";
 export { sequenceTemplates, sequenceOf, purposes, groupings, blockKinds, blocksOf, phaseOf, studentActivities, resourceIdsOf, richTextFieldsOf, hasText } from "./sequences";
 export type { Phase } from "./sequences";
@@ -157,7 +157,7 @@ export { academicYearEditable, academicYearInput, academicYearLabels, academicYe
 export type { AcademicYearAction, AcademicYearDraft, PeriodDraft } from "./academic-years";
 export { assessmentKindLabel, assessmentKinds, assessmentTemplates, averageOf, csvFile, defaultThresholds, gradeAverages, gradeResult, gradeScales, gradeStatistics, isAssessmentKind, isLetterThresholds, letterOf, maxAssessmentActivities, maxCommentLength, maxGradeChanges, passingChoices, pastedCells, periodFromPlan, planTotal, pointsInput, scoreInput, thresholdPresets, thresholdsText } from "./gradebook";
 export type { GradingPolicy, PlannedActivity } from "./gradebook";
-export { displayOf, learnerResult, markValue, pointsScheme, rubricInput, schemeInput, schemeTemplates } from "./grading";
+export { displayOf, learnerResult, markValue, pointsScheme, rubricInput, schemeFromSettings, schemeInput, schemeTemplates } from "./grading";
 export type { Activity as GradingActivity, AtomicMark, GradingPeriod, GradingScheme, LearnerResult, Mark, Rubric } from "./grading";
 export { bibliographyRoleLabel, bibliographyRoles, isBibliographyRole, maxCitation, maxReferences, primaryBlocker, referenceInput } from "./bibliography";
 export { competencyDescription, competencyName, curriculumPackages, indicatorEvidence, linkPlan, maxPickedIndicators, packageOf, packageProblems, packageSummary } from "./curriculum-packages";

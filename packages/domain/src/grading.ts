@@ -1,5 +1,6 @@
 import type {
   AtomicMark,
+  CourseSettings,
   GradingActivity,
   GradingPeriod,
   GradingScheme,
@@ -526,6 +527,19 @@ export const pointsScheme: GradingScheme = {
   extraCreditCap: 0,
   retakes: "replace",
 };
+
+/** Translate the legacy gradebook settings into the compatible data-driven points scheme. */
+export function schemeFromSettings(settings: Pick<Required<CourseSettings>, "gradeScale" | "passingGrade" | "letterThresholds" | "gradeAverage">): GradingScheme {
+  const [a, b, c, d] = settings.letterThresholds;
+  return {
+    ...pointsScheme,
+    display: settings.gradeScale === "letters_af"
+      ? { kind: "letters", thresholds: [{ letter: "A", min: a }, { letter: "B", min: b }, { letter: "C", min: c }, { letter: "D", min: d }, { letter: "F", min: 0 }] }
+      : { kind: "numeric", max: 100, decimals: 1 },
+    passing: { min: settings.passingGrade },
+    periods: settings.gradeAverage,
+  };
+}
 
 /** Starting examples only; every calculation still goes through the same data-driven engine. */
 export const schemeTemplates: GradingScheme[] = [

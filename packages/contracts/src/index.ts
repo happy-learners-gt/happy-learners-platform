@@ -154,6 +154,9 @@ export type GradingScheme = {
   extraCreditCap?: number;
   retakes: "replace" | "highest" | "average";
 };
+export interface OrganizationGradingScheme extends GradingScheme {
+  builtin: boolean; status: "active" | "archived"; createdAt: string; updatedAt: string;
+}
 export type Rubric = {
   criteria: { id: string; label: string; weight: number; levels: { id: string; label: string; points: number }[] }[];
 };
@@ -183,6 +186,8 @@ export interface CourseSettings {
   moduleLabel?: ModuleLabel; defaultSequence?: SequenceTemplate; attendance?: boolean; workGroups?: boolean; outcomesRequired?: boolean; assessmentRequired?: boolean;
   /** How the section's gradebook reads (libreta): scale, passing score, letter thresholds and how periods average. */
   gradeScale?: GradeScale; passingGrade?: number; letterThresholds?: LetterThresholds; gradeAverage?: GradeAverage;
+  /** Organization grading scheme; null or absent keeps the compatible points scheme. */
+  gradingSchemeId?: string | null;
 }
 /** A set of courses that share a configuration; it can fix settings for all of them. */
 export interface StudyProgram extends AcademicProfile {
@@ -334,7 +339,11 @@ export interface BibliographyReference {
 /** The minimal gradebook (libreta) of a section: one optional score per student and period of a school year. */
 export interface GradebookPeriod extends AcademicPeriod { locked: boolean; lockedAt: string | null; lockedBy: string | null }
 export interface GradeEntry { learnerId: string; periodId: string; score: number }
-export interface GradeResult { learnerId: string; average: number | null; letter: string | null; passed: boolean | null; complete: boolean }
+export interface GradeResult {
+  learnerId: string; average: number | null; letter: string | null; passed: boolean | null; complete: boolean;
+  display?: string | null; level?: string | null; reasons?: string[];
+  final?: LearnerResult["final"];
+}
 export interface Gradebook {
   section: { id: string; name: string; courseId: string; courseTitle: string; status: "active" | "archived" };
   year: Pick<AcademicYear, "id" | "name" | "from" | "until" | "status"> | null;
@@ -345,9 +354,12 @@ export interface Gradebook {
   grades: GradeEntry[];
   results: GradeResult[];
   policy: { scale: GradeScale; passingGrade: number; letterThresholds: LetterThresholds; average: GradeAverage };
+  scheme?: GradingScheme;
   /** The course's assessment plan for the year's periods (shared by its sections), its scores in this section and comments. */
   activities: AssessmentActivity[];
   scores: AssessmentScore[];
+  marks?: AssessmentMark[];
+  evaluators?: AssessmentEvaluator[];
   comments: GradeComment[];
   /** Where each period is in its closing: handed in, returned or approved. Absent while it is open. */
   reviews: PeriodReview[];
@@ -356,8 +368,14 @@ export interface Gradebook {
 }
 /** An evaluation activity of a course's assessment plan for a period: its points add up to the period's 100. */
 export type AssessmentKind = "task" | "project" | "quiz" | "exam" | "participation" | "other";
-export interface AssessmentActivity { id: string; periodId: string; position: number; title: string; kind: AssessmentKind; points: number; dueOn: string | null }
+export interface AssessmentActivity {
+  id: string; periodId: string; position: number; title: string; kind: AssessmentKind; points: number; dueOn: string | null;
+  categoryId?: string; grading?: GradingActivity["grading"]; extra?: boolean; retakeOf?: string | null;
+  rubric?: Rubric; panel?: GradingActivity["panel"];
+}
 export interface AssessmentScore { activityId: string; learnerId: string; points: number }
+export interface AssessmentMark { activityId: string; learnerId: string; evaluatorId: string | null; mark: AtomicMark; updatedAt: string; updatedBy: string }
+export interface AssessmentEvaluator { activityId: string; userId: string; name: string; chair: boolean }
 export interface GradeComment { learnerId: string; periodId: string; body: string; updatedAt: string; updatedBy: string }
 export interface PeriodReview { periodId: string; status: "submitted" | "returned" | "approved"; note: string | null; submittedBy: string; submittedAt: string; reviewedBy: string | null; reviewedAt: string | null }
 /** One change of a score: the period's score or an activity's points, before and after (null is empty). */

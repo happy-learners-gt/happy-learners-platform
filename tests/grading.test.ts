@@ -6,6 +6,7 @@ import {
   markValue,
   pointsScheme,
   rubricInput,
+  schemeFromSettings,
   schemeInput,
   schemeTemplates,
 } from "../packages/domain/src/index";
@@ -19,6 +20,15 @@ const result = (scheme: GradingScheme, activities: GradingActivity[], entries: [
   learnerResult(scheme, activities, marks(entries), usePeriods);
 
 describe("the data-driven grading engine", () => {
+  it("translates the current gradebook settings without changing its results", () => {
+    const numeric = schemeFromSettings({ gradeScale: "numeric_100", passingGrade: 60, letterThresholds: [90, 80, 70, 60], gradeAverage: "simple" });
+    const letters = schemeFromSettings({ gradeScale: "letters_af", passingGrade: 65, letterThresholds: [93, 85, 77, 70], gradeAverage: "weighted" });
+    const activities = [activity("first", "p1", 100), activity("second", "p2", 100)];
+    const recorded: [string, Mark][] = [["first", { kind: "points", value: 90 }], ["second", { kind: "points", value: 60 }]];
+    expect(result(numeric, activities, recorded).final).toMatchObject({ score: 75, display: "75,0", passed: true, complete: true });
+    expect(result(letters, activities, recorded).final).toMatchObject({ score: 67.5, display: "F", passed: true, complete: true });
+  });
+
   it("reproduces the points plan, partial periods, missing scores, weighted periods and letters", () => {
     const plan = [activity("zona-a", "p1", 20), activity("zona-b", "p1", 40), activity("examen", "p1", 40)];
     expect(result(pointsScheme, plan, []).periods[0]).toMatchObject({ score: null, graded: 0, complete: false });
