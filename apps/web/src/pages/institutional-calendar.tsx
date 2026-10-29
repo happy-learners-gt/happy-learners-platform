@@ -132,14 +132,20 @@ function YearMonths({ year, events, writable, selected, categories, onEdit, onSt
   onStatus: (event: InstitutionalCalendarEvent, status: "active" | "skipped") => void;
 }) {
   const categoryIndex = (id: string) => Math.max(0, categories.findIndex(item => item.id === id)) % 6;
+  const inMonth = (index: number) => events.filter(event => Number(event.from.slice(5, 7)) - 1 === index || (event.from < `${year}-${String(index + 1).padStart(2, "0")}-01` && event.until >= `${year}-${String(index + 1).padStart(2, "0")}-01`));
+  const empty = months.filter((_, index) => !inMonth(index).length);
   return <section className="calendar-months" aria-label={`Calendario de ${year}`}>
+    {/* Phones hide the months without events; this says which ones. */}
+    {empty.length > 0 && empty.length < 12 && <p className="muted small calendar-empty-note">Sin eventos en {empty.join(", ").toLocaleLowerCase("es")}.</p>}
     {months.map((month, index) => {
-      const items = events.filter(event => Number(event.from.slice(5, 7)) - 1 === index || (event.from < `${year}-${String(index + 1).padStart(2, "0")}-01` && event.until >= `${year}-${String(index + 1).padStart(2, "0")}-01`));
-      return <article className="calendar-month panel" key={month}><h2>{month}</h2>
+      const items = inMonth(index);
+      return <article className={`calendar-month panel${items.length ? "" : " is-empty"}`} key={month}><h2>{month}</h2>
         {items.length ? <ol>{items.map(event => <li key={event.id} className={`calendar-event category-tone-${categoryIndex(event.categoryId)}${event.status === "skipped" ? " is-skipped" : ""}`}>
           <span className="calendar-event-day">{Number(event.from.slice(8, 10))}</span>
-          <div><strong>{event.title}</strong><span>{event.from === event.until ? sessionDay(event.from, "short") : `${sessionDay(event.from, "short")} – ${sessionDay(event.until, "short")}`} · {parts[event.part]}</span>
-            <span>{event.categoryLabel} · {event.scope ? scopeLabels[event.scope] : ""}{event.noClass ? " · Sin clase" : ""}{event.status === "skipped" ? " · Omitido" : ""}</span></div>
+          <div><strong title={event.title}>{event.title}</strong>
+            {/* One line of detail: the day is already in the badge, so only a range, a half day, the category and the level. */}
+            <span>{[event.from !== event.until ? `${sessionDay(event.from, "short")} – ${sessionDay(event.until, "short")}` : "", event.part !== "full" ? parts[event.part] : "", event.categoryLabel, event.scope ? scopeLabels[event.scope] : "", event.status === "skipped" ? "Omitido" : ""].filter(Boolean).join(" · ")}</span>
+            {event.noClass && event.status !== "skipped" && <span className="calendar-no-class">Sin clase</span>}</div>
           {writable && selected?.id === event.calendarId && <Menu label={`Acciones de ${event.title}`} items={[
             { label: event.ruleId ? "Mover esta ocurrencia" : "Editar", icon: "edit", onSelect: () => onEdit(event) },
             ...(event.ruleId ? [{ label: event.status === "skipped" ? "Restaurar ocurrencia" : "Saltar esta ocurrencia", icon: "calendar" as const, onSelect: () => onStatus(event, event.status === "skipped" ? "active" : "skipped") }] : []),
@@ -151,9 +157,13 @@ function YearMonths({ year, events, writable, selected, categories, onEdit, onSt
 }
 
 function RulesPanel({ rules, titles, writable, year, onEdit }: { rules: InstitutionalCalendarRule[]; titles: Record<string, string>; writable: boolean; year: number; onEdit: (rule: InstitutionalCalendarRule | "new") => void }) {
+  // Rules read in the order of the year: by their first date in it; the ones that do not apply go last.
+  let resolved: { ruleId: string; from: string }[] = [];
+  try { resolved = occurrences(rules.map(rule => rule.rule), year); } catch { resolved = []; }
+  const firstDate = (item: InstitutionalCalendarRule) => resolved.find(date => date.ruleId === item.id)?.from;
   return <Section title="Reglas" className="calendar-rules-panel" action={writable ? <button type="button" className="button secondary small" onClick={() => onEdit("new")}><Icon name="plus" size={16}/>Agregar</button> : undefined}>
     <p className="muted small">Las reglas calculan las fechas cada año. Genera el año para crear o actualizar sus eventos.</p>
-    {rules.length ? <ul className="calendar-rule-list">{rules.map(item => {
+    {rules.length ? <ul className="calendar-rule-list">{[...rules].sort((a, b) => (firstDate(a) || "9999").localeCompare(firstDate(b) || "9999") || a.rule.title.localeCompare(b.rule.title, "es")).map(item => {
       let dates = "";
       try { dates = occurrences(rules.map(rule => rule.rule), year).filter(date => date.ruleId === item.id).map(date => date.from === date.until ? sessionDay(date.from, "short") : `${sessionDay(date.from, "short")} – ${sessionDay(date.until, "short")}`).join(", "); } catch { dates = "Revisa la referencia de esta regla"; }
       return <li key={item.id}><div><strong>{item.rule.title}</strong><span>{ruleSummary(item.rule, titles)}</span><span className="muted small">{dates || `No aplica en ${year}`}{item.noClass ? " · sin clase" : ""}</span></div>{writable && <button type="button" className="icon-button" aria-label={`Editar ${item.rule.title}`} onClick={() => onEdit(item)}><Icon name="edit" size={16}/></button>}</li>;
