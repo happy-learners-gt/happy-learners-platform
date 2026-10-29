@@ -22,12 +22,13 @@ type Activity = {
 const closed = "Las notas de este periodo están cerradas o entregadas a revisión.";
 
 async function activityOf(db: Database, current: Member, section: Section, activityId: string) {
-  return db.prepare(`SELECT a.id,a.title,a.points,a.grading,a.rubric,a.group_mode AS groupMode,a.work_group_set_id AS setId,a.period_id AS periodId,
+  return db.prepare(`SELECT a.id,a.title,a.points,a.grading,a.rubric,a.group_mode AS groupMode,s.set_id AS setId,a.period_id AS periodId,
     a.peer_min AS peerMin,a.peer_max AS peerMax,l.locked_at AS lockedAt,r.status AS review,y.status AS yearStatus
     FROM assessment_activities a JOIN academic_periods p ON p.id=a.period_id JOIN academic_years y ON y.id=p.year_id
+    LEFT JOIN section_activity_sets s ON s.activity_id=a.id AND s.group_id=? AND s.kind='assessment'
     LEFT JOIN section_period_locks l ON l.period_id=a.period_id AND l.group_id=?
     LEFT JOIN section_period_reviews r ON r.period_id=a.period_id AND r.group_id=?
-    WHERE a.id=? AND a.course_id=? AND a.organization_id=?`).bind(section.id, section.id, activityId, section.courseId, current.organizationId).first<Activity>();
+    WHERE a.id=? AND a.course_id=? AND a.organization_id=?`).bind(section.id, section.id, section.id, activityId, section.courseId, current.organizationId).first<Activity>();
 }
 
 function groupMarkInput(input: unknown, activity: Activity): AtomicMark | { error: string } {

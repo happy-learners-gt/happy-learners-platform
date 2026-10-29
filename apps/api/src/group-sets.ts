@@ -3,6 +3,7 @@ import { formGroups, groupRulesInput, type FormedGroups, type GroupRules } from 
 import type { Database } from "./storage";
 import { scopedCourses } from "./permissions";
 import { event } from "./team";
+import { sectionSetName, sectionWorkGroups } from "./workgroups";
 
 /**
  * Group sets of a section (lote 3a):
@@ -15,11 +16,13 @@ import { event } from "./team";
  */
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
 const listPath = /^\/api\/sections\/([a-z0-9-]+)\/group-sets$/;
+const assignPath = /^\/api\/sections\/([a-z0-9-]+)\/group-sets\/assignments$/;
 const onePath = /^\/api\/sections\/([a-z0-9-]+)\/group-sets\/(groupset-[a-f0-9-]{36})$/;
 const regenPath = /^\/api\/sections\/([a-z0-9-]+)\/group-sets\/(groupset-[a-f0-9-]{36})\/regenerate$/;
 
 export function groupSetMethods(path: string): string[] | null {
   if (listPath.test(path)) return ["GET", "POST"];
+  if (assignPath.test(path)) return ["PUT"];
   if (regenPath.test(path)) return ["POST"];
   if (onePath.test(path)) return ["PUT", "DELETE"];
   return null;
@@ -49,7 +52,7 @@ async function openSection(db: Database, current: Member, groupId: string): Prom
 }
 
 async function graded(db: Database, setId: string) {
-  return !!(await db.prepare(`SELECT 1 AS found FROM assessment_activities a WHERE a.work_group_set_id=? AND (
+  return !!(await db.prepare(`SELECT 1 AS found FROM section_activity_sets s JOIN assessment_activities a ON a.id=s.activity_id AND s.kind='assessment' WHERE s.set_id=? AND (
     EXISTS (SELECT 1 FROM assessment_group_marks m WHERE m.activity_id=a.id)
     OR EXISTS (SELECT 1 FROM assessment_group_adjustments d WHERE d.activity_id=a.id)
     OR EXISTS (SELECT 1 FROM assessment_peer_ratings p WHERE p.activity_id=a.id)
@@ -105,6 +108,13 @@ async function clearGroups(db: Database, setId: string) {
 }
 
 export async function groupSets(path: string, method: string, input: unknown, url: URL, current: Member, db: Database): Promise<Response> {
+  const assigning = assignPath.exec(path);
+  if (assigning) {
+    if (method !== "PUT") return reply({ error: "Ruta no disponible." }, 404);
+    const section = await openSection(db, current, assigning[1]);
+    if (section instanceof Response) return section;
+    return assignActivity(db, current, section, input);
+  }
   const match = regenPath.exec(path) || onePath.exec(path) || listPath.exec(path);
   if (!match) return reply({ error: "Ruta no disponible." }, 404);
   const section = await openSection(db, current, match[1]);
@@ -119,13 +129,63 @@ export async function groupSets(path: string, method: string, input: unknown, ur
 }
 
 async function list(db: Database, current: Member, section: Section) {
-  const rows = (await db.prepare("SELECT id FROM work_group_sets WHERE group_id=? AND organization_id=? AND archived=0 ORDER BY created_at,id").bind(section.id, current.organizationId).all<{ id: string }>()).results;
+  const rows = (await db.prepare("SELECT id FROM work_group_sets WHERE group_id=? AND organization_id=? AND archived=0 ORDER BY CASE WHEN name=? COLLATE NOCASE THEN 0 ELSE 1 END, created_at, id").bind(section.id, current.organizationId, sectionSetName).all<{ id: string }>()).results;
   const sets = [];
   for (const row of rows) {
     const set = await view(db, row.id, current.organizationId);
     if (set) sets.push({ ...set, graded: await graded(db, row.id) });
   }
-  return reply({ sets });
+  const lessons = await sectionWorkGroups(db, section.courseId, section.id);
+  const links = (await db.prepare("SELECT activity_id AS activityId, kind, set_id AS setId FROM section_activity_sets WHERE group_id=?").bind(section.id).all<{ activityId: string; kind: string; setId: string }>()).results;
+  const groupSet = new Map((await db.prepare("SELECT id, set_id AS setId FROM work_groups WHERE group_id=?").bind(section.id).all<{ id: string; setId: string | null }>()).results.map(row => [row.id, row.setId]));
+  const assessments = (await db.prepare(`SELECT a.id, a.title, p.name AS periodName FROM assessment_activities a JOIN academic_periods p ON p.id=a.period_id JOIN academic_years y ON y.id=p.year_id
+    WHERE a.course_id=? AND a.organization_id=? AND a.group_mode='group' AND y.status IN ('current','closed') ORDER BY p.starts_on, a.position`).bind(section.courseId, current.organizationId).all<{ id: string; title: string; periodName: string }>()).results;
+  const activities = [
+    ...lessons.activities.map(item => ({
+      kind: "lesson" as const, activityId: item.activityId, lessonId: item.lessonId, title: item.title, detail: `${item.lessonTitle} · ${item.unitName}`, grouping: item.grouping, workGroupIds: item.workGroupIds,
+      setId: links.find(link => link.kind === "lesson" && link.activityId === item.activityId)?.setId || item.workGroupIds.map(id => groupSet.get(id)).find(Boolean) || null,
+    })),
+    ...assessments.map(item => ({
+      kind: "assessment" as const, activityId: item.id, title: item.title, detail: item.periodName, workGroupIds: [] as string[],
+      setId: links.find(link => link.kind === "assessment" && link.activityId === item.id)?.setId || null,
+    })),
+  ];
+  return reply({
+    sets: sets.map(set => ({ ...set, usedIn: activities.filter(item => item.setId === set.id).map(item => ({ kind: item.kind, activityId: item.activityId, title: item.title })) })),
+    activities,
+  });
+}
+
+async function assignActivity(db: Database, current: Member, section: Section, input: unknown) {
+  const body = input && typeof input === "object" ? input as Record<string, unknown> : null;
+  const kind = body?.kind, activityId = body?.activityId, setId = body?.setId;
+  if ((kind !== "lesson" && kind !== "assessment") || typeof activityId !== "string" || typeof setId !== "string") return reply({ error: "Elige la actividad y el conjunto de grupos." }, 400);
+  const set = await db.prepare("SELECT id,name FROM work_group_sets WHERE id=? AND group_id=? AND organization_id=? AND archived=0").bind(setId, section.id, current.organizationId).first<{ id: string; name: string }>();
+  if (!set) return reply({ error: "Elige un conjunto de grupos activo de esta sección." }, 400);
+  if (kind === "assessment") {
+    const activity = await db.prepare("SELECT id,title,group_mode AS groupMode FROM assessment_activities WHERE id=? AND course_id=? AND organization_id=?").bind(activityId, section.courseId, current.organizationId).first<{ id: string; title: string; groupMode: string }>();
+    if (!activity || activity.groupMode !== "group") return reply({ error: "Solo una actividad en grupos de la evaluación elige su conjunto en la sección." }, 400);
+    await db.batch([
+      db.prepare("INSERT INTO section_activity_sets(group_id, activity_id, kind, set_id) VALUES (?,?,'assessment',?) ON CONFLICT(group_id, activity_id, kind) DO UPDATE SET set_id=excluded.set_id").bind(section.id, activity.id, set.id),
+      event(db, current, { action: "assigned", targetType: "group", targetId: section.id, courseId: section.courseId, summary: `Eligió «${set.name}» para «${activity.title}» en «${section.name}»` }),
+    ]);
+    return reply({ ok: true });
+  }
+  const lessonId = body?.lessonId;
+  const chosen = body?.workGroupIds;
+  if (typeof lessonId !== "string" || !Array.isArray(chosen) || chosen.some(id => typeof id !== "string")) return reply({ error: "Elige la actividad y los grupos que la trabajan." }, 400);
+  const lessons = await sectionWorkGroups(db, section.courseId, section.id);
+  const activity = lessons.activities.find(item => item.lessonId === lessonId && item.activityId === activityId);
+  if (!activity) return reply({ error: "Solo las actividades en parejas o en equipos de las lecciones publicadas del curso se asignan a grupos." }, 400);
+  const groups = (await db.prepare("SELECT id FROM work_groups WHERE set_id=?").bind(set.id).all<{ id: string }>()).results.map(row => row.id);
+  if ((chosen as string[]).some(id => !groups.includes(id))) return reply({ error: "Elige grupos de ese conjunto." }, 400);
+  await db.batch([
+    db.prepare("DELETE FROM activity_work_groups WHERE group_id=? AND lesson_id=? AND activity_id=?").bind(section.id, lessonId, activityId),
+    ...(chosen as string[]).map(id => db.prepare("INSERT INTO activity_work_groups(organization_id,group_id,lesson_id,activity_id,work_group_id) VALUES (?,?,?,?,?)").bind(current.organizationId, section.id, lessonId, activityId, id)),
+    db.prepare("INSERT INTO section_activity_sets(group_id, activity_id, kind, set_id) VALUES (?,?,'lesson',?) ON CONFLICT(group_id, activity_id, kind) DO UPDATE SET set_id=excluded.set_id").bind(section.id, activityId, set.id),
+    event(db, current, { action: "assigned", targetType: "group", targetId: section.id, courseId: section.courseId, summary: `Asignó «${activity.title}» a «${set.name}» en «${section.name}»` }),
+  ]);
+  return reply({ ok: true });
 }
 
 async function create(db: Database, current: Member, section: Section, input: unknown, preview: boolean) {
