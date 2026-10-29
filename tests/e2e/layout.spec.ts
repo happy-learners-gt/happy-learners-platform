@@ -5,7 +5,7 @@ import { signIn } from "./helpers";
 // Layout invariants of the design standard (docs/design/fluent.md, point 9), checked on desktop and on mobile:
 // pages use the full content column, the page header stays compact, row actions stay at the end of their row, menus
 // open inside the screen, nothing overflows sideways, and the profile's section bar keeps the section chosen.
-const routes = ["/inicio", "/cursos", "/agenda", "/calendario", "/organizacion", "/educadores", "/configuracion-academica", "/tribunales", "/mi-cuenta/cuenta", "/mi-cuenta/notificaciones",
+const routes = ["/inicio", "/cursos", "/agenda", "/calendario", "/organizacion", "/organizacion/calendario", "/educadores", "/configuracion-academica", "/tribunales", "/mi-cuenta/cuenta", "/mi-cuenta/notificaciones",
   "/cursos/seed-course-mate6", "/cursos/seed-course-mate6/plan", "/cursos/seed-course-mate6/evaluacion", "/cursos/seed-course-mate6/contenido", "/cursos/seed-course-mate6/configuracion",
   "/secciones/seed-group-mat-6a", "/secciones/seed-group-mat-6a/clases", "/secciones/seed-group-mat-6a/estudiantes", "/secciones/seed-group-mat-6a/notas", "/secciones/seed-group-mat-6a/grupos"];
 const fullWidth = new Set(["/organizacion", "/mi-cuenta/cuenta", "/cursos/seed-course-mate6/configuracion"]);

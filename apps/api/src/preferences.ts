@@ -1,6 +1,6 @@
 import type { EffectivePreferences, Inbox, InboxItem, Member, NotificationMatrixRow, NotificationPreferences } from "@happy-learners/contracts";
 import type { DeliverySettings, NotificationType, UserPreferences } from "@happy-learners/domain";
-import { effectivePreferences, emailPlan, isConfigurableType, localeWeekStart, lockedBy, notificationCatalog, notificationChannels, notificationPreferencesInput, receivesOn, userPreferencesInput } from "@happy-learners/domain";
+import { agendaKinds, effectivePreferences, emailPlan, isConfigurableType, localeWeekStart, lockedBy, notificationCatalog, notificationChannels, notificationPreferencesInput, receivesOn, userPreferencesInput } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { deliveryOf, mandatoryTypes, preferencesOf } from "./notify";
 import { myPanels } from "./gradebook";
@@ -22,13 +22,14 @@ export function meMethods(path: string): string[] | null {
   return null;
 }
 
-type StoredPreferences = { language: "es"; locale: string | null; timezone: string | null; weekStart: number | null; hourCycle: "h12" | "h23" | null; homePage: UserPreferences["homePage"]; theme: UserPreferences["theme"]; textScale: number; highContrast: number; motion: UserPreferences["motion"]; density: UserPreferences["density"] };
+type StoredPreferences = { language: "es"; locale: string | null; timezone: string | null; weekStart: number | null; hourCycle: "h12" | "h23" | null; homePage: UserPreferences["homePage"]; theme: UserPreferences["theme"]; textScale: number; highContrast: number; motion: UserPreferences["motion"]; density: UserPreferences["density"]; agendaView: UserPreferences["agendaView"]; agendaShow: string };
 /** The preferences in force for a person: their row, and the organization's locale and zone for what they left empty. */
 export async function preferencesFor(db: Database, userId: string, organizationId: string): Promise<EffectivePreferences> {
-  const row = await db.prepare(`SELECT o.locale AS orgLocale,o.timezone AS orgZone,p.language,p.locale,p.timezone,p.week_start AS weekStart,p.hour_cycle AS hourCycle,p.home_page AS homePage,p.theme,p.text_scale AS textScale,p.high_contrast AS highContrast,p.motion,p.density
+  const row = await db.prepare(`SELECT o.locale AS orgLocale,o.timezone AS orgZone,p.language,p.locale,p.timezone,p.week_start AS weekStart,p.hour_cycle AS hourCycle,p.home_page AS homePage,p.theme,p.text_scale AS textScale,p.high_contrast AS highContrast,p.motion,p.density,p.agenda_view AS agendaView,p.agenda_show AS agendaShow
     FROM organizations o LEFT JOIN user_preferences p ON p.user_id=? AND p.organization_id=o.id WHERE o.id=?`).bind(userId, organizationId).first<Partial<StoredPreferences> & { orgLocale: string | null; orgZone: string | null }>();
   const { orgLocale, orgZone, ...own } = row || { orgLocale: null, orgZone: null };
-  const stored = own.theme ? { ...own, highContrast: !!own.highContrast } as Partial<UserPreferences> : null;
+  const shown = typeof own.agendaShow === "string" ? own.agendaShow.split(",").filter((item): item is UserPreferences["agendaShow"][number] => (agendaKinds as readonly string[]).includes(item)) : undefined;
+  const stored = own.theme ? { ...own, highContrast: !!own.highContrast, agendaView: own.agendaView || null, ...(shown ? { agendaShow: shown } : {}) } as Partial<UserPreferences> : null;
   return effectivePreferences(stored, { locale: orgLocale, timezone: orgZone || "America/Guatemala" }) as EffectivePreferences;
 }
 /** The zone a person reads times in: theirs, or the organization's. */
@@ -37,6 +38,7 @@ export const personalZone = async (db: Database, current: Member) => (await pref
 const columnOf: Record<keyof UserPreferences, string> = {
   language: "language", locale: "locale", timezone: "timezone", weekStart: "week_start", hourCycle: "hour_cycle", homePage: "home_page",
   theme: "theme", textScale: "text_scale", highContrast: "high_contrast", motion: "motion", density: "density",
+  agendaView: "agenda_view", agendaShow: "agenda_show",
 };
 
 async function deliveryFor(db: Database, current: Member): Promise<DeliverySettings> {
@@ -75,7 +77,7 @@ export async function me(path: string, method: string, input: unknown, current: 
       const parsed = userPreferencesInput(input);
       if ("error" in parsed) return reply({ error: parsed.error }, 400);
       const entries = Object.entries(parsed.preferences) as [keyof UserPreferences, unknown][];
-      const columns = entries.map(([key]) => columnOf[key]), values = entries.map(([, value]) => typeof value === "boolean" ? (value ? 1 : 0) : value as string | number | null);
+      const columns = entries.map(([key]) => columnOf[key]), values = entries.map(([, value]) => Array.isArray(value) ? value.join(",") : typeof value === "boolean" ? (value ? 1 : 0) : value as string | number | null);
       await db.prepare(`INSERT INTO user_preferences(user_id,organization_id,${columns.join(",")},updated_at) VALUES (?,?,${columns.map(() => "?").join(",")},?)
         ON CONFLICT(user_id) DO UPDATE SET ${columns.map(column => `${column}=excluded.${column}`).join(",")},updated_at=excluded.updated_at`)
         .bind(current.id, current.organizationId, ...values, now).run();

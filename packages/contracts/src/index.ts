@@ -701,9 +701,12 @@ export interface Inbox { items: InboxItem[]; unread: number }
  */
 export type ThemePreference = "system" | "light" | "dark";
 export type HomePage = "inicio" | "agenda" | "cursos" | "biblioteca" | "horas";
+export type AgendaView = "day" | "week" | "month" | "year";
+export type AgendaKind = "class" | "no-class" | "event" | "due";
 export interface UserPreferences {
   language: "es"; locale: string | null; timezone: string | null; weekStart: number | null; hourCycle: "h12" | "h23" | null; homePage: HomePage;
   theme: ThemePreference; textScale: number; highContrast: boolean; motion: "system" | "reduce"; density: "comfortable" | "compact";
+  agendaView: AgendaView | null; agendaShow: AgendaKind[];
 }
 export interface EffectivePreferences extends Omit<UserPreferences, "locale" | "timezone" | "weekStart" | "hourCycle"> {
   locale: string; timezone: string; weekStart: number; hourCycle: "h12" | "h23";

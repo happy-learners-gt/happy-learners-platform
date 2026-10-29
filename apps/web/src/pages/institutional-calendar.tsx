@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type {
-  CalendarCategory, CalendarScope, DateRule, InstitutionalCalendar, InstitutionalCalendarEvent,
+  CalendarCategory, DateRule, InstitutionalCalendar, InstitutionalCalendarEvent,
   InstitutionalCalendarRule,
 } from "@happy-learners/contracts";
 import { occurrences, ruleSummary } from "@happy-learners/domain";
@@ -10,26 +10,22 @@ import { Link, useNavigation } from "../navigation";
 import { plural, sessionDay } from "../model";
 import { useSession } from "../session";
 import { useWorkspace } from "../workspace";
-import { Modal, useFeedback } from "../ui/feedback";
+import { Drawer, useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import { Menu } from "../ui/Menu";
-import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section, StatusBadge } from "../ui/primitives";
+import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section } from "../ui/primitives";
 
 type Catalog = { calendars: InstitutionalCalendar[]; categories: CalendarCategory[] };
 type Plan = { create: InstitutionalCalendarEvent[]; update: InstitutionalCalendarEvent[]; keep: InstitutionalCalendarEvent[] };
 const months = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-const scopeLabels: Record<CalendarScope, string> = { organization: "Organización", program: "Programa", section: "Sección" };
 const parts = { full: "Día completo", morning: "Mañana", afternoon: "Tarde" } as const;
 const todayYear = () => new Date().getFullYear();
 const rangeOf = (year: number) => ({ from: `${year}-01-01`, until: `${year}-12-31` });
-const scopeValue = (calendar: InstitutionalCalendar) => calendar.scope === "organization" ? "organization" : `${calendar.scope}:${calendar.scopeId}`;
-
-function scopeQuery(value: string, year: number) {
-  const [scope, id] = value.split(":");
+function settingsPath(programId: string | null, sectionId: string | null, year: number) {
   const query = new URLSearchParams({ año: String(year) });
-  if (scope === "program") query.set("programa", id);
-  if (scope === "section") query.set("seccion", id);
-  return `/calendario?${query}`;
+  if (programId) query.set("programa", programId);
+  if (sectionId) query.set("seccion", sectionId);
+  return `${programId || sectionId ? "/configuracion-academica/calendario" : "/organizacion/calendario"}?${query}`;
 }
 
 /** The institutional, program or section calendar: twelve months plus rules and generation for its own level. */
@@ -43,7 +39,6 @@ export function InstitutionalCalendarPage() {
   const [catalog, setCatalog] = useState<Catalog | null>(null), [events, setEvents] = useState<InstitutionalCalendarEvent[] | null>(null);
   const [error, setError] = useState(""), [eventDialog, setEventDialog] = useState<InstitutionalCalendarEvent | "new" | null>(null);
   const [ruleDialog, setRuleDialog] = useState<InstitutionalCalendarRule | "new" | null>(null), [generating, setGenerating] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState(""), [scopeFilter, setScopeFilter] = useState("");
   const programId = url.searchParams.get("programa"), sectionId = url.searchParams.get("seccion");
   const selected = catalog?.calendars.find(item => sectionId ? item.scope === "section" && item.scopeId === sectionId
     : programId ? item.scope === "program" && item.scopeId === programId : item.scope === "organization");
@@ -67,12 +62,13 @@ export function InstitutionalCalendarPage() {
   }, [year, sectionId, programId]);
   useEffect(() => { void loadCatalog(); }, [loadCatalog]);
   useEffect(() => { setEvents(null); void loadEvents(); }, [loadEvents]);
-  useEffect(() => { if (requestedYear === year) return; const value = scopeValue(selected || { scope: "organization", scopeId: null } as InstitutionalCalendar); navigate(scopeQuery(value, year), true); }, [year]);
+  useEffect(() => { if (requestedYear === year) return; navigate(settingsPath(programId, sectionId, year), true); }, [year]);
 
   const ownGenerated = (events || []).filter(item => item.calendarId === selected?.id && item.year === year);
   const needsGeneration = rules.some(rule => !ownGenerated.some(event => event.ruleId === rule.id));
-  const visible = (events || []).filter(item => (!categoryFilter || item.categoryId === categoryFilter) && (!scopeFilter || item.scope === scopeFilter));
+  const ownEvents = (events || []).filter(item => item.calendarId === selected?.id);
   const titles = Object.fromEntries(rules.map(item => [item.id, item.rule.title]));
+  const programName = programs?.find(item => item.id === programId)?.name;
   const refresh = async () => { await Promise.all([loadCatalog(), loadEvents()]); };
   async function template() {
     if (!selected) return;
@@ -90,32 +86,41 @@ export function InstitutionalCalendarPage() {
       await loadEvents();
     } catch (cause) { toast({ tone: "error", message: message(cause) }); }
   }
-  const changeScope = (value: string) => navigate(scopeQuery(value, year));
+  const grouped = ownEvents.reduce<Record<string, InstitutionalCalendarEvent[]>>((groups, event) => {
+    const key = event.categoryLabel || "Evento";
+    return { ...groups, [key]: [...(groups[key] || []), event] };
+  }, {});
 
   return <>
-    <PageHeader title="Calendario" description="Fechas institucionales, de programas y secciones. Los eventos sin clase reprograman únicamente las clases pendientes."
+    <PageHeader title={programId ? `Calendario de ${programName || "programa"}` : "Calendario institucional"}
+      description={<>Estas fechas se consultan en la agenda. <Link href="/agenda?vista=año">Ver en la agenda</Link></>}
       actions={writable && selected && <Menu label="Más acciones del calendario" text="Más acciones" items={[
         { label: "Agregar evento", icon: "plus", onSelect: () => setEventDialog("new") },
         { label: "Agregar regla", icon: "calendar", onSelect: () => setRuleDialog("new") },
         "separator",
         { label: "Aplicar plantilla de Guatemala", icon: "copy", onSelect: () => void template() },
-      ]}/>}
-      primary={writable && selected && rules.length > 0 && needsGeneration
-        ? <PrimaryAction icon="spark" onClick={() => setGenerating(true)}>Generar {year}</PrimaryAction>
-        : writable && selected ? <PrimaryAction icon="plus" onClick={() => setEventDialog("new")}>Agregar evento</PrimaryAction> : undefined}/>
-    <div className="calendar-toolbar panel">
-      <Field label="Año"><select value={year} onChange={event => setYear(Number(event.target.value))}>{[...new Set([year, ...Array.from({ length: 7 }, (_, index) => todayYear() - 2 + index)])].sort((a, b) => a - b).map(value => <option key={value}>{value}</option>)}</select></Field>
-      <Field label="Alcance"><select value={selected ? scopeValue(selected) : "organization"} onChange={event => changeScope(event.target.value)}>
-        {catalog?.calendars.map(calendar => <option key={calendar.id} value={scopeValue(calendar)}>{calendar.name}</option>)}
-      </select></Field>
-      <Field label="Categoría"><select value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)}><option value="">Todas</option>{catalog?.categories.map(category => <option key={category.id} value={category.id}>{category.label}</option>)}</select></Field>
-      <Field label="Nivel"><select value={scopeFilter} onChange={event => setScopeFilter(event.target.value)}><option value="">Todos</option>{Object.entries(scopeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
-    </div>
+      ]}/>}/>
     {error ? <ErrorState error={error} retry={() => void refresh()}/> : !catalog || !events ? <Loading label="Cargando calendario…" cards={3}/>
-      : <div className="institutional-calendar-layout">
-        <YearMonths year={year} events={visible} writable={writable} selected={selected} categories={catalog.categories}
-          onEdit={setEventDialog} onStatus={(event, status) => void updateOccurrence(event, status)}/>
-        <RulesPanel rules={rules} titles={titles} writable={writable} year={year} onEdit={setRuleDialog}/>
+      : <div className="agenda-config">
+        <Section title="Asuetos y fechas recurrentes" action={writable ? <div className="agenda-section-actions"><button type="button" className="button secondary small" onClick={() => setRuleDialog("new")}><Icon name="plus" size={16}/>Agregar</button><Menu label="Más acciones de los asuetos" items={[{ label: "Usar plantilla", icon: "copy", onSelect: () => void template() }]}/></div> : undefined}>
+          <p className="muted small">Cada regla dice, en palabras, cuándo cae. Las fechas son las de {year}. La plantilla de Guatemala es una referencia y no afirma la ley vigente.</p>
+          <RulesPanel rules={rules} titles={titles} writable={writable} year={year} onEdit={setRuleDialog}/>
+        </Section>
+        <Section title="Eventos de este año" action={writable ? <button type="button" className="button secondary small" onClick={() => setEventDialog("new")}><Icon name="plus" size={16}/>Agregar</button> : undefined}>
+          <Field label="Año"><select value={year} onChange={event => setYear(Number(event.target.value))}>{[...new Set([year, ...Array.from({ length: 7 }, (_, index) => todayYear() - 2 + index)])].sort((a, b) => a - b).map(value => <option key={value}>{value}</option>)}</select></Field>
+          {ownEvents.length ? Object.entries(grouped).map(([category, list]) => <div key={category} className="agenda-event-group"><h3>{category}</h3><ul>{list.map(event => <li key={event.id} className={`agenda-event${event.status === "skipped" ? " is-skipped" : ""}`}>
+            <div><strong>{event.title}</strong><span>{event.from === event.until ? sessionDay(event.from, "short") : `${sessionDay(event.from, "short")} – ${sessionDay(event.until, "short")}`}{event.part !== "full" ? ` · ${parts[event.part]}` : ""}{event.noClass ? " · Sin clase" : ""}{event.status === "skipped" ? " · Omitido" : ""}</span></div>
+            {writable && <Menu label={`Acciones de ${event.title}`} items={[
+              { label: event.ruleId ? "Mover esta ocurrencia" : "Editar", icon: "edit", onSelect: () => setEventDialog(event) },
+              ...(event.ruleId ? [{ label: event.status === "skipped" ? "Restaurar ocurrencia" : "Saltar esta ocurrencia", icon: "calendar" as const, onSelect: () => void updateOccurrence(event, event.status === "skipped" ? "active" : "skipped") }] : []),
+            ]}/>}
+          </li>)}</ul></div>) : <EmptyState compact icon="calendar" title="Sin eventos en este año">Agrega uno o genera el año a partir de las reglas.</EmptyState>}
+        </Section>
+        <Section title="Preparar el año siguiente">
+          <p className="muted small">Generar crea las fechas que faltan, actualiza las que cambiaron y conserva las que moviste u omitiste.</p>
+          {writable && selected && rules.length > 0 && needsGeneration && <PrimaryAction icon="spark" onClick={() => setGenerating(true)}>Generar {year}</PrimaryAction>}
+          {writable && selected && rules.length > 0 && !needsGeneration && <PrimaryAction icon="spark" onClick={() => { setYear(year + 1); setGenerating(true); }}>Generar {year + 1}</PrimaryAction>}
+        </Section>
       </div>}
     {eventDialog && selected && catalog && <EventDialog calendar={selected} event={eventDialog === "new" ? null : eventDialog} categories={catalog.categories}
       onClose={() => setEventDialog(null)} onSaved={async moved => { setEventDialog(null); toast({ message: `Evento guardado.${moved ? ` ${plural(moved, "clase pendiente se movió", "clases pendientes se movieron")}.` : ""}` }); await loadEvents(); }}/>}
@@ -126,49 +131,16 @@ export function InstitutionalCalendarPage() {
   </>;
 }
 
-function YearMonths({ year, events, writable, selected, categories, onEdit, onStatus }: {
-  year: number; events: InstitutionalCalendarEvent[]; writable: boolean; selected?: InstitutionalCalendar;
-  categories: CalendarCategory[]; onEdit: (event: InstitutionalCalendarEvent) => void;
-  onStatus: (event: InstitutionalCalendarEvent, status: "active" | "skipped") => void;
-}) {
-  const categoryIndex = (id: string) => Math.max(0, categories.findIndex(item => item.id === id)) % 6;
-  const inMonth = (index: number) => events.filter(event => Number(event.from.slice(5, 7)) - 1 === index || (event.from < `${year}-${String(index + 1).padStart(2, "0")}-01` && event.until >= `${year}-${String(index + 1).padStart(2, "0")}-01`));
-  const empty = months.filter((_, index) => !inMonth(index).length);
-  return <section className="calendar-months" aria-label={`Calendario de ${year}`}>
-    {/* Phones hide the months without events; this says which ones. */}
-    {empty.length > 0 && empty.length < 12 && <p className="muted small calendar-empty-note">Sin eventos en {empty.join(", ").toLocaleLowerCase("es")}.</p>}
-    {months.map((month, index) => {
-      const items = inMonth(index);
-      return <article className={`calendar-month panel${items.length ? "" : " is-empty"}`} key={month}><h2>{month}</h2>
-        {items.length ? <ol>{items.map(event => <li key={event.id} className={`calendar-event category-tone-${categoryIndex(event.categoryId)}${event.status === "skipped" ? " is-skipped" : ""}`}>
-          <span className="calendar-event-day">{Number(event.from.slice(8, 10))}</span>
-          <div><strong title={event.title}>{event.title}</strong>
-            {/* One line of detail: the day is already in the badge, so only a range, a half day, the category and the level. */}
-            <span>{[event.from !== event.until ? `${sessionDay(event.from, "short")} – ${sessionDay(event.until, "short")}` : "", event.part !== "full" ? parts[event.part] : "", event.categoryLabel, event.scope ? scopeLabels[event.scope] : "", event.status === "skipped" ? "Omitido" : ""].filter(Boolean).join(" · ")}</span>
-            {event.noClass && event.status !== "skipped" && <span className="calendar-no-class">Sin clase</span>}</div>
-          {writable && selected?.id === event.calendarId && <Menu label={`Acciones de ${event.title}`} items={[
-            { label: event.ruleId ? "Mover esta ocurrencia" : "Editar", icon: "edit", onSelect: () => onEdit(event) },
-            ...(event.ruleId ? [{ label: event.status === "skipped" ? "Restaurar ocurrencia" : "Saltar esta ocurrencia", icon: "calendar" as const, onSelect: () => onStatus(event, event.status === "skipped" ? "active" : "skipped") }] : []),
-          ]}/>}
-        </li>)}</ol> : <p className="muted small">Sin eventos.</p>}
-      </article>;
-    })}
-  </section>;
-}
-
 function RulesPanel({ rules, titles, writable, year, onEdit }: { rules: InstitutionalCalendarRule[]; titles: Record<string, string>; writable: boolean; year: number; onEdit: (rule: InstitutionalCalendarRule | "new") => void }) {
   // Rules read in the order of the year: by their first date in it; the ones that do not apply go last.
   let resolved: { ruleId: string; from: string }[] = [];
   try { resolved = occurrences(rules.map(rule => rule.rule), year); } catch { resolved = []; }
   const firstDate = (item: InstitutionalCalendarRule) => resolved.find(date => date.ruleId === item.id)?.from;
-  return <Section title="Reglas" className="calendar-rules-panel" action={writable ? <button type="button" className="button secondary small" onClick={() => onEdit("new")}><Icon name="plus" size={16}/>Agregar</button> : undefined}>
-    <p className="muted small">Las reglas calculan las fechas cada año. Genera el año para crear o actualizar sus eventos.</p>
-    {rules.length ? <ul className="calendar-rule-list">{[...rules].sort((a, b) => (firstDate(a) || "9999").localeCompare(firstDate(b) || "9999") || a.rule.title.localeCompare(b.rule.title, "es")).map(item => {
+  return rules.length ? <ul className="agenda-rule-list">{[...rules].sort((a, b) => (firstDate(a) || "9999").localeCompare(firstDate(b) || "9999") || a.rule.title.localeCompare(b.rule.title, "es")).map(item => {
       let dates = "";
       try { dates = occurrences(rules.map(rule => rule.rule), year).filter(date => date.ruleId === item.id).map(date => date.from === date.until ? sessionDay(date.from, "short") : `${sessionDay(date.from, "short")} – ${sessionDay(date.until, "short")}`).join(", "); } catch { dates = "Revisa la referencia de esta regla"; }
       return <li key={item.id}><div><strong>{item.rule.title}</strong><span>{ruleSummary(item.rule, titles)}</span><span className="muted small">{dates || `No aplica en ${year}`}{item.noClass ? " · sin clase" : ""}</span></div>{writable && <button type="button" className="icon-button" aria-label={`Editar ${item.rule.title}`} onClick={() => onEdit(item)}><Icon name="edit" size={16}/></button>}</li>;
-    })}</ul> : <EmptyState compact icon="calendar" title="Sin reglas">Agrega una regla o aplica la plantilla de Guatemala.</EmptyState>}
-  </Section>;
+    })}</ul> : <EmptyState compact icon="calendar" title="Sin reglas">Agrega una regla o usa la plantilla de Guatemala.</EmptyState>;
 }
 
 function EventDialog({ calendar, event, categories, onClose, onSaved }: { calendar: InstitutionalCalendar; event: InstitutionalCalendarEvent | null; categories: CalendarCategory[]; onClose: () => void; onSaved: (moved: number) => Promise<void> }) {
@@ -182,7 +154,7 @@ function EventDialog({ calendar, event, categories, onClose, onSaved }: { calend
       await onSaved((result.removed || 0) + (result.added || 0));
     } catch (cause) { setError(message(cause)); setBusy(false); }
   }
-  return <Modal title={event ? event.ruleId ? "Mover ocurrencia" : "Editar evento" : "Agregar evento"} onClose={onClose}>
+  return <Drawer title={event ? event.ruleId ? "Mover ocurrencia" : "Editar evento" : "Agregar evento"} onClose={onClose}>
     <form className="stack" onSubmit={save}><fieldset className="stack" disabled={busy}>
       {error && <p className="form-alert" role="alert">{error}</p>}
       <Field label="Categoría"><select value={values.categoryId} onChange={change => { const category = categories.find(item => item.id === change.target.value); setValues({ ...values, categoryId: change.target.value, noClass: category?.noClassDefault || false }); }}>{categories.map(category => <option key={category.id} value={category.id}>{category.label}</option>)}</select></Field>
@@ -192,7 +164,7 @@ function EventDialog({ calendar, event, categories, onClose, onSaved }: { calend
       <label className="check-row"><input type="checkbox" checked={values.noClass} onChange={change => setValues({ ...values, noClass: change.target.checked })}/><span>Sin clase</span></label>
       <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">{busy ? "Guardando…" : "Guardar evento"}</button></div>
     </fieldset></form>
-  </Modal>;
+  </Drawer>;
 }
 
 type AnchorKind = DateRule["anchor"]["kind"];
@@ -223,7 +195,7 @@ function RuleDialog({ calendar, value, categories, rules, year, onClose, onSaved
     setBusy(true);
     try { await api(`/calendars/${calendar.id}/rules/${value.id}`, "DELETE"); await onSaved(); } catch (cause) { setError(message(cause)); setBusy(false); }
   }
-  return <Modal title={value ? "Editar regla" : "Agregar regla"} onClose={onClose} wide>
+  return <Drawer title={value ? "Editar regla" : "Agregar regla"} onClose={onClose}>
     <form className="stack rule-editor" onSubmit={save}><fieldset className="stack" disabled={busy}>
       {error && <p className="form-alert" role="alert">{error}</p>}
       <div className="field-row"><Field label="Título"><input value={rule.title} required maxLength={120} onChange={event => setRule({ ...rule, title: event.target.value })}/></Field><Field label="Categoría"><select value={categoryId} onChange={event => { const selected = categories.find(item => item.id === event.target.value); setCategoryId(event.target.value); setNoClass(selected?.noClassDefault || false); }}>{categories.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field></div>
@@ -244,7 +216,7 @@ function RuleDialog({ calendar, value, categories, rules, year, onClose, onSaved
       <div className="rule-live-preview" role="status"><strong>Vista previa de {year}</strong><span>{rule.title ? ruleSummary(rule, Object.fromEntries(rules.map(item => [item.id, item.rule.title]))) : "Completa el título y la fecha."}</span>{previewError ? <span className="field-error">{previewError}</span> : preview.map(item => <span key={item.from}>{item.from} · {item.from === item.until ? sessionDay(item.from) : `${sessionDay(item.from)} – ${sessionDay(item.until)}`}</span>)}</div>
       <div className="modal-actions">{value && <button type="button" className="button ghost danger-text push-end" onClick={() => void remove()}>Eliminar regla</button>}<button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">{busy ? "Guardando…" : "Guardar regla"}</button></div>
     </fieldset></form>
-  </Modal>;
+  </Drawer>;
 }
 
 function Weekdays({ label, selected, onChange }: { label: string; selected: (0 | 1 | 2 | 3 | 4 | 5 | 6)[]; onChange: (days: (0 | 1 | 2 | 3 | 4 | 5 | 6)[]) => void }) {
@@ -260,13 +232,13 @@ function GenerateDialog({ calendar, year, onClose, onGenerated }: { calendar: In
     catch (cause) { setError(message(cause)); setBusy(false); }
   }
   const group = (title: string, items: InstitutionalCalendarEvent[], empty: string) => <section><h3>{title} <span className="count-badge">{items.length}</span></h3>{items.length ? <ul>{items.map((item, index) => <li key={item.id || `${item.ruleId}-${index}`}><strong>{item.title}</strong><span>{sessionDay(item.from, "short")}{item.from !== item.until ? ` – ${sessionDay(item.until, "short")}` : ""}</span></li>)}</ul> : <p className="muted small">{empty}</p>}</section>;
-  return <Modal title={`Generar el año ${year}`} onClose={onClose} wide>
+  return <Drawer title={`Generar el año ${year}`} onClose={onClose}>
     {error ? <ErrorState error={error}/> : !plan ? <Loading label="Calculando vista previa…" lines={4}/> : <div className="stack generation-preview">
       <p className="muted">Revisa los cambios antes de confirmar. Las ocurrencias que moviste u omitiste a mano se conservan.</p>
       <div className="generation-groups">{group("Se crean", plan.create, "No se crean eventos.")}{group("Se actualizan", plan.update, "No se actualizan eventos.")}{group("Se conservan", plan.keep, "No hay eventos movidos u omitidos.")}</div>
       <div className="modal-actions"><Button variant="ghost" onClick={onClose}>Cancelar</Button><PrimaryAction busy={busy} disabled={busy} onClick={() => void generate()}>{busy ? "Generando…" : `Confirmar y generar ${year}`}</PrimaryAction></div>
     </div>}
-  </Modal>;
+  </Drawer>;
 }
 
 /** Compact organization summary that replaces the old editor of organization-wide days off. */
@@ -274,7 +246,7 @@ export function CalendarSummary() {
   const [items, setItems] = useState<InstitutionalCalendarEvent[] | null>(null);
   const now = new Date(), from = now.toISOString().slice(0, 10), until = new Date(Date.UTC(now.getUTCFullYear() + 1, now.getUTCMonth(), now.getUTCDate())).toISOString().slice(0, 10);
   useEffect(() => { api<{ events?: InstitutionalCalendarEvent[] }>(`/calendars/view?from=${from}&until=${until}`).then(result => setItems((result.events || []).filter(item => item.noClass && item.status === "active").slice(0, 5)), () => setItems([])); }, []);
-  return <Section title="Calendario institucional" action={<Link href="/calendario" className="section-link">Abrir calendario</Link>}>
+  return <Section title="Calendario institucional" action={<Link href="/organizacion/calendario" className="section-link">Abrir calendario</Link>}>
     <p className="muted small">Próximos eventos sin clase de toda la organización.</p>
     {!items ? <Loading label="Cargando calendario…" lines={2}/> : items.length ? <ul className="calendar-summary">{items.map(item => <li key={item.id}><Icon name="calendar" size={18}/><div><strong>{item.title}</strong><span>{item.from === item.until ? sessionDay(item.from, "short") : `${sessionDay(item.from, "short")} – ${sessionDay(item.until, "short")}`}</span></div></li>)}</ul> : <p className="muted small">No hay eventos sin clase próximos.</p>}
   </Section>;
