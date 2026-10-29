@@ -428,8 +428,8 @@ export async function calendar(path: string, method: string, input: unknown, url
     const source = section ? await breaksOf(db, current.organizationId, section) : (await db.prepare(`SELECT ${breakColumns} FROM calendar_events e JOIN calendars c ON c.id=e.calendar_id
       WHERE e.organization_id=? AND c.scope='organization' AND e.no_class=1 AND e.status='active' ORDER BY e.starts_on,e.ends_on`).bind(current.organizationId).all<CalendarBreak>()).results;
     const rows = source.map(row => {
-      const detail = row as typeof row & { scope?: string; calendarName?: string; calendarId?: string; categoryId?: string };
-      return { id: row.id, groupId: "groupId" in row ? row.groupId : null, title: row.title, from: row.from, until: row.until,
+      const detail = row as typeof row & { scope?: string; calendarName?: string; calendarId?: string; categoryId?: string; part?: string };
+      return { id: row.id, groupId: "groupId" in row ? row.groupId : null, title: row.title, from: row.from, until: row.until, part: detail.part,
         ...(detail.scope ? { scope: detail.scope, calendarName: detail.calendarName, calendarId: detail.calendarId, categoryId: detail.categoryId } : {}) };
     });
     return reply({ breaks: rows, today: await todayFor(db, current.organizationId) });

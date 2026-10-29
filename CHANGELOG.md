@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.4 — 2026-10-29
+
+- La Agenda es el único lugar del menú para consultar fechas: Día, Semana, Mes y Año, con clases a su hora, días sin clase sombreados, eventos y entregas.
+- Un panel lateral abre la clase, el evento o la entrega con la acción que corresponde. El riel muestra la próxima clase y los próximos días sin clase.
+- La vista y los filtros se recuerdan en las preferencias de la persona. Suscribir el calendario personal queda en el menú de la página.
+- Organización › Calendario institucional, y el mismo lugar en un programa, configura reglas, eventos del año y la generación del año siguiente. `/calendario` abre el año en la agenda.
+
 ## 1.3.3 — 2026-10-29
 
 - La evaluación se diseña en el curso: esquema con su explicación, periodos y actividades en un panel.

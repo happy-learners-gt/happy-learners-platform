@@ -165,7 +165,17 @@ test("5 · administration assigns a student and an educator to a section; the ed
   await expect(page.locator(".roster").getByText(learner, { exact: true })).toBeVisible();
   // The educator finds the section among their own and works in it.
   await signIn(page, "educador-demo", "/agenda");
-  await page.getByRole("main").getByRole("link", { name: group, exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Agenda", exact: true })).toBeVisible();
+  const menu = page.getByRole("button", { name: "Menú", exact: true });
+  if (await menu.isVisible()) await menu.click();
+  const nav = page.getByRole("navigation", { name: "Navegación principal" });
+  await expect(nav).toBeVisible();
+  const courseToggle = nav.locator(".tree-row", { has: page.locator("a[href='/cursos/course-exploradores']") }).getByRole("button", { name: /Mostrar las páginas/ });
+  if (await courseToggle.getAttribute("aria-expanded") !== "true") await courseToggle.click();
+  const sectionsToggle = nav.locator(".tree-row", { has: page.locator("a[href='/cursos/course-exploradores/secciones']") }).getByRole("button", { name: /Mostrar las secciones/ });
+  await expect(sectionsToggle).toBeVisible();
+  if (await sectionsToggle.getAttribute("aria-expanded") !== "true") await sectionsToggle.click();
+  await nav.getByRole("link", { name: group, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${section}$`));
   await openNavigation(page);
   await sectionNav(page).getByRole("link", { name: "Cronograma", exact: true }).click();

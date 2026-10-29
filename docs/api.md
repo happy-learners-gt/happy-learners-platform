@@ -19,6 +19,7 @@ Un método no admitido responde 405 con `Allow`; una ruta desconocida, 404.
 | GET | `/api/access/matrix` · GET, POST `/api/access/groups` · PUT, DELETE `/api/access/groups/:id` · PUT `/api/access/groups/:id/permissions` · PUT `/api/access/groups/:id/members` | Administración |
 | GET, POST | `/api/calendar` · DELETE `/api/calendar/:id` | Lectura con sesión; escritura de administración |
 | GET | `/api/calendars` · `/api/calendars/view?from&until[&program][&section]` | Todas las personas con sesión |
+| GET | `/api/agenda?from&until[&scope=mine\|organization\|program:id\|section:id]` | Sesión. `mine` son las secciones que imparte; administración y coordinación pueden ampliar el alcance. El rango admite hasta 400 días. |
 | POST, PUT, DELETE | `/api/calendars/:id/rules[/:ruleId]` · `/events[/:eventId]` | Administración; coordinación con `sections.assign` en su alcance |
 | POST | `/api/calendars/:id/years/:year/generate[?preview=1]` · `/templates/guatemala` | Administración; coordinación con `sections.assign` en su alcance |
 | GET, POST | `/api/academic-years` · PUT, DELETE `/api/academic-years/:id` · POST `/api/academic-years/:id/activate`, `/close`, `/next` | Lectura con sesión; escritura de administración |

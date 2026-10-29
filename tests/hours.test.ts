@@ -9,6 +9,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { HoursReport, HoursRow } from "@happy-learners/contracts";
 import { csvCell, effectiveDuration, hoursAdjustmentInput, hoursCsv, hoursDay, hoursFilterInput, hoursTotals, inHoursFilter, localDateTime } from "@happy-learners/domain";
+import { nextClassDays } from "./class-days";
 
 // ST-152 (DEC-043): effective hours teaching classes. Domain rules first, then the built Worker in a store of its own.
 
@@ -129,7 +130,8 @@ async function section(admin: string, leadId: string, label: string) {
   const path = `/courses/${course.id}`;
   const group = await read<{ id: string }>(await call(admin, `${path}/groups`, "POST", { name: `Sección ${label}` }), 201);
   await read(await call(admin, `${path}/groups/${group.id}/educators`, "PUT", { userIds: [leadId], conflictReason: "Secciones de prueba con el mismo horario." }));
-  await read(await call(admin, `${path}/groups/${group.id}/schedule`, "PUT", { weekdays: [0, 1, 2, 3, 4, 5, 6], startsAt: "08:00", durationMinutes: 45, from: day(1), until: day(5) }));
+  const days = await nextClassDays(async () => read<{ breaks?: { from: string; until: string; part?: string }[]; today: string }>(await call(admin, "/calendar")), 5);
+  await read(await call(admin, `${path}/groups/${group.id}/schedule`, "PUT", { weekdays: [0, 1, 2, 3, 4, 5, 6], startsAt: "08:00", durationMinutes: 45, from: days[0], until: days[4] }));
   const { sessions } = await read<{ sessions: { id: string; groupId: string; sessionDate: string }[] }>(await call(admin, `${path}/sessions`));
   return { courseId: course.id, path, groupId: group.id, classes: sessions.filter(item => item.groupId === group.id).sort((a, b) => a.sessionDate.localeCompare(b.sessionDate)).map(item => item.id) };
 }

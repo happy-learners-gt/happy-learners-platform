@@ -1,7 +1,6 @@
 import { test, expect } from "./local-test";
+import { nextClassDays } from "../class-days";
 import { e2eName, sessionToken, signIn, toast } from "./helpers";
-
-const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Guatemala" });
 
 test("HL-171 ST-125: an educator gets the calendar link in the Agenda, the .ics carries their classes and regenerating stops the old link", async ({ page, playwright, baseURL }, info) => {
   const admin = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("admin-demo")}` } });
@@ -13,11 +12,14 @@ test("HL-171 ST-125: an educator gets the calendar link in the Agenda, the .ics 
     const path = `/api/courses/${(await created.json()).id}`;
     const groupId = (await (await admin.post(`${path}/groups`, { data: { name: e2eName(info, "Sección suscrita") } })).json()).id;
     expect((await admin.put(`${path}/groups/${groupId}/educators`, { data: { userIds: ["user-educator"], conflictReason: "Sección de prueba E2E; su horario puede coincidir con otras secciones de prueba." } })).status()).toBe(200);
-    expect((await admin.put(`${path}/groups/${groupId}/schedule`, { data: { weekdays: [0, 1, 2, 3, 4, 5, 6], startsAt: "07:15", durationMinutes: 40, from: day(1), until: day(3) } })).status()).toBe(200);
+    const days = await nextClassDays(async () => await (await admin.get("/api/calendar")).json(), 3);
+    expect((await admin.put(`${path}/groups/${groupId}/schedule`, { data: { weekdays: [0, 1, 2, 3, 4, 5, 6], startsAt: "07:15", durationMinutes: 40, from: days[0], until: days[2] } })).status()).toBe(200);
     const sessions = ((await (await admin.get(`${path}/sessions`)).json()).sessions as { id: string; groupId: string }[]).filter(item => item.groupId === groupId);
     expect(sessions).toHaveLength(3);
 
     await signIn(page, "educador-demo", "/agenda");
+    await page.getByRole("button", { name: "Más acciones de la agenda" }).click();
+    await page.getByRole("menuitem", { name: "Suscribirme" }).click();
     const panel = page.getByRole("region", { name: "Sincronizar con mi calendario" });
     await expect(panel).toBeVisible();
     await panel.getByText("Cómo suscribirte").click();
