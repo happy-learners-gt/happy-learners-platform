@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { expect, test } from "./local-test";
-import { e2eName, origin, sessionToken, signIn } from "./helpers";
+import { e2eName, origin, sessionToken, signIn, E2E_PREFIX } from "./helpers";
 
 test("designs the evaluation, chooses each section's groups and grades", async ({ page }, info) => {
   const admin = await sessionToken("admin-demo");
@@ -14,8 +14,8 @@ test("designs the evaluation, chooses each section's groups and grades", async (
     level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", area: "011",
     settings: { attendance: true }, programId: null, leadId: "user-educator",
   })).json()) as { id: string }).id;
-  const sectionA = ((await (await call(`/courses/${course}/groups`, "POST", { name: "Sección A" })).json()) as { id: string }).id;
-  const sectionB = ((await (await call(`/courses/${course}/groups`, "POST", { name: "Sección B" })).json()) as { id: string }).id;
+  const sectionA = ((await (await call(`/courses/${course}/groups`, "POST", { name: `${E2E_PREFIX} Sección A` })).json()) as { id: string }).id;
+  const sectionB = ((await (await call(`/courses/${course}/groups`, "POST", { name: `${E2E_PREFIX} Sección B` })).json()) as { id: string }).id;
   expect((await call(`/courses/${course}/assessment/scheme`, "PUT", { gradingSchemeId: scheme })).status).toBe(200);
   await call(`/courses/${course}/groups/${sectionA}/educators`, "PUT", { userIds: ["user-educator"] });
   await call(`/courses/${course}/groups/${sectionB}/educators`, "PUT", { userIds: ["user-educator"] });
