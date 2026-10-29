@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent, MouseEvent, ReactNode } from "react";
-import type { Course, SectionSummary, StudyProgram } from "@happy-learners/contracts";
+import type { Course, MyPanel, SectionSummary, StudyProgram } from "@happy-learners/contracts";
 import { fictional } from "@happy-learners/domain";
 import { api, message } from "../api";
 import { Link, useNavigation } from "../navigation";
@@ -126,6 +126,8 @@ function Sidebar() {
   const trail = ["courses", ...currentCourse ? [`course:${currentCourse}`] : [], ...current || courseRoute && third === "secciones" ? [`sections:${currentCourse}`] : [], ...current ? [`section:${current.id}`] : []];
   const [open, toggle, expand] = useTree(trail);
   const [creating, setCreating] = useState<string | null>(null);
+  const [panels, setPanels] = useState<MyPanel[]>([]);
+  useEffect(() => { api<{ panels?: MyPanel[] }>("/me/panels").then(result => setPanels(Array.isArray(result.panels) ? result.panels : [])).catch(() => setPanels([])); }, [member.id]);
   const page = (item: Page, size = 20) => <li key={item.href}><Link href={item.href} className={`tree-link tone-${item.hue}`} aria-current={item.active ? "page" : undefined}><span className="nav-icon"><Icon name={item.icon} size={size} filled={item.active}/></span><span className="tree-label">{item.label}</span></Link></li>;
   // On its own page, choosing a level shows or hides it, every time; from anywhere else it opens it and goes there.
   const select = (key: string, href: string) => (event: MouseEvent<HTMLAnchorElement>) => { if (path === href) { event.preventDefault(); toggle(key); } else expand(key); };
@@ -189,6 +191,7 @@ function Sidebar() {
           </Node>;
         }) : <li className="nav-empty">{admin ? "Aún no hay cursos activos." : "Aún no tienes cursos asignados."}</li>}
       </Node>
+      {panels.length > 0 && page({ href: "/tribunales", label: "Mis tribunales", icon: "team", hue: "violet", active: path === "/tribunales" })}
       {page({ href: "/biblioteca", label: "Biblioteca", icon: "library", hue: "teal", active: path === "/biblioteca" })}
       {page({ href: "/equipo", label: "Equipo", icon: "team", hue: "pink", active: path === "/equipo" || path.startsWith("/equipo/") })}
       {page({ href: "/ayuda", label: "Ayuda", icon: "help", hue: "amber", active: path === "/ayuda" })}

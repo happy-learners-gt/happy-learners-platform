@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { materialInput, completeOrder, validTermIds } from "../packages/domain/src/courses";
-import { courseInput, derivedSettings, moduleNoun, programInput, resolveSettings, settingsInput } from "../packages/domain/src/academic";
+import { courseInput, derivedSettings, moduleNoun, programInput, resolveSettings, settingDefinitions, settingsInput } from "../packages/domain/src/academic";
 import type { StudyProgram } from "../packages/contracts/src/index";
 
 const course = { title: "Fotografía cotidiana", objective: "Componer una imagen con luz natural.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", settings: {}, programId: null };
@@ -23,14 +23,21 @@ describe("generic learning content", () => {
     expect(validTermIds(Array.from({ length: 25 }, (_, i) => `t-${i}`))).toBe(false);
   });
   it("derives behaviour from the dimensions and resolves settings with their source", () => {
-    expect(derivedSettings({ educationType: "formal", level: "primary", modality: "online", pacing: "scheduled", format: "laboratory" })).toEqual({ moduleLabel: "modules", defaultSequence: "five-e", attendance: false, workGroups: false, outcomesRequired: true, assessmentRequired: true, gradeScale: "numeric_100", passingGrade: 60, letterThresholds: [90, 80, 70, 60], gradeAverage: "simple" });
+    expect(derivedSettings({ educationType: "formal", level: "primary", modality: "online", pacing: "scheduled", format: "laboratory" })).toEqual({ moduleLabel: "modules", defaultSequence: "five-e", attendance: false, workGroups: false, outcomesRequired: true, assessmentRequired: true, gradeScale: "numeric_100", passingGrade: 60, letterThresholds: [90, 80, 70, 60], gradeAverage: "simple", gradingSchemeId: null });
     const program: StudyProgram = { id: "p", name: "Primaria", description: "", educationType: "formal", level: "primary", modality: "in-person", pacing: "scheduled", format: "subject", settings: { moduleLabel: "units", assessmentRequired: false }, locked: ["moduleLabel"], status: "active", version: 1, updatedAt: "t" };
     const inProgram = { educationType: "non-formal" as const, level: "unspecified" as const, modality: "online" as const, pacing: "self-paced" as const, format: "subject" as const, settings: { moduleLabel: "weeks" as const, assessmentRequired: true } };
     const { values, source } = resolveSettings(inProgram, program);
     // The program fixes the label, so the course's own value is ignored; its own assessment value wins.
-    expect(values).toEqual({ moduleLabel: "units", defaultSequence: "start-develop-close", attendance: true, workGroups: true, outcomesRequired: true, assessmentRequired: true, gradeScale: "numeric_100", passingGrade: 60, letterThresholds: [90, 80, 70, 60], gradeAverage: "simple" });
-    expect(source).toEqual({ moduleLabel: "program-locked", defaultSequence: "derived", attendance: "derived", workGroups: "derived", outcomesRequired: "derived", assessmentRequired: "course", gradeScale: "derived", passingGrade: "derived", letterThresholds: "derived", gradeAverage: "derived" });
+    expect(values).toEqual({ moduleLabel: "units", defaultSequence: "start-develop-close", attendance: true, workGroups: true, outcomesRequired: true, assessmentRequired: true, gradeScale: "numeric_100", passingGrade: 60, letterThresholds: [90, 80, 70, 60], gradeAverage: "simple", gradingSchemeId: null });
+    expect(source).toEqual({ moduleLabel: "program-locked", defaultSequence: "derived", attendance: "derived", workGroups: "derived", outcomesRequired: "derived", assessmentRequired: "course", gradeScale: "derived", passingGrade: "derived", letterThresholds: "derived", gradeAverage: "derived", gradingSchemeId: "derived" });
     expect(resolveSettings({ ...inProgram, settings: {} }, program).source.assessmentRequired).toBe("program");
+  });
+  it("keeps the grading scheme inheritable without offering an empty selector", () => {
+    expect(settingDefinitions.map(item => item.key)).toContain("gradingSchemeId");
+    expect(settingDefinitions.find(item => item.key === "gradingSchemeId")?.label).toBe("Esquema de evaluación");
+    expect(settingsInput({ gradingSchemeId: "scheme-11111111-1111-4111-8111-111111111111" })?.gradingSchemeId).toBe("scheme-11111111-1111-4111-8111-111111111111");
+    expect(settingsInput({ gradingSchemeId: null })).toEqual({ gradingSchemeId: null });
+    expect(settingsInput({ gradingSchemeId: "points" })).toBeNull();
   });
   it("only lets a program fix settings it gives a value to", () => {
     const base = { name: "Inglés para adultos", educationType: "non-formal", level: "unspecified", modality: "online", pacing: "self-paced", format: "open-course", status: "active" };

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ClipboardEvent, FormEvent, KeyboardEvent } from "react";
-import type { Gradebook, GradebookPeriod, GradeResult } from "@happy-learners/contracts";
-import { assessmentKindLabel, csvFile, gradeStatistics, letterOf, pastedCells, periodFromPlan, planTotal, pointsInput, scoreInput, settingText, thresholdsText } from "@happy-learners/domain";
+import type { AtomicMark, Gradebook, GradebookPeriod, GradeResult, Mark, Rubric } from "@happy-learners/contracts";
+import { assessmentKindLabel, csvFile, displayOf, gradeStatistics, learnerResult, letterOf, pastedCells, periodFromPlan, planTotal, pointsInput, scoreInput, settingText, thresholdsText } from "@happy-learners/domain";
 import { api, message } from "../../api";
 import { Link, useNavigation, useUnsavedChanges } from "../../navigation";
 import { plural, sessionDay } from "../../model";
 import { Modal, useFeedback } from "../../ui/feedback";
+import { Menu } from "../../ui/Menu";
 import { Icon } from "../../ui/icons";
 import { Button, EmptyState, ErrorState, Loading, PageHeader, PrimaryAction, Section, StatTiles, StatusBadge } from "../../ui/primitives";
 import { Tabs } from "../../ui/Tabs";
@@ -17,7 +18,9 @@ import { GradeStudentDrawer } from "./GradeStudent";
 
 const number = (value: number) => new Intl.NumberFormat(currentRegional().locale, { maximumFractionDigits: 1 }).format(value);
 const summary = "resumen";
-type Column = { id: string; kind: "grade" | "score"; title: string; detail: string; max: number };
+/** How an activity is graded, as the grid's column header says it. */
+const gradingLabels: Record<string, string> = { points: "Puntos", rubric: "Rúbrica", "pass-fail": "Aprobado o no", level: "Nivel", panel: "Tribunal" };
+type Column = { id: string; kind: "grade" | "score" | "mark" | "panel"; grading?: string; title: string; detail: string; max: number; rubric?: Rubric | null };
 type PeriodState = "open" | "submitted" | "returned" | "closed";
 const stateLabels: Record<PeriodState, string> = { open: "Abierto", submitted: "En revisión", returned: "Devuelto", closed: "Cerrado" };
 const stateTones = { open: "neutral", submitted: "info", returned: "warning", closed: "success" } as const;
@@ -76,6 +79,7 @@ export function SectionGradesPage() {
   const [data, setData] = useState<Gradebook | null>(null), [error, setError] = useState(""), [year, setYear] = useState("");
   const [edits, setEdits] = useState<Record<string, string>>({}), [busy, setBusy] = useState(""), [formError, setFormError] = useState("");
   const [planning, setPlanning] = useState(false), [student, setStudent] = useState(""), [returning, setReturning] = useState(false);
+  const [rubricCell, setRubricCell] = useState<{ learnerId: string; learnerName: string; activityId: string; title: string; rubric: Rubric } | null>(null);
   const grid = useRef<HTMLTableElement>(null);
   const dirty = Object.keys(edits).length > 0;
   useUnsavedChanges(dirty);
@@ -128,7 +132,9 @@ export function SectionGradesPage() {
     <Section title={`${data.year.name}${data.year.status === "closed" ? " (cerrado)" : ""}`} action={data.years.length > 1 && <label><span className="sr-only">Ciclo lectivo</span>
       <select value={data.year.id} onChange={event => { if (!dirty) { setYear(event.target.value); } }} disabled={dirty}>{data.years.map(item => <option key={item.id} value={item.id}>{item.name}{item.status === "closed" ? " (cerrado)" : ""}</option>)}</select></label>}>
       <p className="muted small grade-policy">
-        {settingText("gradeScale", policy.scale)} · Aprueba con {policy.passingGrade} · {settingText("gradeAverage", policy.average)}{letters ? ` · ${thresholdsText(policy.letterThresholds)}` : ""}.{" "}
+        {data.scheme && data.scheme.id !== "points"
+          ? <>Esquema «{data.scheme.name}»{data.scheme.passing.min !== undefined ? ` · Aprueba con ${data.scheme.passing.min}` : data.scheme.passing.level ? ` · Aprueba desde ${data.scheme.levels?.find(level => level.id === data.scheme!.passing.level)?.label || data.scheme.passing.level}` : ""}.{" "}</>
+          : <>{settingText("gradeScale", policy.scale)} · Aprueba con {policy.passingGrade} · {settingText("gradeAverage", policy.average)}{letters ? ` · ${thresholdsText(policy.letterThresholds)}` : ""}.{" "}</>}
         {course.status === "active" && <Link href={`/cursos/${course.id}/configuracion`}>Configuración del curso</Link>}
       </p>
       {data.year.status === "closed" && <p className="notice"><Icon name="info" size={18}/>El ciclo está cerrado: sus notas se consultan, pero ya no cambian.</p>}
@@ -139,6 +145,7 @@ export function SectionGradesPage() {
         </Tabs>}
     </Section>
     {planning && view !== summary && <GradePlanDialog book={data} periodId={view} sectionId={section.id} onClose={() => setPlanning(false)} onSaved={book => { update(book); setPlanning(false); toast({ message: "Plan de evaluación guardado." }); }}/>}
+    {rubricCell && <RubricDialog cell={rubricCell} current={edits[`mark:${rubricCell.learnerId}:${rubricCell.activityId}`]} onClose={() => setRubricCell(null)} onSave={choices => { setEdits(current => ({ ...current, [`mark:${rubricCell.learnerId}:${rubricCell.activityId}`]: JSON.stringify({ kind: "rubric", choices }) })); setRubricCell(null); }}/>}
     {student && <GradeStudentDrawer book={data} learnerId={student} periodId={view === summary ? (periods.find(period => !period.locked) || periods[periods.length - 1]).id : view}
       editable={data.canEdit && view !== summary && ["open", "returned"].includes(stateOf(periods.find(period => period.id === view)!))}
       onSaved={book => { update(book); toast({ message: "Comentario guardado." }); }} onReport={() => void reports(student)} onClose={() => setStudent("")}/>}
@@ -153,10 +160,17 @@ export function SectionGradesPage() {
     const planned = plan.length > 0, total = planTotal(plan);
     const editable = data!.canEdit && (state === "open" || state === "returned");
     const columns: Column[] = planned
-      ? plan.map(item => ({ id: item.id, kind: "score", title: item.title, detail: `${assessmentKindLabel(item.kind)} · ${number(item.points)} pts`, max: item.points }))
-      : [{ id: period.id, kind: "grade", title: "Nota del periodo", detail: "De 0 a 100", max: 100 }];
+      ? plan.map(item => {
+        const grading = item.grading || "points";
+        return { id: item.id, kind: grading === "points" ? "score" as const : grading === "panel" ? "panel" as const : "mark" as const, grading, title: item.title, detail: `${assessmentKindLabel(item.kind)} · ${grading === "points" ? `${number(item.points)} pts` : gradingLabels[grading] || grading}`, max: item.points, rubric: item.rubric };
+      })
+      : [{ id: period.id, kind: "grade" as const, title: "Nota del periodo", detail: "De 0 a 100", max: 100 }];
     const key = (learnerId: string, column: Column) => `${column.kind}:${learnerId}:${column.id}`;
+    const exemptKey = (learnerId: string, activityId: string) => `exempt:${learnerId}:${activityId}`;
+    const storedMark = (learnerId: string, activityId: string) => data!.marks?.find(mark => mark.learnerId === learnerId && mark.activityId === activityId && mark.evaluatorId === null);
+    const isExempt = (learnerId: string, activityId: string) => exemptKey(learnerId, activityId) in edits ? edits[exemptKey(learnerId, activityId)] === "exempt" : storedMark(learnerId, activityId)?.mark.kind === "exempt";
     const stored = (learnerId: string, column: Column) => {
+      if (column.kind === "mark") { const mark = storedMark(learnerId, column.id); return mark && mark.mark.kind !== "exempt" ? JSON.stringify(mark.mark) : ""; }
       const value = column.kind === "grade" ? data!.grades.find(grade => grade.learnerId === learnerId && grade.periodId === column.id)?.score : data!.scores.find(score => score.learnerId === learnerId && score.activityId === column.id)?.points;
       return value === undefined ? "" : String(value);
     };
@@ -172,10 +186,22 @@ export function SectionGradesPage() {
     const scores = learners.map(learner => ({ learnerId: learner.id, ...periodOf(learner.id) }));
     // While the plan is under way, each student is judged by the share of the points graded so far: 42 of 60 is 70.
     const standing = (item: { score: number | null; graded: number; complete: boolean }) => item.score === null ? null : item.complete || !planned || !item.graded ? item.score : Math.round(item.score / item.graded * 1000) / 10;
-    const partial = planned && scores.some(item => item.score !== null && !item.complete);
-    const stats = gradeStatistics(scores.map(item => ({ learnerId: item.learnerId, score: standing(item) })), policy.passingGrade);
-    const invalid = Object.entries(edits).some(([id, value]) => { const column = columns.find(item => id.endsWith(`:${item.id}`)); return !column || parse(value, column) === undefined; });
+    // With a scheme other than accumulated points, the period, its statistics and the result all read the scheme's score.
+    const custom = !!data!.scheme && data!.scheme.id !== "points";
+    const schemed = (learnerId: string) => custom ? schemePeriod(data!, period, plan, learnerId, columns, valueOf, isExempt) : null;
+    const partial = !custom && planned && scores.some(item => item.score !== null && !item.complete);
+    const stats = gradeStatistics(scores.map(item => ({ learnerId: item.learnerId, score: custom ? schemed(item.learnerId)?.score ?? null : standing(item) })), custom ? data!.scheme!.passing.min ?? policy.passingGrade : policy.passingGrade);
+    const invalid = Object.entries(edits).some(([id, value]) => {
+      const [kind, , columnId] = id.split(":");
+      if (kind !== "score" && kind !== "grade") return false;
+      const column = columns.find(item => item.id === columnId && item.kind === kind);
+      return !column || parse(value, column) === undefined;
+    });
     const changed = Object.keys(edits).length;
+    function setExempt(learnerId: string, activityId: string, on: boolean) {
+      const id = exemptKey(learnerId, activityId), storedOn = storedMark(learnerId, activityId)?.mark.kind === "exempt";
+      setEdits(current => { const next = { ...current }; if (on === storedOn) delete next[id]; else next[id] = on ? "exempt" : ""; return next; });
+    }
     function edit(learnerId: string, column: Column, value: string) {
       const id = key(learnerId, column), original = stored(learnerId, column);
       setEdits(current => { const next = { ...current }; if (value.trim() === original) delete next[id]; else next[id] = value.trim() === "" ? "" : value; return next; });
@@ -211,9 +237,14 @@ export function SectionGradesPage() {
       event.preventDefault(); setBusy("save"); setFormError("");
       try {
         const entries = Object.entries(edits).map(([id, value]) => { const [kind, learnerId, columnId] = id.split(":"); return { kind, learnerId, columnId, value }; });
+        const marks = [
+          ...entries.filter(entry => entry.kind === "mark" && entry.value).map(entry => ({ learnerId: entry.learnerId, activityId: entry.columnId, mark: JSON.parse(entry.value) as AtomicMark })),
+          ...entries.filter(entry => entry.kind === "exempt").map(entry => ({ learnerId: entry.learnerId, activityId: entry.columnId, mark: entry.value === "exempt" ? { kind: "exempt" as const } : null })),
+        ];
         const body = {
           grades: entries.filter(entry => entry.kind === "grade").map(entry => ({ learnerId: entry.learnerId, periodId: entry.columnId, score: scoreInput(entry.value) ?? null })),
           scores: entries.filter(entry => entry.kind === "score").map(entry => ({ learnerId: entry.learnerId, activityId: entry.columnId, points: pointsInput(entry.value, 100) ?? null })),
+          ...(marks.length ? { marks } : {}),
         };
         const result = await api<{ gradebook: Gradebook }>(`/sections/${section.id}/grades`, "PUT", body);
         update(result.gradebook);
@@ -249,7 +280,7 @@ export function SectionGradesPage() {
           {state === "open" && `${sessionDay(period.from, "short")} – ${sessionDay(period.until, "short")}`}
         </span>
         <div className="grade-status-actions">
-          {data!.canSubmit && (state === "open" || state === "returned") && <Button icon="send" disabled={!!busy || (planned && total !== 100)} title={planned && total !== 100 ? "El plan debe sumar 100 puntos." : undefined} onClick={() => void act("submit")}>Entregar para revisión</Button>}
+          {data!.canSubmit && (state === "open" || state === "returned") && <Button icon="send" disabled={!!busy || ((data!.scheme?.method || "points") === "points" && planned && total !== 100)} title={(data!.scheme?.method || "points") === "points" && planned && total !== 100 ? "El plan debe sumar 100 puntos." : undefined} onClick={() => void act("submit")}>Entregar para revisión</Button>}
           {data!.canLock && state === "submitted" && <Button variant="ghost" icon="undo" disabled={!!busy} onClick={() => setReturning(true)}>Devolver</Button>}
           {data!.canLock && state !== "closed" && <Button icon="shield" disabled={!!busy} onClick={() => void act("lock")}>Aprobar y cerrar</Button>}
           {data!.canUnlock && state === "closed" && period.lockedAt && <Button variant="ghost" icon="undo" disabled={!!busy} onClick={() => void act("unlock")}>Reabrir</Button>}
@@ -258,7 +289,7 @@ export function SectionGradesPage() {
       <div className="grade-plan-line">
         <Icon name="list" size={18}/>
         {planned
-          ? <span><strong>Plan de evaluación:</strong> {plural(plan.length, "actividad", "actividades")} · {number(total)} de 100 puntos{total !== 100 && <span className="muted"> (incompleto)</span>}</span>
+          ? <span><strong>Plan de evaluación:</strong> {plural(plan.length, "actividad", "actividades")}{(data!.scheme?.method || "points") === "points" && <> · {number(total)} de 100 puntos{total !== 100 && <span className="muted"> (incompleto)</span>}</>}</span>
           : <span className="muted">Sin plan de evaluación: registras una nota de 0 a 100 por estudiante. Con un plan, la nota es la suma de la zona y el examen.</span>}
         {editable && <Button variant="ghost" icon={planned ? "edit" : "plus"} className="small" onClick={() => { if (dirty) toast({ tone: "error", message: "Guarda o descarta tus cambios antes de editar el plan." }); else setPlanning(true); }}>{planned ? "Editar el plan" : "Crear plan de evaluación"}</Button>}
       </div>
@@ -280,17 +311,24 @@ export function SectionGradesPage() {
               return <tr key={learner.id}>
                 <th scope="row">{learner.name}</th>
                 {columns.map((column, index) => {
-                  const value = valueOf(learner.id, column), parsed = parse(value, column), changedCell = key(learner.id, column) in edits;
+                  const value = valueOf(learner.id, column), parsed = column.kind === "score" || column.kind === "grade" ? parse(value, column) : undefined;
+                  const changedCell = key(learner.id, column) in edits || (column.kind !== "grade" && exemptKey(learner.id, column.id) in edits);
+                  const exempt = column.kind !== "grade" && isExempt(learner.id, column.id);
                   return <td key={column.id} className={`grade-cell${changedCell ? " grade-dirty" : ""}`}>
-                    {editable
-                      ? <input type="text" inputMode="decimal" className="grade-input" value={value} data-cell={`${row}:${index}`} aria-label={`${column.title} de ${learner.name}`} aria-invalid={parsed === undefined}
-                        onChange={event => edit(learner.id, column, event.target.value)} onKeyDown={event => onKey(event, row, index)} onPaste={event => onPaste(event, row, index)} onFocus={event => event.currentTarget.select()}/>
-                      : <span>{value === "" ? <span className="muted">—</span> : number(Number(value))}</span>}
+                    {column.kind === "panel" ? <span className="panel-progress">{panelProgress(data!, learner.id, column.id)}</span>
+                      : exempt ? <span>Exonerado</span>
+                      : column.kind === "mark" ? <MarkCell column={column} learnerName={learner.name} value={value} schemeLevels={data!.scheme?.levels} editable={editable} onChange={next => edit(learner.id, column, next)} onRubric={() => column.rubric && setRubricCell({ learnerId: learner.id, learnerName: learner.name, activityId: column.id, title: column.title, rubric: column.rubric })}/>
+                      : editable
+                        ? <input type="text" inputMode="decimal" className="grade-input" value={value} data-cell={`${row}:${index}`} aria-label={`${column.title} de ${learner.name}`} aria-invalid={parsed === undefined}
+                          onChange={event => edit(learner.id, column, event.target.value)} onKeyDown={event => onKey(event, row, index)} onPaste={event => onPaste(event, row, index)} onFocus={event => event.currentTarget.select()}/>
+                        : <span>{value === "" ? <span className="muted">—</span> : number(Number(value))}</span>}
                     {!planned && letters && typeof parsed === "number" && <span className="grade-letter" aria-label={`letra ${letterOf(parsed, policy.letterThresholds)}`}>{letterOf(parsed, policy.letterThresholds)}</span>}
+                    {editable && column.kind !== "panel" && column.kind !== "grade" && <Menu label={`Acciones de ${column.title} de ${learner.name}`} items={[exempt ? { label: "Quitar exoneración", onSelect: () => setExempt(learner.id, column.id, false) } : { label: "Exonerar", onSelect: () => setExempt(learner.id, column.id, true) }]}/>}
                   </td>;
                 })}
-                {planned && <td className="grade-total">{item.score === null ? <span className="muted">—</span> : <><strong>{number(item.score)}{letters ? ` (${letterOf(item.score, policy.letterThresholds)})` : ""}</strong>{!item.complete && <span className="muted small"> de {number(item.graded)}</span>}</>}</td>}
-                <td><ResultBadge result={resultOf(item)}/></td>
+                {planned && custom && <td className="grade-total">{(() => { const shown = schemed(learner.id); return shown?.score == null ? <span className="muted">—</span> : <><strong>{number(shown.score)}</strong>{!shown.complete && <span className="muted small"> (parcial)</span>}</>; })()}</td>}
+                {planned && !custom && <td className="grade-total">{item.score === null ? <span className="muted">—</span> : <><strong>{number(item.score)}{letters ? ` (${letterOf(item.score, policy.letterThresholds)})` : ""}</strong>{!item.complete && <span className="muted small"> de {number(item.graded)}</span>}</>}</td>}
+                <td>{schemeResult(data!, period, plan, learner.id, columns, valueOf, isExempt) || <ResultBadge result={resultOf(item)}/>}</td>
                 <td><button type="button" className={`icon-button${comment ? " has-comment" : ""}`} aria-label={`Detalle de ${learner.name}${comment ? " (tiene comentario)" : ""}`} onClick={() => setStudent(learner.id)}><Icon name={comment ? "text" : "more"} size={18}/></button></td>
               </tr>;
             })}</tbody>
@@ -351,14 +389,91 @@ function YearSummary({ book, onStudent }: { book: Gradebook; onStudent: (id: str
           return <tr key={learner.id}>
             <th scope="row">{learner.name}</th>
             {periods.map(period => { const score = book.grades.find(grade => grade.learnerId === learner.id && grade.periodId === period.id)?.score; return <td key={period.id}>{score === undefined ? <span className="muted">—</span> : <>{number(score)}{policy.scale === "letters_af" && <span className="grade-letter">{letterOf(score, policy.letterThresholds)}</span>}</>}</td>; })}
-            <td>{!result || result.average === null ? <span className="muted">—</span> : <strong>{number(result.average)}{result.letter ? ` (${result.letter})` : ""}</strong>}</td>
-            <td><ResultBadge result={result}/></td>
+            <td>{result?.display ? <strong>{result.display}</strong> : !result || result.average === null ? <span className="muted">—</span> : <strong>{number(result.average)}{result.letter ? ` (${result.letter})` : ""}</strong>}</td>
+            <td>{result?.reasons?.length ? <ul className="grade-reasons">{result.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul> : <ResultBadge result={result}/>}</td>
             <td><button type="button" className="icon-button" aria-label={`Detalle de ${learner.name}`} onClick={() => onStudent(learner.id)}><Icon name="more" size={18}/></button></td>
           </tr>;
         })}</tbody>
       </table>
     </div>
   </div>;
+}
+
+function panelProgress(book: Gradebook, learnerId: string, activityId: string) {
+  const assigned = (book.evaluators || []).filter(item => item.activityId === activityId);
+  const marks = (book.marks || []).filter(item => item.activityId === activityId && item.learnerId === learnerId && item.evaluatorId);
+  const done = assigned.length > 0 && assigned.every(item => marks.some(mark => mark.evaluatorId === item.userId));
+  return `${marks.length} de ${assigned.length}${done ? " · completo" : ""}`;
+}
+
+function MarkCell({ column, learnerName, value, schemeLevels, editable, onChange, onRubric }: { column: Column; learnerName: string; value: string; schemeLevels?: { id: string; label: string }[]; editable: boolean; onChange: (value: string) => void; onRubric: () => void }) {
+  const mark = value ? JSON.parse(value) as AtomicMark : null;
+  if (!editable) return <span>{mark ? markText(mark, column, schemeLevels) : <span className="muted">—</span>}</span>;
+  if (column.grading === "rubric" && column.rubric) {
+    const total = mark?.kind === "rubric" ? rubricTotal(column.rubric, mark.choices) : null;
+    return <button type="button" className="button secondary small" aria-label={`Rúbrica de ${column.title} de ${learnerName}`} onClick={onRubric}>{total === null ? "Calificar" : total}</button>;
+  }
+  if (column.grading === "pass-fail") return <label className="lock"><input type="checkbox" aria-label={`${column.title} de ${learnerName}`} checked={mark?.kind === "pass" && mark.value} onChange={event => onChange(JSON.stringify({ kind: "pass", value: event.target.checked }))}/><span>{mark?.kind === "pass" && mark.value ? "Aprobado" : "No aprobado"}</span></label>;
+  return <select aria-label={`Nivel de ${column.title} de ${learnerName}`} value={mark?.kind === "level" ? mark.value : ""} onChange={event => onChange(event.target.value ? JSON.stringify({ kind: "level", value: event.target.value }) : "")}>
+    <option value="">Elegir nivel…</option>
+    {(schemeLevels || []).map(level => <option key={level.id} value={level.id}>{level.label}</option>)}
+  </select>;
+}
+
+function markText(mark: AtomicMark, column: Column, levels?: { id: string; label: string }[]) {
+  if (mark.kind === "pass") return mark.value ? "Aprobado" : "No aprobado";
+  if (mark.kind === "level") return levels?.find(level => level.id === mark.value)?.label || mark.value;
+  if (mark.kind === "rubric" && column.rubric) return String(rubricTotal(column.rubric, mark.choices));
+  return "—";
+}
+
+function rubricTotal(rubric: Rubric, choices: Record<string, string>) {
+  const weight = rubric.criteria.reduce((sum, criterion) => sum + criterion.weight, 0) || 1;
+  return Math.round(rubric.criteria.reduce((sum, criterion) => {
+    const level = criterion.levels.find(item => item.id === choices[criterion.id]);
+    return sum + (level ? level.points * criterion.weight : 0);
+  }, 0) / weight);
+}
+
+/** The period's result under the course's scheme, computed with the same engine as the server. */
+function schemePeriod(book: Gradebook, period: GradebookPeriod, plan: Gradebook["activities"], learnerId: string, columns: Column[], valueOf: (learnerId: string, column: Column) => string, isExempt: (learnerId: string, activityId: string) => boolean) {
+  const scheme = book.scheme;
+  if (!scheme || scheme.id === "points") return null;
+  const marks = new Map<string, Mark>();
+  for (const column of columns) {
+    if (isExempt(learnerId, column.id)) { marks.set(column.id, { kind: "exempt" }); continue; }
+    if (column.kind === "score") { const value = pointsInput(valueOf(learnerId, column), column.max); if (typeof value === "number") marks.set(column.id, { kind: "points", value }); }
+    if (column.kind === "mark" && valueOf(learnerId, column)) marks.set(column.id, JSON.parse(valueOf(learnerId, column)) as AtomicMark);
+  }
+  try {
+    const result = learnerResult(scheme, plan.map(item => ({ id: item.id, periodId: item.periodId, categoryId: item.categoryId || scheme.categories[0]?.id || "general", title: item.title, points: item.points, grading: item.grading || "points", extra: item.extra, ...(item.retakeOf ? { retakeOf: item.retakeOf } : {}), ...(item.rubric ? { rubric: item.rubric } : {}), ...(item.panel ? { panel: item.panel } : {}) })), marks, [{ id: period.id, position: period.position, weight: period.weight }]);
+    return result.periods[0] || null;
+  } catch { return null; }
+}
+/** The scheme's result for the period, as the grid shows it (null with the accumulated points of 1.2.3). */
+function schemeResult(...args: Parameters<typeof schemePeriod>) {
+  const shown = schemePeriod(...args), scheme = args[0].scheme;
+  if (!shown || !scheme) return null;
+  return <><strong>{shown.display || displayOf(scheme, shown.score) || "—"}</strong>{shown.reasons.map(reason => <p key={reason} className="grade-reasons">{reason}</p>)}</>;
+}
+
+function RubricDialog({ cell, current, onClose, onSave }: { cell: { learnerName: string; title: string; rubric: Rubric }; current?: string; onClose: () => void; onSave: (choices: Record<string, string>) => void }) {
+  const initial = current ? (JSON.parse(current) as AtomicMark) : null;
+  const [choices, setChoices] = useState<Record<string, string>>(initial?.kind === "rubric" ? initial.choices : {});
+  const ready = cell.rubric.criteria.every(criterion => criterion.levels.some(level => level.id === choices[criterion.id]));
+  return <Modal title={`Rúbrica · ${cell.title}`} onClose={onClose}>
+    <form className="stack" onSubmit={event => { event.preventDefault(); if (ready) onSave(choices); }}>
+      <p className="muted small">{cell.learnerName}. Elige un nivel por criterio.</p>
+      {cell.rubric.criteria.map(criterion => <label key={criterion.id} className="field"><span>{criterion.label}</span>
+        <select aria-label={criterion.label} value={choices[criterion.id] || ""} onChange={event => setChoices(currentChoices => ({ ...currentChoices, [criterion.id]: event.target.value }))}>
+          <option value="">Elegir nivel…</option>
+          {criterion.levels.map(level => <option key={level.id} value={level.id}>{level.label} · {level.points}</option>)}
+        </select>
+      </label>)}
+      <p role="status">Total: {ready ? rubricTotal(cell.rubric, choices) : "—"}</p>
+      <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><PrimaryAction type="submit" disabled={!ready}>Guardar rúbrica</PrimaryAction></div>
+    </form>
+  </Modal>;
 }
 
 /** Returns a handed-in period with a note that says what to review. */

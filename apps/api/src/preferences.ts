@@ -3,6 +3,7 @@ import type { DeliverySettings, NotificationType, UserPreferences } from "@happy
 import { effectivePreferences, emailPlan, isConfigurableType, localeWeekStart, lockedBy, notificationCatalog, notificationChannels, notificationPreferencesInput, receivesOn, userPreferencesInput } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { deliveryOf, mandatoryTypes, preferencesOf } from "./notify";
+import { myPanels } from "./gradebook";
 import { hasAddress, historyOf } from "./notifications";
 
 /**
@@ -16,7 +17,7 @@ const reply = (value: unknown, status = 200) => Response.json(value, { status })
 
 export function meMethods(path: string): string[] | null {
   if (path === "/api/me/preferences" || path === "/api/me/notification-preferences") return ["GET", "PUT"];
-  if (path === "/api/me/inbox") return ["GET"];
+  if (path === "/api/me/inbox" || path === "/api/me/panels") return ["GET"];
   if (path === "/api/me/inbox/read") return ["POST"];
   return null;
 }
@@ -67,6 +68,7 @@ async function inbox(db: Database, current: Member): Promise<Inbox> {
 }
 
 export async function me(path: string, method: string, input: unknown, current: Member, db: Database): Promise<Response> {
+  if (path === "/api/me/panels") return myPanels(db, current);
   const now = new Date().toISOString();
   if (path === "/api/me/preferences") {
     if (method === "PUT") {

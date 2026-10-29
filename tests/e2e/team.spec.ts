@@ -50,8 +50,14 @@ test("administration reviews each educator's contributions and every course's pr
   // The feed names who did each thing; which person is newest depends on the specs that ran before.
   await expect(page.locator(".activity-feed.people").first()).toContainText(/Administración de la demostración|Marta Ruiz|Diego Ramírez|Ana López|Educador de la demostración|Lucía Herrera|Sofía Castillo|Tomás Aguilar|Carlos Mejía/);
   await page.goto("/configuracion-academica");
-  await expect(page.locator(".program-list")).toContainText("Primaria bilingüe");
-  await expect(page.locator(".program-list")).toContainText("2 cursos");
+  // The program's row counts its active courses; other specs may add courses to it, so the count comes from the API.
+  const { courses, programs } = await page.evaluate(async () => ({
+    courses: (await (await fetch("/api/courses")).json()).courses as { programId: string | null; status: string }[],
+    programs: (await (await fetch("/api/programs")).json()).programs as { id: string; name: string }[],
+  }));
+  const bilingual = programs.find(item => item.name === "Primaria bilingüe")!;
+  const count = courses.filter(course => course.programId === bilingual.id && course.status === "active").length;
+  await expect(page.locator(".program-list > li").filter({ hasText: /^Primaria bilingüe/ })).toContainText(`${count} ${count === 1 ? "curso" : "cursos"}`);
 
   // Administration manages a course team (HL-115 / ST-072): add a co-teacher, then restore the original team.
   await page.goto("/cursos/seed-course-matematicas");

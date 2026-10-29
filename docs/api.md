@@ -389,6 +389,34 @@ cada periodo (`reviews`: `submitted`, `returned` con su `note` o `approved`) y `
   periodo, sus actividades, el comentario, el promedio, el resultado y los espacios para firmas. Dice que es informativa
   y no sustituye el certificado oficial del Ministerio de Educación.
 
+### Evaluación agnóstica: esquemas, marcas y tribunal (0060, 1.3.1)
+
+`GET /api/grading-schemes` responde `{ schemes }` de la organización. Administración crea uno con `POST`, lo actualiza
+con `PUT /api/grading-schemes/:id` y lo elimina con `DELETE`: si está elegido por un curso o programa, queda archivado.
+`POST /api/grading-schemes/templates/:templateId` copia una plantilla (`colegio`, `universidad`, `idiomas`, `tecnica`,
+`artes`, `seminario` o `doctorado`). Los cuerpos siguen `GradingScheme`; pesos, niveles y umbrales se validan antes de
+guardar. Las demás personas pueden consultar los esquemas, pero no cambiarlos.
+
+`gradingSchemeId` es un ajuste heredable del curso y del programa. Al guardarlo debe ser un esquema activo de la misma
+organización: uno inexistente o de otra organización responde 400, y uno archivado responde 409. Sin elegirlo, la libreta
+conserva exactamente su cálculo anterior de puntos, escala, mínimo, letras y promedio. Con un esquema elegido, el
+`gradebook` agrega `scheme`, `marks`, `evaluators` y los campos `display`, `level`, `reasons` y `final` de cada estudiante.
+
+- El plan acepta además `categoryId`, `grading` (`points`, `rubric`, `pass-fail`, `level` o `panel`), `extra`,
+  `retakeOf`, `rubric` y `panel`. Las actividades anteriores siguen siendo `points` en `general`.
+- `PUT /api/sections/:id/grades` acepta `marks: [{ activityId, learnerId, mark }]` para rúbrica, nivel,
+  aprobado/no aprobado y exoneración. Los punteos continúan en `scores`.
+- `PUT …/grades/activities/:activityId/evaluators` recibe
+  `{ evaluators: [{ userId, chair }] }`; exige integrantes distintos, una presidencia y que aún no existan marcas.
+- `PUT …/grades/activities/:activityId/panel` recibe `{ learnerId, mark }`. Cada integrante escribe solo su marca.
+  Antes de completar el tribunal ve únicamente la propia; administración y quienes imparten ven todas.
+- Una exoneración (`{ kind: "exempt" }`) también vale en una actividad de puntos. `mark: null` la quita.
+- `GET /api/me/panels` responde `{ panels }` con las actividades de tribunal asignadas a quien consulta, una por
+  sección activa del ciclo vigente. Cada estudiante trae solo la marca propia (`marked`, `mark`) y `combined` (el
+  punteo ya combinado) cuando todas las personas del tribunal marcaron. Otra persona recibe una lista vacía.
+- `GET …/grades/report.csv[?year=]` exporta los mismos resultados mostrados por la boleta PDF. Ambos usan el texto del
+  esquema (letra, GPA, nivel o aprobado/no aprobado) e incluyen las razones que impiden aprobar.
+
 ## Invitaciones por correo (ST-121, DEC-042)
 
 `POST /api/invitations` recibe `{ email, displayName, role }` (correo válido que se guarda en minúsculas, nombre de 2 a
