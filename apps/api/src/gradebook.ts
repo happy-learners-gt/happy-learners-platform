@@ -6,6 +6,7 @@ import { configurationOf } from "./courses";
 import { scopedCourses } from "./permissions";
 import { event } from "./team";
 import { gradingSchemesFor } from "./grading-schemes";
+import { groupGrades } from "./group-grading";
 
 /**
  * The section's gradebook (libreta) and the course's assessment plan:
@@ -27,6 +28,7 @@ const reportPath = /^\/api\/sections\/([a-z0-9-]+)\/grades\/report\.pdf$/;
 const csvPath = /^\/api\/sections\/([a-z0-9-]+)\/grades\/report\.csv$/;
 const periodPath = /^\/api\/sections\/([a-z0-9-]+)\/grades\/periods\/(period-[a-f0-9-]{36})\/(lock|submit|return|plan)$/;
 const panelPath = /^\/api\/sections\/([a-z0-9-]+)\/grades\/activities\/(assessment-[a-f0-9-]{36})\/(panel|evaluators)$/;
+const groupGradePath = /^\/api\/sections\/([a-z0-9-]+)\/grades\/activities\/(assessment-[a-f0-9-]{36})\/(groups|adjustments|peer-ratings)$/;
 
 export function gradebookMethods(path: string): string[] | null {
   if (gradesPath.test(path)) return ["GET", "PUT"];
@@ -34,6 +36,7 @@ export function gradebookMethods(path: string): string[] | null {
   const period = periodPath.exec(path);
   if (period) return period[3] === "lock" ? ["POST", "DELETE"] : period[3] === "plan" ? ["PUT"] : ["POST"];
   if (panelPath.test(path)) return ["PUT"];
+  if (groupGradePath.test(path)) return ["PUT"];
   return null;
 }
 
@@ -124,16 +127,16 @@ function marksFor(learnerId: string, activities: StoredActivity[], scores: Map<s
 async function contents(db: Database, current: Member, section: { id: string; courseId: string }, year: Year | null, policy: GradingPolicy, scheme: GradingScheme, privileged: boolean): Promise<Book> {
   if (!year) return { year: null, periods: [], learners: [], grades: [], results: [], activities: [], scores: [], marks: [], evaluators: [], comments: [], reviews: [], scheme };
   const organizationId = current.organizationId;
-  const [periods, learners, grades, activityRows, scores, markRows, evaluatorRows, comments, reviews] = await db.batch([
+  const [periods, learners, grades, activityRows, scores, markRows, evaluatorRows, comments, reviews, groupRows, groupMarkRows, adjustmentRows] = await db.batch([
     db.prepare(`SELECT p.id,p.position,p.name,p.starts_on AS "from",p.ends_on AS until,p.weight,l.locked_at AS lockedAt,COALESCE(u.display_name,u.username) AS lockedBy
       FROM academic_periods p LEFT JOIN section_period_locks l ON l.period_id=p.id AND l.group_id=? LEFT JOIN users u ON u.id=l.locked_by WHERE p.year_id=? AND p.organization_id=? ORDER BY p.starts_on`).bind(section.id, year.id, organizationId),
     db.prepare("SELECT id,display_name AS name FROM group_learners WHERE group_id=? AND organization_id=? AND status='active' ORDER BY display_name COLLATE NOCASE,created_at,id").bind(section.id, organizationId),
     db.prepare("SELECT g.learner_id AS learnerId,g.period_id AS periodId,g.score FROM section_grades g JOIN academic_periods p ON p.id=g.period_id WHERE g.group_id=? AND g.organization_id=? AND p.year_id=?").bind(section.id, organizationId, year.id),
-    db.prepare(`SELECT a.id,a.period_id AS periodId,a.position,a.title,a.kind,a.points,a.due_on AS dueOn,a.category_id AS categoryId,a.grading,a.extra,a.retake_of AS retakeOf,a.rubric,a.panel FROM assessment_activities a JOIN academic_periods p ON p.id=a.period_id
+    db.prepare(`SELECT a.id,a.period_id AS periodId,a.position,a.title,a.kind,a.points,a.due_on AS dueOn,a.category_id AS categoryId,a.grading,a.extra,a.retake_of AS retakeOf,a.rubric,a.panel,a.group_mode AS groupMode,a.work_group_set_id AS workGroupSetId FROM assessment_activities a JOIN academic_periods p ON p.id=a.period_id
       WHERE a.course_id=? AND a.organization_id=? AND p.year_id=? ORDER BY p.starts_on,a.position,a.id`).bind(section.courseId, organizationId, year.id),
-    db.prepare(`SELECT s.activity_id AS activityId,s.learner_id AS learnerId,s.points FROM assessment_scores s JOIN assessment_activities a ON a.id=s.activity_id JOIN academic_periods p ON p.id=a.period_id
+    db.prepare(`SELECT s.activity_id AS activityId,s.learner_id AS learnerId,s.points,s.source FROM assessment_scores s JOIN assessment_activities a ON a.id=s.activity_id JOIN academic_periods p ON p.id=a.period_id
       WHERE s.group_id=? AND s.organization_id=? AND p.year_id=?`).bind(section.id, organizationId, year.id),
-    db.prepare(`SELECT m.activity_id AS activityId,m.learner_id AS learnerId,m.evaluator_id AS evaluatorId,m.mark,m.updated_at AS updatedAt,COALESCE(u.display_name,u.username) AS updatedBy
+    db.prepare(`SELECT m.activity_id AS activityId,m.learner_id AS learnerId,m.evaluator_id AS evaluatorId,m.mark,m.updated_at AS updatedAt,COALESCE(u.display_name,u.username) AS updatedBy,m.source
       FROM assessment_marks m JOIN assessment_activities a ON a.id=m.activity_id JOIN academic_periods p ON p.id=a.period_id
       LEFT JOIN users u ON u.id=m.updated_by WHERE m.group_id=? AND m.organization_id=? AND p.year_id=?`).bind(section.id, organizationId, year.id),
     db.prepare(`SELECT e.activity_id AS activityId,e.user_id AS userId,COALESCE(u.display_name,u.username) AS name,e.chair
@@ -143,23 +146,41 @@ async function contents(db: Database, current: Member, section: { id: string; co
       JOIN academic_periods p ON p.id=c.period_id LEFT JOIN users u ON u.id=c.updated_by WHERE c.group_id=? AND c.organization_id=? AND p.year_id=?`).bind(section.id, organizationId, year.id),
     db.prepare(`SELECT r.period_id AS periodId,r.status,r.note,COALESCE(s.display_name,s.username) AS submittedBy,r.submitted_at AS submittedAt,COALESCE(v.display_name,v.username) AS reviewedBy,r.reviewed_at AS reviewedAt
       FROM section_period_reviews r JOIN academic_periods p ON p.id=r.period_id LEFT JOIN users s ON s.id=r.submitted_by LEFT JOIN users v ON v.id=r.reviewed_by WHERE r.group_id=? AND r.organization_id=? AND p.year_id=?`).bind(section.id, organizationId, year.id),
+    db.prepare(`SELECT w.id,w.set_id AS setId,w.name,(SELECT json_group_array(learner_id) FROM work_group_members m WHERE m.work_group_id=w.id) AS learnerIds
+      FROM work_groups w JOIN work_group_sets s ON s.id=w.set_id WHERE w.group_id=? AND w.organization_id=? AND s.archived=0 ORDER BY w.rowid`).bind(section.id, organizationId),
+    db.prepare(`SELECT m.activity_id AS activityId,m.work_group_id AS workGroupId,m.mark FROM assessment_group_marks m
+      JOIN assessment_activities a ON a.id=m.activity_id JOIN academic_periods p ON p.id=a.period_id
+      WHERE m.group_id=? AND m.organization_id=? AND p.year_id=?`).bind(section.id, organizationId, year.id),
+    db.prepare(`SELECT d.activity_id AS activityId,d.learner_id AS learnerId,d.kind,d.value,d.note FROM assessment_group_adjustments d
+      JOIN assessment_activities a ON a.id=d.activity_id JOIN academic_periods p ON p.id=a.period_id
+      WHERE d.group_id=? AND d.organization_id=? AND p.year_id=?`).bind(section.id, organizationId, year.id),
   ]) as unknown as [
     Omit<GradebookPeriod, "locked">[], { id: string; name: string }[], GradeEntry[],
-    (Omit<AssessmentActivity, "rubric" | "panel" | "extra"> & { rubric: string | null; panel: string | null; extra: number })[],
-    AssessmentScore[], (Omit<AssessmentMark, "mark"> & { mark: string })[], (Omit<AssessmentEvaluator, "chair"> & { chair: number })[],
+    (Omit<AssessmentActivity, "rubric" | "panel" | "extra" | "groupMode" | "workGroupSetId"> & { rubric: string | null; panel: string | null; extra: number; groupMode: string | null; workGroupSetId: string | null })[],
+    (AssessmentScore & { source: "individual" | "group" })[], (Omit<AssessmentMark, "mark" | "source"> & { mark: string; source: "individual" | "group" })[], (Omit<AssessmentEvaluator, "chair"> & { chair: number })[],
     GradeComment[], PeriodReview[],
+    { id: string; setId: string; name: string; learnerIds: string | null }[],
+    { activityId: string; workGroupId: string; mark: string }[],
+    { activityId: string; learnerId: string; kind: "factor" | "override" | "peer"; value: number; note: string | null }[],
   ];
   const activities: AssessmentActivity[] = activityRows.map(row => ({
-    ...row, extra: !!row.extra, retakeOf: row.retakeOf || null,
+    id: row.id, periodId: row.periodId, position: row.position, title: row.title, kind: row.kind, points: row.points, dueOn: row.dueOn,
+    categoryId: row.categoryId, grading: row.grading, extra: !!row.extra, retakeOf: row.retakeOf || null,
     ...(row.rubric ? { rubric: JSON.parse(row.rubric) } : {}),
     ...(row.panel ? { panel: JSON.parse(row.panel) } : {}),
+    ...(row.groupMode === "group" ? { groupMode: "group" as const, workGroupSetId: row.workGroupSetId } : {}),
   }));
+  const grouped = new Set(activities.filter(activity => activity.groupMode === "group").map(activity => activity.id));
   const evaluators: AssessmentEvaluator[] = evaluatorRows.map(row => ({ ...row, chair: !!row.chair }));
-  const parsedMarks: AssessmentMark[] = markRows.map(row => ({ ...row, mark: JSON.parse(row.mark) as AtomicMark }));
+  const parsedMarks: AssessmentMark[] = markRows.map(row => ({
+    activityId: row.activityId, learnerId: row.learnerId, evaluatorId: row.evaluatorId, updatedAt: row.updatedAt, updatedBy: row.updatedBy,
+    mark: JSON.parse(row.mark) as AtomicMark,
+    ...(grouped.has(row.activityId) ? { source: row.source } : {}),
+  }));
   const listed = periods.map(period => ({ ...period, locked: !!period.lockedAt || year.status === "closed" }));
   const roster = new Set(learners.map(learner => learner.id));
   const shownGrades = grades.filter(grade => roster.has(grade.learnerId));
-  const shownScores = scores.filter(score => roster.has(score.learnerId));
+  const shownScores = scores.filter(score => roster.has(score.learnerId)).map(score => grouped.has(score.activityId) ? score : { activityId: score.activityId, learnerId: score.learnerId, points: score.points });
   const completePanel = (activityId: string, learnerId: string) => {
     const assigned = evaluators.filter(item => item.activityId === activityId);
     return assigned.length > 0 && assigned.every(item => parsedMarks.some(mark => mark.activityId === activityId && mark.learnerId === learnerId && mark.evaluatorId === item.userId));
@@ -207,7 +228,16 @@ async function contents(db: Database, current: Member, section: { id: string; co
     const activity = activities.find(item => item.id === mark.activityId);
     return activity?.grading !== "panel" || privileged || completePanel(mark.activityId, mark.learnerId) || mark.evaluatorId === current.id;
   });
-  return { year, periods: listed, learners, grades: shownGrades, results, activities, scores: shownScores, marks: visibleMarks, evaluators, comments: comments.filter(comment => roster.has(comment.learnerId)), reviews, scheme };
+  const setIds = new Set(activities.flatMap(activity => activity.workGroupSetId ? [activity.workGroupSetId] : []));
+  return {
+    year, periods: listed, learners, grades: shownGrades, results, activities, scores: shownScores, marks: visibleMarks, evaluators,
+    comments: comments.filter(comment => roster.has(comment.learnerId)), reviews, scheme,
+    ...(setIds.size ? {
+      workGroups: groupRows.filter(group => setIds.has(group.setId)).map(group => ({ id: group.id, setId: group.setId, name: group.name, learnerIds: (JSON.parse(group.learnerIds || "[]") as (string | null)[]).filter((id): id is string => !!id) })),
+      groupMarks: groupMarkRows.filter(row => grouped.has(row.activityId)).map(row => ({ activityId: row.activityId, workGroupId: row.workGroupId, mark: JSON.parse(row.mark) as AtomicMark })),
+      groupAdjustments: adjustmentRows.filter(row => grouped.has(row.activityId)),
+    } : {}),
+  };
 }
 
 async function gradebook(db: Database, current: Member, { section, write, approve }: Access, yearId?: string | null): Promise<Gradebook> {
@@ -279,6 +309,7 @@ type PlanItem = {
   id: string | null; title: string; kind: AssessmentKind; points: number; dueOn: string | null;
   categoryId: string; grading: GradingActivity["grading"]; extra: boolean; retakeOf: string | null;
   rubric: GradingActivity["rubric"] | null; panel: GradingActivity["panel"] | null;
+  groupMode?: "individual" | "group"; workGroupSetId?: string | null;
 };
 function planInput(input: unknown): PlanItem[] | string {
   const list = objects(input && typeof input === "object" ? (input as Record<string, unknown>).activities : undefined);
@@ -311,7 +342,17 @@ function planInput(input: unknown): PlanItem[] | string {
       if (!["average", "median", "majority", "chair"].includes(String(raw.combine)) || (raw.chair !== undefined && typeof raw.chair !== "string")) return `Elige cómo combina sus marcas el tribunal de «${title}».`;
       panel = { combine: raw.combine as NonNullable<GradingActivity["panel"]>["combine"], ...(raw.chair ? { chair: raw.chair as string } : {}) };
     } else if (item.panel !== undefined && item.panel !== null) return `«${title}» no usa un tribunal.`;
-    items.push({ id: (item.id as string | undefined) || null, title, kind: item.kind, points, dueOn, categoryId, grading, extra: item.extra === true, retakeOf, rubric, panel });
+    let groupMode: PlanItem["groupMode"];
+    let workGroupSetId: string | null | undefined;
+    if (item.groupMode !== undefined || item.workGroupSetId !== undefined) {
+      if (item.groupMode !== "individual" && item.groupMode !== "group") return `Elige si «${title}» se califica individual o en grupo.`;
+      groupMode = item.groupMode;
+      if (groupMode === "group") {
+        if (typeof item.workGroupSetId !== "string" || !/^groupset-[a-f0-9-]{36}$/.test(item.workGroupSetId)) return `Elige el conjunto de grupos de «${title}».`;
+        workGroupSetId = item.workGroupSetId;
+      } else workGroupSetId = null;
+    }
+    items.push({ id: (item.id as string | undefined) || null, title, kind: item.kind, points, dueOn, categoryId, grading, extra: item.extra === true, retakeOf, rubric, panel, ...(groupMode ? { groupMode, workGroupSetId: workGroupSetId ?? null } : {}) });
   }
   if (new Set(items.filter(item => item.id).map(item => item.id)).size !== items.filter(item => item.id).length) return "Revisa las actividades: hay una repetida.";
   return items;
@@ -321,14 +362,19 @@ const writeClosed = (section: SectionRow) => reply({ error: section.status !== "
 type OpenPeriod = { id: string; name: string; position: number; weight: number; lockedAt: string | null; review: PeriodReview["status"] | null };
 
 export async function grades(path: string, method: string, input: unknown, url: URL, current: Member, db: Database): Promise<Response> {
-  const period = periodPath.exec(path), panelAction = panelPath.exec(path);
-  const groupId = (period || panelAction || gradesPath.exec(path) || historyPath.exec(path) || reportPath.exec(path) || csvPath.exec(path))![1];
+  const period = periodPath.exec(path), panelAction = panelPath.exec(path), groupGrade = groupGradePath.exec(path);
+  const groupId = (period || panelAction || groupGrade || gradesPath.exec(path) || historyPath.exec(path) || reportPath.exec(path) || csvPath.exec(path))![1];
   const allowed = await access(db, current, groupId);
   if (allowed instanceof Response) return allowed;
   const { section } = allowed;
   if (panelAction) return panelAction[3] === "evaluators"
     ? saveEvaluators(db, current, allowed, panelAction[2], input)
     : savePanelMark(db, current, allowed, panelAction[2], input);
+  if (groupGrade) {
+    const saved = await groupGrades(db, current, allowed, groupGrade[2], groupGrade[3] as "groups" | "adjustments" | "peer-ratings", input, (learnerId, periodId) => recomputeOne(db, current, section, learnerId, periodId, new Date().toISOString()));
+    if (saved) return saved;
+    return reply({ gradebook: await gradebook(db, current, allowed) });
+  }
   if (historyPath.test(path)) return changesOf(db, current, section, url.searchParams.get("learner") || "");
   if (reportPath.test(path)) return report(db, current, section, url);
   if (csvPath.test(path)) return reportCsv(db, current, section, url);
@@ -448,7 +494,7 @@ export async function grades(path: string, method: string, input: unknown, url: 
     if (before === change.points) continue;
     writes.push(change.points === null
       ? db.prepare("DELETE FROM assessment_scores WHERE activity_id=? AND learner_id=? AND group_id=? AND organization_id=?").bind(change.activityId, change.learnerId, groupId, current.organizationId)
-      : db.prepare("INSERT INTO assessment_scores(activity_id,organization_id,group_id,learner_id,points,updated_by,updated_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT(activity_id,learner_id) DO UPDATE SET points=excluded.points,updated_by=excluded.updated_by,updated_at=excluded.updated_at")
+      : db.prepare("INSERT INTO assessment_scores(activity_id,organization_id,group_id,learner_id,points,updated_by,updated_at,source) VALUES (?,?,?,?,?,?,?,'individual') ON CONFLICT(activity_id,learner_id) DO UPDATE SET points=excluded.points,updated_by=excluded.updated_by,updated_at=excluded.updated_at,source='individual'")
         .bind(change.activityId, current.organizationId, groupId, change.learnerId, change.points, current.id, now));
     if (change.points === null) earned.delete(id); else earned.set(id, change.points);
     log(change.learnerId, activity.periodId, activity.id, before, change.points); counted++;
@@ -464,7 +510,7 @@ export async function grades(path: string, method: string, input: unknown, url: 
       if (beforeRow) writes.push(db.prepare("DELETE FROM assessment_marks WHERE activity_id=? AND learner_id=? AND group_id=? AND organization_id=? AND evaluator_id IS NULL").bind(change.activityId, change.learnerId, groupId, current.organizationId));
       storedMarkRows.splice(0, storedMarkRows.length, ...storedMarkRows.filter(row => !(row.activityId === change.activityId && row.learnerId === change.learnerId && row.evaluatorId === null)));
     } else if (beforeRow) {
-      writes.push(db.prepare("UPDATE assessment_marks SET mark=?,updated_by=?,updated_at=? WHERE activity_id=? AND learner_id=? AND group_id=? AND organization_id=? AND evaluator_id IS NULL")
+      writes.push(db.prepare("UPDATE assessment_marks SET mark=?,updated_by=?,updated_at=?,source='individual' WHERE activity_id=? AND learner_id=? AND group_id=? AND organization_id=? AND evaluator_id IS NULL")
         .bind(after, current.id, now, change.activityId, change.learnerId, groupId, current.organizationId));
       beforeRow.mark = after;
     } else {
@@ -659,13 +705,23 @@ async function savePlan(db: Database, current: Member, section: SectionRow, peri
   const ids = new Set(items.map(item => item.id).filter((id): id is string => !!id));
   const invalidRetake = items.find(item => item.retakeOf && (!ids.has(item.retakeOf) || item.retakeOf === item.id));
   if (invalidRetake) return reply({ error: `La reposición «${invalidRetake.title}» debe señalar otra actividad de este plan.` }, 400);
+  const setIds = [...new Set(items.flatMap(item => item.workGroupSetId ? [item.workGroupSetId] : []))];
+  if (setIds.length) {
+    const found = (await db.prepare(`SELECT id FROM work_group_sets WHERE organization_id=? AND group_id=? AND archived=0 AND id IN (${setIds.map(() => "?").join(",")})`).bind(current.organizationId, section.id, ...setIds).all<{ id: string }>()).results;
+    if (found.length !== setIds.length) return reply({ error: "Elige un conjunto de grupos activo de esta sección." }, 400);
+  }
   await db.batch([
     ...existing.filter(row => !kept.has(row.id)).map(row => db.prepare("DELETE FROM assessment_activities WHERE id=? AND organization_id=?").bind(row.id, current.organizationId)),
-    ...items.map((item, position) => item.id
-      ? db.prepare("UPDATE assessment_activities SET position=?,title=?,kind=?,points=?,due_on=?,category_id=?,grading=?,extra=?,retake_of=?,rubric=?,panel=?,updated_at=? WHERE id=? AND organization_id=?")
-        .bind(position, item.title, item.kind, item.points, item.dueOn, item.categoryId, item.grading, item.extra ? 1 : 0, item.retakeOf, item.rubric ? JSON.stringify(item.rubric) : null, item.panel ? JSON.stringify(item.panel) : null, now, item.id, current.organizationId)
-      : db.prepare("INSERT INTO assessment_activities(id,organization_id,course_id,period_id,position,title,kind,points,due_on,created_by,created_at,updated_at,category_id,grading,extra,retake_of,rubric,panel) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-        .bind(`assessment-${crypto.randomUUID()}`, current.organizationId, section.courseId, period.id, position, item.title, item.kind, item.points, item.dueOn, current.id, now, now, item.categoryId, item.grading, item.extra ? 1 : 0, item.retakeOf, item.rubric ? JSON.stringify(item.rubric) : null, item.panel ? JSON.stringify(item.panel) : null)),
+    ...items.map((item, position) => {
+      const leading = [position, item.title, item.kind, item.points, item.dueOn] as (string | number | null)[];
+      const trailing = [item.categoryId, item.grading, item.extra ? 1 : 0, item.retakeOf, item.rubric ? JSON.stringify(item.rubric) : null, item.panel ? JSON.stringify(item.panel) : null] as (string | number | null)[];
+      return item.id
+        ? item.groupMode
+          ? db.prepare("UPDATE assessment_activities SET position=?,title=?,kind=?,points=?,due_on=?,category_id=?,grading=?,extra=?,retake_of=?,rubric=?,panel=?,group_mode=?,work_group_set_id=?,updated_at=? WHERE id=? AND organization_id=?").bind(...leading, ...trailing, item.groupMode, item.workGroupSetId ?? null, now, item.id, current.organizationId)
+          : db.prepare("UPDATE assessment_activities SET position=?,title=?,kind=?,points=?,due_on=?,category_id=?,grading=?,extra=?,retake_of=?,rubric=?,panel=?,updated_at=? WHERE id=? AND organization_id=?").bind(...leading, ...trailing, now, item.id, current.organizationId)
+        : db.prepare("INSERT INTO assessment_activities(id,organization_id,course_id,period_id,position,title,kind,points,due_on,created_by,created_at,updated_at,category_id,grading,extra,retake_of,rubric,panel,group_mode,work_group_set_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+          .bind(`assessment-${crypto.randomUUID()}`, current.organizationId, section.courseId, period.id, ...leading, current.id, now, now, ...trailing, item.groupMode || "individual", item.workGroupSetId ?? null);
+    }),
     event(db, current, { action: "updated", targetType: "course", targetId: section.courseId, courseId: section.courseId, summary: `Actualizó el plan de evaluación de «${period.name}» (${items.length === 1 ? "1 actividad" : `${items.length} actividades`}, ${planTotal(items)} puntos)` }),
   ]);
   const allowed = await access(db, current, section.id);
