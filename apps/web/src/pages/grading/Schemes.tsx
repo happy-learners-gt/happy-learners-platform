@@ -100,7 +100,7 @@ export function GradingSchemes() {
       </label>
     </div>
     <p className="muted">Un esquema dice cómo se calculan y se muestran las notas. Los cursos y programas lo eligen en su configuración. Sin esquema, siguen con puntos acumulados.</p>
-    <ul className="template-grid">{schemeTemplates.map(item => <li key={item.id} className="panel lit"><strong>{item.name}</strong><p className="muted small">{notes[item.id]}</p><p className="muted small">{methodLabel(item.method)}</p></li>)}</ul>
+    <ul className="scheme-templates">{schemeTemplates.map(item => <li key={item.id} className="panel lit"><strong>{item.name}</strong><p className="muted small">{notes[item.id]}</p><p className="muted small">{methodLabel(item.method)}</p></li>)}</ul>
     {error ? <ErrorState error={error} retry={() => void load()}/> : !schemes ? <Loading label="Cargando esquemas…" lines={3}/> : !schemes.length
       ? <EmptyState compact icon="grid" title="Sin esquemas propios">Agrega uno desde una plantilla y ajústalo. Los cursos siguen con puntos acumulados hasta que elijan un esquema.</EmptyState>
       : <ul className="program-list">{schemes.map(scheme => <li key={scheme.id} className={scheme.status === "archived" ? "is-archived" : undefined}>
@@ -140,12 +140,12 @@ export function SchemeDialog({ scheme, onClose, onSave }: { scheme: Draft; onClo
           : <input inputMode="decimal" aria-label="Nota mínima" value={draft.passing.min ?? 60} onChange={event => set({ passing: { min: Number(event.target.value) } })}/>}</Field>
       </div>
       <fieldset className="config-section"><legend>Categorías</legend>
-        <ul className="stack">{draft.categories.map((category, index) => <li key={category.id} className="field-grid">
+        <ul className="stack scheme-categories">{draft.categories.map((category, index) => <li key={category.id} className="scheme-category">
           <Field label="Nombre"><input aria-label={`Nombre de la categoría ${index + 1}`} value={category.label} onChange={event => updateCategory(setDraft, index, { label: event.target.value, id: slug(event.target.value, `categoria-${index + 1}`) })}/></Field>
           {draft.method === "weighted-categories" && <Field label="Peso"><input inputMode="decimal" aria-label={`Peso de ${category.label}`} value={category.weight ?? 0} onChange={event => updateCategory(setDraft, index, { weight: Number(event.target.value) })}/></Field>}
           <Field label="Descartar la más baja"><input inputMode="numeric" aria-label={`Descartar la más baja de ${category.label}`} value={category.dropLowest ?? 0} onChange={event => updateCategory(setDraft, index, { dropLowest: Number(event.target.value) || 0 })}/></Field>
           <Field label="Mínimo"><input inputMode="decimal" aria-label={`Mínimo de ${category.label}`} value={category.minimum ?? ""} onChange={event => updateCategory(setDraft, index, { minimum: event.target.value === "" ? undefined : Number(event.target.value) })}/></Field>
-          <button type="button" className="button ghost" disabled={draft.categories.length === 1} onClick={() => setDraft(current => ({ ...current, categories: current.categories.filter((_, item) => item !== index) }))}>Quitar</button>
+          <button type="button" className="icon-button" aria-label={`Quitar ${category.label || `la categoría ${index + 1}`}`} disabled={draft.categories.length === 1} onClick={() => setDraft(current => ({ ...current, categories: current.categories.filter((_, item) => item !== index) }))}><Icon name="close" size={16}/></button>
         </li>)}
         </ul>
         <button type="button" className="button secondary small" onClick={() => setDraft(current => ({ ...current, categories: [...current.categories, { id: `categoria-${current.categories.length + 1}`, label: "Nueva categoría", ...(current.method === "weighted-categories" ? { weight: 0 } : {}) }] }))}><Icon name="plus" size={16}/>Agregar categoría</button>
