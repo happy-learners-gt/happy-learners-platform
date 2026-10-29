@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import type { Course, GradingScheme, OrganizationGradingScheme, StudyProgram } from "@happy-learners/contracts";
-import { learnerResult, schemeInput, schemeTemplates } from "@happy-learners/domain";
+import { learnerResult, schemeExplanation, schemeInput, schemeTemplates } from "@happy-learners/domain";
 import { api, message } from "../../api";
 import { Modal, useFeedback } from "../../ui/feedback";
 import { Icon } from "../../ui/icons";
@@ -167,7 +167,7 @@ export function SchemeDialog({ scheme, onClose, onSave }: { scheme: Draft; onClo
           {draft.display.kind === "gpa" && <Field label="Puntos"><input inputMode="decimal" aria-label={`Puntos de ${threshold.letter}`} value={"points" in threshold ? threshold.points : 0} onChange={event => updateGpa(setDraft, index, Number(event.target.value))}/></Field>}
         </li>)}</ul>
       </fieldset>}
-      <p className="scheme-preview" role="status" aria-label="Vista previa">Vista previa: <strong>{preview.display ?? "—"}</strong>{preview.score !== null && <span className="muted"> · {preview.score}</span>}{preview.reasons[0] && <span className="muted"> · {preview.reasons[0]}</span>}</p>
+      <div className="scheme-preview" role="status" aria-label="Vista previa">{schemeExplanation(draft).map(line => <p key={line}>{line}</p>)}<p>Vista previa: <strong>{preview.display ?? "—"}</strong>{preview.score !== null && <span className="muted"> · {preview.score}</span>}{preview.reasons[0] && <span className="muted"> · {preview.reasons[0]}</span>}</p></div>
       {"error" in checked && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{checked.error}</p>}
       <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><PrimaryAction type="submit" busy={busy} disabled={busy || "error" in checked}>Guardar esquema</PrimaryAction></div>
     </form>

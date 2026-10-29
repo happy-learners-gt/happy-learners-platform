@@ -158,7 +158,7 @@ export interface OrganizationGradingScheme extends GradingScheme {
   builtin: boolean; status: "active" | "archived"; createdAt: string; updatedAt: string;
 }
 export type Rubric = {
-  criteria: { id: string; label: string; weight: number; levels: { id: string; label: string; points: number }[] }[];
+  criteria: { id: string; label: string; weight: number; levels: { id: string; label: string; points: number; description?: string }[] }[];
 };
 /** An evaluable activity. Named GradingActivity to avoid colliding with a lesson's Activity. */
 export type GradingActivity = {
@@ -370,6 +370,8 @@ export interface Gradebook {
   reviews: PeriodReview[];
   /** Writes the scores of open periods and edits the plan; hands a period in; approves and closes it (administration and coordination); reopens it (administration only). */
   canEdit: boolean; canLock: boolean; canUnlock: boolean; canSubmit: boolean;
+  /** The course lead, a co-teacher or administration can design the evaluation. Absent means unknown. */
+  canDesign?: boolean;
 }
 /** An evaluation activity of a course's assessment plan for a period: its points add up to the period's 100. */
 export type AssessmentKind = "task" | "project" | "quiz" | "exam" | "participation" | "other";

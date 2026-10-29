@@ -33,7 +33,7 @@ export async function configurationOf(db: Database, organization: string, course
   return { course, program, settings: resolveSettings(course, program).values, pacing: effectiveProfile(course, program).pacing };
 }
 /** A chosen scheme must be active in this organization. Null keeps the compatible points scheme. */
-async function gradingSchemeError(db: Database, organizationId: string, schemeId: string | null | undefined) {
+export async function gradingSchemeError(db: Database, organizationId: string, schemeId: string | null | undefined) {
   if (!schemeId) return null;
   const row = await db.prepare("SELECT status FROM grading_schemes WHERE id=? AND organization_id=?").bind(schemeId, organizationId).first<{ status: string }>();
   if (!row) return reply({ error: "Elige un esquema de evaluación activo de tu organización." }, 400);

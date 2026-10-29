@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ClipboardEvent, FormEvent, KeyboardEvent } from "react";
 import type { AtomicMark, Gradebook, GradebookPeriod, GradeResult, Mark, Rubric } from "@happy-learners/contracts";
-import { assessmentKindLabel, csvFile, displayOf, gradeStatistics, learnerResult, letterOf, pastedCells, periodFromPlan, planTotal, pointsInput, scoreInput, settingText, thresholdsText } from "@happy-learners/domain";
+import { assessmentKindLabel, csvFile, displayOf, gradeStatistics, learnerResult, letterOf, pastedCells, periodFromPlan, planTotal, pointsInput, schemeExplanation, schemeFromSettings, scoreInput } from "@happy-learners/domain";
 import { api, message } from "../../api";
 import { Link, useNavigation, useUnsavedChanges } from "../../navigation";
 import { plural, sessionDay } from "../../model";
@@ -13,7 +13,6 @@ import { Tabs } from "../../ui/Tabs";
 import { currentRegional } from "../../regional";
 import { useCourse } from "../course/context";
 import { sectionCrumbs, useSection } from "./context";
-import { GradePlanDialog } from "./GradePlan";
 import { GradeStudentDrawer } from "./GradeStudent";
 import { factorText, liveFactors, originLabel, resultText } from "./group-grade";
 
@@ -79,7 +78,7 @@ export function SectionGradesPage() {
   const { toast, confirm } = useFeedback();
   const [data, setData] = useState<Gradebook | null>(null), [error, setError] = useState(""), [year, setYear] = useState("");
   const [edits, setEdits] = useState<Record<string, string>>({}), [busy, setBusy] = useState(""), [formError, setFormError] = useState("");
-  const [planning, setPlanning] = useState(false), [student, setStudent] = useState(""), [returning, setReturning] = useState(false);
+  const [student, setStudent] = useState(""), [returning, setReturning] = useState(false);
   const [rubricCell, setRubricCell] = useState<{ learnerId: string; learnerName: string; activityId: string; title: string; rubric: Rubric } | null>(null);
   const [groupRubric, setGroupRubric] = useState<{ workGroupId: string; name: string; activityId: string; title: string; rubric: Rubric } | null>(null);
   const [peerTarget, setPeerTarget] = useState<{ activityId: string; workGroupId: string } | null>(null);
@@ -142,10 +141,8 @@ export function SectionGradesPage() {
     <Section title={`${data.year.name}${data.year.status === "closed" ? " (cerrado)" : ""}`} action={data.years.length > 1 && <label><span className="sr-only">Ciclo lectivo</span>
       <select value={data.year.id} onChange={event => { if (!dirty) { setYear(event.target.value); } }} disabled={dirty}>{data.years.map(item => <option key={item.id} value={item.id}>{item.name}{item.status === "closed" ? " (cerrado)" : ""}</option>)}</select></label>}>
       <p className="muted small grade-policy">
-        {data.scheme && data.scheme.id !== "points"
-          ? <>Esquema «{data.scheme.name}»{data.scheme.passing.min !== undefined ? ` · Aprueba con ${data.scheme.passing.min}` : data.scheme.passing.level ? ` · Aprueba desde ${data.scheme.levels?.find(level => level.id === data.scheme!.passing.level)?.label || data.scheme.passing.level}` : ""}.{" "}</>
-          : <>{settingText("gradeScale", policy.scale)} · Aprueba con {policy.passingGrade} · {settingText("gradeAverage", policy.average)}{letters ? ` · ${thresholdsText(policy.letterThresholds)}` : ""}.{" "}</>}
-        {course.status === "active" && <Link href={`/cursos/${course.id}/configuracion`}>Configuración del curso</Link>}
+        {schemeExplanation(data.scheme || schemeFromSettings({ gradeScale: policy.scale, passingGrade: policy.passingGrade, letterThresholds: policy.letterThresholds, gradeAverage: policy.average })).join(" · ")}{" "}
+        <Link href={`/cursos/${course.id}/evaluacion`}>Ver la evaluación del curso</Link>
       </p>
       {data.year.status === "closed" && <p className="notice"><Icon name="info" size={18}/>El ciclo está cerrado: sus notas se consultan, pero ya no cambian.</p>}
       {!periods.length ? <p className="muted">El ciclo no tiene periodos.</p>
@@ -154,7 +151,6 @@ export function SectionGradesPage() {
           {view === summary ? <YearSummary book={data} onStudent={setStudent}/> : periodGrid()}
         </Tabs>}
     </Section>
-    {planning && view !== summary && <GradePlanDialog book={data} periodId={view} sectionId={section.id} onClose={() => setPlanning(false)} onSaved={book => { update(book); setPlanning(false); toast({ message: "Plan de evaluación guardado." }); }}/>}
     {rubricCell && <RubricDialog cell={rubricCell} current={edits[`mark:${rubricCell.learnerId}:${rubricCell.activityId}`]} onClose={() => setRubricCell(null)} onSave={choices => { setEdits(current => ({ ...current, [`mark:${rubricCell.learnerId}:${rubricCell.activityId}`]: JSON.stringify({ kind: "rubric", choices }) })); setRubricCell(null); }}/>}
     {groupRubric && <RubricDialog cell={{ learnerName: groupRubric.name, title: groupRubric.title, rubric: groupRubric.rubric }} current={(() => { const mark = data.groupMarks?.find(item => item.activityId === groupRubric.activityId && item.workGroupId === groupRubric.workGroupId)?.mark; return mark ? JSON.stringify(mark) : undefined; })()} onClose={() => setGroupRubric(null)} onSave={choices => { const target = groupRubric; setGroupRubric(null); void saveGroupMark(target.activityId, target.workGroupId, { kind: "rubric", choices }); }}/>}
     {peerTarget && <PeerDialog book={data} activityId={peerTarget.activityId} workGroupId={peerTarget.workGroupId} onClose={() => setPeerTarget(null)} onSaved={book => { update(book); setPeerTarget(null); toast({ message: "Coevaluación guardada." }); }}/>}
@@ -309,8 +305,8 @@ export function SectionGradesPage() {
         <Icon name="list" size={18}/>
         {planned
           ? <span><strong>Plan de evaluación:</strong> {plural(plan.length, "actividad", "actividades")}{(data!.scheme?.method || "points") === "points" && <> · {number(total)} de 100 puntos{total !== 100 && <span className="muted"> (incompleto)</span>}</>}</span>
-          : <span className="muted">Sin plan de evaluación: registras una nota de 0 a 100 por estudiante. Con un plan, la nota es la suma de la zona y el examen.</span>}
-        {editable && <Button variant="ghost" icon={planned ? "edit" : "plus"} className="small" onClick={() => { if (dirty) toast({ tone: "error", message: "Guarda o descarta tus cambios antes de editar el plan." }); else setPlanning(true); }}>{planned ? "Editar el plan" : "Crear plan de evaluación"}</Button>}
+          : <span className="muted">Este periodo aún no tiene actividades. {data!.canDesign === false ? "Pide el cambio a la persona responsable del curso o a administración." : <Link href={`/cursos/${course.id}/evaluacion`}>Ver la evaluación del curso</Link>}</span>}
+        {plan.some(item => item.groupMode === "group" && !item.workGroupSetId) && <Link href={`/secciones/${section.id}/grupos`}>Elige los grupos</Link>}
       </div>
       <PeriodStats stats={stats} names={new Map(learners.map(learner => [learner.id, learner.name]))} passing={policy.passingGrade}/>
       {partial && <p className="muted small">Mientras falten actividades, las cifras y el resultado comparan lo ganado con lo evaluado hasta ahora (por ejemplo, 42 de 60 cuenta como 70).</p>}

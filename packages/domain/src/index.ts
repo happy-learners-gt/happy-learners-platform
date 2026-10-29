@@ -157,7 +157,7 @@ export { academicYearEditable, academicYearInput, academicYearLabels, academicYe
 export type { AcademicYearAction, AcademicYearDraft, PeriodDraft } from "./academic-years";
 export { assessmentKindLabel, assessmentKinds, assessmentTemplates, averageOf, csvFile, defaultThresholds, gradeAverages, gradeResult, gradeScales, gradeStatistics, isAssessmentKind, isLetterThresholds, letterOf, maxAssessmentActivities, maxCommentLength, maxGradeChanges, passingChoices, pastedCells, periodFromPlan, planTotal, pointsInput, scoreInput, thresholdPresets, thresholdsText } from "./gradebook";
 export type { GradingPolicy, PlannedActivity } from "./gradebook";
-export { displayOf, learnerResult, markValue, pointsScheme, rubricInput, schemeFromSettings, schemeInput, schemeTemplates } from "./grading";
+export { activitySummary, assessmentPeriodStatus, displayOf, learnerResult, markValue, pointsScheme, rubricInput, schemeExplanation, schemeFromSettings, schemeInput, schemeTemplates } from "./grading";
 export { formGroups, groupRulesInput, groupToIndividual } from "./group-formation";
 export type { FormedGroups, FormationLearner, GroupAdjustment, GroupRules, IndividualAssignment, PeerRating, UnmetConstraint } from "./group-formation";
 export type { Activity as GradingActivity, AtomicMark, GradingPeriod, GradingScheme, LearnerResult, Mark, Rubric } from "./grading";
