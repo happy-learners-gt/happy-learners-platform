@@ -123,7 +123,15 @@ describe("data-driven grading on the built Worker", () => {
     await read(await as(educator, `${path}/activities/${defense}/panel`, "PUT", { learnerId: learner, mark: { kind: "pass", value: true } }));
     const complete = (await read<{ gradebook: Gradebook }>(await as(admin, `${path}/activities/${defense}/panel`, "PUT", { learnerId: learner, mark: { kind: "pass", value: false } }))).gradebook;
     expect(complete.marks?.filter(item => item.activityId === defense)).toHaveLength(3);
-    expect(complete.grades.find(item => item.learnerId === learner)?.score).toBeTypeOf("number");
+    // Majority: two passes and one fail count as a pass (the same grade as a unanimous pass); two fails, as a fail.
+    const scoreOf = (book: Gradebook) => book.grades.find(item => item.learnerId === learner)?.score;
+    const majorityPass = scoreOf(complete);
+    expect(majorityPass).toBeTypeOf("number");
+    const unanimous = (await read<{ gradebook: Gradebook }>(await as(admin, `${path}/activities/${defense}/panel`, "PUT", { learnerId: learner, mark: { kind: "pass", value: true } }))).gradebook;
+    expect(scoreOf(unanimous)).toBe(majorityPass);
+    await read(await as(admin, `${path}/activities/${defense}/panel`, "PUT", { learnerId: learner, mark: { kind: "pass", value: false } }));
+    const majorityFail = (await read<{ gradebook: Gradebook }>(await as(educator, `${path}/activities/${defense}/panel`, "PUT", { learnerId: learner, mark: { kind: "pass", value: false } }))).gradebook;
+    expect(scoreOf(majorityFail)!).toBeLessThan(majorityPass!);
   }, 30_000);
 
   it("prints a level in PDF and CSV and archives an in-use scheme", async () => {
