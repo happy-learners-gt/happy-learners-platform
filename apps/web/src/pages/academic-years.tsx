@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { AcademicYear, CalendarBreak, PeriodKind } from "@happy-learners/contracts";
+import type { AcademicYear, CalendarBreak, PeriodKind, StudyProgram } from "@happy-learners/contracts";
 import { academicYearLabels, maxGapDays, periodGaps, periodKindOf, periodKinds, splitPeriods } from "@happy-learners/domain";
 import { api, message } from "../api";
 import { plural, sessionDay } from "../model";
@@ -35,9 +35,11 @@ export function AcademicYears() {
   const { toast, confirm } = useFeedback();
   const { years, error, load } = useAcademicYears();
   const [editing, setEditing] = useState<AcademicYear | "new" | null>(null);
+  const [programs, setPrograms] = useState<StudyProgram[]>([]);
   const [breaks, setBreaks] = useState<CalendarBreak[]>([]), [marking, setMarking] = useState("");
   const loadBreaks = useCallback(() => api<{ breaks: CalendarBreak[] }>("/calendar").then(result => setBreaks(result.breaks.filter(item => !item.groupId)), () => setBreaks([])), []);
   useEffect(() => { void loadBreaks(); }, [loadBreaks]);
+  useEffect(() => { api<{ programs?: StudyProgram[] }>("/programs").then(result => setPrograms((result.programs || []).filter(item => item.status === "active")), () => setPrograms([])); }, []);
   // The vacations between periods that no organization-wide day without class covers yet.
   const uncovered = (year: AcademicYear) => periodGaps(year.periods).filter(gap => !breaks.some(item => item.from <= gap.from && gap.until <= item.until));
   async function markGaps(year: AcademicYear) {
@@ -83,7 +85,7 @@ export function AcademicYears() {
       : <ul className="academic-years">{years.map(year => <li key={year.id} className={year.status === "closed" ? "is-past" : undefined}>
         <div className="academic-year-head">
           <Icon name="calendar" size={18}/>
-          <div><strong>{year.name}</strong><span className="muted small">{span(year)} · {periodCount(year)}</span></div>
+          <div><strong>{year.name}</strong><span className="muted small">{span(year)} · {periodCount(year)} · {programs.find(item => item.id === year.programId)?.name || "Organización"}</span></div>
           <StatusBadge tone={tones[year.status]}>{academicYearLabels[year.status]}</StatusBadge>
           <Menu label={`Acciones de ${year.name}`} items={actions(year)}/>
         </div>
@@ -93,7 +95,7 @@ export function AcademicYears() {
           <button type="button" className="button ghost small" disabled={!!marking} onClick={() => void markGaps(year)}><Icon name="calendar" size={16}/>{marking === year.id ? "Marcando…" : "Marcar las vacaciones sin clase"}</button>
         </div>}
       </li>)}</ul>}
-    {editing && <YearDialog year={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={async saved => { setEditing(null); toast({ message: `«${saved.name}» se guardó.` }); await load(); }}/>}
+    {editing && <YearDialog year={editing === "new" ? null : editing} programs={programs} onClose={() => setEditing(null)} onSaved={async saved => { setEditing(null); toast({ message: `«${saved.name}» se guardó.` }); await load(); }}/>}
   </Section>;
 }
 
@@ -101,9 +103,9 @@ type Row = { key: string; id: string | null; name: string; from: string; until: 
 let rowKey = 0;
 const row = (value: Omit<Row, "key" | "weight"> & { weight: number | string }): Row => ({ ...value, weight: String(value.weight), key: `row-${++rowKey}` });
 
-function YearDialog({ year, onClose, onSaved }: { year: AcademicYear | null; onClose: () => void; onSaved: (year: AcademicYear) => Promise<void> }) {
+function YearDialog({ year, programs, onClose, onSaved }: { year: AcademicYear | null; programs: StudyProgram[]; onClose: () => void; onSaved: (year: AcademicYear) => Promise<void> }) {
   const { confirm } = useFeedback();
-  const [values, setValues] = useState({ name: year?.name || "", from: year?.from || "", until: year?.until || "", periodKind: year?.periodKind || "bimester" as PeriodKind });
+  const [values, setValues] = useState({ name: year?.name || "", from: year?.from || "", until: year?.until || "", periodKind: year?.periodKind || "bimester" as PeriodKind, programId: year?.programId || "" });
   const [periods, setPeriods] = useState<Row[]>(() => (year?.periods || []).map(period => row(period)));
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [gap, setGap] = useState("0");
   const kind = periodKindOf(values.periodKind);
@@ -115,7 +117,8 @@ function YearDialog({ year, onClose, onSaved }: { year: AcademicYear | null; onC
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
     try {
-      const body = { ...values, periods: periods.map(({ id, name, from, until, weight }) => ({ ...(id ? { id } : {}), name, from, until, weight: Number(weight) || 1 })) };
+      const { programId, ...dates } = values;
+      const body = { ...dates, ...(programId ? { programId } : {}), periods: periods.map(({ id, name, from, until, weight }) => ({ ...(id ? { id } : {}), name, from, until, weight: Number(weight) || 1 })) };
       const result = await api<{ year: AcademicYear }>(year ? `/academic-years/${year.id}` : "/academic-years", year ? "PUT" : "POST", body);
       await onSaved(result.year);
     } catch (cause) { setError(message(cause)); setBusy(false); }
@@ -126,6 +129,7 @@ function YearDialog({ year, onClose, onSaved }: { year: AcademicYear | null; onC
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
       <fieldset disabled={busy} className="stack">
         <Field label="Nombre" hint="Por ejemplo: Ciclo 2027."><input value={values.name} required minLength={3} maxLength={80} placeholder="Ciclo 2027" onChange={event => setValues({ ...values, name: event.target.value })}/></Field>
+        <Field label="Alcance" hint={year ? "El alcance no cambia después de crear el ciclo." : undefined}><select value={values.programId} disabled={!!year} onChange={event => setValues({ ...values, programId: event.target.value })}><option value="">De la organización</option>{programs.map(program => <option key={program.id} value={program.id}>{program.name}</option>)}</select></Field>
         <div className="field-row">
           <Field label="Inicio del ciclo"><input type="date" value={values.from} onChange={event => setValues({ ...values, from: event.target.value })} required/></Field>
           <Field label="Fin del ciclo"><input type="date" value={values.until} min={values.from} onChange={event => setValues({ ...values, until: event.target.value })} required/></Field>

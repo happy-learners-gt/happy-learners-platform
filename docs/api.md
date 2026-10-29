@@ -18,6 +18,9 @@ Un método no admitido responde 405 con `Allow`; una ruta desconocida, 404.
 | GET, POST | `/api/members` · PUT `/api/members/:id` · POST `/api/members/:id/password` · GET, POST `/api/members/:id/departure` · PUT `/api/members/:id/coordination` | Administración |
 | GET | `/api/access/matrix` · GET, POST `/api/access/groups` · PUT, DELETE `/api/access/groups/:id` · PUT `/api/access/groups/:id/permissions` · PUT `/api/access/groups/:id/members` | Administración |
 | GET, POST | `/api/calendar` · DELETE `/api/calendar/:id` | Lectura con sesión; escritura de administración |
+| GET | `/api/calendars` · `/api/calendars/view?from&until[&program][&section]` | Todas las personas con sesión |
+| POST, PUT, DELETE | `/api/calendars/:id/rules[/:ruleId]` · `/events[/:eventId]` | Administración; coordinación con `sections.assign` en su alcance |
+| POST | `/api/calendars/:id/years/:year/generate[?preview=1]` · `/templates/guatemala` | Administración; coordinación con `sections.assign` en su alcance |
 | GET, POST | `/api/academic-years` · PUT, DELETE `/api/academic-years/:id` · POST `/api/academic-years/:id/activate`, `/close`, `/next` | Lectura con sesión; escritura de administración |
 | GET | `/api/activity`, `/api/progress`, `/api/people`, `/api/reviews` | Sesión, filtrado por permisos |
 | GET, POST | `/api/feeds/calendar` | Sesión: estado del enlace de calendario propio; POST lo crea o regenera |
@@ -70,8 +73,27 @@ periodos queden dentro de él, sin traslaparse y con nombres distintos (400). El
 `activate` exige un borrador con al menos un periodo y que no haya otro ciclo vigente (409); `close` solo aplica al
 vigente; un ciclo cerrado ya no se edita y solo se elimina un borrador (409). `next` crea en borrador el ciclo siguiente
 («Ciclo 2027» → «Ciclo 2028») con las fechas y el patrón de periodos un año después, sin copiar secciones, estudiantes
-ni notas. El ciclo no cambia el horario de las secciones: al configurar uno nuevo, la pantalla sugiere las fechas del
-ciclo vigente. Los días sin clase siguen en `/api/calendar` (DEC-026).
+ni notas. Un ciclo puede incluir `programId`: el vigente de un programa convive con el de la organización. Un horario
+de sección puede incluir `periodId`; entonces usa las fechas de ese periodo del ciclo vigente de la organización o del
+programa. Los días sin clase siguen siendo compatibles con `/api/calendar` (DEC-026).
+
+## Calendario institucional
+
+`GET /api/calendars` devuelve los calendarios de organización, programa y sección junto con las categorías base; cada
+calendario incluye sus `rules`, para que la interfaz pueda describirlas, editarlas y calcular su vista previa local.
+`GET /api/calendars/view?from=YYYY-MM-DD&until=YYYY-MM-DD` devuelve los eventos de la organización; `program` suma los
+del programa y `section` suma los de su programa y sección. Cada evento indica su calendario, categoría y nivel de
+origen. Un evento omitido (`status: "skipped"`) permanece visible, pero no suspende clases.
+
+Las reglas reciben `{ categoryId, noClass, rule: DateRule }`; el servidor asigna el `id` de la regla. Los eventos
+sueltos reciben `{ categoryId, title, from, until?, part?, noClass?, status? }`. Una ocurrencia generada puede moverse
+con `PUT` o saltarse con `status: "skipped"` sin alterar la regla. Generar con `preview=1` devuelve
+`{ plan: { create, update, keep } }`; sin vista previa aplica el plan y conserva las ocurrencias movidas u omitidas.
+La plantilla de Guatemala agrega reglas de categoría `holiday` sin duplicar títulos y no afirma la ley vigente.
+
+Los eventos activos con `noClass: true` regeneran las clases pendientes del nivel afectado. `part: "morning"` afecta
+reuniones que empiezan antes de las 12:00 y `part: "afternoon"`, las que empiezan desde las 12:00. Las rutas antiguas
+`GET|POST /api/calendar` y `DELETE /api/calendar/:id` leen y escriben estos mismos eventos con la respuesta anterior.
 
 ## Roles y accesos
 

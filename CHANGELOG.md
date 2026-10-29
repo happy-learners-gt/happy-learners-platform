@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0 — 2026-10-29
+
+- Nuevo **Calendario** anual de la organización, programas y secciones, con filtros por categoría y nivel.
+- Eventos de día completo o medio día, reglas recurrentes con vista previa, plantilla de Guatemala y generación anual
+  que conserva las ocurrencias movidas u omitidas a mano.
+- Los ciclos lectivos pueden pertenecer a un programa; el horario de una sección puede seguir uno de sus periodos.
+- Organización resume sus próximos eventos sin clase y cada programa abre su calendario desde Configuración académica.
+
 ## 1.2.6 — 2026-10-29
 
 - Las descripciones de páginas, paneles y tarjetas usan todo el ancho disponible (solo la Ayuda conserva una medida de

@@ -13,7 +13,7 @@ import { Icon } from "../ui/icons";
 import { Menu } from "../ui/Menu";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section, StatusBadge } from "../ui/primitives";
 import type { Tone } from "../ui/primitives";
-import { DaysOff } from "./calendar";
+import { CalendarSummary } from "./institutional-calendar";
 import { AcademicYears } from "./academic-years";
 import { BellSchedules } from "./bell-schedules";
 import { CurriculumPackages } from "./curriculum-packages";
@@ -80,7 +80,7 @@ function OrganizationForm() {
     </form>
     <AcademicYears/>
     <BellSchedules/>
-    <DaysOff writable/>
+    <CalendarSummary/>
     <Section title="Respaldo" action={<a className="button secondary small" href="/api/organization/backup" download><Icon name="download" size={16}/>Descargar respaldo</a>}>
       <p className="muted">Una copia en JSON de los cursos, las lecciones, las secciones, el calendario y los registros de la organización. No incluye contraseñas, sesiones ni el contenido de los documentos subidos. Guárdala en un lugar privado: contiene los nombres de los estudiantes.</p>
     </Section>
@@ -324,6 +324,7 @@ function ProgramEditor() {
         <Menu label={`Acciones de ${program.name}`} items={[
           { label: "Editar", icon: "edit", onSelect: () => setEditing({ item: program }) },
           { label: "Requisitos entre cursos", icon: "list", onSelect: () => navigate(`/configuracion-academica?ruta=${program.id}`) },
+          { label: "Calendario del programa", icon: "calendar", onSelect: () => navigate(`/calendario?programa=${program.id}`) },
           program.status === "active" ? { label: "Archivar", icon: "archive", danger: true, onSelect: () => void setStatus(program, "archived") } : { label: "Restaurar", icon: "archive", onSelect: () => void setStatus(program, "active") },
         ]}/>
       </li>)}</ul>}

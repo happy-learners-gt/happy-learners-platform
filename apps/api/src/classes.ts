@@ -1,5 +1,5 @@
-import type { CalendarBreak, ClassLesson, ClassLessonPlan, ClassResource, ClassSession, ClassStatus, CourseAccess, Lesson, Material, Member, Pacing, Resource, ScheduleMeeting, SectionSchedule, StudentClass, StudentPathModule, StudentSpace } from "@happy-learners/contracts";
-import { acceptsAttendance, breakInput, cancelPlanInput, carryOver, classActions, classPlanInput, classStatusLabels, completionInput, groupCodePattern, inSessionFilter, lessonsInOrder, meetingOn, maxClassLessons, localDay, nextClassStatus, normalizeGroupCode, resourceIdsOf, scheduleDates, scheduleInput, scheduleSummary, seesSection, sessionFilterAllowed, sessionFilterInput, teachesSection, upcomingClasses } from "@happy-learners/domain";
+import type { CalendarBreak, ClassLesson, ClassLessonPlan, ClassResource, ClassSession, ClassStatus, CourseAccess, InstitutionalCalendarEvent, Lesson, Material, Member, Pacing, Resource, ScheduleMeeting, SectionSchedule, StudentClass, StudentPathModule, StudentSpace } from "@happy-learners/contracts";
+import { acceptsAttendance, breakInput, cancelPlanInput, carryOver, classActions, classPlanInput, classStatusLabels, completionInput, groupCodePattern, inSessionFilter, lessonsInOrder, meetingOn, maxClassLessons, localDay, nextClassStatus, noClassDays, normalizeGroupCode, resourceIdsOf, scheduleDates, scheduleInput, scheduleSummary, seesSection, sessionFilterAllowed, sessionFilterInput, teachesSection, upcomingClasses } from "@happy-learners/domain";
 import { tokenPattern, tokenPrefix } from "@happy-learners/domain";
 import type { ClassAction } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
@@ -117,8 +117,14 @@ export async function sessions(parts: string[], method: string, input: unknown, 
       // Class days are calendar days of the organization's time zone, so the period compares them as they are stored.
       const narrowed = [filter.section && ["s.group_id=?", filter.section], filter.from && ["s.session_date>=?", filter.from], filter.to && ["s.session_date<=?", filter.to]].filter(Boolean) as [string, string][];
       const rows = (await db.prepare(`SELECT ${sessionColumns} ${sessionJoins} WHERE s.course_id=? AND s.organization_id=?${narrowed.map(([clause]) => ` AND ${clause}`).join("")} ORDER BY s.session_date DESC,s.starts_at DESC,s.created_at DESC LIMIT 400`).bind(courseId, current.organizationId, ...narrowed.map(([, value]) => value)).all<StoredSession>()).results.map(withLessons).filter(row => seesSection(access, row.groupId) && inSessionFilter(row, filter));
-      const breaks = (await db.prepare(`SELECT ${breakColumns} FROM calendar_breaks WHERE organization_id=? AND (group_id IS NULL OR group_id IN (SELECT id FROM course_groups WHERE course_id=?)) ORDER BY starts_on,ends_on`).bind(current.organizationId, courseId).all<CalendarBreak>()).results
-        .filter(row => (!row.groupId || seesSection(access, row.groupId)) && (!filter.section || !row.groupId || row.groupId === filter.section) && (!filter.from || row.until >= filter.from) && (!filter.to || row.from <= filter.to));
+      const breaks = (await db.prepare(`SELECT ${breakColumns} FROM calendar_events e JOIN calendars c ON c.id=e.calendar_id
+        JOIN courses co ON co.id=? AND co.organization_id=e.organization_id
+        WHERE e.organization_id=? AND e.no_class=1 AND e.status='active' AND (c.scope='organization'
+          OR (c.scope='program' AND c.scope_id=co.program_id)
+          OR (c.scope='section' AND c.scope_id IN (SELECT id FROM course_groups WHERE course_id=co.id)))
+        ORDER BY e.starts_on,e.ends_on`).bind(courseId, current.organizationId).all<CalendarBreak & { part: string }>()).results
+        .filter(row => (!row.groupId || seesSection(access, row.groupId)) && (!filter.section || !row.groupId || row.groupId === filter.section) && (!filter.from || row.until >= filter.from) && (!filter.to || row.from <= filter.to))
+        .map(({ id, groupId, title, from, until }) => ({ id, groupId, title, from, until }));
       return reply({ sessions: rows, lessonPlans: await lessonPlans(db, current.organizationId, rows.flatMap(row => row.lessons.map(lesson => lesson.id))), today: await todayFor(db, current.organizationId), breaks, filter });
     }
     if (!access.assigned.length) return notTeaching();
@@ -313,11 +319,11 @@ export async function myClasses(current: Member, db: Database) {
 }
 
 type Group = { id: string; name: string };
-const scheduleColumns = "schedule_weekdays AS weekdays,schedule_starts_at AS startsAt,schedule_duration AS durationMinutes,schedule_from AS \"from\",schedule_until AS until,schedule_meetings AS meetings";
-type StoredSchedule = { weekdays: string | null; startsAt: string | null; durationMinutes: number | null; from: string | null; until: string | null; meetings?: string | null };
+const scheduleColumns = "schedule_weekdays AS weekdays,schedule_starts_at AS startsAt,schedule_duration AS durationMinutes,schedule_from AS \"from\",schedule_until AS until,schedule_meetings AS meetings,schedule_period_id AS periodId";
+type StoredSchedule = { weekdays: string | null; startsAt: string | null; durationMinutes: number | null; from: string | null; until: string | null; meetings?: string | null; periodId?: string | null };
 /** The stored schedule, with each day's own time when the section has them (1.2.4). */
 export const scheduleOf = (row: StoredSchedule): SectionSchedule | null => row.weekdays && row.startsAt && row.durationMinutes && row.from && row.until
-  ? { weekdays: row.weekdays.split(",").map(Number), startsAt: row.startsAt, durationMinutes: row.durationMinutes, from: row.from, until: row.until, ...(row.meetings ? { meetings: JSON.parse(row.meetings) as ScheduleMeeting[] } : {}) } : null;
+  ? { weekdays: row.weekdays.split(",").map(Number), startsAt: row.startsAt, durationMinutes: row.durationMinutes, from: row.from, until: row.until, ...(row.meetings ? { meetings: JSON.parse(row.meetings) as ScheduleMeeting[] } : {}), ...(row.periodId ? { periodId: row.periodId } : {}) } : null;
 
 /**
  * PUT|DELETE /api/courses/:id/groups/:gid/schedule — saving the section's schedule generates its classes for the
@@ -325,7 +331,16 @@ export const scheduleOf = (row: StoredSchedule): SectionSchedule | null => row.w
  * and their attendance stay. What was already planned (lessons and comments) keeps its order on the new days.
  */
 export async function saveSchedule(method: string, input: unknown, current: Member, db: Database, courseId: string, group: Group) {
-  const schedule = method === "DELETE" ? null : scheduleInput(input);
+  const raw = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  const periodId = typeof raw.periodId === "string" ? raw.periodId : null;
+  const period = periodId ? await db.prepare(`SELECT p.starts_on AS "from",p.ends_on AS until FROM academic_periods p
+    JOIN academic_years y ON y.id=p.year_id AND y.organization_id=p.organization_id AND y.status='current'
+    JOIN courses c ON c.id=? AND c.organization_id=p.organization_id
+    WHERE p.id=? AND (y.program_id IS NULL OR y.program_id=c.program_id)`).bind(courseId, periodId).first<{ from: string; until: string }>() : null;
+  if (periodId && !period) return reply({ error: "El periodo debe pertenecer al ciclo vigente de la organización o del programa del curso." }, 400);
+  const value = period ? { ...raw, from: period.from, until: period.until } : raw;
+  const checked = method === "DELETE" ? null : scheduleInput(value);
+  const schedule = checked && !("error" in checked) ? { ...checked, ...(periodId ? { periodId } : {}) } : checked;
   if (schedule && "error" in schedule) return reply(schedule, 400);
   const before = await db.prepare(`SELECT ${scheduleColumns} FROM course_groups WHERE id=?`).bind(group.id).first<StoredSchedule>();
   const result = await applySchedule(current, db, courseId, group, schedule, before);
@@ -337,10 +352,10 @@ export async function saveSchedule(method: string, input: unknown, current: Memb
  * generated classes on days that are no longer class days go away and their plans move, in order, to the next ones.
  * Returns null when the section changed meanwhile.
  */
-async function applySchedule(current: Member, db: Database, courseId: string, group: Group, schedule: SectionSchedule | null, before: StoredSchedule | null, reason?: string) {
+export async function applySchedule(current: Member, db: Database, courseId: string, group: Group, schedule: SectionSchedule | null, before: StoredSchedule | null, reason?: string) {
   const now = new Date().toISOString();
   const today = await todayFor(db, current.organizationId);
-  const breaks = schedule ? await breaksOf(db, current.organizationId, group.id) : [];
+  const breaks = schedule ? await breaksOf(db, current.organizationId, group.id, schedule) : [];
   const pending = (await db.prepare("SELECT id,session_date AS sessionDate,notes FROM class_sessions WHERE group_id=? AND origin='schedule' AND status='planned' AND session_date>=? ORDER BY session_date,starts_at").bind(group.id, today).all<{ id: string; sessionDate: string; notes: string }>()).results;
   const planned = (await db.prepare("SELECT p.session_id AS sessionId,p.lesson_id AS lessonId FROM class_session_lessons p JOIN class_sessions s ON s.id=p.session_id WHERE s.group_id=? AND s.origin='schedule' AND s.status='planned' AND s.session_date>=? ORDER BY p.position").bind(group.id, today).all<{ sessionId: string; lessonId: string }>()).results;
   const taken = new Set((await db.prepare("SELECT session_date AS sessionDate FROM class_sessions WHERE group_id=? AND session_date>=? AND NOT (origin='schedule' AND status='planned')").bind(group.id, today).all<{ sessionDate: string }>()).results.map(row => row.sessionDate));
@@ -353,8 +368,8 @@ async function applySchedule(current: Member, db: Database, courseId: string, gr
   const planFor = (id: string) => plans[ordered.findIndex(row => row.id === id)] ?? { lessonIds: [], notes: "" };
   const same = (column: string) => `${column} IS ?`;
   const ok = await db.guardedBatch(
-    db.prepare(`SELECT id FROM course_groups WHERE id=? AND status='active' AND ${["schedule_weekdays", "schedule_starts_at", "schedule_duration", "schedule_from", "schedule_until", "schedule_meetings"].map(same).join(" AND ")}`).bind(group.id, before?.weekdays ?? null, before?.startsAt ?? null, before?.durationMinutes ?? null, before?.from ?? null, before?.until ?? null, before?.meetings ?? null), [
-      db.prepare("UPDATE course_groups SET schedule_weekdays=?,schedule_starts_at=?,schedule_duration=?,schedule_from=?,schedule_until=?,schedule_meetings=? WHERE id=?").bind(schedule ? schedule.weekdays.join(",") : null, schedule?.startsAt ?? null, schedule?.durationMinutes ?? null, schedule?.from ?? null, schedule?.until ?? null, schedule?.meetings ? JSON.stringify(schedule.meetings) : null, group.id),
+    db.prepare(`SELECT id FROM course_groups WHERE id=? AND status='active' AND ${["schedule_weekdays", "schedule_starts_at", "schedule_duration", "schedule_from", "schedule_until", "schedule_meetings", "schedule_period_id"].map(same).join(" AND ")}`).bind(group.id, before?.weekdays ?? null, before?.startsAt ?? null, before?.durationMinutes ?? null, before?.from ?? null, before?.until ?? null, before?.meetings ?? null, before?.periodId ?? null), [
+      db.prepare("UPDATE course_groups SET schedule_weekdays=?,schedule_starts_at=?,schedule_duration=?,schedule_from=?,schedule_until=?,schedule_meetings=?,schedule_period_id=? WHERE id=?").bind(schedule ? schedule.weekdays.join(",") : null, schedule?.startsAt ?? null, schedule?.durationMinutes ?? null, schedule?.from ?? null, schedule?.until ?? null, schedule?.meetings ? JSON.stringify(schedule.meetings) : null, schedule?.periodId ?? null, group.id),
       ...removed.flatMap(row => [db.prepare("DELETE FROM class_session_lessons WHERE session_id=?").bind(row.id), db.prepare("DELETE FROM class_session_resources WHERE session_id=?").bind(row.id), db.prepare("DELETE FROM class_sessions WHERE id=? AND status='planned'").bind(row.id)]),
       ...kept.flatMap(row => [db.prepare("UPDATE class_sessions SET starts_at=?,duration_minutes=?,lesson_id=?,notes=?,version=version+1,updated_at=? WHERE id=? AND status='planned'").bind(meetingOn(schedule!, row.sessionDate).startsAt, meetingOn(schedule!, row.sessionDate).durationMinutes, planFor(row.id).lessonIds[0] ?? null, planFor(row.id).notes, now, row.id), ...planLessons(db, row.id, planFor(row.id).lessonIds)]),
       ...added.flatMap(row => [db.prepare("INSERT INTO class_sessions(id,group_id,course_id,organization_id,lesson_id,session_date,starts_at,duration_minutes,notes,status,origin,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,'planned','schedule',?,?)")
@@ -364,10 +379,41 @@ async function applySchedule(current: Member, db: Database, courseId: string, gr
   return ok ? { classes: ordered.length, added: added.length, removed: removed.length } : null;
 }
 
-const breakColumns = "id,group_id AS groupId,title,starts_on AS \"from\",ends_on AS until";
-/** Days without class that apply to a section: the organization's and its own. */
-async function breaksOf(db: Database, organizationId: string, groupId: string) {
-  return (await db.prepare(`SELECT ${breakColumns} FROM calendar_breaks WHERE organization_id=? AND (group_id IS NULL OR group_id=?) ORDER BY starts_on`).bind(organizationId, groupId).all<CalendarBreak>()).results;
+/** Rebuilds pending classes touched by a no-class event at an organization, program or section level. */
+export async function reapplyCalendar(
+  current: Member,
+  db: Database,
+  scope: "organization" | "program" | "section",
+  scopeId: string | null,
+  from: string,
+  until: string,
+  reason: string,
+) {
+  const restriction = scope === "program" ? " AND c.program_id=?" : scope === "section" ? " AND g.id=?" : "";
+  const rows = (await db.prepare(`SELECT g.id,g.name,g.course_id AS courseId,${scheduleColumns.replace(/schedule_/g, "g.schedule_")}
+    FROM course_groups g JOIN courses c ON c.id=g.course_id LEFT JOIN study_programs p ON p.id=c.program_id
+    WHERE g.organization_id=? AND g.status='active' AND COALESCE(p.pacing,c.pacing)='scheduled'
+      AND g.schedule_weekdays IS NOT NULL AND g.schedule_from<=? AND g.schedule_until>=?${restriction}`)
+    .bind(current.organizationId, until, from, ...(scopeId ? [scopeId] : [])).all<Group & StoredSchedule & { courseId: string }>()).results;
+  let sections = 0, removed = 0, added = 0;
+  for (const row of rows) {
+    const schedule = scheduleOf(row);
+    const result = schedule && await applySchedule(current, db, row.courseId, row, schedule, row, reason);
+    if (result && (result.removed || result.added)) { sections++; removed += result.removed; added += result.added; }
+  }
+  return { sections, removed, added };
+}
+
+const breakColumns = "e.id,CASE WHEN c.scope='section' THEN c.scope_id END AS groupId,e.title,e.starts_on AS \"from\",e.ends_on AS until,e.part,e.no_class AS noClass,e.rule_id AS ruleId,e.year,e.status,e.calendar_id AS calendarId,e.category_id AS categoryId,c.scope,c.name AS calendarName";
+/** Effective no-class dates for a section: organization, its program and the section itself. */
+export async function breaksOf(db: Database, organizationId: string, groupId: string, schedule?: SectionSchedule) {
+  const rows = (await db.prepare(`SELECT ${breakColumns} FROM calendar_events e JOIN calendars c ON c.id=e.calendar_id
+    JOIN course_groups g ON g.id=? AND g.organization_id=e.organization_id JOIN courses co ON co.id=g.course_id
+    WHERE e.organization_id=? AND (c.scope='organization' OR (c.scope='program' AND c.scope_id=co.program_id) OR (c.scope='section' AND c.scope_id=g.id))
+    ORDER BY e.starts_on,e.ends_on`).bind(groupId, organizationId).all<InstitutionalCalendarEvent & { groupId: string | null }>()).results
+    .map(row => ({ ...row, noClass: !!row.noClass }));
+  if (!schedule) return rows.filter(row => row.noClass && row.status === "active").map(row => ({ id: row.id, groupId: row.groupId, title: row.title, from: row.from, until: row.until, part: row.part, scope: row.scope, calendarName: row.calendarName, calendarId: row.calendarId, categoryId: row.categoryId }));
+  return noClassDays(rows, { from: schedule.from, until: schedule.until, schedule });
 }
 
 /**
@@ -379,23 +425,39 @@ export async function calendar(path: string, method: string, input: unknown, url
   const id = path.split("/")[3];
   if (method === "GET") {
     const section = url.searchParams.get("section");
-    const rows = (await db.prepare(`SELECT ${breakColumns} FROM calendar_breaks WHERE organization_id=? AND (group_id IS NULL OR group_id=?) ORDER BY starts_on,ends_on`).bind(current.organizationId, section || "").all<CalendarBreak>()).results;
+    const source = section ? await breaksOf(db, current.organizationId, section) : (await db.prepare(`SELECT ${breakColumns} FROM calendar_events e JOIN calendars c ON c.id=e.calendar_id
+      WHERE e.organization_id=? AND c.scope='organization' AND e.no_class=1 AND e.status='active' ORDER BY e.starts_on,e.ends_on`).bind(current.organizationId).all<CalendarBreak>()).results;
+    const rows = source.map(row => {
+      const detail = row as typeof row & { scope?: string; calendarName?: string; calendarId?: string; categoryId?: string };
+      return { id: row.id, groupId: "groupId" in row ? row.groupId : null, title: row.title, from: row.from, until: row.until,
+        ...(detail.scope ? { scope: detail.scope, calendarName: detail.calendarName, calendarId: detail.calendarId, categoryId: detail.categoryId } : {}) };
+    });
     return reply({ breaks: rows, today: await todayFor(db, current.organizationId) });
   }
   if (current.role !== "admin") return reply({ error: "Solo administración define los días sin clase." }, 403);
-  let item: CalendarBreak;
+  let item: CalendarBreak & { calendarId?: string };
   if (method === "POST") {
     const value = breakInput(input);
     if ("error" in value) return reply(value, 400);
     const groupId = typeof (input as Record<string, unknown>)?.groupId === "string" ? String((input as Record<string, unknown>).groupId) : null;
-    if (groupId && !await db.prepare("SELECT id FROM course_groups WHERE id=? AND organization_id=? AND status='active'").bind(groupId, current.organizationId).first()) return reply({ error: "Elige una sección activa." }, 400);
-    item = { id: `break-${crypto.randomUUID()}`, groupId, ...value };
-    await db.prepare("INSERT INTO calendar_breaks(id,organization_id,group_id,title,starts_on,ends_on,created_by,created_at) VALUES (?,?,?,?,?,?,?,?)").bind(item.id, current.organizationId, groupId, item.title, item.from, item.until, current.id, new Date().toISOString()).run();
+    const group = groupId ? await db.prepare("SELECT id,name FROM course_groups WHERE id=? AND organization_id=? AND status='active'").bind(groupId, current.organizationId).first<{ id: string; name: string }>() : null;
+    if (groupId && !group) return reply({ error: "Elige una sección activa." }, 400);
+    const scope = groupId ? "section" : "organization", now = new Date().toISOString();
+    let own = await db.prepare("SELECT id FROM calendars WHERE organization_id=? AND scope=? AND scope_id IS ?").bind(current.organizationId, scope, groupId).first<{ id: string }>();
+    if (!own) {
+      own = { id: `calendar-${crypto.randomUUID()}` };
+      await db.prepare("INSERT INTO calendars(id,organization_id,scope,scope_id,name,created_at,updated_at) VALUES (?,?,?,?,?,?,?)")
+        .bind(own.id, current.organizationId, scope, groupId, group ? `Calendario de ${group.name}` : "Calendario institucional", now, now).run();
+    }
+    const category = await db.prepare("SELECT id FROM calendar_categories WHERE organization_id=? AND key='no-class'").bind(current.organizationId).first<{ id: string }>();
+    item = { id: `event-${crypto.randomUUID()}`, groupId, calendarId: own.id, ...value };
+    await db.prepare("INSERT INTO calendar_events(id,calendar_id,organization_id,category_id,title,starts_on,ends_on,part,no_class,rule_id,year,status,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,'full',1,NULL,NULL,'active',?,?,?)")
+      .bind(item.id, own.id, current.organizationId, category!.id, item.title, item.from, item.until, current.id, now, now).run();
   } else {
-    const found = await db.prepare(`SELECT ${breakColumns} FROM calendar_breaks WHERE id=? AND organization_id=?`).bind(id, current.organizationId).first<CalendarBreak>();
+    const found = await db.prepare(`SELECT ${breakColumns} FROM calendar_events e JOIN calendars c ON c.id=e.calendar_id WHERE e.id=? AND e.organization_id=? AND e.no_class=1`).bind(id, current.organizationId).first<CalendarBreak & { calendarId: string }>();
     if (!found) return reply({ error: "Ese periodo sin clase ya no existe." }, 404);
     item = found;
-    await db.prepare("DELETE FROM calendar_breaks WHERE id=?").bind(id).run();
+    await db.prepare("DELETE FROM calendar_events WHERE id=?").bind(id).run();
   }
   const span = item.from === item.until ? `el ${item.from}` : `del ${item.from} al ${item.until}`;
   const reason = method === "POST" ? `Sin clase ${span} (${item.title})` : `Volvió a haber clase ${span} (${item.title})`;

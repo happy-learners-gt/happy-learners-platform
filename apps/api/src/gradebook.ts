@@ -51,9 +51,12 @@ async function access(db: Database, current: Member, groupId: string): Promise<A
 }
 
 type Year = Pick<AcademicYear, "id" | "name" | "status" | "from" | "until">;
-async function yearsOf(db: Database, organizationId: string) {
-  return (await db.prepare("SELECT id,name,status,starts_on AS \"from\",ends_on AS until FROM academic_years WHERE organization_id=? AND status IN ('current','closed') ORDER BY starts_on DESC,rowid DESC")
-    .bind(organizationId).all<Year>()).results;
+async function yearsOf(db: Database, organizationId: string, courseId: string) {
+  return (await db.prepare(`SELECT y.id,y.name,y.status,y.starts_on AS "from",y.ends_on AS until FROM academic_years y
+    JOIN courses c ON c.id=? AND c.organization_id=y.organization_id
+    WHERE y.organization_id=? AND y.status IN ('current','closed') AND (y.program_id IS NULL OR y.program_id=c.program_id)
+    ORDER BY CASE WHEN y.status='current' THEN 0 ELSE 1 END,CASE WHEN y.program_id IS NULL THEN 1 ELSE 0 END,y.starts_on DESC,y.rowid DESC`)
+    .bind(courseId, organizationId).all<Year>()).results;
 }
 async function policyOf(db: Database, organizationId: string, courseId: string): Promise<GradingPolicy> {
   const settings = (await configurationOf(db, organizationId, courseId))!.settings;
@@ -86,7 +89,7 @@ async function contents(db: Database, organizationId: string, section: { id: str
 }
 
 async function gradebook(db: Database, current: Member, { section, write, approve }: Access, yearId?: string | null): Promise<Gradebook> {
-  const years = await yearsOf(db, current.organizationId);
+  const years = await yearsOf(db, current.organizationId, section.courseId);
   const year = years.find(item => item.id === yearId) || years.find(item => item.status === "current") || years[0] || null;
   const policy = await policyOf(db, current.organizationId, section.courseId);
   const { teaches: _, courseStatus: __, ...shown } = section;
@@ -165,7 +168,9 @@ export async function grades(path: string, method: string, input: unknown, url: 
   if (historyPath.test(path)) return changesOf(db, current, section, url.searchParams.get("learner") || "");
   if (reportPath.test(path)) return report(db, current, section, url);
   if (method === "GET") return reply({ gradebook: await gradebook(db, current, allowed, url.searchParams.get("year")) });
-  const year = await db.prepare("SELECT id,name FROM academic_years WHERE organization_id=? AND status='current'").bind(current.organizationId).first<{ id: string; name: string }>();
+  const year = await db.prepare(`SELECT y.id,y.name FROM academic_years y JOIN courses c ON c.id=? AND c.organization_id=y.organization_id
+    WHERE y.organization_id=? AND y.status='current' AND (y.program_id IS NULL OR y.program_id=c.program_id)
+    ORDER BY CASE WHEN y.program_id IS NULL THEN 1 ELSE 0 END LIMIT 1`).bind(section.courseId, current.organizationId).first<{ id: string; name: string }>();
   const periods = year ? (await db.prepare(`SELECT p.id,p.name,l.locked_at AS lockedAt,r.status AS review FROM academic_periods p LEFT JOIN section_period_locks l ON l.period_id=p.id AND l.group_id=?
     LEFT JOIN section_period_reviews r ON r.period_id=p.id AND r.group_id=? WHERE p.year_id=? AND p.organization_id=?`).bind(groupId, groupId, year.id, current.organizationId).all<OpenPeriod>()).results : [];
   const now = new Date().toISOString();
@@ -374,7 +379,7 @@ const decimal = (value: number) => new Intl.NumberFormat("es-GT", { maximumFract
 export const reportFooter = "Boleta informativa de Happy Learners. No sustituye el certificado oficial del Ministerio de Educación.";
 /** The report card (boleta) of the section's students, or of one, for a school year: a page per student. */
 async function report(db: Database, current: Member, section: SectionRow, url: URL) {
-  const years = await yearsOf(db, current.organizationId);
+  const years = await yearsOf(db, current.organizationId, section.courseId);
   const year = years.find(item => item.id === url.searchParams.get("year")) || years.find(item => item.status === "current") || years[0];
   if (!year) return reply({ error: "Aún no hay un ciclo lectivo con notas." }, 409);
   const policy = await policyOf(db, current.organizationId, section.courseId);
