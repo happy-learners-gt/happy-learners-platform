@@ -1316,6 +1316,45 @@ class GradingSchemeTests(unittest.TestCase):
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
 
 
+class GroupSetTests(unittest.TestCase):
+    """0061: reusable group sets, group marks and the origin of a copied score."""
+
+    def test_sets_share_names_and_group_marks_follow_the_period_lock(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            if path.name.startswith("0054"):
+                continue
+            db.executescript(path.read_text())
+        columns = {row[1]: row[4] for row in db.execute("PRAGMA table_info(assessment_activities)")}
+        self.assertEqual((columns["group_mode"], columns["peer_min"], columns["peer_max"]), ("'individual'", "0.5", "1.5"))
+        self.assertEqual(db.execute("PRAGMA table_info(assessment_scores)").fetchall()[-1][1], "source")
+        org, group_id, course = db.execute("SELECT organization_id,id,course_id FROM course_groups ORDER BY id LIMIT 1").fetchone()
+        admin = db.execute("SELECT user_id FROM memberships WHERE organization_id=? AND active=1 ORDER BY user_id LIMIT 1", (org,)).fetchone()[0]
+        db.execute("UPDATE academic_years SET status='closed',closed_at='t' WHERE organization_id=? AND status='current'", (org,))
+        db.execute("INSERT INTO group_learners(id,group_id,course_id,organization_id,display_name,created_at) VALUES ('group-l',?,?,?,'Ana','t')", (group_id, course, org))
+        db.execute("INSERT INTO academic_years(id,organization_id,name,starts_on,ends_on,period_kind,status,created_by,created_at,updated_at,activated_at) VALUES ('group-y',?,'Ciclo','2031-01-01','2031-06-01','semester','current',?,'t','t','t')", (org, admin))
+        db.execute("INSERT INTO academic_periods(id,organization_id,year_id,position,name,starts_on,ends_on) VALUES ('group-p',?,'group-y',1,'Periodo','2031-01-01','2031-06-01')", (org,))
+        db.execute("INSERT INTO assessment_activities(id,organization_id,course_id,period_id,position,title,kind,points,created_by,created_at,updated_at) VALUES ('group-a',?,?,'group-p',0,'Ensayo','project',100,?,'t','t')", (org, course, admin))
+        self.assertEqual(db.execute("SELECT group_mode,work_group_set_id,peer_min,peer_max FROM assessment_activities WHERE id='group-a'").fetchone(), ("individual", None, 0.5, 1.5))
+        rules = '{"by":"count","count":1,"how":"random","seed":"a"}'
+        db.execute("INSERT INTO work_group_sets(id,organization_id,group_id,name,rules,source,created_by,created_at,updated_at) VALUES ('groupset-1',?,?,'Equipo',?,'generated',?,'t','t')", (org, group_id, rules, admin))
+        db.execute("INSERT INTO work_group_sets(id,organization_id,group_id,name,rules,source,created_by,created_at,updated_at) VALUES ('groupset-2',?,?,'Otro',?,'generated',?,'t','t')", (org, group_id, rules, admin))
+        db.execute("INSERT INTO work_groups(id,organization_id,course_id,group_id,name,created_at) VALUES ('legacy-g',?,?,?,'Grupo 1','t')", (org, course, group_id))
+        db.execute("INSERT INTO work_groups(id,organization_id,course_id,group_id,name,created_at,set_id) VALUES ('set-g1',?,?,?,'Grupo 1','t','groupset-1')", (org, course, group_id))
+        db.execute("INSERT INTO work_groups(id,organization_id,course_id,group_id,name,created_at,set_id) VALUES ('set-g2',?,?,?,'Grupo 1','t','groupset-2')", (org, course, group_id))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO work_groups(id,organization_id,course_id,group_id,name,created_at) VALUES ('legacy-g2',?,?,?,'Grupo 1','t')", (org, course, group_id))
+        db.execute("UPDATE assessment_activities SET group_mode='group',work_group_set_id='groupset-1' WHERE id='group-a'")
+        db.execute("INSERT INTO assessment_scores(activity_id,organization_id,group_id,learner_id,points,updated_by,updated_at) VALUES ('group-a',?,?,'group-l',80,?,'t')", (org, group_id, admin))
+        self.assertEqual(db.execute("SELECT source FROM assessment_scores WHERE learner_id='group-l'").fetchone(), ("individual",))
+        db.execute("INSERT INTO assessment_group_marks(activity_id,work_group_id,organization_id,group_id,mark,updated_by,updated_at) VALUES ('group-a','set-g1',?,?,'{\"kind\":\"points\",\"value\":80}',?,'t')", (org, group_id, admin))
+        db.execute("INSERT INTO section_period_reviews(group_id,organization_id,period_id,status,submitted_by,submitted_at) VALUES (?,?,'group-p','submitted',?,'t')", (group_id, org, admin))
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "closed"):
+            db.execute("UPDATE assessment_group_marks SET mark='{\"kind\":\"points\",\"value\":70}' WHERE activity_id='group-a'")
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
 class AcademicCalendarTests(unittest.TestCase):
     """0057: jornadas keep their configuration and blocks as JSON, one name per organization; a section may store a
     time per day as a JSON array next to its single-time columns. 0058 gives the demo its morning jornada."""

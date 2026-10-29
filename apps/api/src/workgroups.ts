@@ -11,7 +11,7 @@ const ids = (json: string | null) => (JSON.parse(json || "[]") as (string | null
 /** The groups of a section and the activities of the course's published lessons done in pairs or teams, with who does each. */
 export async function sectionWorkGroups(db: Database, courseId: string, groupId: string): Promise<SectionWorkGroups> {
   const [groups, lessons, assigned] = await db.batch([
-    db.prepare("SELECT w.id,w.name,(SELECT json_group_array(m.learner_id) FROM work_group_members m JOIN group_learners l ON l.id=m.learner_id AND l.status='active' WHERE m.work_group_id=w.id) AS learners FROM work_groups w WHERE w.group_id=? ORDER BY w.name COLLATE NOCASE,w.created_at").bind(groupId),
+    db.prepare("SELECT w.id,w.name,(SELECT json_group_array(m.learner_id) FROM work_group_members m JOIN group_learners l ON l.id=m.learner_id AND l.status='active' WHERE m.work_group_id=w.id) AS learners FROM work_groups w WHERE w.group_id=? AND w.set_id IS NULL ORDER BY w.name COLLATE NOCASE,w.created_at").bind(groupId),
     db.prepare("SELECT l.id,COALESCE(json_extract(l.published_content,'$.title'),'Lección') AS title,json_extract(l.published_content,'$.activities') AS activities,u.name AS unitName FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id AND u.status='active' WHERE u.course_id=? AND l.archived=0 AND l.revision>0 AND l.published_content IS NOT NULL ORDER BY u.position,l.position,l.id").bind(courseId),
     db.prepare("SELECT lesson_id AS lessonId,activity_id AS activityId,work_group_id AS workGroupId FROM activity_work_groups WHERE group_id=?").bind(groupId),
   ]) as unknown as [{ id: string; name: string; learners: string | null }[], { id: string; title: string; activities: string | null; unitName: string }[], { lessonId: string; activityId: string; workGroupId: string }[]];
@@ -32,7 +32,7 @@ export async function workGroups(sub: string, workGroupId: string | undefined, m
   if (!enabled) return reply({ error: "Los grupos de trabajo están desactivados en la configuración de este curso." }, 409);
   if (section.status !== "active") return reply({ error: "La sección está cerrada. Reactívala para hacer cambios." }, 409);
   if (sub === "activity-groups" && method === "PUT") return assign(input, current, db, courseId, section);
-  const existing = workGroupId ? await db.prepare("SELECT id,name FROM work_groups WHERE id=? AND group_id=?").bind(workGroupId, section.id).first<{ id: string; name: string }>() : null;
+  const existing = workGroupId ? await db.prepare("SELECT id,name FROM work_groups WHERE id=? AND group_id=? AND set_id IS NULL").bind(workGroupId, section.id).first<{ id: string; name: string }>() : null;
   if (workGroupId && !existing) return reply({ error: "El grupo ya no existe en esta sección." }, 404);
   if (existing && method === "DELETE") {
     await db.batch([
@@ -48,10 +48,10 @@ export async function workGroups(sub: string, workGroupId: string | undefined, m
   if (!value) return reply({ error: "Escribe un nombre de grupo de hasta 60 caracteres, distinto de «Toda la sección», y elige estudiantes distintos." }, 400);
   const roster = new Set((await db.prepare("SELECT id FROM group_learners WHERE group_id=? AND status='active'").bind(section.id).all<{ id: string }>()).results.map(row => row.id));
   if (value.learnerIds.some(id => !roster.has(id))) return reply({ error: "Elige estudiantes de la lista de esta sección." }, 400);
-  const taken = await db.prepare("SELECT id FROM work_groups WHERE group_id=? AND name=? COLLATE NOCASE").bind(section.id, value.name).first<{ id: string }>();
+  const taken = await db.prepare("SELECT id FROM work_groups WHERE group_id=? AND set_id IS NULL AND name=? COLLATE NOCASE").bind(section.id, value.name).first<{ id: string }>();
   if (taken && taken.id !== existing?.id) return reply({ error: `Ya hay un grupo llamado «${value.name}» en esta sección.` }, 409);
   const id = existing?.id || `work-group-${crypto.randomUUID()}`;
-  if (!existing && ((await db.prepare("SELECT count(*) AS total FROM work_groups WHERE group_id=?").bind(section.id).first<{ total: number }>())?.total || 0) >= maxWorkGroups) return reply({ error: `Una sección tiene hasta ${maxWorkGroups} grupos de trabajo.` }, 409);
+  if (!existing && ((await db.prepare("SELECT count(*) AS total FROM work_groups WHERE group_id=? AND set_id IS NULL").bind(section.id).first<{ total: number }>())?.total || 0) >= maxWorkGroups) return reply({ error: `Una sección tiene hasta ${maxWorkGroups} grupos de trabajo.` }, 409);
   await db.batch([
     existing ? db.prepare("UPDATE work_groups SET name=? WHERE id=?").bind(value.name, id)
       : db.prepare("INSERT INTO work_groups(id,organization_id,course_id,group_id,name,created_at) VALUES (?,?,?,?,?,?)").bind(id, current.organizationId, courseId, section.id, value.name, new Date().toISOString()),
@@ -69,7 +69,7 @@ async function assign(input: unknown, current: Member, db: Database, courseId: s
   if (typeof value?.lessonId !== "string" || typeof value.activityId !== "string" || !Array.isArray(chosen) || chosen.length > maxWorkGroups || chosen.some(id => typeof id !== "string") || new Set(chosen).size !== chosen.length) return reply({ error: "Elige la actividad y los grupos que la trabajan." }, 400);
   const activity = (await sectionWorkGroups(db, courseId, section.id)).activities.find(item => item.lessonId === value.lessonId && item.activityId === value.activityId);
   if (!activity) return reply({ error: "Solo las actividades en parejas o en equipos de las lecciones publicadas del curso se asignan a grupos." }, 400);
-  const groups = (await db.prepare("SELECT id FROM work_groups WHERE group_id=?").bind(section.id).all<{ id: string }>()).results.map(row => row.id);
+  const groups = (await db.prepare("SELECT id FROM work_groups WHERE group_id=? AND set_id IS NULL").bind(section.id).all<{ id: string }>()).results.map(row => row.id);
   if (chosen.some(id => !groups.includes(id as string))) return reply({ error: "Elige grupos de esta sección." }, 400);
   await db.batch([
     db.prepare("DELETE FROM activity_work_groups WHERE group_id=? AND lesson_id=? AND activity_id=?").bind(section.id, activity.lessonId, activity.activityId),

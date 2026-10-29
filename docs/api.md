@@ -417,6 +417,40 @@ conserva exactamente su cálculo anterior de puntos, escala, mínimo, letras y p
 - `GET …/grades/report.csv[?year=]` exporta los mismos resultados mostrados por la boleta PDF. Ambos usan el texto del
   esquema (letra, GPA, nivel o aprobado/no aprobado) e incluyen las razones que impiden aprobar.
 
+### Conjuntos de grupos y calificación grupal (0061)
+
+Los grupos de trabajo de la sección (los que no pertenecen a un conjunto) siguen igual. Un conjunto es otro reparto,
+reutilizable entre actividades, de esa misma sección.
+
+`POST /api/sections/:id/group-sets` recibe `{ name, rules, sessionId? }`. `rules` indica si se forma por `size` (2 a 30)
+o por `count` (1 a 30), `how` (`random`, `balanced` o `mixed`), la `seed`, y de forma opcional mínimo, máximo, parejas
+`together` y `apart`, un `prefix`, `scores` y `attributes`. Con `?preview=1` no guarda nada y responde
+`{ preview, groups, unmet }`. Sin eso responde 201 `{ set }` con los grupos, sus estudiantes y las restricciones que no
+pudo cumplir. Si envías `sessionId`, el reparto usa solo quienes están presentes o llegaron tarde en esa clase; sin
+clase, usa la lista activa. La misma semilla y la misma lista producen el mismo reparto.
+
+`PUT …/group-sets/:setId` cambia el nombre, archiva (`archived: true`) o reemplaza los miembros (`groups`). `DELETE` en
+la misma ruta archiva. `POST …/group-sets/:setId/regenerate` recibe `{ seed }` y vuelve a formar el conjunto. Si una
+actividad que lo usa ya tiene nota de grupo, ajuste o coevaluación, responde 409 y el reparto no cambia.
+
+El plan de evaluación puede marcar una actividad con `groupMode: "group"` y `workGroupSetId`. Las anteriores siguen
+siendo individuales. Quien imparte la sección, o administración, califica así:
+
+- `PUT …/grades/activities/:activityId/groups` con `{ workGroupId, mark }` guarda una marca para el grupo (puntos,
+  rúbrica, nivel o aprobado/no aprobado) y la copia a cada integrante.
+- `PUT …/adjustments` con `{ learnerId, kind, value, note? }` aplica un `factor` de 0 a 2, un `override` (nota propia)
+  o un `peer`. El factor explícito gana sobre la coevaluación.
+- `PUT …/peer-ratings` con `{ ratings: [{ raterId, rateeId, score }] }` reemplaza la coevaluación. El factor de cada
+  estudiante es su promedio recibido dividido por el promedio del grupo, limitado al rango de la actividad (0,5 a 1,5
+  si no se cambió).
+
+La copia queda en `scores` o `marks` con `source: "group"`. Una marca escrita a mano (`source: "individual"`) no se
+pisa. Una exoneración se queda. Quien no está en ningún grupo del conjunto no recibe nota, ni siquiera un cero. La
+libreta, en una actividad grupal, agrega `workGroups`, `groupMarks`, `groupAdjustments` y el `source` de cada nota. Un
+periodo cerrado o entregado a revisión responde 409. La actividad registrada no incluye el valor de la nota.
+
+Otra persona que no imparte la sección recibe 403. Una sección de otra organización recibe 404.
+
 ## Invitaciones por correo (ST-121, DEC-042)
 
 `POST /api/invitations` recibe `{ email, displayName, role }` (correo válido que se guarda en minúsculas, nombre de 2 a
