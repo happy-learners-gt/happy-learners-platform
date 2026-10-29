@@ -604,7 +604,7 @@ it("designs the course evaluation and saves a rubric descriptor", async () => {
   expect(await screen.findByText("La nota de cada periodo es Tareas 30 % + Proyectos 30 % + Examen final 40 %.")).toBeTruthy();
   expect(screen.getByRole("heading", { name: "Tareas · 30 %" })).toBeTruthy();
   expect(screen.getByRole("heading", { name: "Proyectos · 30 %" })).toBeTruthy();
-  expect(screen.getByRole("tab", { name: "Primer bimestre · Sin actividades en Proyectos y Examen final" })).toBeTruthy();
+  expect(screen.getByRole("tab", { name: /^Primer bimestre\s+Pendiente$/ })).toBeTruthy();
   expect(screen.getByText("Sin actividades en Proyectos y Examen final")).toBeTruthy();
   expect(screen.queryByText(/faltan \d+ pts/)).toBeNull();
   fireEvent.click(screen.getAllByRole("button", { name: "Agregar" })[1]);
@@ -651,7 +651,7 @@ it("shows accumulated points as a bar and the points still missing on the period
   }));
   history.replaceState(null, "", "/cursos/course-1/evaluacion");
   render(<App/>);
-  expect(await screen.findByRole("tab", { name: "Segundo bimestre · faltan 20 pts" })).toBeTruthy();
+  expect(await screen.findByRole("tab", { name: /^Segundo bimestre\s+faltan 20 pts$/ })).toBeTruthy();
   expect(screen.getByText("80 de 100 puntos")).toBeTruthy();
   expect(screen.queryByText("80 de 100 puntos · faltan 20 pts")).toBeNull();
 });

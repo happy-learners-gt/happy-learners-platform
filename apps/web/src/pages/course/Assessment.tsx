@@ -71,7 +71,9 @@ export function Assessment() {
   if (!data) return <>{header}<Loading label="Abriendo la evaluación…" lines={6}/></>;
   const period = data.periods.find(item => item.id === periodId) || data.periods[0];
   const statusOf = (item: Period) => assessmentPeriodStatus(data.scheme, item.activities);
-  const tab = (item: Period) => { const status = statusOf(item); return `${item.name}${status.state === "complete" ? " ✓" : status.tab ? ` · ${status.tab}` : ""}`; };
+  // The tab says the period's name and a short status; the full status reads above the categories. No sr-only text
+  // here: absolutely positioned helpers inside the scrolling tab list made the page jump on mobile.
+  const badge = (item: Period) => { const status = statusOf(item); return <span className={`tab-badge${status.state === "complete" ? " is-done" : ""}`} aria-label={status.state === "complete" ? "completo" : undefined}>{status.state === "complete" ? "✓" : status.tab && status.tab.length <= 16 ? status.tab : "Pendiente"}</span>; };
   async function remove(activity: Activity) {
     if (!await confirm({ title: `¿Quitar «${activity.title}»?`, body: <p>Deja de formar parte de la evaluación. Las notas que ya tiene no se pueden borrar desde aquí.</p>, confirm: "Quitar actividad", danger: true })) return;
     try { await api(`/courses/${course.id}/assessment/activities/${activity.id}`, "DELETE"); await load(); toast({ message: `«${activity.title}» se quitó.` }); }
@@ -85,7 +87,7 @@ export function Assessment() {
     </Section>
     {!data.periods.length ? <EmptyState icon="table" title="El ciclo no tiene periodos">Cuando el ciclo lectivo tenga periodos, aquí se diseñan sus actividades.</EmptyState> : period && <>
       <div className="assessment-period">
-        <Tabs label="Periodos" value={period.id} onChange={setPeriodId} items={data.periods.map(item => ({ value: item.id, label: tab(item) }))}
+        <Tabs label="Periodos" value={period.id} onChange={setPeriodId} items={data.periods.map(item => ({ value: item.id, label: item.name, badge: badge(item) }))}
           aside={data.canEdit ? <Menu label={`Acciones de ${period.name}`} text="Acciones" items={[
             { label: "Usar plantilla", icon: "spark", onSelect: () => setTemplateOpen(true) },
             { label: "Copiar de otro periodo", icon: "copy", onSelect: () => setCopyOpen(true) },
@@ -96,7 +98,7 @@ export function Assessment() {
         const rows = period.activities.filter(item => item.categoryId === category.id);
         return <article key={category.id} className="assessment-category" aria-labelledby={`category-${category.id}`}>
           <header>
-            <div><h3 id={`category-${category.id}`}>{category.label}{category.weight !== undefined ? ` · ${category.weight} %` : ""}</h3><p className="muted small">{plural(rows.length, "actividad", "actividades")}</p></div>
+            <div><h3 id={`category-${category.id}`}>{category.label}{category.weight !== undefined ? ` · ${category.weight} %` : ""}</h3><p className="muted small">{rows.length ? plural(rows.length, "actividad", "actividades") : "Sin actividades"}</p></div>
             {data.canEdit && <Button icon="plus" className="small" onClick={() => { setCategoryId(category.id); setEditing("new"); }}>Agregar</Button>}
           </header>
           {rows.length ? <ul className="assessment-activities">{rows.map(activity => <li key={activity.id}>
@@ -111,7 +113,7 @@ export function Assessment() {
               "separator" as const,
               { label: "Quitar", icon: "archive", danger: true, disabled: activity.graded, onSelect: () => void remove(activity) },
             ]}/>}
-          </li>)}</ul> : <p className="muted small">Sin actividades.</p>}
+          </li>)}</ul> : null}
         </article>;
       })}</div>
     </>}
@@ -202,7 +204,7 @@ function ActivityPanel({ courseId, period, categoryId, activity, scheme, team, o
       await onSaved(draft.title.trim());
     } catch (cause) { setError(message(cause)); setBusy(false); }
   }
-  return <Drawer title={activity ? `Editar ${activity.title}` : `Nueva actividad en ${category?.label || "el periodo"}`} onClose={onClose}>
+  return <Drawer wide title={activity ? `Editar ${activity.title}` : `Nueva actividad en ${category?.label || "el periodo"}`} onClose={onClose}>
     <form className="assessment-panel" onSubmit={submit}>
       <div className="assessment-panel-body">
       {locked && <p className="notice" role="status"><Icon name="info" size={18}/>{gradedNote(activity!.title)}</p>}
@@ -292,7 +294,7 @@ function RubricMatrix({ rubric, locked, onLevel, onCriterion, onWeight, onRename
             const level = criterion.levels[levelIndex];
             if (!level) return <td key={column.id}/>;
             return <td key={level.id}><div className="assessment-cell">
-              <label>Descriptor<input aria-label={`Descriptor de ${level.label} en ${criterion.label}`} disabled={locked} value={level.description || ""} onChange={event => onLevel(criterionIndex, levelIndex, { description: event.target.value })}/></label>
+              <label>Descriptor<textarea rows={2} aria-label={`Descriptor de ${level.label} en ${criterion.label}`} disabled={locked} value={level.description || ""} onChange={event => onLevel(criterionIndex, levelIndex, { description: event.target.value })}/></label>
               <label>Puntos<input inputMode="decimal" aria-label={`Puntos de ${level.label} en ${criterion.label}`} disabled={locked} value={level.points} onChange={event => onLevel(criterionIndex, levelIndex, { points: Number(event.target.value) })}/></label>
             </div></td>;
           })}

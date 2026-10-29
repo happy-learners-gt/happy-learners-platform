@@ -20,7 +20,7 @@ export function Tabs<T extends string>({ label, items, value, onChange, children
     <div role="tablist" aria-label={label} className="tabs scrollable-tabs">
       {items.map((item, index) => <button key={item.value} ref={element => { refs.current[index] = element; }} type="button" role="tab" id={`${base}-${item.value}`} aria-controls={`${base}-panel`}
         aria-selected={value === item.value} tabIndex={value === item.value ? 0 : -1} className="tab" onClick={() => onChange(item.value)} onKeyDown={event => onKey(event, index)}>
-        {item.label}{item.badge}
+        {item.label}{item.badge ? <>{" "}{item.badge}</> : null}
       </button>)}
     </div>
     {aside}
