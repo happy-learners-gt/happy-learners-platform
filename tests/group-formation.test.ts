@@ -97,11 +97,15 @@ describe("group formation", () => {
       { by: "size", size: 3, how: "random", seed: "  " },
       { by: "size", size: 3, how: "random", seed: "a", prefix: " " },
     ].map(input => groupRulesInput(input));
-    expect(rejected.filter(item => "error" in item).length).toBeGreaterThanOrEqual(8);
-    for (const item of rejected) {
-      expect(item).toHaveProperty("error");
-      expect((item as { error: string }).error.length).toBeGreaterThan(8);
-    }
+    // Each case says exactly what to fix.
+    expect(rejected).toEqual([
+      "Indica las reglas del conjunto.", "Elige si formas por tamaño o por cantidad de grupos.", "Elige si formas por tamaño o por cantidad de grupos.",
+      "Indica el tamaño de cada grupo, un entero entre 2 y 30.", "Indica el tamaño de cada grupo, un entero entre 2 y 30.",
+      "Indica cuántos grupos quieres, un entero entre 1 y 30.", "Indica cuántos grupos quieres, un entero entre 1 y 30.",
+      "Elige cómo repartes: al azar, equilibrado o mixto.", "El mínimo no puede ser mayor que el máximo.", "El mínimo de un grupo es un entero entre 1 y 100.",
+      "Revisa las parejas que deben ir juntas: cada una son dos estudiantes distintos.", "Revisa las parejas que deben ir separadas: cada una son dos estudiantes distintos.",
+      "Indica la semilla con la que se forma el conjunto.", "Escribe un prefijo de 1 a 40 caracteres para el nombre de los grupos.",
+    ].map(error => ({ error })));
     expect(rules({ by: "size", size: 3, how: "balanced", seed: "ok", minimum: 2, maximum: 4 })).toMatchObject({ size: 3, minimum: 2, maximum: 4 });
   });
 });

@@ -147,7 +147,7 @@ export function groupRulesInput(input: unknown): GroupRules | InputError {
   if (together.length) rules.together = together;
   if (apart.length) rules.apart = apart;
   if (value.prefix !== undefined) {
-    if (typeof value.prefix !== "string" || !value.prefix.trim() || value.prefix.trim().length > 40) return { error: "El prefijo del nombre cabe en 40 caracteres." };
+    if (typeof value.prefix !== "string" || !value.prefix.trim() || value.prefix.trim().length > 40) return { error: "Escribe un prefijo de 1 a 40 caracteres para el nombre de los grupos." };
     rules.prefix = value.prefix.trim();
   }
   const scores = optionalMap(value.scores, true, "los puntajes previos");
