@@ -35,6 +35,7 @@ import { contractMethods, contracts } from "./contracts";
 import { academicYearMethods, academicYearsApi } from "./academic-years";
 import { bellScheduleMethods, bellSchedulesApi } from "./bell-schedules";
 import { gradebookMethods, grades } from "./gradebook";
+import { groupSetMethods, groupSets } from "./group-sets";
 import { bibliography, bibliographyMethods } from "./bibliography";
 import { curriculumPackagesApi, packageMethods } from "./curriculum-packages";
 import { bookTextPath, proposalMethods, proposals } from "./proposals";
@@ -110,6 +111,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   const bellAllowed = bellScheduleMethods(path);
   // The section's gradebook: saving scores and the plan read a JSON body, and so does returning a period; the rest carry none.
   const gradebookAllowed = gradebookMethods(path);
+  const groupSetAllowed = groupSetMethods(path);
   // The course's bibliography; its POST and PUT bodies are read with the other course routes.
   const bibliographyAllowed = bibliographyMethods(path);
   // Curriculum packages; picking indicators reads its body with the other course routes.
@@ -135,6 +137,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (institutionalCalendarAllowed && ["POST", "PUT"].includes(method) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   if (gradingSchemeAllowed && ["POST", "PUT"].includes(method) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   if (gradebookAllowed && (method === "PUT" || (method === "POST" && request.headers.get("content-type")?.startsWith("application/json")))) input = await body(request);
+  if (groupSetAllowed && ["POST", "PUT"].includes(method) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   // DEC-046: publishing a legal document may carry the date from which the version applies.
   if (method === "POST" && /^\/api\/legal\/documents\/[a-z]+\/publish$/.test(path) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   // ST-158, ST-159: a change of e-mail and a closure request.
@@ -242,6 +245,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (academicYearAllowed) methods[path] = academicYearAllowed;
   if (bellAllowed) methods[path] = bellAllowed;
   if (gradebookAllowed) methods[path] = gradebookAllowed;
+  if (groupSetAllowed) methods[path] = groupSetAllowed;
   if (gradingSchemeAllowed) methods[path] = gradingSchemeAllowed;
   if (bibliographyAllowed) methods[path] = bibliographyAllowed;
   if (packageAllowed) methods[path] = packageAllowed;
@@ -385,6 +389,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (path === "/api/feeds/calendar") return feedLink(method, url, current, db);
   if (path.startsWith("/api/calendar")) return calendar(path, method, input, url, current, db);
   if (gradebookAllowed) return grades(path, method, input, url, current, db);
+  if (groupSetAllowed) return groupSets(path, method, input, url, current, db);
   if (gradingSchemeAllowed) return gradingSchemesApi(path, method, input, current, db);
   if (path.startsWith("/api/sections")) return sections(path, current, db);
   if (path === "/api/progress") return progress(current, db);

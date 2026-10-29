@@ -261,12 +261,9 @@ export function markValue(activity: GradingActivity, mark: Mark): number | null 
   if (!finite(activity.points) || activity.points < 0) return null;
   if (activity.grading === "panel") return mark.kind === "panel" ? panelValue(activity, mark) : null;
   if (mark.kind === "panel") return null;
-  if (
-    (activity.grading === "points" && mark.kind !== "points")
-    || (activity.grading === "pass-fail" && mark.kind !== "pass")
-    || (activity.grading === "rubric" && mark.kind !== "rubric")
-    || (activity.grading === "level" && mark.kind !== "level")
-  ) return null;
+  // A points mark is already the earned number. Group adjustments are stored that way on any activity.
+  if (mark.kind === "points") return atomicValue(activity, mark);
+  if (activity.grading === "points" || (activity.grading === "pass-fail" && mark.kind !== "pass") || (activity.grading === "rubric" && mark.kind !== "rubric") || (activity.grading === "level" && mark.kind !== "level")) return null;
   return atomicValue(activity, mark);
 }
 

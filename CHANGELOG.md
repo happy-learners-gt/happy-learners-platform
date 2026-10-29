@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.2 — 2026-10-28
+
+- En Grupos, **Formar grupos** arma un conjunto con toda la lista o con los presentes de una clase, con vista previa y otra combinación.
+- Cada conjunto se reordena arrastrando o con **Mover a…**, se renombra, se vuelve a formar mientras no tenga notas y se archiva.
+- El plan de evaluación marca una actividad como individual o en grupos, con su conjunto y el rango del factor de coevaluación.
+- La cuadrícula califica una vez por grupo y muestra en cada estudiante si la marca es del grupo, ajustada o propia.
+- Desde el detalle se aplica un factor, una nota propia o se quita el ajuste. La coevaluación muestra la matriz y el factor al momento.
+
 ## 1.3.1 — 2026-10-28
 
 - Esquemas de evaluación en Configuración académica: plantillas, editor y vista previa del resultado de un estudiante.
