@@ -11,6 +11,7 @@ import { Menu } from "../../ui/Menu";
 import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section, StatusBadge } from "../../ui/primitives";
 import { useCourse } from "../course/context";
 import { sectionCrumbs, useSection } from "./context";
+import { GroupSets } from "./GroupSets";
 
 type Data = SectionWorkGroups & { learners: GroupLearner[] };
 
@@ -23,7 +24,7 @@ export function SectionWorkGroupsPage() {
   const { section, base } = useSection();
   const { toast, confirm } = useFeedback();
   const [data, setData] = useState<Data | null>(null), [error, setError] = useState("");
-  const [editing, setEditing] = useState<WorkGroup | "new" | null>(null), [assigning, setAssigning] = useState<GroupActivity | null>(null);
+  const [editing, setEditing] = useState<WorkGroup | "new" | null>(null), [assigning, setAssigning] = useState<GroupActivity | null>(null), [forming, setForming] = useState(false);
   const path = `/courses/${course.id}/groups/${section.id}`;
   const enabled = settings.attendance && settings.workGroups;
   const writable = enabled && (configurable || teaches(section.id)) && section.status === "active" && course.status === "active";
@@ -37,7 +38,7 @@ export function SectionWorkGroupsPage() {
   useEffect(() => { void load(); }, [section.id]);
   const header = <PageHeader crumbs={sectionCrumbs(section, { label: "Grupos" })} title="Grupos de trabajo"
     description={`Los estudiantes de la sección forman grupos para las actividades en parejas o en equipos. ${wholeSection} es el grupo predeterminado: trabaja cada actividad que no tiene otro grupo asignado.`}
-    primary={writable && data ? <PrimaryAction icon="plus" onClick={() => setEditing("new")}>Nuevo grupo</PrimaryAction> : undefined}/>;
+    primary={writable && data ? <PrimaryAction icon="team" onClick={() => setForming(true)}>Formar grupos</PrimaryAction> : undefined}/>;
   if (!enabled) return <>{header}<EmptyState icon="team" title="Los grupos de trabajo están desactivados" action={configurable && <Link className="button secondary" href={`/cursos/${course.id}/configuracion`}>Abrir la configuración</Link>}>Actívalos en la configuración del curso (o de su programa) para formar grupos en cada sección y asignarlos a las actividades.</EmptyState></>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
   if (!data) return <>{header}<Loading label="Cargando grupos…" lines={5}/></>;
@@ -51,7 +52,7 @@ export function SectionWorkGroupsPage() {
   }
   return <>
     {header}
-    <Section title={`Grupos (${data.workGroups.length + 1})`}>
+    <Section title={`Grupos (${data.workGroups.length + 1})`} action={writable ? <Button icon="plus" onClick={() => setEditing("new")}>Nuevo grupo</Button> : undefined}>
       <div className="group-grid">
         <article className="group-card" aria-labelledby="whole-section">
           <header><div><h3 id="whole-section">{wholeSection}</h3><p className="muted small">{plural(data.learners.length, "estudiante", "estudiantes")}</p></div><StatusBadge>Predeterminado</StatusBadge></header>
@@ -68,6 +69,7 @@ export function SectionWorkGroupsPage() {
       {data.workGroups.length > 0 && loose.length > 0 && <p className="muted small">Sin grupo: {loose.map(learner => learner.displayName).join(", ")}.</p>}
       {!data.workGroups.length && writable && <p className="muted small">Forma grupos con los estudiantes de la lista; un estudiante puede estar en varios grupos.</p>}
     </Section>
+    <GroupSets sectionId={section.id} courseId={course.id} learners={data.learners} workGroups={data.workGroups} writable={writable} forming={forming} onForming={setForming} onToast={(text, error) => toast(error ? { tone: "error", message: text } : { message: text })}/>
     <Section title="Actividades en parejas y en equipos">
       {!data.activities.length ? <EmptyState compact icon="team" title="El curso aún no tiene actividades en grupo publicadas">En el editor de lecciones, elige «En parejas» o «En equipos» en la organización de una actividad y publica la lección.</EmptyState>
         : <div className="coverage-scroll" role="region" aria-label="Actividades en grupo" tabIndex={0}>

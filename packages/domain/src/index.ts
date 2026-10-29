@@ -158,6 +158,8 @@ export type { AcademicYearAction, AcademicYearDraft, PeriodDraft } from "./acade
 export { assessmentKindLabel, assessmentKinds, assessmentTemplates, averageOf, csvFile, defaultThresholds, gradeAverages, gradeResult, gradeScales, gradeStatistics, isAssessmentKind, isLetterThresholds, letterOf, maxAssessmentActivities, maxCommentLength, maxGradeChanges, passingChoices, pastedCells, periodFromPlan, planTotal, pointsInput, scoreInput, thresholdPresets, thresholdsText } from "./gradebook";
 export type { GradingPolicy, PlannedActivity } from "./gradebook";
 export { displayOf, learnerResult, markValue, pointsScheme, rubricInput, schemeFromSettings, schemeInput, schemeTemplates } from "./grading";
+export { formGroups, groupRulesInput, groupToIndividual } from "./group-formation";
+export type { FormedGroups, FormationLearner, GroupAdjustment, GroupRules, IndividualAssignment, PeerRating, UnmetConstraint } from "./group-formation";
 export type { Activity as GradingActivity, AtomicMark, GradingPeriod, GradingScheme, LearnerResult, Mark, Rubric } from "./grading";
 export { bibliographyRoleLabel, bibliographyRoles, isBibliographyRole, maxCitation, maxReferences, primaryBlocker, referenceInput } from "./bibliography";
 export { competencyDescription, competencyName, curriculumPackages, indicatorEvidence, linkPlan, maxPickedIndicators, packageOf, packageProblems, packageSummary } from "./curriculum-packages";
