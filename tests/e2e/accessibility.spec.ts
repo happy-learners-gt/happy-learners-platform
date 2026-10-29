@@ -16,7 +16,7 @@ async function audit(page: Page, label: string) {
 
 test("main routes have no WCAG 2.2 A/AA violations detectable by axe", async ({ page }) => {
   // Many routes are audited one after another; give the whole tour room on slow runners.
-  test.setTimeout(180_000);
+  test.setTimeout(300_000);
   await page.goto("/inicio");
   await audit(page, "login");
   await signIn(page, "educador-demo", "/inicio");
@@ -59,6 +59,17 @@ test("main routes have no WCAG 2.2 A/AA violations detectable by axe", async ({ 
   await audit(page, "configuración académica");
   await page.getByRole("button", { name: "Crear programa", exact: true }).click();
   await audit(page, "diálogo de programa");
+  await page.keyboard.press("Escape");
+  await page.goto("/tribunales");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Mis tribunales");
+  await audit(page, "tribunales");
+  await page.goto("/configuracion-academica");
+  await page.getByLabel("Agregar desde plantilla").selectOption("universidad");
+  const schemeMenu = page.getByRole("button", { name: "Acciones de Universidad: categorías y GPA" });
+  await expect(schemeMenu).toBeVisible();
+  await schemeMenu.click();
+  await page.getByRole("menuitem", { name: "Editar" }).click();
+  await audit(page, "editor de esquema");
 });
 
 test("keyboard: skip link, visible focus, menus and dialogs work without a pointer", async ({ page }) => {

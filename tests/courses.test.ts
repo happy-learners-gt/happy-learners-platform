@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { materialInput, completeOrder, validTermIds } from "../packages/domain/src/courses";
-import { courseInput, derivedSettings, moduleNoun, programInput, resolveSettings, settingDefinitions, settingsInput, visibleSettingDefinitions } from "../packages/domain/src/academic";
+import { courseInput, derivedSettings, moduleNoun, programInput, resolveSettings, settingDefinitions, settingsInput } from "../packages/domain/src/academic";
 import type { StudyProgram } from "../packages/contracts/src/index";
 
 const course = { title: "Fotografía cotidiana", objective: "Componer una imagen con luz natural.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", settings: {}, programId: null };
@@ -34,7 +34,7 @@ describe("generic learning content", () => {
   });
   it("keeps the grading scheme inheritable without offering an empty selector", () => {
     expect(settingDefinitions.map(item => item.key)).toContain("gradingSchemeId");
-    expect(visibleSettingDefinitions.map(item => item.key)).not.toContain("gradingSchemeId");
+    expect(settingDefinitions.find(item => item.key === "gradingSchemeId")?.label).toBe("Esquema de evaluación");
     expect(settingsInput({ gradingSchemeId: "scheme-11111111-1111-4111-8111-111111111111" })?.gradingSchemeId).toBe("scheme-11111111-1111-4111-8111-111111111111");
     expect(settingsInput({ gradingSchemeId: null })).toEqual({ gradingSchemeId: null });
     expect(settingsInput({ gradingSchemeId: "points" })).toBeNull();

@@ -1,5 +1,5 @@
-import type { AcademicYear, AssessmentActivity, AssessmentEvaluator, AssessmentKind, AssessmentMark, AssessmentScore, AtomicMark, GradeChange, GradeComment, Gradebook, GradebookPeriod, GradeEntry, GradingActivity, GradingScheme, Mark, Member, PeriodReview } from "@happy-learners/contracts";
-import { assessmentKindLabel, csvFile, displayOf, gradeResult, isAssessmentKind, learnerResult, maxAssessmentActivities, maxCommentLength, maxGradeChanges, pdfFile, planTotal, pointsInput, rubricInput, schemeFromSettings, schemeInput, scoreInput } from "@happy-learners/domain";
+import type { AcademicYear, AssessmentActivity, AssessmentEvaluator, AssessmentKind, AssessmentMark, AssessmentScore, AtomicMark, GradeChange, GradeComment, Gradebook, GradebookPeriod, GradeEntry, GradingActivity, GradingScheme, Mark, Member, MyPanel, PeriodReview, Rubric } from "@happy-learners/contracts";
+import { assessmentKindLabel, csvFile, displayOf, gradeResult, isAssessmentKind, learnerResult, markValue, maxAssessmentActivities, maxCommentLength, maxGradeChanges, pdfFile, planTotal, pointsInput, rubricInput, schemeFromSettings, schemeInput, scoreInput } from "@happy-learners/domain";
 import type { GradingPolicy, PdfBlock } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
 import { configurationOf } from "./courses";
@@ -104,7 +104,9 @@ function marksFor(learnerId: string, activities: StoredActivity[], scores: Map<s
   const out = new Map<string, Mark>();
   for (const activity of activities) {
     const score = scores.get(`${learnerId}:${activity.id}`);
-    if (activity.grading === "points" && score !== undefined) out.set(activity.id, { kind: "points", value: score });
+    const exempt = marks.find(item => item.activityId === activity.id && item.learnerId === learnerId && item.evaluatorId === null && item.mark.includes('"exempt"'));
+    if (exempt) out.set(activity.id, { kind: "exempt" });
+    else if (activity.grading === "points" && score !== undefined) out.set(activity.id, { kind: "points", value: score });
     else if (activity.grading === "panel") {
       const assigned = evaluators.filter(item => item.activityId === activity.id);
       const panelMarks = marks.filter(item => item.activityId === activity.id && item.learnerId === learnerId && item.evaluatorId);
@@ -165,7 +167,9 @@ async function contents(db: Database, current: Member, section: { id: string; co
   const resultOf = (learnerId: string) => {
     const mine = new Map<string, Mark>();
     for (const activity of activities) {
-      if ((activity.grading || "points") === "points") {
+      const exempt = parsedMarks.find(item => item.activityId === activity.id && item.learnerId === learnerId && item.evaluatorId === null && item.mark.kind === "exempt");
+      if (exempt) mine.set(activity.id, exempt.mark);
+      else if ((activity.grading || "points") === "points") {
         const score = shownScores.find(item => item.activityId === activity.id && item.learnerId === learnerId);
         if (score) mine.set(activity.id, { kind: "points", value: score.points });
       } else if ((activity.grading || "points") === "panel") {
@@ -397,11 +401,12 @@ export async function grades(path: string, method: string, input: unknown, url: 
     if (points === undefined) return reply({ error: `Los punteos de «${activity.title}» van de 0 a ${activity.points}, con un decimal como máximo.` }, 400);
     scores.push({ activityId: activity.id, learnerId: change.learnerId, points });
   }
-  const checkedMarks: (Omit<MarkChange, "mark"> & { mark: AtomicMark })[] = [];
+  const checkedMarks: (Omit<MarkChange, "mark"> & { mark: AtomicMark | null })[] = [];
   for (const change of changes.marks) {
     const activity = activities.get(change.activityId);
     if (!activity) return reply({ error: "Revisa las marcas: una actividad no es del plan de este ciclo." }, 400);
-    if (activity.grading === "points" || activity.grading === "panel") return reply({ error: `«${activity.title}» se registra ${activity.grading === "panel" ? "desde su tribunal" : "como punteo"}.` }, 400);
+    if (change.mark === null) { checkedMarks.push({ ...change, mark: null }); continue; }
+    if (activity.grading === "panel" || (activity.grading === "points" && (change.mark as { kind?: string } | null)?.kind !== "exempt")) return reply({ error: `«${activity.title}» se registra ${activity.grading === "panel" ? "desde su tribunal" : "como punteo"}.` }, 400);
     const mark = atomicMarkInput(change.mark, { grading: activity.grading, ...(activity.rubric ? { rubric: JSON.parse(activity.rubric) } : {}) });
     if (!mark) return reply({ error: `Revisa la marca de «${activity.title}».` }, 400);
     if (mark.kind === "level" && !scheme.levels?.some(level => level.id === mark.value)) return reply({ error: `El nivel de «${activity.title}» no existe en el esquema.` }, 400);
@@ -453,9 +458,12 @@ export async function grades(path: string, method: string, input: unknown, url: 
     const activity = activities.get(change.activityId)!;
     const beforeRow = storedMarkRows.find(row => row.activityId === change.activityId && row.learnerId === change.learnerId && row.evaluatorId === null);
     const before = beforeRow?.mark || null;
-    const after = JSON.stringify(change.mark);
+    const after = change.mark === null ? null : JSON.stringify(change.mark);
     if (before === after) continue;
-    if (beforeRow) {
+    if (after === null) {
+      if (beforeRow) writes.push(db.prepare("DELETE FROM assessment_marks WHERE activity_id=? AND learner_id=? AND group_id=? AND organization_id=? AND evaluator_id IS NULL").bind(change.activityId, change.learnerId, groupId, current.organizationId));
+      storedMarkRows.splice(0, storedMarkRows.length, ...storedMarkRows.filter(row => !(row.activityId === change.activityId && row.learnerId === change.learnerId && row.evaluatorId === null)));
+    } else if (beforeRow) {
       writes.push(db.prepare("UPDATE assessment_marks SET mark=?,updated_by=?,updated_at=? WHERE activity_id=? AND learner_id=? AND group_id=? AND organization_id=? AND evaluator_id IS NULL")
         .bind(after, current.id, now, change.activityId, change.learnerId, groupId, current.organizationId));
       beforeRow.mark = after;
@@ -752,4 +760,36 @@ async function report(db: Database, current: Member, section: SectionRow, url: U
   await event(db, current, { action: "recorded", targetType: "group", targetId: section.id, courseId: section.courseId, summary: `Generó ${only ? "la boleta de un estudiante" : "las boletas"} de «${section.name}» (${year.name})` }).run();
   const name = `boleta-${`${section.courseTitle}-${section.name}${only ? `-${learners[0].name}` : ""}`.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80)}.pdf`;
   return new Response(new TextEncoder().encode(file), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${name}"`, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
+}
+
+/** Tribunal work assigned to the signed-in person. Other evaluators' marks stay hidden until every one has marked. */
+export async function myPanels(db: Database, current: Member) {
+  const rows = (await db.prepare(`SELECT a.id AS activityId,a.title,a.points,a.rubric,a.panel,c.id AS courseId,c.title AS courseTitle,g.id AS sectionId,g.name AS sectionName,p.name AS periodName,
+    (SELECT count(*) FROM assessment_evaluators x WHERE x.activity_id=a.id) AS evaluators
+    FROM assessment_evaluators e JOIN assessment_activities a ON a.id=e.activity_id AND a.grading='panel'
+    JOIN courses c ON c.id=a.course_id AND c.organization_id=a.organization_id
+    JOIN course_groups g ON g.course_id=c.id AND g.organization_id=c.organization_id AND g.status='active'
+    JOIN academic_periods p ON p.id=a.period_id JOIN academic_years y ON y.id=p.year_id AND y.status='current'
+    WHERE e.user_id=? AND a.organization_id=? ORDER BY c.title COLLATE NOCASE,g.name COLLATE NOCASE,a.position,a.id`).bind(current.id, current.organizationId).all<{
+    activityId: string; title: string; points: number; rubric: string | null; panel: string | null; courseId: string; courseTitle: string; sectionId: string; sectionName: string; periodName: string; evaluators: number;
+  }>()).results;
+  const panels: MyPanel[] = [];
+  for (const row of rows) {
+    const learners = (await db.prepare("SELECT id,display_name AS name FROM group_learners WHERE group_id=? AND organization_id=? AND status='active' ORDER BY display_name COLLATE NOCASE,id").bind(row.sectionId, current.organizationId).all<{ id: string; name: string }>()).results;
+    const marks = (await db.prepare("SELECT learner_id AS learnerId,evaluator_id AS evaluatorId,mark FROM assessment_marks WHERE activity_id=? AND group_id=? AND organization_id=?").bind(row.activityId, row.sectionId, current.organizationId).all<{ learnerId: string; evaluatorId: string | null; mark: string }>()).results;
+    const panel = row.panel ? JSON.parse(row.panel) as { combine: MyPanel["combine"] } : { combine: "average" as const };
+    panels.push({
+      activityId: row.activityId, title: row.title, points: row.points, courseId: row.courseId, courseTitle: row.courseTitle,
+      sectionId: row.sectionId, sectionName: row.sectionName, periodName: row.periodName, rubric: row.rubric ? JSON.parse(row.rubric) as Rubric : null,
+      combine: panel.combine, evaluators: row.evaluators,
+      learners: learners.map(learner => {
+        const own = marks.find(item => item.learnerId === learner.id && item.evaluatorId === current.id);
+        const theirs = marks.filter(item => item.learnerId === learner.id && item.evaluatorId);
+        const complete = row.evaluators > 0 && theirs.length >= row.evaluators && new Set(theirs.map(item => item.evaluatorId)).size >= row.evaluators;
+        const combined = complete ? markValue({ id: row.activityId, periodId: "", categoryId: "general", title: row.title, points: row.points, grading: "panel", panel }, { kind: "panel", marks: theirs.map(item => ({ evaluator: item.evaluatorId!, mark: JSON.parse(item.mark) as AtomicMark })) }) : null;
+        return { id: learner.id, name: learner.name, marked: !!own, mark: own ? JSON.parse(own.mark) as AtomicMark : null, combined };
+      }),
+    });
+  }
+  return reply({ panels });
 }
