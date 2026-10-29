@@ -291,3 +291,49 @@ describe("ST-151 acuerdo de voluntariado ad honorem", () => {
     expect(contracts.find(item => item.id === lucia.id)).toMatchObject({ userId: person.id, templateVersion: 2, status: "active", memberSignature: { name: "Nora Voluntaria" }, documentSha256: lucia.documentSha256 });
   });
 });
+
+// ST-044 with DEC-046: a contract can come with an invitation. A copy restored where that invitation does not exist
+// (another store, or one taken back to an earlier copy) restores all the same; the invitation's link does not.
+type Copy = { tables: Record<string, { columns: string[]; rows: unknown[][] }>; digests: Record<string, string> };
+describe("ST-044 un respaldo con un contrato que llega con una invitación se restaura en otro espacio", () => {
+  it("la invitación se copia sin su enlace, se restaura donde no existe y su enlace funciona solo después de reenviarla", async () => {
+    expect(volunteerTemplateId).toBeTruthy();
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Guatemala", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    const invited = await read<{ link: string; invitation: { id: string; contractId: string } }>(await call(await login("admin-demo"), "/invitations", "POST", {
+      email: "vera.respaldo@example.test", displayName: "Vera Respaldo", role: "educator",
+      contract: { templateId: volunteerTemplateId, startDate: today }, signature: { fullName: "Administración de la Demostración", password },
+    }), 201);
+    const token = (link: string) => /\/invitacion\/([a-z]_[a-f0-9]{64})$/.exec(link)![1];
+    const opens = async (link: string) => (await fetch(`${origin}/api/invitations/accept/${token(link)}`)).status;
+    const backup = await read<Copy>(await call(await login("admin-demo"), "/organization/backup"));
+    const invitations = backup.tables.invitations, contracts = backup.tables.contracts;
+    expect(invitations.columns).not.toContain("token_hash");
+    expect(JSON.stringify(backup)).not.toContain(token(invited.link).slice(2));
+    expect(contracts.rows.find(row => row[contracts.columns.indexOf("id")] === invited.invitation.contractId)![contracts.columns.indexOf("invitation_id")]).toBe(invited.invitation.id);
+
+    // Restored in the store that issued it, the invitation keeps its link.
+    await read(await call(await login("admin-demo"), "/organization/restore", "POST", backup));
+    expect(await opens(invited.link)).toBe(200);
+
+    // Where it does not exist (here, the same copy with another id for it), the copy restores with the contract
+    // pointing to it, and the old link does not open it until administration resends the invitation.
+    const canonical = (value: { columns: string[]; rows: unknown[][] }) => value.columns.join(",") + "\n" + value.rows.map(item => JSON.stringify(item)).sort().join("\n");
+    const elsewhere = invited.invitation.id.replace(/.$/, last => last === "0" ? "1" : "0"), moved = structuredClone(backup);
+    for (const row of moved.tables.invitations.rows) if (row[invitations.columns.indexOf("id")] === invited.invitation.id) row[invitations.columns.indexOf("id")] = elsewhere;
+    for (const row of moved.tables.contracts.rows) if (row[contracts.columns.indexOf("invitation_id")] === invited.invitation.id) row[contracts.columns.indexOf("invitation_id")] = elsewhere;
+    for (const name of ["invitations", "contracts"]) moved.digests[name] = sha256(canonical(moved.tables[name]));
+    const restored = await read<{ restored: Record<string, number> }>(await call(await login("admin-demo"), "/organization/restore", "POST", moved));
+    expect(restored.restored.invitations).toBe(invitations.rows.length);
+    const admin = await login("admin-demo");
+    expect((await read<{ contract: { status: string } }>(await call(admin, `/contracts/${invited.invitation.contractId}`))).contract.status).toBe("sent");
+    expect(await opens(invited.link)).toBe(404);
+    const resent = await read<{ link: string }>(await call(admin, `/invitations/${elsewhere}/resend`, "POST"));
+    expect(await opens(resent.link)).toBe(200);
+
+    // A copy taken before invitations were copied still restores and leaves the store's invitations as they are.
+    const legacy = structuredClone(moved);
+    delete legacy.tables.invitations; delete legacy.digests.invitations;
+    await read(await call(admin, "/organization/restore", "POST", legacy));
+    expect(await opens(resent.link)).toBe(200);
+  });
+});
