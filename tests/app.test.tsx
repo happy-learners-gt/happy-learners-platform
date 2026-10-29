@@ -2,6 +2,8 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { App } from "../apps/web/src/App";
+import { NavigationProvider } from "../apps/web/src/navigation";
+import { CourseForm } from "../apps/web/src/pages/Courses";
 beforeEach(() => { vi.stubGlobal("scrollTo", vi.fn()); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); history.replaceState(null, "", "/"); });
 it("shows an accessible Spanish login with explicit synthetic account guidance", async () => {
@@ -413,4 +415,11 @@ it("guides «Planificar con IA» step by step: review of an AI proposal, coverag
   fireEvent.click(await screen.findByRole("button", { name: "La revisé, publicar" }));
   expect(await screen.findByText("«Área y volumen de prismas» se publicó.")).toBeTruthy();
   expect(published).toEqual(["POST"]);
+});
+it("keeps the grading scheme out of the course configuration form", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (input: string) => Response.json(String(input).endsWith("/people") ? { people: [] } : { programs: [] })));
+  render(<NavigationProvider><CourseForm cancelHref="/cursos" onSaved={() => undefined}/></NavigationProvider>);
+  expect(await screen.findByRole("heading", { name: "Comportamiento del curso" })).toBeTruthy();
+  expect(screen.getByText("Escala de las notas")).toBeTruthy();
+  expect(screen.queryByText("Esquema de evaluación")).toBeNull();
 });

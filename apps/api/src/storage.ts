@@ -58,6 +58,7 @@ import demoGradebookMigration from "../../../database/migrations/0056_demo_grade
 import academicCalendarMigration from "../../../database/migrations/0057_academic_calendar.sql";
 import demoCalendarMigration from "../../../database/migrations/0058_demo_calendar.sql";
 import institutionalCalendarMigration from "../../../database/migrations/0059_institutional_calendar.sql";
+import gradingSchemesMigration from "../../../database/migrations/0060_grading_schemes.sql";
 import { organizationIds } from "@happy-learners/domain";
 import { exportStore, importStore, RestoreError, type Backup } from "./backup";
 import { processProposals } from "./proposals";
@@ -195,6 +196,7 @@ export class OrganizationStore extends DurableObject<Env> {
       if (!applied.length || applied[0].version < 57) { this.ctx.storage.sql.exec(academicCalendarMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (57,?)", scope); }
       if (!applied.length || applied[0].version < 58) { this.ctx.storage.sql.exec(demoCalendarMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (58,?)", scope); }
       if (!applied.length || applied[0].version < 59) { this.ctx.storage.sql.exec(institutionalCalendarMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (59,?)", scope); }
+      if (!applied.length || applied[0].version < 60) { this.ctx.storage.sql.exec(gradingSchemesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (60,?)", scope); }
       // Compare-and-write plus dependent writes belong to one SQLite transaction.
       if (guard && !this.ctx.storage.sql.exec(guard.sql, ...guard.values).toArray().length) return [];
       return statements.map(statement => this.ctx.storage.sql.exec(statement.sql, ...statement.values).toArray());

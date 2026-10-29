@@ -32,6 +32,14 @@ export async function configurationOf(db: Database, organization: string, course
   const program = course.programId ? (await programsFor(db, organization)).find(item => item.id === course.programId) || null : null;
   return { course, program, settings: resolveSettings(course, program).values, pacing: effectiveProfile(course, program).pacing };
 }
+/** A chosen scheme must be active in this organization. Null keeps the compatible points scheme. */
+async function gradingSchemeError(db: Database, organizationId: string, schemeId: string | null | undefined) {
+  if (!schemeId) return null;
+  const row = await db.prepare("SELECT status FROM grading_schemes WHERE id=? AND organization_id=?").bind(schemeId, organizationId).first<{ status: string }>();
+  if (!row) return reply({ error: "Elige un esquema de evaluación activo de tu organización." }, 400);
+  if (row.status !== "active") return reply({ error: "Ese esquema de evaluación está archivado." }, 409);
+  return null;
+}
 /** The former profile column is still NOT NULL; keep it coherent for anything that reads history. */
 function legacyProfile(format: CourseFormat, level: EducationLevel) {
   if (format === "workshop" || format === "laboratory") return format;
@@ -148,6 +156,8 @@ export async function courses(path: string, method: string, input: unknown, curr
       Object.assign(data, { educationType: program.educationType, level: program.level, modality: program.modality, pacing: program.pacing });
       for (const key of program.locked) delete data.settings[key];
     }
+    const schemeError = await gradingSchemeError(db, current.organizationId, data.settings.gradingSchemeId);
+    if (schemeError) return schemeError;
     const cid = id || `course-${crypto.randomUUID()}`;
     const values = [data.title, data.objective, legacyProfile(data.format, data.level), data.programId, data.educationType, data.level, data.format, data.modality, data.pacing, data.area || null, JSON.stringify(data.settings), data.status, now] as const;
     if (course) {
@@ -271,6 +281,8 @@ export async function programs(path: string, method: string, input: unknown, cur
   if (!v || !data) return reply({ error: "Revisa el nombre y la configuración del programa: la educación formal necesita un nivel y solo se fijan ajustes con valor." }, 400);
   const nameKey = data.name.toLocaleLowerCase("es");
   if (list.some(item => item.id !== id && item.name.toLocaleLowerCase("es") === nameKey)) return reply({ error: "Ya existe un programa con ese nombre." }, 409);
+  const schemeError = await gradingSchemeError(db, current.organizationId, data.settings.gradingSchemeId);
+  if (schemeError) return schemeError;
   const now = new Date().toISOString(), pid = id || `program-${crypto.randomUUID()}`;
   const values = [data.name, nameKey, data.description, data.educationType, data.level, data.format, data.modality, data.pacing, data.area || null, JSON.stringify(data.settings), JSON.stringify(data.locked), data.status, now] as const;
   if (old) {

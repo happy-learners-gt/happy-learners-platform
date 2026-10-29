@@ -1280,6 +1280,42 @@ class AssessmentPlanTests(unittest.TestCase):
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
 
 
+class GradingSchemeTests(unittest.TestCase):
+    """0060: schemes, activity defaults, unique marks and evaluators, and frozen marked plans."""
+
+    def test_schemes_marks_evaluators_and_locks(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            if path.name.startswith("0054"):
+                continue
+            db.executescript(path.read_text())
+        columns = {row[1]: row[4] for row in db.execute("PRAGMA table_info(assessment_activities)")}
+        self.assertEqual((columns["category_id"], columns["grading"], columns["extra"]), ("'general'", "'points'", "0"))
+        org, group_id, course = db.execute("SELECT organization_id,id,course_id FROM course_groups ORDER BY id LIMIT 1").fetchone()
+        users = [row[0] for row in db.execute("SELECT user_id FROM memberships WHERE organization_id=? AND active=1 ORDER BY user_id LIMIT 3", (org,))]
+        admin = users[0]
+        db.execute("UPDATE academic_years SET status='closed',closed_at='t' WHERE organization_id=? AND status='current'", (org,))
+        db.execute("INSERT INTO group_learners(id,group_id,course_id,organization_id,display_name,created_at) VALUES ('grading-l',?,?,?,'Ana','t')", (group_id, course, org))
+        db.execute("INSERT INTO academic_years(id,organization_id,name,starts_on,ends_on,period_kind,status,created_by,created_at,updated_at,activated_at) VALUES ('grading-y',?,'Ciclo','2030-01-01','2030-06-01','semester','current',?,'t','t','t')", (org, admin))
+        db.execute("INSERT INTO academic_periods(id,organization_id,year_id,position,name,starts_on,ends_on) VALUES ('grading-p',?,'grading-y',1,'Periodo','2030-01-01','2030-06-01')", (org,))
+        db.execute("INSERT INTO assessment_activities(id,organization_id,course_id,period_id,position,title,kind,points,created_by,created_at,updated_at) VALUES ('grading-a',?,?,'grading-p',0,'Tribunal','exam',100,?,'t','t')", (org, course, admin))
+        self.assertEqual(db.execute("SELECT category_id,grading,extra,retake_of,rubric,panel FROM assessment_activities WHERE id='grading-a'").fetchone(), ("general", "points", 0, None, None, None))
+        db.execute("INSERT INTO assessment_evaluators(activity_id,user_id,chair) VALUES ('grading-a',?,1)", (users[0],))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO assessment_evaluators(activity_id,user_id,chair) VALUES ('grading-a',?,1)", (users[1],))
+        mark = "INSERT INTO assessment_marks(id,activity_id,organization_id,group_id,learner_id,evaluator_id,mark,updated_by,updated_at) VALUES (?,'grading-a',?,?,'grading-l',NULL,'{\"kind\":\"pass\",\"value\":true}',?,'t')"
+        db.execute(mark, ("grading-m1", org, group_id, admin))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(mark, ("grading-m2", org, group_id, admin))
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "marks"):
+            db.execute("DELETE FROM assessment_activities WHERE id='grading-a'")
+        db.execute("INSERT INTO section_period_reviews(group_id,organization_id,period_id,status,submitted_by,submitted_at) VALUES (?,?,'grading-p','submitted',?,'t')", (group_id, org, admin))
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "closed"):
+            db.execute("UPDATE assessment_marks SET mark='{\"kind\":\"pass\",\"value\":false}' WHERE id='grading-m1'")
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
 class AcademicCalendarTests(unittest.TestCase):
     """0057: jornadas keep their configuration and blocks as JSON, one name per organization; a section may store a
     time per day as a JSON array next to its single-time columns. 0058 gives the demo its morning jornada."""

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { AcademicProfile, Course, CourseFormat, CourseSettings, EducationLevel, EducationType, LearningUnit, Lesson, Modality, Pacing, StudyProgram, Taxonomy } from "@happy-learners/contracts";
-import { areaLabel, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, pacings, resolveSettings, settingChoices, settingDefinitions, settingText, settingValue, sourceLabel } from "@happy-learners/domain";
+import { areaLabel, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, pacings, resolveSettings, settingChoices, visibleSettingDefinitions, settingText, settingValue, sourceLabel } from "@happy-learners/domain";
 import type { SettingKey } from "@happy-learners/domain";
 import { api, message } from "../api";
 import { Link, useNavigation, useUnsavedChanges } from "../navigation";
@@ -194,7 +194,7 @@ export function CourseForm({ course, onSaved, cancelHref, readOnly = false }: { 
       <section className="config-section" aria-labelledby="behaviour-title">
         <h2 id="behaviour-title">Comportamiento del curso</h2>
         <p className="muted small">Cada ajuste toma su valor del tipo de curso o del programa. Cámbialo solo si este curso necesita algo distinto.</p>
-        <ul className="settings-list">{settingDefinitions.map(definition => {
+        <ul className="settings-list">{visibleSettingDefinitions.map(definition => {
           const key = definition.key, source = resolved.source[key], locked = source === "program-locked";
           const inherited = program?.settings[key] !== undefined ? program.settings[key] : derivedSettings({ ...profile, format: dims.format })[key];
           const options = settingChoices(key, settings[key]);
