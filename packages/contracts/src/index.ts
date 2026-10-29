@@ -136,6 +136,49 @@ export type GradeScale = "numeric_100" | "letters_af";
 export type GradeAverage = "simple" | "weighted";
 /** Minimum score (0–100) for A, B, C and D, in that order; below D is F. */
 export type LetterThresholds = [number, number, number, number];
+/** A data-driven way of turning activities into period and final results. */
+export type GradingScheme = {
+  id: string; name: string;
+  method: "points" | "weighted-categories" | "pass-fail" | "levels";
+  categories: { id: string; label: string; weight?: number; dropLowest?: number; minimum?: number }[];
+  /** Highest level first. Values, when present, are percentages used to average levels. */
+  levels?: { id: string; label: string; value?: number }[];
+  display:
+    | { kind: "numeric"; max: number; decimals: 0 | 1 | 2 }
+    | { kind: "letters"; thresholds: { letter: string; min: number }[] }
+    | { kind: "gpa"; thresholds: { letter: string; min: number; points: number }[] }
+    | { kind: "levels" }
+    | { kind: "pass-fail" };
+  passing: { min?: number; level?: string };
+  periods: "simple" | "weighted" | "cumulative" | "last" | "none";
+  extraCreditCap?: number;
+  retakes: "replace" | "highest" | "average";
+};
+export type Rubric = {
+  criteria: { id: string; label: string; weight: number; levels: { id: string; label: string; points: number }[] }[];
+};
+/** An evaluable activity. Named GradingActivity to avoid colliding with a lesson's Activity. */
+export type GradingActivity = {
+  id: string; periodId: string; categoryId: string; title: string; points: number;
+  grading: "points" | "rubric" | "pass-fail" | "level" | "panel";
+  extra?: boolean; retakeOf?: string; rubric?: Rubric;
+  panel?: { combine: "average" | "median" | "majority" | "chair"; chair?: string };
+};
+export type AtomicMark =
+  | { kind: "points"; value: number }
+  | { kind: "pass"; value: boolean }
+  | { kind: "level"; value: string }
+  | { kind: "rubric"; choices: Record<string, string> }
+  | { kind: "exempt" };
+export type Mark = AtomicMark | { kind: "panel"; marks: { evaluator: string; mark: AtomicMark }[] };
+export type GradingPeriod = { id: string; position?: number; weight?: number };
+export type LearnerResult = {
+  periods: {
+    periodId: string; score: number | null; display: string | null; level: string | null;
+    graded: number; complete: boolean; passed: boolean | null; reasons: string[];
+  }[];
+  final: { score: number | null; display: string | null; passed: boolean | null; complete: boolean; reasons: string[] };
+};
 export interface CourseSettings {
   moduleLabel?: ModuleLabel; defaultSequence?: SequenceTemplate; attendance?: boolean; workGroups?: boolean; outcomesRequired?: boolean; assessmentRequired?: boolean;
   /** How the section's gradebook reads (libreta): scale, passing score, letter thresholds and how periods average. */

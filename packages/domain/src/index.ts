@@ -157,6 +157,8 @@ export { academicYearEditable, academicYearInput, academicYearLabels, academicYe
 export type { AcademicYearAction, AcademicYearDraft, PeriodDraft } from "./academic-years";
 export { assessmentKindLabel, assessmentKinds, assessmentTemplates, averageOf, csvFile, defaultThresholds, gradeAverages, gradeResult, gradeScales, gradeStatistics, isAssessmentKind, isLetterThresholds, letterOf, maxAssessmentActivities, maxCommentLength, maxGradeChanges, passingChoices, pastedCells, periodFromPlan, planTotal, pointsInput, scoreInput, thresholdPresets, thresholdsText } from "./gradebook";
 export type { GradingPolicy, PlannedActivity } from "./gradebook";
+export { displayOf, learnerResult, markValue, pointsScheme, rubricInput, schemeInput, schemeTemplates } from "./grading";
+export type { Activity as GradingActivity, AtomicMark, GradingPeriod, GradingScheme, LearnerResult, Mark, Rubric } from "./grading";
 export { bibliographyRoleLabel, bibliographyRoles, isBibliographyRole, maxCitation, maxReferences, primaryBlocker, referenceInput } from "./bibliography";
 export { competencyDescription, competencyName, curriculumPackages, indicatorEvidence, linkPlan, maxPickedIndicators, packageOf, packageProblems, packageSummary } from "./curriculum-packages";
 export type { CurriculumPackage, PackageCompetency, PackageIndicator } from "./curriculum-packages";
