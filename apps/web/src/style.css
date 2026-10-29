@@ -40,6 +40,8 @@ code, kbd { font-family: var(--font-mono); font-size: .85em; background: var(--c
 .optional { color: var(--color-muted); font-weight: var(--weight-regular); }
 .preserve-lines { white-space: pre-line; }
 .stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+/* A list laid out as a stack is a layout, not a bulleted list: no markers and no browser indentation. */
+ul.stack, ol.stack { list-style: none; margin: 0; padding: 0; }
 .stack-lg { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
 .reading { max-width: var(--reading-max); }
 /* Only long-form reading (Help) keeps a measure; descriptions in pages, panels and cards use the full width. */
@@ -1891,8 +1893,12 @@ section.panel[id^="profile-"] { scroll-margin-top: calc(var(--topbar-h) + var(--
 .scheme-preview { margin: 0; padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-sunken); }
 .grade-reasons { margin: var(--space-1) 0 0; color: var(--color-ink-soft); font-size: var(--text-xs); }
 .panel-progress { font-variant-numeric: tabular-nums; }
-.panel-mark { align-items: start; }
 .panel-heading { flex-wrap: wrap; align-items: baseline; }
 .panel-heading h2 { flex: 0 0 auto; }
 .panel-heading p { flex: 1 1 14rem; margin: 0; min-width: 0; }
-.template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.scheme-templates { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+/* A category of a scheme on one row: name, weight, drop lowest, minimum and remove. */
+.scheme-category { display: grid; grid-template-columns: minmax(10rem, 2fr) repeat(3, minmax(6rem, 1fr)) auto; gap: var(--space-3); align-items: end; }
+@media (max-width: 639px) { .scheme-category { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; } .scheme-category > :first-child { grid-column: 1 / -1; } }
+.panel-mark { display: grid; grid-template-columns: minmax(8rem, 1fr) minmax(10rem, 2fr) auto auto; gap: var(--space-3); align-items: end; }
+@media (max-width: 639px) { .panel-mark { grid-template-columns: minmax(0, 1fr); } }

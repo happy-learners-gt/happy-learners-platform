@@ -18,6 +18,8 @@ import { GradeStudentDrawer } from "./GradeStudent";
 
 const number = (value: number) => new Intl.NumberFormat(currentRegional().locale, { maximumFractionDigits: 1 }).format(value);
 const summary = "resumen";
+/** How an activity is graded, as the grid's column header says it. */
+const gradingLabels: Record<string, string> = { points: "Puntos", rubric: "Rúbrica", "pass-fail": "Aprobado o no", level: "Nivel", panel: "Tribunal" };
 type Column = { id: string; kind: "grade" | "score" | "mark" | "panel"; grading?: string; title: string; detail: string; max: number; rubric?: Rubric | null };
 type PeriodState = "open" | "submitted" | "returned" | "closed";
 const stateLabels: Record<PeriodState, string> = { open: "Abierto", submitted: "En revisión", returned: "Devuelto", closed: "Cerrado" };
@@ -130,7 +132,9 @@ export function SectionGradesPage() {
     <Section title={`${data.year.name}${data.year.status === "closed" ? " (cerrado)" : ""}`} action={data.years.length > 1 && <label><span className="sr-only">Ciclo lectivo</span>
       <select value={data.year.id} onChange={event => { if (!dirty) { setYear(event.target.value); } }} disabled={dirty}>{data.years.map(item => <option key={item.id} value={item.id}>{item.name}{item.status === "closed" ? " (cerrado)" : ""}</option>)}</select></label>}>
       <p className="muted small grade-policy">
-        {settingText("gradeScale", policy.scale)} · Aprueba con {policy.passingGrade} · {settingText("gradeAverage", policy.average)}{letters ? ` · ${thresholdsText(policy.letterThresholds)}` : ""}.{" "}
+        {data.scheme && data.scheme.id !== "points"
+          ? <>Esquema «{data.scheme.name}»{data.scheme.passing.min !== undefined ? ` · Aprueba con ${data.scheme.passing.min}` : data.scheme.passing.level ? ` · Aprueba desde ${data.scheme.levels?.find(level => level.id === data.scheme!.passing.level)?.label || data.scheme.passing.level}` : ""}.{" "}</>
+          : <>{settingText("gradeScale", policy.scale)} · Aprueba con {policy.passingGrade} · {settingText("gradeAverage", policy.average)}{letters ? ` · ${thresholdsText(policy.letterThresholds)}` : ""}.{" "}</>}
         {course.status === "active" && <Link href={`/cursos/${course.id}/configuracion`}>Configuración del curso</Link>}
       </p>
       {data.year.status === "closed" && <p className="notice"><Icon name="info" size={18}/>El ciclo está cerrado: sus notas se consultan, pero ya no cambian.</p>}
@@ -158,7 +162,7 @@ export function SectionGradesPage() {
     const columns: Column[] = planned
       ? plan.map(item => {
         const grading = item.grading || "points";
-        return { id: item.id, kind: grading === "points" ? "score" as const : grading === "panel" ? "panel" as const : "mark" as const, grading, title: item.title, detail: `${assessmentKindLabel(item.kind)} · ${grading === "points" ? `${number(item.points)} pts` : grading}`, max: item.points, rubric: item.rubric };
+        return { id: item.id, kind: grading === "points" ? "score" as const : grading === "panel" ? "panel" as const : "mark" as const, grading, title: item.title, detail: `${assessmentKindLabel(item.kind)} · ${grading === "points" ? `${number(item.points)} pts` : gradingLabels[grading] || grading}`, max: item.points, rubric: item.rubric };
       })
       : [{ id: period.id, kind: "grade" as const, title: "Nota del periodo", detail: "De 0 a 100", max: 100 }];
     const key = (learnerId: string, column: Column) => `${column.kind}:${learnerId}:${column.id}`;
@@ -182,8 +186,11 @@ export function SectionGradesPage() {
     const scores = learners.map(learner => ({ learnerId: learner.id, ...periodOf(learner.id) }));
     // While the plan is under way, each student is judged by the share of the points graded so far: 42 of 60 is 70.
     const standing = (item: { score: number | null; graded: number; complete: boolean }) => item.score === null ? null : item.complete || !planned || !item.graded ? item.score : Math.round(item.score / item.graded * 1000) / 10;
-    const partial = planned && scores.some(item => item.score !== null && !item.complete);
-    const stats = gradeStatistics(scores.map(item => ({ learnerId: item.learnerId, score: standing(item) })), policy.passingGrade);
+    // With a scheme other than accumulated points, the period, its statistics and the result all read the scheme's score.
+    const custom = !!data!.scheme && data!.scheme.id !== "points";
+    const schemed = (learnerId: string) => custom ? schemePeriod(data!, period, plan, learnerId, columns, valueOf, isExempt) : null;
+    const partial = !custom && planned && scores.some(item => item.score !== null && !item.complete);
+    const stats = gradeStatistics(scores.map(item => ({ learnerId: item.learnerId, score: custom ? schemed(item.learnerId)?.score ?? null : standing(item) })), custom ? data!.scheme!.passing.min ?? policy.passingGrade : policy.passingGrade);
     const invalid = Object.entries(edits).some(([id, value]) => {
       const [kind, , columnId] = id.split(":");
       if (kind !== "score" && kind !== "grade") return false;
@@ -319,7 +326,8 @@ export function SectionGradesPage() {
                     {editable && column.kind !== "panel" && column.kind !== "grade" && <Menu label={`Acciones de ${column.title} de ${learner.name}`} items={[exempt ? { label: "Quitar exoneración", onSelect: () => setExempt(learner.id, column.id, false) } : { label: "Exonerar", onSelect: () => setExempt(learner.id, column.id, true) }]}/>}
                   </td>;
                 })}
-                {planned && <td className="grade-total">{item.score === null ? <span className="muted">—</span> : <><strong>{number(item.score)}{letters ? ` (${letterOf(item.score, policy.letterThresholds)})` : ""}</strong>{!item.complete && <span className="muted small"> de {number(item.graded)}</span>}</>}</td>}
+                {planned && custom && <td className="grade-total">{(() => { const shown = schemed(learner.id); return shown?.score == null ? <span className="muted">—</span> : <><strong>{number(shown.score)}</strong>{!shown.complete && <span className="muted small"> (parcial)</span>}</>; })()}</td>}
+                {planned && !custom && <td className="grade-total">{item.score === null ? <span className="muted">—</span> : <><strong>{number(item.score)}{letters ? ` (${letterOf(item.score, policy.letterThresholds)})` : ""}</strong>{!item.complete && <span className="muted small"> de {number(item.graded)}</span>}</>}</td>}
                 <td>{schemeResult(data!, period, plan, learner.id, columns, valueOf, isExempt) || <ResultBadge result={resultOf(item)}/>}</td>
                 <td><button type="button" className={`icon-button${comment ? " has-comment" : ""}`} aria-label={`Detalle de ${learner.name}${comment ? " (tiene comentario)" : ""}`} onClick={() => setStudent(learner.id)}><Icon name={comment ? "text" : "more"} size={18}/></button></td>
               </tr>;
@@ -427,7 +435,8 @@ function rubricTotal(rubric: Rubric, choices: Record<string, string>) {
   }, 0) / weight);
 }
 
-function schemeResult(book: Gradebook, period: GradebookPeriod, plan: Gradebook["activities"], learnerId: string, columns: Column[], valueOf: (learnerId: string, column: Column) => string, isExempt: (learnerId: string, activityId: string) => boolean) {
+/** The period's result under the course's scheme, computed with the same engine as the server. */
+function schemePeriod(book: Gradebook, period: GradebookPeriod, plan: Gradebook["activities"], learnerId: string, columns: Column[], valueOf: (learnerId: string, column: Column) => string, isExempt: (learnerId: string, activityId: string) => boolean) {
   const scheme = book.scheme;
   if (!scheme || scheme.id === "points") return null;
   const marks = new Map<string, Mark>();
@@ -438,10 +447,14 @@ function schemeResult(book: Gradebook, period: GradebookPeriod, plan: Gradebook[
   }
   try {
     const result = learnerResult(scheme, plan.map(item => ({ id: item.id, periodId: item.periodId, categoryId: item.categoryId || scheme.categories[0]?.id || "general", title: item.title, points: item.points, grading: item.grading || "points", extra: item.extra, ...(item.retakeOf ? { retakeOf: item.retakeOf } : {}), ...(item.rubric ? { rubric: item.rubric } : {}), ...(item.panel ? { panel: item.panel } : {}) })), marks, [{ id: period.id, position: period.position, weight: period.weight }]);
-    const shown = result.periods[0];
-    if (!shown) return null;
-    return <><strong>{shown.display || displayOf(scheme, shown.score) || "—"}</strong>{shown.reasons.map(reason => <p key={reason} className="grade-reasons">{reason}</p>)}</>;
+    return result.periods[0] || null;
   } catch { return null; }
+}
+/** The scheme's result for the period, as the grid shows it (null with the accumulated points of 1.2.3). */
+function schemeResult(...args: Parameters<typeof schemePeriod>) {
+  const shown = schemePeriod(...args), scheme = args[0].scheme;
+  if (!shown || !scheme) return null;
+  return <><strong>{shown.display || displayOf(scheme, shown.score) || "—"}</strong>{shown.reasons.map(reason => <p key={reason} className="grade-reasons">{reason}</p>)}</>;
 }
 
 function RubricDialog({ cell, current, onClose, onSave }: { cell: { learnerName: string; title: string; rubric: Rubric }; current?: string; onClose: () => void; onSave: (choices: Record<string, string>) => void }) {
