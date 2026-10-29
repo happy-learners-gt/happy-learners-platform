@@ -7,7 +7,7 @@ import { signIn } from "./helpers";
 // open inside the screen, nothing overflows sideways, and the profile's section bar keeps the section chosen.
 const routes = ["/inicio", "/cursos", "/agenda", "/calendario", "/organizacion", "/educadores", "/configuracion-academica", "/tribunales", "/mi-cuenta/cuenta", "/mi-cuenta/notificaciones",
   "/cursos/seed-course-mate6", "/cursos/seed-course-mate6/plan", "/cursos/seed-course-mate6/contenido", "/cursos/seed-course-mate6/configuracion",
-  "/secciones/seed-group-mat-6a", "/secciones/seed-group-mat-6a/clases", "/secciones/seed-group-mat-6a/estudiantes", "/secciones/seed-group-mat-6a/notas"];
+  "/secciones/seed-group-mat-6a", "/secciones/seed-group-mat-6a/clases", "/secciones/seed-group-mat-6a/estudiantes", "/secciones/seed-group-mat-6a/notas", "/secciones/seed-group-mat-6a/grupos"];
 const fullWidth = new Set(["/organizacion", "/mi-cuenta/cuenta", "/cursos/seed-course-mate6/configuracion"]);
 
 async function settle(page: Page) {

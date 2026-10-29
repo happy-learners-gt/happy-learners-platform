@@ -127,12 +127,12 @@ function marksFor(learnerId: string, activities: StoredActivity[], scores: Map<s
 async function contents(db: Database, current: Member, section: { id: string; courseId: string }, year: Year | null, policy: GradingPolicy, scheme: GradingScheme, privileged: boolean): Promise<Book> {
   if (!year) return { year: null, periods: [], learners: [], grades: [], results: [], activities: [], scores: [], marks: [], evaluators: [], comments: [], reviews: [], scheme };
   const organizationId = current.organizationId;
-  const [periods, learners, grades, activityRows, scores, markRows, evaluatorRows, comments, reviews, groupRows, groupMarkRows, adjustmentRows] = await db.batch([
+  const [periods, learners, grades, activityRows, scores, markRows, evaluatorRows, comments, reviews, groupRows, groupMarkRows, adjustmentRows, peerRows] = await db.batch([
     db.prepare(`SELECT p.id,p.position,p.name,p.starts_on AS "from",p.ends_on AS until,p.weight,l.locked_at AS lockedAt,COALESCE(u.display_name,u.username) AS lockedBy
       FROM academic_periods p LEFT JOIN section_period_locks l ON l.period_id=p.id AND l.group_id=? LEFT JOIN users u ON u.id=l.locked_by WHERE p.year_id=? AND p.organization_id=? ORDER BY p.starts_on`).bind(section.id, year.id, organizationId),
     db.prepare("SELECT id,display_name AS name FROM group_learners WHERE group_id=? AND organization_id=? AND status='active' ORDER BY display_name COLLATE NOCASE,created_at,id").bind(section.id, organizationId),
     db.prepare("SELECT g.learner_id AS learnerId,g.period_id AS periodId,g.score FROM section_grades g JOIN academic_periods p ON p.id=g.period_id WHERE g.group_id=? AND g.organization_id=? AND p.year_id=?").bind(section.id, organizationId, year.id),
-    db.prepare(`SELECT a.id,a.period_id AS periodId,a.position,a.title,a.kind,a.points,a.due_on AS dueOn,a.category_id AS categoryId,a.grading,a.extra,a.retake_of AS retakeOf,a.rubric,a.panel,a.group_mode AS groupMode,a.work_group_set_id AS workGroupSetId FROM assessment_activities a JOIN academic_periods p ON p.id=a.period_id
+    db.prepare(`SELECT a.id,a.period_id AS periodId,a.position,a.title,a.kind,a.points,a.due_on AS dueOn,a.category_id AS categoryId,a.grading,a.extra,a.retake_of AS retakeOf,a.rubric,a.panel,a.group_mode AS groupMode,a.work_group_set_id AS workGroupSetId,a.peer_min AS peerMin,a.peer_max AS peerMax FROM assessment_activities a JOIN academic_periods p ON p.id=a.period_id
       WHERE a.course_id=? AND a.organization_id=? AND p.year_id=? ORDER BY p.starts_on,a.position,a.id`).bind(section.courseId, organizationId, year.id),
     db.prepare(`SELECT s.activity_id AS activityId,s.learner_id AS learnerId,s.points,s.source FROM assessment_scores s JOIN assessment_activities a ON a.id=s.activity_id JOIN academic_periods p ON p.id=a.period_id
       WHERE s.group_id=? AND s.organization_id=? AND p.year_id=?`).bind(section.id, organizationId, year.id),
@@ -146,7 +146,7 @@ async function contents(db: Database, current: Member, section: { id: string; co
       JOIN academic_periods p ON p.id=c.period_id LEFT JOIN users u ON u.id=c.updated_by WHERE c.group_id=? AND c.organization_id=? AND p.year_id=?`).bind(section.id, organizationId, year.id),
     db.prepare(`SELECT r.period_id AS periodId,r.status,r.note,COALESCE(s.display_name,s.username) AS submittedBy,r.submitted_at AS submittedAt,COALESCE(v.display_name,v.username) AS reviewedBy,r.reviewed_at AS reviewedAt
       FROM section_period_reviews r JOIN academic_periods p ON p.id=r.period_id LEFT JOIN users s ON s.id=r.submitted_by LEFT JOIN users v ON v.id=r.reviewed_by WHERE r.group_id=? AND r.organization_id=? AND p.year_id=?`).bind(section.id, organizationId, year.id),
-    db.prepare(`SELECT w.id,w.set_id AS setId,w.name,(SELECT json_group_array(learner_id) FROM work_group_members m WHERE m.work_group_id=w.id) AS learnerIds
+    db.prepare(`SELECT w.id,w.set_id AS setId,s.name AS setName,w.name,(SELECT json_group_array(learner_id) FROM work_group_members m WHERE m.work_group_id=w.id) AS learnerIds
       FROM work_groups w JOIN work_group_sets s ON s.id=w.set_id WHERE w.group_id=? AND w.organization_id=? AND s.archived=0 ORDER BY w.rowid`).bind(section.id, organizationId),
     db.prepare(`SELECT m.activity_id AS activityId,m.work_group_id AS workGroupId,m.mark FROM assessment_group_marks m
       JOIN assessment_activities a ON a.id=m.activity_id JOIN academic_periods p ON p.id=a.period_id
@@ -154,21 +154,25 @@ async function contents(db: Database, current: Member, section: { id: string; co
     db.prepare(`SELECT d.activity_id AS activityId,d.learner_id AS learnerId,d.kind,d.value,d.note FROM assessment_group_adjustments d
       JOIN assessment_activities a ON a.id=d.activity_id JOIN academic_periods p ON p.id=a.period_id
       WHERE d.group_id=? AND d.organization_id=? AND p.year_id=?`).bind(section.id, organizationId, year.id),
+    db.prepare(`SELECT r.activity_id AS activityId,r.rater_id AS raterId,r.ratee_id AS rateeId,r.score FROM assessment_peer_ratings r
+      JOIN assessment_activities a ON a.id=r.activity_id JOIN academic_periods p ON p.id=a.period_id
+      WHERE a.course_id=? AND a.organization_id=? AND p.year_id=?`).bind(section.courseId, organizationId, year.id),
   ]) as unknown as [
     Omit<GradebookPeriod, "locked">[], { id: string; name: string }[], GradeEntry[],
-    (Omit<AssessmentActivity, "rubric" | "panel" | "extra" | "groupMode" | "workGroupSetId"> & { rubric: string | null; panel: string | null; extra: number; groupMode: string | null; workGroupSetId: string | null })[],
+    (Omit<AssessmentActivity, "rubric" | "panel" | "extra" | "groupMode" | "workGroupSetId" | "peerMin" | "peerMax"> & { rubric: string | null; panel: string | null; extra: number; groupMode: string | null; workGroupSetId: string | null; peerMin: number; peerMax: number })[],
     (AssessmentScore & { source: "individual" | "group" })[], (Omit<AssessmentMark, "mark" | "source"> & { mark: string; source: "individual" | "group" })[], (Omit<AssessmentEvaluator, "chair"> & { chair: number })[],
     GradeComment[], PeriodReview[],
-    { id: string; setId: string; name: string; learnerIds: string | null }[],
+    { id: string; setId: string; setName: string; name: string; learnerIds: string | null }[],
     { activityId: string; workGroupId: string; mark: string }[],
     { activityId: string; learnerId: string; kind: "factor" | "override" | "peer"; value: number; note: string | null }[],
+    { activityId: string; raterId: string; rateeId: string; score: number }[],
   ];
   const activities: AssessmentActivity[] = activityRows.map(row => ({
     id: row.id, periodId: row.periodId, position: row.position, title: row.title, kind: row.kind, points: row.points, dueOn: row.dueOn,
     categoryId: row.categoryId, grading: row.grading, extra: !!row.extra, retakeOf: row.retakeOf || null,
     ...(row.rubric ? { rubric: JSON.parse(row.rubric) } : {}),
     ...(row.panel ? { panel: JSON.parse(row.panel) } : {}),
-    ...(row.groupMode === "group" ? { groupMode: "group" as const, workGroupSetId: row.workGroupSetId } : {}),
+    ...(row.groupMode === "group" ? { groupMode: "group" as const, workGroupSetId: row.workGroupSetId, peerMin: row.peerMin, peerMax: row.peerMax } : {}),
   }));
   const grouped = new Set(activities.filter(activity => activity.groupMode === "group").map(activity => activity.id));
   const evaluators: AssessmentEvaluator[] = evaluatorRows.map(row => ({ ...row, chair: !!row.chair }));
@@ -233,9 +237,10 @@ async function contents(db: Database, current: Member, section: { id: string; co
     year, periods: listed, learners, grades: shownGrades, results, activities, scores: shownScores, marks: visibleMarks, evaluators,
     comments: comments.filter(comment => roster.has(comment.learnerId)), reviews, scheme,
     ...(setIds.size ? {
-      workGroups: groupRows.filter(group => setIds.has(group.setId)).map(group => ({ id: group.id, setId: group.setId, name: group.name, learnerIds: (JSON.parse(group.learnerIds || "[]") as (string | null)[]).filter((id): id is string => !!id) })),
+      workGroups: groupRows.filter(group => setIds.has(group.setId)).map(group => ({ id: group.id, setId: group.setId, setName: group.setName, name: group.name, learnerIds: (JSON.parse(group.learnerIds || "[]") as (string | null)[]).filter((id): id is string => !!id) })),
       groupMarks: groupMarkRows.filter(row => grouped.has(row.activityId)).map(row => ({ activityId: row.activityId, workGroupId: row.workGroupId, mark: JSON.parse(row.mark) as AtomicMark })),
       groupAdjustments: adjustmentRows.filter(row => grouped.has(row.activityId)),
+      peerRatings: peerRows.filter(row => grouped.has(row.activityId)),
     } : {}),
   };
 }
@@ -309,7 +314,7 @@ type PlanItem = {
   id: string | null; title: string; kind: AssessmentKind; points: number; dueOn: string | null;
   categoryId: string; grading: GradingActivity["grading"]; extra: boolean; retakeOf: string | null;
   rubric: GradingActivity["rubric"] | null; panel: GradingActivity["panel"] | null;
-  groupMode?: "individual" | "group"; workGroupSetId?: string | null;
+  groupMode?: "individual" | "group"; workGroupSetId?: string | null; peerMin?: number; peerMax?: number;
 };
 function planInput(input: unknown): PlanItem[] | string {
   const list = objects(input && typeof input === "object" ? (input as Record<string, unknown>).activities : undefined);
@@ -344,15 +349,23 @@ function planInput(input: unknown): PlanItem[] | string {
     } else if (item.panel !== undefined && item.panel !== null) return `«${title}» no usa un tribunal.`;
     let groupMode: PlanItem["groupMode"];
     let workGroupSetId: string | null | undefined;
+    let peerMin: number | undefined;
+    let peerMax: number | undefined;
     if (item.groupMode !== undefined || item.workGroupSetId !== undefined) {
       if (item.groupMode !== "individual" && item.groupMode !== "group") return `Elige si «${title}» se califica individual o en grupo.`;
       groupMode = item.groupMode;
       if (groupMode === "group") {
         if (typeof item.workGroupSetId !== "string" || !/^groupset-[a-f0-9-]{36}$/.test(item.workGroupSetId)) return `Elige el conjunto de grupos de «${title}».`;
         workGroupSetId = item.workGroupSetId;
+        const minimum = item.peerMin === undefined ? 0.5 : pointsInput(item.peerMin, 2);
+        const maximum = item.peerMax === undefined ? 1.5 : pointsInput(item.peerMax, 2);
+        if (typeof minimum !== "number" || typeof maximum !== "number") return `El rango del factor de «${title}» va de 0 a 2, con un decimal.`;
+        if (minimum > maximum) return `El factor mínimo de «${title}» no puede ser mayor que el máximo.`;
+        peerMin = minimum;
+        peerMax = maximum;
       } else workGroupSetId = null;
     }
-    items.push({ id: (item.id as string | undefined) || null, title, kind: item.kind, points, dueOn, categoryId, grading, extra: item.extra === true, retakeOf, rubric, panel, ...(groupMode ? { groupMode, workGroupSetId: workGroupSetId ?? null } : {}) });
+    items.push({ id: (item.id as string | undefined) || null, title, kind: item.kind, points, dueOn, categoryId, grading, extra: item.extra === true, retakeOf, rubric, panel, ...(groupMode ? { groupMode, workGroupSetId: workGroupSetId ?? null, peerMin, peerMax } : {}) });
   }
   if (new Set(items.filter(item => item.id).map(item => item.id)).size !== items.filter(item => item.id).length) return "Revisa las actividades: hay una repetida.";
   return items;
@@ -717,10 +730,10 @@ async function savePlan(db: Database, current: Member, section: SectionRow, peri
       const trailing = [item.categoryId, item.grading, item.extra ? 1 : 0, item.retakeOf, item.rubric ? JSON.stringify(item.rubric) : null, item.panel ? JSON.stringify(item.panel) : null] as (string | number | null)[];
       return item.id
         ? item.groupMode
-          ? db.prepare("UPDATE assessment_activities SET position=?,title=?,kind=?,points=?,due_on=?,category_id=?,grading=?,extra=?,retake_of=?,rubric=?,panel=?,group_mode=?,work_group_set_id=?,updated_at=? WHERE id=? AND organization_id=?").bind(...leading, ...trailing, item.groupMode, item.workGroupSetId ?? null, now, item.id, current.organizationId)
+          ? db.prepare("UPDATE assessment_activities SET position=?,title=?,kind=?,points=?,due_on=?,category_id=?,grading=?,extra=?,retake_of=?,rubric=?,panel=?,group_mode=?,work_group_set_id=?,peer_min=?,peer_max=?,updated_at=? WHERE id=? AND organization_id=?").bind(...leading, ...trailing, item.groupMode, item.workGroupSetId ?? null, item.peerMin ?? 0.5, item.peerMax ?? 1.5, now, item.id, current.organizationId)
           : db.prepare("UPDATE assessment_activities SET position=?,title=?,kind=?,points=?,due_on=?,category_id=?,grading=?,extra=?,retake_of=?,rubric=?,panel=?,updated_at=? WHERE id=? AND organization_id=?").bind(...leading, ...trailing, now, item.id, current.organizationId)
-        : db.prepare("INSERT INTO assessment_activities(id,organization_id,course_id,period_id,position,title,kind,points,due_on,created_by,created_at,updated_at,category_id,grading,extra,retake_of,rubric,panel,group_mode,work_group_set_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-          .bind(`assessment-${crypto.randomUUID()}`, current.organizationId, section.courseId, period.id, ...leading, current.id, now, now, ...trailing, item.groupMode || "individual", item.workGroupSetId ?? null);
+        : db.prepare("INSERT INTO assessment_activities(id,organization_id,course_id,period_id,position,title,kind,points,due_on,created_by,created_at,updated_at,category_id,grading,extra,retake_of,rubric,panel,group_mode,work_group_set_id,peer_min,peer_max) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+          .bind(`assessment-${crypto.randomUUID()}`, current.organizationId, section.courseId, period.id, ...leading, current.id, now, now, ...trailing, item.groupMode || "individual", item.workGroupSetId ?? null, item.peerMin ?? 0.5, item.peerMax ?? 1.5);
     }),
     event(db, current, { action: "updated", targetType: "course", targetId: section.courseId, courseId: section.courseId, summary: `Actualizó el plan de evaluación de «${period.name}» (${items.length === 1 ? "1 actividad" : `${items.length} actividades`}, ${planTotal(items)} puntos)` }),
   ]);

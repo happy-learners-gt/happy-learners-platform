@@ -15,12 +15,13 @@ import { useCourse } from "../course/context";
 import { sectionCrumbs, useSection } from "./context";
 import { GradePlanDialog } from "./GradePlan";
 import { GradeStudentDrawer } from "./GradeStudent";
+import { factorText, liveFactors, originLabel, resultText } from "./group-grade";
 
 const number = (value: number) => new Intl.NumberFormat(currentRegional().locale, { maximumFractionDigits: 1 }).format(value);
 const summary = "resumen";
 /** How an activity is graded, as the grid's column header says it. */
 const gradingLabels: Record<string, string> = { points: "Puntos", rubric: "Rúbrica", "pass-fail": "Aprobado o no", level: "Nivel", panel: "Tribunal" };
-type Column = { id: string; kind: "grade" | "score" | "mark" | "panel"; grading?: string; title: string; detail: string; max: number; rubric?: Rubric | null };
+type Column = { id: string; kind: "grade" | "score" | "mark" | "panel" | "group"; grading?: string; title: string; detail: string; max: number; rubric?: Rubric | null; setId?: string | null; peerMin?: number; peerMax?: number };
 type PeriodState = "open" | "submitted" | "returned" | "closed";
 const stateLabels: Record<PeriodState, string> = { open: "Abierto", submitted: "En revisión", returned: "Devuelto", closed: "Cerrado" };
 const stateTones = { open: "neutral", submitted: "info", returned: "warning", closed: "success" } as const;
@@ -80,6 +81,8 @@ export function SectionGradesPage() {
   const [edits, setEdits] = useState<Record<string, string>>({}), [busy, setBusy] = useState(""), [formError, setFormError] = useState("");
   const [planning, setPlanning] = useState(false), [student, setStudent] = useState(""), [returning, setReturning] = useState(false);
   const [rubricCell, setRubricCell] = useState<{ learnerId: string; learnerName: string; activityId: string; title: string; rubric: Rubric } | null>(null);
+  const [groupRubric, setGroupRubric] = useState<{ workGroupId: string; name: string; activityId: string; title: string; rubric: Rubric } | null>(null);
+  const [peerTarget, setPeerTarget] = useState<{ activityId: string; workGroupId: string } | null>(null);
   const grid = useRef<HTMLTableElement>(null);
   const dirty = Object.keys(edits).length > 0;
   useUnsavedChanges(dirty);
@@ -88,6 +91,13 @@ export function SectionGradesPage() {
   useEffect(() => { void load(); }, [load]);
   const crumbs = sectionCrumbs(section, { label: "Notas" });
   const update = (book: Gradebook) => { setData(book); setEdits({}); setFormError(""); };
+  async function saveGroupMark(activityId: string, workGroupId: string, mark: AtomicMark) {
+    if (dirty) { toast({ tone: "error", message: "Guarda o descarta tus cambios antes de calificar un grupo." }); return; }
+    try {
+      update((await api<{ gradebook: Gradebook }>(`/sections/${section.id}/grades/activities/${activityId}/groups`, "PUT", { workGroupId, mark })).gradebook);
+      toast({ message: "Nota del grupo guardada." });
+    } catch (cause) { toast({ tone: "error", message: message(cause) }); }
+  }
   async function exportCsv() {
     if (!data) return;
     save(new Blob([gradebookCsv(data)], { type: "text/csv;charset=utf-8" }), `notas-${slug(`${section.name}-${data.year?.name || ""}`)}.csv`);
@@ -146,6 +156,8 @@ export function SectionGradesPage() {
     </Section>
     {planning && view !== summary && <GradePlanDialog book={data} periodId={view} sectionId={section.id} onClose={() => setPlanning(false)} onSaved={book => { update(book); setPlanning(false); toast({ message: "Plan de evaluación guardado." }); }}/>}
     {rubricCell && <RubricDialog cell={rubricCell} current={edits[`mark:${rubricCell.learnerId}:${rubricCell.activityId}`]} onClose={() => setRubricCell(null)} onSave={choices => { setEdits(current => ({ ...current, [`mark:${rubricCell.learnerId}:${rubricCell.activityId}`]: JSON.stringify({ kind: "rubric", choices }) })); setRubricCell(null); }}/>}
+    {groupRubric && <RubricDialog cell={{ learnerName: groupRubric.name, title: groupRubric.title, rubric: groupRubric.rubric }} current={(() => { const mark = data.groupMarks?.find(item => item.activityId === groupRubric.activityId && item.workGroupId === groupRubric.workGroupId)?.mark; return mark ? JSON.stringify(mark) : undefined; })()} onClose={() => setGroupRubric(null)} onSave={choices => { const target = groupRubric; setGroupRubric(null); void saveGroupMark(target.activityId, target.workGroupId, { kind: "rubric", choices }); }}/>}
+    {peerTarget && <PeerDialog book={data} activityId={peerTarget.activityId} workGroupId={peerTarget.workGroupId} onClose={() => setPeerTarget(null)} onSaved={book => { update(book); setPeerTarget(null); toast({ message: "Coevaluación guardada." }); }}/>}
     {student && <GradeStudentDrawer book={data} learnerId={student} periodId={view === summary ? (periods.find(period => !period.locked) || periods[periods.length - 1]).id : view}
       editable={data.canEdit && view !== summary && ["open", "returned"].includes(stateOf(periods.find(period => period.id === view)!))}
       onSaved={book => { update(book); toast({ message: "Comentario guardado." }); }} onReport={() => void reports(student)} onClose={() => setStudent("")}/>}
@@ -162,7 +174,8 @@ export function SectionGradesPage() {
     const columns: Column[] = planned
       ? plan.map(item => {
         const grading = item.grading || "points";
-        return { id: item.id, kind: grading === "points" ? "score" as const : grading === "panel" ? "panel" as const : "mark" as const, grading, title: item.title, detail: `${assessmentKindLabel(item.kind)} · ${grading === "points" ? `${number(item.points)} pts` : gradingLabels[grading] || grading}`, max: item.points, rubric: item.rubric };
+        const grouped = item.groupMode === "group";
+        return { id: item.id, kind: grouped ? "group" as const : grading === "points" ? "score" as const : grading === "panel" ? "panel" as const : "mark" as const, grading, title: item.title, detail: `${assessmentKindLabel(item.kind)} · ${grouped ? "En grupos · " : ""}${grading === "points" ? `${number(item.points)} pts` : gradingLabels[grading] || grading}`, max: item.points, rubric: item.rubric, setId: item.workGroupSetId, peerMin: item.peerMin, peerMax: item.peerMax };
       })
       : [{ id: period.id, kind: "grade" as const, title: "Nota del periodo", detail: "De 0 a 100", max: 100 }];
     const key = (learnerId: string, column: Column) => `${column.kind}:${learnerId}:${column.id}`;
@@ -171,6 +184,12 @@ export function SectionGradesPage() {
     const isExempt = (learnerId: string, activityId: string) => exemptKey(learnerId, activityId) in edits ? edits[exemptKey(learnerId, activityId)] === "exempt" : storedMark(learnerId, activityId)?.mark.kind === "exempt";
     const stored = (learnerId: string, column: Column) => {
       if (column.kind === "mark") { const mark = storedMark(learnerId, column.id); return mark && mark.mark.kind !== "exempt" ? JSON.stringify(mark.mark) : ""; }
+      if (column.kind === "group") {
+        const score = data!.scores.find(item => item.learnerId === learnerId && item.activityId === column.id)?.points;
+        if (score !== undefined) return String(score);
+        const mark = storedMark(learnerId, column.id)?.mark;
+        return mark?.kind === "points" ? String(mark.value) : "";
+      }
       const value = column.kind === "grade" ? data!.grades.find(grade => grade.learnerId === learnerId && grade.periodId === column.id)?.score : data!.scores.find(score => score.learnerId === learnerId && score.activityId === column.id)?.points;
       return value === undefined ? "" : String(value);
     };
@@ -306,7 +325,13 @@ export function SectionGradesPage() {
               {planned && <th scope="col">Resultado</th>}
               <th scope="col"><span className="sr-only">Detalle</span></th>
             </tr></thead>
-            <tbody>{learners.map((learner, row) => {
+            <tbody>{(data!.workGroups || []).filter(group => columns.some(column => column.kind === "group" && column.setId === group.setId)).map(group => <tr key={group.id} className="grade-group-row">
+              <th scope="row">{group.name}<span className="muted grade-column-detail">{group.learnerIds.map(id => learners.find(learner => learner.id === id)?.name).filter(Boolean).join(", ")}</span></th>
+              {columns.map(column => <td key={column.id} className="grade-cell">{column.kind === "group" && column.setId === group.setId
+                ? <GroupMarkCell column={column} groupName={group.name} mark={data!.groupMarks?.find(item => item.activityId === column.id && item.workGroupId === group.id)?.mark} levels={data!.scheme?.levels} editable={editable} onSave={mark => void saveGroupMark(column.id, group.id, mark)} onRubric={() => column.rubric && setGroupRubric({ workGroupId: group.id, name: group.name, activityId: column.id, title: column.title, rubric: column.rubric })} onPeers={() => setPeerTarget({ activityId: column.id, workGroupId: group.id })}/>
+                : <span className="muted">—</span>}</td>)}
+              {planned && <td/>}<td/><td/>
+            </tr>)}{learners.map((learner, row) => {
               const item = scores[row], comment = data!.comments.some(entry => entry.learnerId === learner.id && entry.periodId === period.id);
               return <tr key={learner.id}>
                 <th scope="row">{learner.name}</th>
@@ -316,6 +341,7 @@ export function SectionGradesPage() {
                   const exempt = column.kind !== "grade" && isExempt(learner.id, column.id);
                   return <td key={column.id} className={`grade-cell${changedCell ? " grade-dirty" : ""}`}>
                     {column.kind === "panel" ? <span className="panel-progress">{panelProgress(data!, learner.id, column.id)}</span>
+                      : column.kind === "group" ? <GroupResult book={data!} column={column} learnerId={learner.id}/>
                       : exempt ? <span>Exonerado</span>
                       : column.kind === "mark" ? <MarkCell column={column} learnerName={learner.name} value={value} schemeLevels={data!.scheme?.levels} editable={editable} onChange={next => edit(learner.id, column, next)} onRubric={() => column.rubric && setRubricCell({ learnerId: learner.id, learnerName: learner.name, activityId: column.id, title: column.title, rubric: column.rubric })}/>
                       : editable
@@ -323,7 +349,7 @@ export function SectionGradesPage() {
                           onChange={event => edit(learner.id, column, event.target.value)} onKeyDown={event => onKey(event, row, index)} onPaste={event => onPaste(event, row, index)} onFocus={event => event.currentTarget.select()}/>
                         : <span>{value === "" ? <span className="muted">—</span> : number(Number(value))}</span>}
                     {!planned && letters && typeof parsed === "number" && <span className="grade-letter" aria-label={`letra ${letterOf(parsed, policy.letterThresholds)}`}>{letterOf(parsed, policy.letterThresholds)}</span>}
-                    {editable && column.kind !== "panel" && column.kind !== "grade" && <Menu label={`Acciones de ${column.title} de ${learner.name}`} items={[exempt ? { label: "Quitar exoneración", onSelect: () => setExempt(learner.id, column.id, false) } : { label: "Exonerar", onSelect: () => setExempt(learner.id, column.id, true) }]}/>}
+                    {editable && column.kind !== "panel" && column.kind !== "grade" && column.kind !== "group" && <Menu label={`Acciones de ${column.title} de ${learner.name}`} items={[exempt ? { label: "Quitar exoneración", onSelect: () => setExempt(learner.id, column.id, false) } : { label: "Exonerar", onSelect: () => setExempt(learner.id, column.id, true) }]}/>}
                   </td>;
                 })}
                 {planned && custom && <td className="grade-total">{(() => { const shown = schemed(learner.id); return shown?.score == null ? <span className="muted">—</span> : <><strong>{number(shown.score)}</strong>{!shown.complete && <span className="muted small"> (parcial)</span>}</>; })()}</td>}
@@ -406,6 +432,72 @@ function panelProgress(book: Gradebook, learnerId: string, activityId: string) {
   return `${marks.length} de ${assigned.length}${done ? " · completo" : ""}`;
 }
 
+function GroupResult({ book, column, learnerId }: { book: Gradebook; column: Column; learnerId: string }) {
+  const activity = book.activities.find(item => item.id === column.id);
+  if (!activity) return <span className="muted">—</span>;
+  const text = resultText(book, activity, learnerId, book.scheme?.levels);
+  const origin = originLabel(book, activity, learnerId);
+  return <span>{text || <span className="muted">—</span>}{origin && <span className="grade-origin">{origin}</span>}</span>;
+}
+
+function GroupMarkCell({ column, groupName, mark, levels, editable, onSave, onRubric, onPeers }: {
+  column: Column; groupName: string; mark?: AtomicMark; levels?: { id: string; label: string }[]; editable: boolean; onSave: (mark: AtomicMark) => void; onRubric: () => void; onPeers: () => void;
+}) {
+  const [draft, setDraft] = useState(mark?.kind === "points" ? String(mark.value) : "");
+  useEffect(() => { setDraft(mark?.kind === "points" ? String(mark.value) : ""); }, [mark]);
+  const label = `Nota de ${groupName} en ${column.title}`;
+  const peers = <Button type="button" variant="ghost" className="small" onClick={onPeers}>Coevaluación</Button>;
+  if (!editable) return <span>{mark ? markText(mark, column, levels) : <span className="muted">—</span>}{peers}</span>;
+  if (column.grading === "rubric" && column.rubric) {
+    const total = mark?.kind === "rubric" ? rubricTotal(column.rubric, mark.choices) : null;
+    return <span className="grade-group-mark"><button type="button" className="button secondary small" aria-label={`Rúbrica de ${column.title} de ${groupName}`} onClick={onRubric}>{total === null ? "Calificar" : total}</button>{peers}</span>;
+  }
+  if (column.grading === "pass-fail") return <span className="grade-group-mark"><label className="lock"><input type="checkbox" aria-label={label} checked={mark?.kind === "pass" && mark.value} onChange={event => onSave({ kind: "pass", value: event.target.checked })}/><span>{mark?.kind === "pass" && mark.value ? "Aprobado" : "No aprobado"}</span></label>{peers}</span>;
+  if (column.grading === "level") return <span className="grade-group-mark"><select aria-label={label} value={mark?.kind === "level" ? mark.value : ""} onChange={event => event.target.value && onSave({ kind: "level", value: event.target.value })}><option value="">Elegir nivel…</option>{(levels || []).map(level => <option key={level.id} value={level.id}>{level.label}</option>)}</select>{peers}</span>;
+  return <span className="grade-group-mark"><input type="text" inputMode="decimal" className="grade-input" aria-label={label} value={draft} onChange={event => setDraft(event.target.value)} onBlur={event => { const value = pointsInput(event.target.value, column.max); if (typeof value === "number" && value !== (mark?.kind === "points" ? mark.value : undefined)) onSave({ kind: "points", value }); }}/>{peers}</span>;
+}
+
+function PeerDialog({ book, activityId, workGroupId, onClose, onSaved }: { book: Gradebook; activityId: string; workGroupId: string; onClose: () => void; onSaved: (book: Gradebook) => void }) {
+  const activity = book.activities.find(item => item.id === activityId)!;
+  const group = book.workGroups?.find(item => item.id === workGroupId);
+  const members = group?.learnerIds || [];
+  const names = new Map(book.learners.map(learner => [learner.id, learner.name]));
+  const [ratings, setRatings] = useState(() => (book.peerRatings || []).filter(item => item.activityId === activityId));
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const mine = ratings.filter(item => members.includes(item.raterId) && members.includes(item.rateeId));
+  const factors = liveFactors(activity, members, mine, book.groupMarks?.find(item => item.activityId === activityId && item.workGroupId === workGroupId)?.mark || null);
+  const scoreOf = (raterId: string, rateeId: string) => mine.find(item => item.raterId === raterId && item.rateeId === rateeId)?.score;
+  function setScore(raterId: string, rateeId: string, raw: string) {
+    const score = pointsInput(raw, 5);
+    setRatings(current => {
+      const rest = current.filter(item => !(item.raterId === raterId && item.rateeId === rateeId && item.activityId === activityId));
+      return typeof score === "number" ? [...rest, { activityId, raterId, rateeId, score }] : rest;
+    });
+  }
+  const received = (id: string) => mine.filter(item => item.rateeId === id).reduce((sum, item) => sum + item.score, 0);
+  async function save(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError("");
+    try { onSaved((await api<{ gradebook: Gradebook }>(`/sections/${book.section.id}/grades/activities/${activityId}/peer-ratings`, "PUT", { ratings: ratings.map(({ raterId, rateeId, score }) => ({ raterId, rateeId, score })) })).gradebook); }
+    catch (cause) { setError(message(cause)); setBusy(false); }
+  }
+  return <Modal wide title={`Coevaluación · ${group?.name || "Grupo"}`} onClose={onClose}>
+    <form className="stack" onSubmit={save}>
+      <p className="muted small">{activity.title}. Cada integrante califica a los demás de 0 a 5. El factor es el promedio recibido dividido por el del grupo, entre {factorText(activity.peerMin ?? 0.5)} y {factorText(activity.peerMax ?? 1.5)}.</p>
+      {error && <p className="form-alert" role="alert">{error}</p>}
+      <div className="coverage-scroll" tabIndex={0}><table className="peer-matrix">
+        <thead><tr><th scope="col">Quién califica</th>{members.map(id => <th scope="col" key={id}>{names.get(id)}</th>)}<th scope="col">Total recibido</th><th scope="col">Factor</th></tr></thead>
+        <tbody>{members.map(raterId => <tr key={raterId}>
+          <th scope="row">{names.get(raterId)}</th>
+          {members.map(rateeId => <td key={rateeId}>{raterId === rateeId ? <span className="muted">—</span> : <input inputMode="decimal" aria-label={`Calificación de ${names.get(raterId)} a ${names.get(rateeId)}`} defaultValue={scoreOf(raterId, rateeId) ?? ""} onChange={event => setScore(raterId, rateeId, event.target.value)}/>}</td>)}
+          <td>{received(raterId)}</td>
+          <td>Factor de {names.get(raterId)} ×{factorText(factors.get(raterId) ?? 1)}</td>
+        </tr>)}</tbody>
+      </table></div>
+      <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><PrimaryAction type="submit" busy={busy} disabled={busy}>Guardar coevaluación</PrimaryAction></div>
+    </form>
+  </Modal>;
+}
+
 function MarkCell({ column, learnerName, value, schemeLevels, editable, onChange, onRubric }: { column: Column; learnerName: string; value: string; schemeLevels?: { id: string; label: string }[]; editable: boolean; onChange: (value: string) => void; onRubric: () => void }) {
   const mark = value ? JSON.parse(value) as AtomicMark : null;
   if (!editable) return <span>{mark ? markText(mark, column, schemeLevels) : <span className="muted">—</span>}</span>;
@@ -442,7 +534,7 @@ function schemePeriod(book: Gradebook, period: GradebookPeriod, plan: Gradebook[
   const marks = new Map<string, Mark>();
   for (const column of columns) {
     if (isExempt(learnerId, column.id)) { marks.set(column.id, { kind: "exempt" }); continue; }
-    if (column.kind === "score") { const value = pointsInput(valueOf(learnerId, column), column.max); if (typeof value === "number") marks.set(column.id, { kind: "points", value }); }
+    if (column.kind === "score" || column.kind === "group") { const value = pointsInput(valueOf(learnerId, column), column.max); if (typeof value === "number") marks.set(column.id, { kind: "points", value }); }
     if (column.kind === "mark" && valueOf(learnerId, column)) marks.set(column.id, JSON.parse(valueOf(learnerId, column)) as AtomicMark);
   }
   try {

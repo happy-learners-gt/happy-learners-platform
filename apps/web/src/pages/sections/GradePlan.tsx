@@ -13,6 +13,7 @@ type Row = {
   categoryId: string; grading: GradingActivity["grading"]; extra: boolean; retakeOf: string;
   rubric: Rubric | null; combine: NonNullable<GradingActivity["panel"]>["combine"];
   evaluators: { userId: string; chair: boolean }[];
+  groupMode: "individual" | "group"; workGroupSetId: string; peerMin: string; peerMax: string;
 };
 const decimal = (value: number) => String(value).replace(".", ",");
 const gradings = [["points", "Puntos"], ["rubric", "Rúbrica"], ["pass-fail", "Aprobado o no"], ["level", "Nivel"], ["panel", "Tribunal"]] as const;
@@ -23,6 +24,7 @@ const fresh = (item: { title: string; kind: AssessmentKind; points: number; dueO
   key: `new-${++counter}`, title: item.title, kind: item.kind, points: decimal(item.points), dueOn: item.dueOn || "",
   categoryId: item.categoryId || categoryId, grading: item.grading || "points", extra: !!item.extra, retakeOf: item.retakeOf || "",
   rubric: item.rubric || null, combine: item.panel?.combine || "average", evaluators: [],
+  groupMode: "individual", workGroupSetId: "", peerMin: "0,5", peerMax: "1,5",
 });
 
 /**
@@ -36,21 +38,24 @@ export function GradePlanDialog({ book, periodId, sectionId, onSaved, onClose }:
   const categoryId = scheme.categories[0]?.id || "general";
   const own = book.activities.filter(item => item.periodId === periodId);
   const scored = new Set(book.scores.map(score => score.activityId));
-  const [people, setPeople] = useState<Person[]>([]);
+  const [people, setPeople] = useState<Person[]>([]), [sets, setSets] = useState<{ id: string; name: string }[]>([]);
   const [rows, setRows] = useState<Row[]>(() => own.map((item: AssessmentActivity) => ({
     key: item.id, id: item.id, title: item.title, kind: item.kind, points: decimal(item.points), dueOn: item.dueOn || "",
     categoryId: item.categoryId || categoryId, grading: item.grading || "points", extra: !!item.extra, retakeOf: item.retakeOf || "",
     rubric: item.rubric || null, combine: item.panel?.combine || "average",
     evaluators: (book.evaluators || []).filter(person => person.activityId === item.id).map(person => ({ userId: person.userId, chair: person.chair })),
+    groupMode: item.groupMode || "individual", workGroupSetId: item.workGroupSetId || "", peerMin: decimal(item.peerMin ?? 0.5), peerMax: decimal(item.peerMax ?? 1.5),
   })));
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
   useEffect(() => { api<{ people?: Person[] }>("/people").then(result => setPeople(Array.isArray(result.people) ? result.people : [])).catch(() => undefined); }, []);
+  useEffect(() => { api<{ sets: { id: string; name: string }[] }>(`/sections/${sectionId}/group-sets`).then(result => setSets(result.sets), () => undefined); }, [sectionId]);
   const others = book.periods.filter(item => item.id !== periodId && book.activities.some(activity => activity.periodId === item.id));
   const parsed = rows.map(row => pointsInput(row.points, 100));
   const counted = rows.map((row, index) => ({ points: row.extra || row.retakeOf ? 0 : typeof parsed[index] === "number" ? parsed[index] : 0 }));
   const total = planTotal(counted);
   const pointsOnly = scheme.method === "points";
-  const invalid = rows.some((row, index) => !row.title.trim() || !parsed[index] || (row.grading === "rubric" && (!row.rubric || "error" in rubricInput(row.rubric))) || (row.grading === "panel" && row.evaluators.filter(person => person.chair).length !== 1));
+  const peerOf = (value: string) => pointsInput(value, 2);
+  const invalid = rows.some((row, index) => !row.title.trim() || !parsed[index] || (row.grading === "rubric" && (!row.rubric || "error" in rubricInput(row.rubric))) || (row.grading === "panel" && row.evaluators.filter(person => person.chair).length !== 1) || (row.groupMode === "group" && (!row.workGroupSetId || typeof peerOf(row.peerMin) !== "number" || typeof peerOf(row.peerMax) !== "number" || (peerOf(row.peerMin) as number) > (peerOf(row.peerMax) as number))));
   const set = (key: string, patch: Partial<Row>) => setRows(current => current.map(row => row.key === key ? { ...row, ...patch } : row));
   const move = (index: number, step: number) => setRows(current => { const next = [...current], [item] = next.splice(index, 1); next.splice(index + step, 0, item); return next; });
   // A template or another period replaces the activities without scores; the scored ones stay first.
@@ -65,6 +70,8 @@ export function GradePlanDialog({ book, periodId, sectionId, onSaved, onClose }:
         categoryId: row.categoryId, grading: row.grading, extra: row.extra, retakeOf: row.retakeOf || null,
         ...(row.grading === "rubric" || (row.grading === "panel" && row.rubric) ? { rubric: row.rubric } : {}),
         ...(row.grading === "panel" ? { panel: { combine: row.combine } } : {}),
+        groupMode: row.groupMode,
+        ...(row.groupMode === "group" ? { workGroupSetId: row.workGroupSetId, peerMin: peerOf(row.peerMin), peerMax: peerOf(row.peerMax) } : { workGroupSetId: null }),
       }));
       let result = await api<{ gradebook: Gradebook }>(`/sections/${sectionId}/grades/periods/${periodId}/plan`, "PUT", { activities });
       for (const row of rows.filter(item => item.grading === "panel")) {
@@ -105,6 +112,13 @@ export function GradePlanDialog({ book, periodId, sectionId, onSaved, onClose }:
               <td><select value={row.grading} aria-label={`Evaluación de ${name}`} onChange={event => set(row.key, { grading: event.target.value as Row["grading"], rubric: event.target.value === "rubric" ? row.rubric || blankRubric() : row.rubric })}>{gradings.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
                 <label className="lock"><input type="checkbox" checked={row.extra} onChange={event => set(row.key, { extra: event.target.checked })}/><span>Puntos extra</span></label>
                 <select aria-label={`Reposición de ${name}`} value={row.retakeOf} onChange={event => set(row.key, { retakeOf: event.target.value })}><option value="">No es reposición</option>{rows.filter(item => item.id && item.id !== row.id).map(item => <option key={item.id} value={item.id}>Reposición de {item.title}</option>)}</select>
+                <select aria-label={`Quién se califica en ${name}`} value={row.groupMode} onChange={event => set(row.key, { groupMode: event.target.value as Row["groupMode"] })}><option value="individual">Individual</option><option value="group">En grupos</option></select>
+                {row.groupMode === "group" && <>
+                  <select aria-label={`Conjunto de ${name}`} value={row.workGroupSetId} onChange={event => set(row.key, { workGroupSetId: event.target.value })}><option value="">Elegir conjunto…</option>{sets.map(set => <option key={set.id} value={set.id}>{set.name}</option>)}</select>
+                  {!sets.length && <span className="muted small">Forma un conjunto en Grupos.</span>}
+                  <label className="lock">Factor mínimo <input className="plan-points" inputMode="decimal" aria-label={`Factor mínimo de ${name}`} value={row.peerMin} onChange={event => set(row.key, { peerMin: event.target.value })}/></label>
+                  <label className="lock">Factor máximo <input className="plan-points" inputMode="decimal" aria-label={`Factor máximo de ${name}`} value={row.peerMax} onChange={event => set(row.key, { peerMax: event.target.value })}/></label>
+                </>}
               </td>
               <td><input type="date" value={row.dueOn} min={period.from} max={period.until} aria-label={`Fecha de ${name}`} onChange={event => set(row.key, { dueOn: event.target.value })}/>
                 {(row.grading === "rubric" || (row.grading === "panel" && row.rubric)) && row.rubric && <RubricEditor rubric={row.rubric} onChange={rubric => set(row.key, { rubric })}/>}

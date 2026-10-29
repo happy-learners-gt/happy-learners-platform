@@ -5,7 +5,8 @@ import { scopedCourses } from "./permissions";
 import { event } from "./team";
 
 /**
- * Group sets of a section (lote 3a), without a screen yet:
+ * Group sets of a section (lote 3a):
+ * - GET /api/sections/:id/group-sets lists the section's active sets.
  * - POST /api/sections/:id/group-sets[?preview=1] { name, rules, sessionId? } previews or stores a split.
  * - PUT …/group-sets/:setId renames it, replaces its members or archives it.
  * - DELETE …/group-sets/:setId archives it.
@@ -18,7 +19,7 @@ const onePath = /^\/api\/sections\/([a-z0-9-]+)\/group-sets\/(groupset-[a-f0-9-]
 const regenPath = /^\/api\/sections\/([a-z0-9-]+)\/group-sets\/(groupset-[a-f0-9-]{36})\/regenerate$/;
 
 export function groupSetMethods(path: string): string[] | null {
-  if (listPath.test(path)) return ["POST"];
+  if (listPath.test(path)) return ["GET", "POST"];
   if (regenPath.test(path)) return ["POST"];
   if (onePath.test(path)) return ["PUT", "DELETE"];
   return null;
@@ -112,8 +113,19 @@ export async function groupSets(path: string, method: string, input: unknown, ur
   if (regenPath.test(path)) return regenerate(db, current, section, setId, input);
   if (setId && method === "DELETE") return archive(db, current, section, setId);
   if (setId && method === "PUT") return update(db, current, section, setId, input);
+  if (!setId && method === "GET") return list(db, current, section);
   if (!setId && method === "POST") return create(db, current, section, input, url.searchParams.get("preview") === "1");
   return reply({ error: "Ruta no disponible." }, 404);
+}
+
+async function list(db: Database, current: Member, section: Section) {
+  const rows = (await db.prepare("SELECT id FROM work_group_sets WHERE group_id=? AND organization_id=? AND archived=0 ORDER BY created_at,id").bind(section.id, current.organizationId).all<{ id: string }>()).results;
+  const sets = [];
+  for (const row of rows) {
+    const set = await view(db, row.id, current.organizationId);
+    if (set) sets.push({ ...set, graded: await graded(db, row.id) });
+  }
+  return reply({ sets });
 }
 
 async function create(db: Database, current: Member, section: Section, input: unknown, preview: boolean) {
