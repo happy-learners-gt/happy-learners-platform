@@ -190,7 +190,8 @@ it("shows a section's gradebook with letters, the partial result and saves only 
   // The open period is the first tab shown; without a plan it takes one score per student.
   expect((await screen.findByRole("tab", { name: "Primer bimestre" })).getAttribute("aria-selected")).toBe("true");
   expect(screen.getByRole("tab", { name: /Segundo bimestre.*Cerrado/ })).toBeTruthy();
-  expect(screen.getByText(/Sin plan de evaluación/)).toBeTruthy();
+  expect(screen.getByText(/Este periodo aún no tiene actividades/)).toBeTruthy();
+  expect(screen.getAllByRole("link", { name: "Ver la evaluación del curso" }).length).toBeGreaterThan(0);
   const cell = screen.getByLabelText("Nota del periodo de Beto") as HTMLInputElement;
   fireEvent.change(cell, { target: { value: "101" } });
   expect((screen.getByRole("button", { name: /^Guardar/ }) as HTMLButtonElement).disabled).toBe(true);
@@ -222,13 +223,13 @@ it("grades a period with its assessment plan: points per activity, keyboard, pas
     comments: [{ learnerId: "learner-a", periodId: "period-4", body: "Muy constante.", updatedAt: "2026-10-20T10:00:00Z", updatedBy: "Lucía" }], reviews: [],
     results: [{ learnerId: "learner-a", average: 25, letter: null, passed: false, complete: true }, { learnerId: "learner-b", average: null, letter: null, passed: null, complete: false }],
     policy: { scale: "numeric_100", passingGrade: 60, letterThresholds: [90, 80, 70, 60], average: "simple" }, canEdit: true, canLock: false, canUnlock: false, canSubmit: true };
-  const saved: unknown[] = [], plans: unknown[] = [];
+  const saved: unknown[] = [];
   vi.stubGlobal("fetch", vi.fn(async (input: string, init?: RequestInit) => {
     if (input === "/api/session") return Response.json({ member, pending: [] });
     if (input === "/api/organization") return Response.json({ organization: { id: "org-demo", name: "Escuela", timezone: "America/Guatemala", configured: true } });
     if (input === "/api/sections/group-1") return Response.json({ section, today: "2026-10-28" });
     if (input === "/api/courses/course-1") return Response.json({ course, units: [], curriculum: { competencies: [], outcomes: [] } });
-    if (input.endsWith("/plan")) { plans.push(JSON.parse(String(init!.body))); return Response.json({ gradebook }); }
+    if (input.endsWith("/plan")) return Response.json({ gradebook });
     if (input.startsWith("/api/sections/group-1/grades/history")) return Response.json({ changes: [{ id: "history-1", learnerId: "learner-a", periodId: "period-4", activityId: "assessment-1", activity: "Tareas", before: null, after: 25, by: "Lucía", at: "2026-10-20T10:00:00Z" }] });
     if (input.startsWith("/api/sections/group-1/grades")) {
       if (init?.method === "PUT") saved.push(JSON.parse(String(init.body)));
@@ -268,20 +269,8 @@ it("grades a period with its assessment plan: points per activity, keyboard, pas
   expect(await screen.findByText(/Tareas/, { selector: "strong" })).toBeTruthy();
   expect((screen.getByLabelText("Comentario de Ana en Cuarto bimestre") as HTMLTextAreaElement).value).toBe("Muy constante.");
   fireEvent.click(screen.getByRole("button", { name: "Cerrar" }));
-  // The plan editor: a template replaces the activities without scores and adds up to 100.
-  fireEvent.click(screen.getByRole("button", { name: "Editar el plan" }));
-  const dialog = await screen.findByRole("dialog", { name: "Plan de evaluación · Cuarto bimestre" });
-  fireEvent.change(within(dialog).getByLabelText("Empezar con una plantilla"), { target: { value: "zona-60" } });
-  expect(within(dialog).getByText("Suma 130 de 100 puntos")).toBeTruthy();
-  expect((within(dialog).getByRole("button", { name: "Guardar el plan" }) as HTMLButtonElement).disabled).toBe(true);
-  expect((within(dialog).getAllByRole("button", { name: "Quitar Tareas" })[0] as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.click(within(dialog).getAllByRole("button", { name: "Quitar Tareas" })[1]);
-  expect(within(dialog).getByText("Suma 110 de 100 puntos")).toBeTruthy();
-  fireEvent.click(within(dialog).getByRole("button", { name: "Quitar Pruebas cortas" }));
-  expect(within(dialog).getByText("Suma 100 de 100 puntos")).toBeTruthy();
-  fireEvent.click(within(dialog).getByRole("button", { name: "Guardar el plan" }));
-  await waitFor(() => expect(plans).toHaveLength(1));
-  expect((plans[0] as { activities: { title: string; points: number; id?: string }[] }).activities.map(item => [item.title, item.points, !!item.id])).toEqual([["Tareas", 30, true], ["Proyecto", 20, false], ["Participación", 10, false], ["Examen del periodo", 40, false]]);
+  expect(screen.queryByRole("button", { name: "Editar el plan" })).toBeNull();
+  expect(screen.getByRole("link", { name: "Ver la evaluación del curso" }).getAttribute("href")).toBe("/cursos/course-1/evaluacion");
 });
 it("shows the course's bibliography with its main book and links a library item from the dialog", async () => {
   const member = { id: "user-educator", username: "educador-demo", role: "educator", organizationId: "org-demo", permissions: { admin: false, coordination: null, grants: {} } };
@@ -588,4 +577,81 @@ it("grades a group, shows each member's origin, applies a factor and previews th
   expect(within(matrix).getByText("Factor de Ana ×1,5")).toBeTruthy();
   expect(within(matrix).getByText("Factor de Leo ×1,0")).toBeTruthy();
   expect(within(matrix).getByText("Factor de Noa ×0,5")).toBeTruthy();
+});
+it("designs the course evaluation and saves a rubric descriptor", async () => {
+  const member = { id: "user-educator", username: "educador-demo", role: "educator", organizationId: "org-demo", permissions: { admin: false, coordination: null, grants: {} } };
+  const course = { id: "course-1", title: "Universidad", objective: "Investigar.", educationType: "formal", level: "bachelor", modality: "in-person", pacing: "scheduled", format: "subject", settings: {}, status: "active", version: 1, updatedAt: "t",
+    access: { role: "lead", assigned: [], configure: false, edit: true, publish: true, review: true, team: false, educators: false, sections: "assigned" } };
+  const scheme = { id: "scheme-1", name: "Universidad: categorías y GPA", method: "weighted-categories", categories: [{ id: "tareas", label: "Tareas", weight: 30, dropLowest: 1 }, { id: "proyectos", label: "Proyectos", weight: 30 }, { id: "final", label: "Examen final", weight: 40, minimum: 60 }], display: { kind: "gpa", thresholds: [{ letter: "A", min: 90, points: 4 }, { letter: "F", min: 0, points: 0 }] }, passing: { min: 60 }, periods: "weighted", retakes: "highest" };
+  const task = { id: "assessment-t", periodId: "period-1", title: "Tarea 1", kind: "task", points: 30, dueOn: null, categoryId: "tareas", grading: "points", extra: false, retakeOf: null, groupMode: "individual", peerMin: 0.5, peerMax: 1.5, graded: false, maxScore: null, evaluators: [] };
+  const assessment = { scheme, explanation: ["La nota de cada periodo es Tareas 30 % + Proyectos 30 % + Examen final 40 %.", "Se descarta la tarea más baja · Examen final mínimo 60 · Se muestra como GPA (4,0)", "El ciclo promedia sus periodos según su peso · Aprueba con 60"], canEdit: true, year: { id: "year-1", name: "2026", status: "current" }, years: [{ id: "year-1", name: "2026", status: "current" }], team: [{ id: "user-educator", name: "Lucía Herrera" }], periods: [{ id: "period-1", name: "Primer bimestre", position: 1, weight: 1, status: { state: "missing", label: "", points: 30, maximum: null }, activities: [task] }] };
+  const saved: unknown[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: string, init?: RequestInit) => {
+    if (input === "/api/session") return Response.json({ member, pending: [] });
+    if (input === "/api/organization") return Response.json({ organization: { id: "org-demo", name: "Escuela", timezone: "America/Guatemala", configured: true } });
+    if (input === "/api/courses/course-1") return Response.json({ course, units: [], curriculum: { competencies: [], outcomes: [] } });
+    if (input.startsWith("/api/courses/course-1/assessment/activities") && init?.method === "POST") { saved.push(JSON.parse(String(init.body))); return Response.json({ id: "assessment-1" }, { status: 201 }); }
+    if (input.startsWith("/api/courses/course-1/assessment")) return Response.json(assessment);
+    if (input.startsWith("/api/lessons")) return Response.json({ lessons: [] });
+    if (input.endsWith("/materials")) return Response.json({ materials: [] });
+    if (input === "/api/resources") return Response.json({ resources: [] });
+    if (input === "/api/programs") return Response.json({ programs: [] });
+    return Response.json({});
+  }));
+  history.replaceState(null, "", "/cursos/course-1/evaluacion");
+  render(<App/>);
+  expect(await screen.findByRole("heading", { level: 1, name: "Evaluación" })).toBeTruthy();
+  expect(await screen.findByText("La nota de cada periodo es Tareas 30 % + Proyectos 30 % + Examen final 40 %.")).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Tareas · 30 %" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Proyectos · 30 %" })).toBeTruthy();
+  expect(screen.getByRole("tab", { name: /^Primer bimestre\s+Pendiente$/ })).toBeTruthy();
+  expect(screen.getByText("Sin actividades en Proyectos y Examen final")).toBeTruthy();
+  expect(screen.queryByText(/faltan \d+ pts/)).toBeNull();
+  fireEvent.click(screen.getAllByRole("button", { name: "Agregar" })[1]);
+  const panel = await screen.findByRole("dialog", { name: "Nueva actividad en Proyectos" });
+  expect(within(panel).getByRole("heading", { name: "1 Qué es" })).toBeTruthy();
+  expect(within(panel).getByRole("heading", { name: "2 Cómo se califica" })).toBeTruthy();
+  expect(within(panel).getByRole("heading", { name: "3 Quién la hace" })).toBeTruthy();
+  expect(within(panel).getByRole("heading", { name: "4 Opciones" })).toBeTruthy();
+  fireEvent.change(within(panel).getByLabelText("Nombre"), { target: { value: "Ensayo" } });
+  fireEvent.change(within(panel).getByRole("textbox", { name: "Puntos" }), { target: { value: "20" } });
+  fireEvent.click(within(panel).getByRole("radio", { name: "Rúbrica" }));
+  const matrix = within(panel).getByRole("table", { name: "Rúbrica" });
+  expect(within(matrix).getByRole("columnheader", { name: /Alto/ })).toBeTruthy();
+  expect(within(matrix).getByRole("button", { name: "Quitar Criterio 1" })).toBeTruthy();
+  expect(within(matrix).getByRole("button", { name: "Quitar nivel Alto" })).toBeTruthy();
+  fireEvent.click(within(panel).getByRole("button", { name: "Agregar criterio" }));
+  fireEvent.click(within(panel).getByRole("button", { name: "Agregar criterio" }));
+  fireEvent.change(within(panel).getByLabelText("Descriptor de Alto en Criterio 1"), { target: { value: "Argumenta con evidencia." } });
+  fireEvent.click(within(panel).getByRole("radio", { name: "En grupos" }));
+  expect(within(panel).getByText("Vale 20 de 30 % en Proyectos · se califica con rúbrica de 3 criterios · en grupos")).toBeTruthy();
+  fireEvent.click(within(panel).getByRole("button", { name: "Guardar" }));
+  await waitFor(() => expect(saved).toHaveLength(1));
+  const body = saved[0] as { title: string; categoryId: string; grading: string; rubric: { criteria: { levels: { description?: string }[] }[] } };
+  expect(body).toMatchObject({ title: "Ensayo", categoryId: "proyectos", grading: "rubric" });
+  expect(body.rubric.criteria[0].levels[0].description).toBe("Argumenta con evidencia.");
+});
+it("shows accumulated points as a bar and the points still missing on the period tab", async () => {
+  const member = { id: "user-educator", username: "educador-demo", role: "educator", organizationId: "org-demo", permissions: { admin: false, coordination: null, grants: {} } };
+  const course = { id: "course-1", title: "Colegio", objective: "Sumar.", educationType: "formal", level: "primary", modality: "in-person", pacing: "scheduled", format: "subject", settings: {}, status: "active", version: 1, updatedAt: "t",
+    access: { role: "lead", assigned: [], configure: false, edit: true, publish: true, review: true, team: false, educators: false, sections: "assigned" } };
+  const scheme = { id: "points", name: "Puntos acumulados", method: "points", categories: [{ id: "general", label: "Actividades" }], display: { kind: "numeric", max: 100, decimals: 1 }, passing: { min: 60 }, periods: "simple", retakes: "replace" };
+  const activity = { id: "assessment-t", periodId: "period-2", title: "Zona", kind: "task", points: 80, dueOn: null, categoryId: "general", grading: "points", extra: false, retakeOf: null, groupMode: "individual", peerMin: 0.5, peerMax: 1.5, graded: false, maxScore: null, evaluators: [] };
+  const assessment = { scheme, explanation: ["La nota de cada periodo es la suma de los puntos de Actividades."], canEdit: true, year: { id: "year-1", name: "2026", status: "current" }, years: [{ id: "year-1", name: "2026", status: "current" }], team: [], periods: [{ id: "period-2", name: "Segundo bimestre", position: 2, weight: 1, status: { state: "missing", label: "", points: 80, maximum: 100 }, activities: [activity] }] };
+  vi.stubGlobal("fetch", vi.fn(async (input: string) => {
+    if (input === "/api/session") return Response.json({ member, pending: [] });
+    if (input === "/api/organization") return Response.json({ organization: { id: "org-demo", name: "Escuela", timezone: "America/Guatemala", configured: true } });
+    if (input === "/api/courses/course-1") return Response.json({ course, units: [], curriculum: { competencies: [], outcomes: [] } });
+    if (input.startsWith("/api/courses/course-1/assessment")) return Response.json(assessment);
+    if (input.startsWith("/api/lessons")) return Response.json({ lessons: [] });
+    if (input.endsWith("/materials")) return Response.json({ materials: [] });
+    if (input === "/api/resources") return Response.json({ resources: [] });
+    if (input === "/api/programs") return Response.json({ programs: [] });
+    return Response.json({});
+  }));
+  history.replaceState(null, "", "/cursos/course-1/evaluacion");
+  render(<App/>);
+  expect(await screen.findByRole("tab", { name: /^Segundo bimestre\s+faltan 20 pts$/ })).toBeTruthy();
+  expect(screen.getByText("80 de 100 puntos")).toBeTruthy();
+  expect(screen.queryByText("80 de 100 puntos · faltan 20 pts")).toBeNull();
 });

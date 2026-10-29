@@ -208,6 +208,7 @@ export function CourseForm({ course, onSaved, cancelHref, readOnly = false }: { 
                 {!locked && options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
               <span className={`source-tag source-${source}`}>{sourceLabel[source]}</span>
+              {key === "gradingSchemeId" && course && <Link href={`/cursos/${course.id}/evaluacion`}>Ver cómo se calcula</Link>}
             </div>
           </li>;
         })}</ul>

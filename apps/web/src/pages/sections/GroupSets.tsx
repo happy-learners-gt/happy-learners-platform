@@ -11,9 +11,11 @@ import { Button, EmptyState, Field, Section } from "../../ui/primitives";
 
 type Formed = { name: string; learnerIds: string[] };
 type StoredGroup = Formed & { id: string };
+type UsedIn = { kind: "lesson" | "assessment"; activityId: string; title: string };
+export type GroupActivityRow = UsedIn & { lessonId?: string; detail: string; setId: string | null; workGroupIds: string[]; grouping?: string };
 type GroupSet = {
   id: string; name: string; sessionId: string | null; graded?: boolean; rules: GroupRules;
-  groups: StoredGroup[]; unmet?: UnmetConstraint[];
+  groups: StoredGroup[]; unmet?: UnmetConstraint[]; usedIn?: UsedIn[];
 };
 type Session = { id: string; sessionDate: string; groupId: string };
 type Preview = { groups: Formed[]; unmet: UnmetConstraint[] };
@@ -22,9 +24,10 @@ type Preview = { groups: Formed[]; unmet: UnmetConstraint[] };
  * Reusable splits of a section (lote 3b). The teacher previews who is together, then keeps the set, moves a student
  * and archives it. A set that already has grades explains why it cannot be formed again.
  */
-export function GroupSets({ sectionId, courseId, learners, workGroups, writable, forming, onForming, onToast }: {
+export function GroupSets({ sectionId, courseId, learners, workGroups, writable, forming, onForming, onToast, onNewGroup, revision = 0, onActivities, onSets }: {
   sectionId: string; courseId: string; learners: GroupLearner[]; workGroups: WorkGroup[]; writable: boolean;
   forming: boolean; onForming: (open: boolean) => void; onToast: (message: string, error?: boolean) => void;
+  onNewGroup?: () => void; revision?: number; onActivities?: (activities: GroupActivityRow[]) => void; onSets?: (sets: { id: string; name: string }[]) => void;
 }) {
   const { confirm } = useFeedback();
   const [sets, setSets] = useState<GroupSet[] | null>(null), [error, setError] = useState("");
@@ -32,10 +35,13 @@ export function GroupSets({ sectionId, courseId, learners, workGroups, writable,
   const names = new Map(learners.map(learner => [learner.id, learner.displayName]));
   const path = `/sections/${sectionId}/group-sets`;
   async function load() {
-    try { setSets((await api<{ sets: GroupSet[] }>(path)).sets); setError(""); }
+    try {
+      const payload = await api<{ sets: GroupSet[]; activities?: GroupActivityRow[] }>(path);
+      setSets(payload.sets); setError(""); onActivities?.(payload.activities || []); onSets?.(payload.sets.map(item => ({ id: item.id, name: item.name })));
+    }
     catch (cause) { setError(message(cause)); }
   }
-  useEffect(() => { void load(); }, [sectionId]);
+  useEffect(() => { void load(); }, [sectionId, revision]);
   async function move(set: GroupSet, learnerId: string, toId: string) {
     const groups = set.groups.map(group => ({
       id: group.id, name: group.name,
@@ -56,13 +62,17 @@ export function GroupSets({ sectionId, courseId, learners, workGroups, writable,
       : <div className="set-board">{sets.map(set => <article key={set.id} className="set-card lit" aria-labelledby={`set-${set.id}`}>
         <header>
           <div><h3 id={`set-${set.id}`}>{set.name}</h3><p className="muted small">{plural(set.groups.length, "grupo", "grupos")} · {set.sessionId ? "de una clase" : "de toda la lista"}</p></div>
+          <div className="set-card-actions">
+          {writable && set.name === "Grupos de la sección" && onNewGroup && <Button icon="plus" className="small" onClick={onNewGroup}>Nuevo grupo</Button>}
           {writable && <Menu label={`Acciones del conjunto ${set.name}`} items={[
             { label: "Renombrar", icon: "edit", onSelect: () => setRenaming(set) },
             { label: set.graded ? "Regenerar: este conjunto ya tiene notas" : "Regenerar", icon: "undo", onSelect: () => setRegenerating(set) },
             "separator",
             { label: "Archivar", icon: "archive", danger: true, onSelect: () => void archive(set) },
           ]}/>}
+          </div>
         </header>
+        <p className="muted small">Se usa en {set.usedIn?.length ? set.usedIn.map(item => item.title).join(", ") : "ninguna actividad"}.</p>
         <div className="set-groups">{set.groups.map(group => <div key={group.id} className="set-group" data-set-group={group.id}>
           <h4>{group.name}</h4>
           <ul className="set-members" aria-label={`Integrantes de ${group.name}`}>

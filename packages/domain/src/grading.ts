@@ -8,6 +8,7 @@ import type {
   Mark,
   Rubric,
 } from "@happy-learners/contracts";
+import { planTotal } from "./gradebook";
 
 export type { AtomicMark, GradingPeriod, GradingScheme, LearnerResult, Mark, Rubric };
 /** The domain name is unambiguous; the contracts package uses GradingActivity to avoid a lesson type collision. */
@@ -73,9 +74,15 @@ export function rubricInput(input: unknown): Rubric | InputError {
       if (levelIds.has(levelId)) return error(`Los niveles de «${label}» no pueden repetirse.`);
       if (!finite(level!.points) || level!.points < 0 || level!.points > 100) return error(`Los puntos de los niveles de «${label}» deben estar entre 0 y 100.`);
       if (level!.points >= previousPoints) return error(`Ordena los niveles de «${label}» de mayor a menor puntaje.`);
+      let description: string | undefined;
+      if (level!.description !== undefined && level!.description !== null && String(level!.description).trim() !== "") {
+        const text = cleanText(level!.description, 240);
+        if (!text) return error(`El descriptor de «${levelLabel}» en «${label}» tiene hasta 240 caracteres.`);
+        description = text;
+      }
       levelIds.add(levelId);
       previousPoints = level!.points;
-      levels.push({ id: levelId, label: levelLabel, points: level!.points as number });
+      levels.push({ id: levelId, label: levelLabel, points: level!.points as number, ...(description ? { description } : {}) });
     }
     if (!levels.some(level => level.points > 0)) return error(`«${label}» necesita un nivel con más de cero puntos.`);
     criteria.push({ id: String(criterion.id), label, weight: criterion.weight as number, levels });
@@ -536,6 +543,99 @@ export function schemeFromSettings(settings: Pick<Required<CourseSettings>, "gra
     passing: { min: settings.passingGrade },
     periods: settings.gradeAverage,
   };
+}
+
+const joinNames = (labels: string[]) => labels.length <= 1 ? labels[0] || "" : labels.length === 2 ? `${labels[0]} y ${labels[1]}` : `${labels.slice(0, -1).join(", ")} y ${labels.at(-1)}`;
+/** «Tareas» → «tarea»; a consonant before «es» drops both letters («niveles» → «nivel»). */
+const singular = (label: string) => {
+  const lower = label.toLocaleLowerCase("es");
+  if (/[^aeiouáéíóúü]es$/i.test(lower)) return lower.slice(0, -2);
+  return lower.endsWith("s") ? lower.slice(0, -1) : lower;
+};
+const gpaTop = (points: number) => { const text = String(points); return text.includes(".") ? text.replace(".", ",") : `${text},0`; };
+
+/**
+ * How a scheme calculates a grade, in the same three lines everywhere: the period, what it drops or requires
+ * and how it is shown, then how periods combine and what passes. Extra credit and retakes stay out of the text.
+ */
+export function schemeExplanation(scheme: GradingScheme): string[] {
+  const categories = scheme.categories;
+  const first = scheme.method === "points"
+    ? `La nota de cada periodo es la suma de los puntos de ${joinNames(categories.map(category => category.label))}.`
+    : scheme.method === "weighted-categories"
+      ? `La nota de cada periodo es ${categories.map(category => `${category.label} ${category.weight} %`).join(" + ")}.`
+      : scheme.method === "levels"
+        ? `La nota de cada periodo es el nivel en ${joinNames(categories.map(category => category.label))}.`
+        : `La nota de cada periodo es aprobado o no en ${joinNames(categories.map(category => category.label))}.`;
+  const middle: string[] = [];
+  for (const category of categories) {
+    if (!category.dropLowest) continue;
+    middle.push(category.dropLowest === 1 ? `Se descarta la ${singular(category.label)} más baja` : `Se descartan las ${category.dropLowest} ${category.label.toLocaleLowerCase("es")} más bajas`);
+  }
+  for (const category of categories) if (category.minimum !== undefined) middle.push(`${category.label} mínimo ${category.minimum}`);
+  const display = scheme.display;
+  middle.push(display.kind === "gpa" ? `Se muestra como GPA (${gpaTop(display.thresholds[0]?.points ?? 0)})`
+    : display.kind === "numeric" ? `Se muestra de 0 a ${display.max}`
+    : display.kind === "letters" ? "Se muestra con letras"
+    : display.kind === "levels" ? "Se muestra con niveles"
+    : "Se muestra como aprobado o no");
+  const periods = scheme.periods === "weighted" ? "El ciclo promedia sus periodos según su peso"
+    : scheme.periods === "cumulative" ? "El ciclo acumula los periodos"
+    : scheme.periods === "last" ? "El ciclo usa el último periodo"
+    : scheme.periods === "none" ? "Cada periodo se evalúa por separado"
+    : "El ciclo promedia sus periodos por igual";
+  const passing = scheme.passing.level
+    ? `Aprueba desde ${scheme.levels?.find(level => level.id === scheme.passing.level)?.label || scheme.passing.level}`
+    : `Aprueba con ${scheme.passing.min}`;
+  return [first, middle.join(" · "), `${periods} · ${passing}`];
+}
+
+const pointsText = (value: number) => String(planTotal([{ points: value }])).replace(".", ",");
+const amountText = (value: number | string) => {
+  if (typeof value === "string") return value.trim().replace(".", ",") || "0";
+  return pointsText(value);
+};
+
+/**
+ * What a period still needs, in the words of its method. Points say how many of 100 are placed, or how many are
+ * missing. Weighted categories name the categories that still have no activity. They never talk about points.
+ */
+export function assessmentPeriodStatus(
+  scheme: Pick<GradingScheme, "method" | "categories">,
+  activities: { categoryId: string; points: number; extra?: boolean; retakeOf?: string | null }[],
+): { state: "complete" | "missing" | "weights"; tab: string; line: string } {
+  const counted = activities.filter(item => !item.extra && !item.retakeOf);
+  if (scheme.method === "points") {
+    const points = planTotal(counted);
+    const line = `${pointsText(points)} de 100 puntos`;
+    if (points === 100) return { state: "complete", tab: "", line };
+    if (points > 100) return { state: "weights", tab: "pesos que no suman", line: "pesos que no suman" };
+    return { state: "missing", tab: `faltan ${pointsText(100 - points)} pts`, line };
+  }
+  if (scheme.method === "weighted-categories") {
+    const empty = scheme.categories.filter(category => !counted.some(item => item.categoryId === category.id)).map(category => category.label);
+    if (!empty.length) return { state: "complete", tab: "", line: "Completo" };
+    const text = `Sin actividades en ${joinNames(empty)}`;
+    return { state: "missing", tab: text, line: text };
+  }
+  const covered = scheme.categories.every(category => counted.some(item => item.categoryId === category.id));
+  return covered
+    ? { state: "complete", tab: "", line: "Completo" }
+    : { state: "missing", tab: "faltan actividades", line: "faltan actividades" };
+}
+
+/** The sentence at the foot of the activity panel, updated as the draft changes. */
+export function activitySummary(input: { points: number | string; category: string; weight?: number; grading: "points" | "rubric" | "pass-fail" | "level" | "panel"; criteria?: number; group?: boolean }): string {
+  const worth = input.weight !== undefined
+    ? `Vale ${amountText(input.points)} de ${amountText(input.weight)} % en ${input.category}`
+    : `Vale ${amountText(input.points)} en ${input.category}`;
+  const count = input.criteria ?? 0;
+  const how = input.grading === "rubric" ? `rúbrica de ${count === 1 ? "1 criterio" : `${count} criterios`}`
+    : input.grading === "panel" ? "tribunal"
+    : input.grading === "pass-fail" ? "aprobado o no"
+    : input.grading === "level" ? "nivel"
+    : "puntos";
+  return `${worth} · se califica con ${how}${input.group ? " · en grupos" : ""}`;
 }
 
 /** Starting examples only; every calculation still goes through the same data-driven engine. */

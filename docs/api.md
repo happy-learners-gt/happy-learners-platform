@@ -417,12 +417,31 @@ conserva exactamente su cálculo anterior de puntos, escala, mínimo, letras y p
 - `GET …/grades/report.csv[?year=]` exporta los mismos resultados mostrados por la boleta PDF. Ambos usan el texto del
   esquema (letra, GPA, nivel o aprobado/no aprobado) e incluyen las razones que impiden aprobar.
 
-### Conjuntos de grupos y calificación grupal (0061)
+### Evaluación del curso (0062)
 
-Los grupos de trabajo de la sección (los que no pertenecen a un conjunto) siguen igual. Un conjunto es otro reparto,
-reutilizable entre actividades, de esa misma sección.
+La evaluación se diseña en el curso y la califica cada sección. Quien puede ver el curso la consulta. Administración y el equipo docente con permiso de edición (`edit`) la cambian. Un colaborador que ve el curso y no lo edita recibe 403. Un curso de otra organización recibe 404.
 
-`GET /api/sections/:id/group-sets` lista los conjuntos activos de la sección: cada uno con sus grupos, sus reglas y `graded` (si alguna actividad que lo usa ya tiene nota de grupo, ajuste o coevaluación).
+`GET /api/courses/:id/assessment?year=` responde el esquema efectivo, `explanation` (las mismas tres líneas en todas partes), `canEdit`, el ciclo, los periodos con `status` (`complete`, `missing` con `faltan N pts` o `faltan actividades`, `weights` con `pesos que no suman`) y las actividades. Cada actividad dice si `graded` y qué nota máxima ya tiene.
+
+`PUT …/assessment/scheme` recibe `{ gradingSchemeId }` (o `null` para volver a puntos acumulados). El esquema tiene que estar activo en la organización. Si el programa lo fija, responde 409.
+
+`POST …/assessment/activities` crea una actividad. `PUT …/assessment/activities/:activityId` la edita. `DELETE` la quita. El cuerpo lleva `periodId`, `title`, `kind`, `categoryId`, `points`, `dueOn`, `grading`, y según el caso `rubric` (cada nivel puede traer `description`), `panel`, `evaluators`, `groupMode` (`individual` o `group`), `peerMin`, `peerMax`, `extra` y `retakeOf`. No elige conjunto: cada sección lo hace en Grupos.
+
+Si la actividad ya tiene notas, se puede cambiar el nombre y la fecha. Cambiar la forma de calificar responde 409: `«título» ya tiene notas: puedes cambiar su nombre y su fecha, no su forma de calificar ni sus puntos por debajo de una nota dada.` Bajar los puntos bajo una nota dada, o quitar la actividad, conserva los mensajes anteriores.
+
+`POST …/assessment/periods/:periodId/template` recibe `{ templateId? }`. Con puntos usa una plantilla (`zona-60` si no se indica); con categorías, niveles o aprobado/no aprobado agrega una actividad por categoría. `POST …/periods/:periodId/copy-from/:sourceId` copia las actividades de otro periodo, sin notas. Si el periodo de destino ya tiene actividades, responde 409.
+
+`PUT /api/sections/:id/grades/periods/:periodId/plan` sigue aceptando el plan completo, incluido `workGroupSetId`. Además de la columna anterior, guarda el conjunto en `section_activity_sets` de esa sección. La libreta y la calificación grupal leen esa tabla, no la columna.
+
+### Conjuntos de grupos y calificación grupal (0061, 0062)
+
+Los grupos que no pertenecían a un conjunto pasan al conjunto **Grupos de la sección**. Un conjunto nuevo es otro reparto, reutilizable, de esa misma sección. `set_id` sigue pudiendo quedar vacío: un grupo insertado sin conjunto conserva el nombre único de ese cubo.
+
+`GET /api/sections/:id/group-sets` lista los conjuntos activos (primero «Grupos de la sección»), cada uno con sus grupos, sus reglas, `graded`, `usedIn` («Se usa en») y `activities`: la lista única de actividades en grupos, de lección y de evaluación, con el `setId` que eligió esta sección.
+
+`PUT …/group-sets/assignments` recibe `{ kind: "lesson"|"assessment", activityId, setId, lessonId?, workGroupIds? }`. En una evaluación guarda el conjunto de esta sección. En una lección guarda el conjunto y qué grupos de ese conjunto la trabajan (`activity_work_groups` no cambia de forma).
+
+`GET /api/sections/:id/group-sets` lista los conjuntos activos de la sección: cada uno con sus grupos, sus reglas y `graded` (si alguna actividad que lo usa ya tiene nota de grupo, ajuste o coevaluación). `graded` mira `section_activity_sets`, no la columna anterior.
 
 `POST /api/sections/:id/group-sets` recibe `{ name, rules, sessionId? }`. `rules` indica si se forma por `size` (2 a 30)
 o por `count` (1 a 30), `how` (`random`, `balanced` o `mixed`), la `seed`, y de forma opcional mínimo, máximo, parejas
