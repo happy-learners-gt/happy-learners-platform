@@ -103,7 +103,7 @@ export function GradingSchemes() {
     <ul className="scheme-templates">{schemeTemplates.map(item => <li key={item.id} className="panel lit"><strong>{item.name}</strong><p className="muted small">{notes[item.id]}</p><p className="muted small">{methodLabel(item.method)}</p></li>)}</ul>
     {error ? <ErrorState error={error} retry={() => void load()}/> : !schemes ? <Loading label="Cargando esquemas…" lines={3}/> : !schemes.length
       ? <EmptyState compact icon="grid" title="Sin esquemas propios">Agrega uno desde una plantilla y ajústalo. Los cursos siguen con puntos acumulados hasta que elijan un esquema.</EmptyState>
-      : <ul className="program-list">{schemes.map(scheme => <li key={scheme.id} className={scheme.status === "archived" ? "is-archived" : undefined}>
+      : <ul className="scheme-list">{schemes.map(scheme => <li key={scheme.id} className={scheme.status === "archived" ? "is-archived" : undefined}>
         <div className="program-text"><strong>{scheme.name}</strong>{scheme.status === "archived" && <StatusBadge>Archivado</StatusBadge>}<p className="muted small">{methodLabel(scheme.method)} · {usage(scheme.id) ? `En uso en ${usage(scheme.id)}` : "Sin usar"}</p></div>
         <Menu label={`Acciones de ${scheme.name}`} items={[
           { label: "Editar", icon: "edit", onSelect: () => setEditing(scheme) },

@@ -1062,11 +1062,11 @@ dialog.modal.viewer .modal-body > .usage, dialog.modal.viewer .modal-body > p { 
 .source-tag.source-program, .source-tag.source-program-locked { color: var(--green-ink); }
 .lock { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs); font-weight: var(--weight-medium); color: var(--color-ink-soft); }
 .admin-section { display: grid; gap: var(--space-3); margin-bottom: var(--space-5); }
-.program-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
-.program-list > li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-2) var(--space-3); padding: var(--space-3); border: 1px solid var(--color-border); border-left: 4px solid var(--green-vivid); border-radius: var(--radius-md); background: var(--color-surface); }
-.program-list > li.is-archived { opacity: .75; }
+.program-list, .scheme-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.program-list > li, .scheme-list > li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-2) var(--space-3); padding: var(--space-3); border: 1px solid var(--color-border); border-left: 4px solid var(--green-vivid); border-radius: var(--radius-md); background: var(--color-surface); }
+.program-list > li.is-archived, .scheme-list > li.is-archived { opacity: .75; }
 .program-text { min-width: 0; overflow-wrap: anywhere; }
-@media (max-width: 639px) { .program-list > li { grid-template-columns: minmax(0, 1fr) auto; align-items: start; } .program-list > li > .muted { grid-column: 1; grid-row: 2; } .program-list > li > .menu { grid-column: 2; grid-row: 1; } }
+@media (max-width: 639px) { .program-list > li, .scheme-list > li { grid-template-columns: minmax(0, 1fr) auto; align-items: start; } .program-list > li > .muted, .scheme-list > li > .muted { grid-column: 1; grid-row: 2; } .program-list > li > .menu, .scheme-list > li > .menu { grid-column: 2; grid-row: 1; } }
 .program-text { flex: 1 1 300px; display: grid; gap: var(--space-1); }
 .tag-groups { display: grid; gap: var(--space-3); }
 .tag-group { display: grid; gap: var(--space-2); padding: var(--space-3); border-radius: var(--radius-md); background: var(--color-surface-muted); }
@@ -1382,7 +1382,7 @@ ul.cell-list li svg { display: inline-block; vertical-align: -2px; margin-right:
 
 /* Light — surfaces under the pointer get a soft brand glow at the pointer position (see fluent/light.ts).
    The glow sits on top of the surface colour as a background image, so text contrast is unchanged. */
-.course-card, .resource-card, .panel, .stat-tile, .canvas-card, .competency-card, .program-list > li, .preset, .lit {
+.course-card, .resource-card, .panel, .stat-tile, .canvas-card, .competency-card, .program-list > li, .scheme-list > li, .preset, .lit {
   background-image: radial-gradient(360px circle at var(--light-x, -999px) var(--light-y, -999px), var(--light-glow), transparent 70%);
 }
 
