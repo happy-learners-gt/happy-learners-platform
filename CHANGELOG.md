@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.3 — 2026-10-29
+
+- La evaluación se diseña en el curso: esquema con su explicación, periodos y actividades en un panel.
+- Lo que ya tiene notas explica qué se puede cambiar. Cada sección elige sus grupos y califica en Notas.
+- Los grupos de siempre son el conjunto «Grupos de la sección». Actividades de lección y de evaluación comparten «Actividades en grupos».
+- La rúbrica guarda el descriptor de cada nivel aparte de su nombre.
+
 ## 1.3.2 — 2026-10-28
 
 - En Grupos, **Formar grupos** arma un conjunto con toda la lista o con los presentes de una clase, con vista previa y otra combinación.

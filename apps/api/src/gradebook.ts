@@ -3,6 +3,7 @@ import { assessmentKindLabel, csvFile, displayOf, gradeResult, isAssessmentKind,
 import type { GradingPolicy, PdfBlock } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
 import { configurationOf } from "./courses";
+import { accessTo } from "./access";
 import { scopedCourses } from "./permissions";
 import { event } from "./team";
 import { gradingSchemesFor } from "./grading-schemes";
@@ -167,12 +168,14 @@ async function contents(db: Database, current: Member, section: { id: string; co
     { activityId: string; learnerId: string; kind: "factor" | "override" | "peer"; value: number; note: string | null }[],
     { activityId: string; raterId: string; rateeId: string; score: number }[],
   ];
+  const assignedSets = (await db.prepare("SELECT activity_id AS activityId, set_id AS setId FROM section_activity_sets WHERE group_id=? AND kind='assessment'").bind(section.id).all<{ activityId: string; setId: string }>()).results;
+  const setOf = new Map(assignedSets.map(row => [row.activityId, row.setId]));
   const activities: AssessmentActivity[] = activityRows.map(row => ({
     id: row.id, periodId: row.periodId, position: row.position, title: row.title, kind: row.kind, points: row.points, dueOn: row.dueOn,
     categoryId: row.categoryId, grading: row.grading, extra: !!row.extra, retakeOf: row.retakeOf || null,
     ...(row.rubric ? { rubric: JSON.parse(row.rubric) } : {}),
     ...(row.panel ? { panel: JSON.parse(row.panel) } : {}),
-    ...(row.groupMode === "group" ? { groupMode: "group" as const, workGroupSetId: row.workGroupSetId, peerMin: row.peerMin, peerMax: row.peerMax } : {}),
+    ...(row.groupMode === "group" ? { groupMode: "group" as const, workGroupSetId: setOf.get(row.id) ?? null, peerMin: row.peerMin, peerMax: row.peerMax } : {}),
   }));
   const grouped = new Set(activities.filter(activity => activity.groupMode === "group").map(activity => activity.id));
   const evaluators: AssessmentEvaluator[] = evaluatorRows.map(row => ({ ...row, chair: !!row.chair }));
@@ -252,10 +255,12 @@ async function gradebook(db: Database, current: Member, { section, write, approv
   const { teaches: _, evaluates: __, courseStatus: ___, ...shown } = section;
   const open = !!year && year.status === "current";
   const book = await contents(db, current, section, year, policy, scheme, write);
+  const design = await accessTo(db, current, section.courseId);
   return {
     ...book, year: book.year && { id: book.year.id, name: book.year.name, from: book.year.from, until: book.year.until, status: book.year.status },
     section: shown, years: years.map(({ id, name, status }) => ({ id, name, status })), policy,
     canEdit: write && open, canSubmit: write && open, canLock: approve && open, canUnlock: current.role === "admin" && open,
+    canDesign: current.role === "admin" || !!design?.edit,
   };
 }
 
@@ -724,7 +729,10 @@ async function savePlan(db: Database, current: Member, section: SectionRow, peri
     if (found.length !== setIds.length) return reply({ error: "Elige un conjunto de grupos activo de esta sección." }, 400);
   }
   await db.batch([
-    ...existing.filter(row => !kept.has(row.id)).map(row => db.prepare("DELETE FROM assessment_activities WHERE id=? AND organization_id=?").bind(row.id, current.organizationId)),
+    ...existing.filter(row => !kept.has(row.id)).flatMap(row => [
+      db.prepare("DELETE FROM section_activity_sets WHERE activity_id=? AND kind='assessment'").bind(row.id),
+      db.prepare("DELETE FROM assessment_activities WHERE id=? AND organization_id=?").bind(row.id, current.organizationId),
+    ]),
     ...items.map((item, position) => {
       const leading = [position, item.title, item.kind, item.points, item.dueOn] as (string | number | null)[];
       const trailing = [item.categoryId, item.grading, item.extra ? 1 : 0, item.retakeOf, item.rubric ? JSON.stringify(item.rubric) : null, item.panel ? JSON.stringify(item.panel) : null] as (string | number | null)[];
@@ -737,6 +745,12 @@ async function savePlan(db: Database, current: Member, section: SectionRow, peri
     }),
     event(db, current, { action: "updated", targetType: "course", targetId: section.courseId, courseId: section.courseId, summary: `Actualizó el plan de evaluación de «${period.name}» (${items.length === 1 ? "1 actividad" : `${items.length} actividades`}, ${planTotal(items)} puntos)` }),
   ]);
+  const storedSets = (await db.prepare("SELECT id, group_mode AS groupMode, work_group_set_id AS setId FROM assessment_activities WHERE course_id=? AND period_id=? AND organization_id=?").bind(section.courseId, period.id, current.organizationId).all<{ id: string; groupMode: string; setId: string | null }>()).results;
+  const setWrites = [
+    ...storedSets.filter(row => row.groupMode !== "group").map(row => db.prepare("DELETE FROM section_activity_sets WHERE activity_id=? AND kind='assessment'").bind(row.id)),
+    ...storedSets.filter(row => row.groupMode === "group" && row.setId).map(row => db.prepare("INSERT INTO section_activity_sets(group_id, activity_id, kind, set_id) VALUES (?,?,'assessment',?) ON CONFLICT(group_id, activity_id, kind) DO UPDATE SET set_id=excluded.set_id").bind(section.id, row.id, row.setId)),
+  ];
+  if (setWrites.length) await db.batch(setWrites);
   const allowed = await access(db, current, section.id);
   return reply({ gradebook: await gradebook(db, current, allowed as Access) });
 }

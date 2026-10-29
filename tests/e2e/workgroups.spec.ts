@@ -76,7 +76,7 @@ test("HL-149 ST-111: a section forms work groups from its students and assigns t
     await openNavigation(page);
     await sectionNav(page).getByRole("link", { name: "Grupos", exact: true }).click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Grupos de trabajo");
-    await expect(page.getByRole("heading", { name: "Toda la sección" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Grupos de la sección" })).toBeVisible();
     await page.getByRole("button", { name: "Nuevo grupo" }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel("Nombre del grupo").fill("Equipo Verde");
@@ -88,7 +88,7 @@ test("HL-149 ST-111: a section forms work groups from its students and assigns t
     await page.getByRole("button", { name: "Asignar grupos a Entrevista" }).click();
     await page.getByRole("dialog").getByRole("checkbox", { name: "Equipo Verde" }).check();
     await page.getByRole("dialog").getByRole("button", { name: "Guardar" }).click();
-    const rows = page.getByRole("region", { name: "Actividades en grupo" }).locator("tbody tr");
+    const rows = page.getByRole("region", { name: "Actividades en grupos" }).locator("tbody tr");
     await expect(rows.filter({ hasText: "Entrevista" })).toContainText("Equipo Verde");
     await expect(rows.filter({ hasText: "Debate" })).toContainText("Equipo Azul");
     expect(await page.evaluate(() => Math.max(document.documentElement.scrollWidth, innerWidth) <= screen.width)).toBe(true);

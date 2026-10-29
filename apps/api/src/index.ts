@@ -10,6 +10,7 @@ import { changePassword } from "./accounts";
 import { digests, type Backup } from "./backup";
 import { content, reviews, shared } from "./content";
 import { courses, programs, taxonomy } from "./courses";
+import { assessmentMethods, courseAssessment } from "./assessment";
 import { duplicateCourse } from "./duplicate";
 import { accessTo } from "./access";
 import { activity, people, progress } from "./team";
@@ -122,6 +123,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   const bookMapAllowed = bookMapMethods(path);
   const institutionalCalendarAllowed = institutionalCalendarMethods(path);
   const gradingSchemeAllowed = gradingSchemeMethods(path);
+  const assessmentAllowed = assessmentMethods(path);
   let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|account|organization|calendar|members|access|levels|units|resources|lessons|courses|programs|vocabularies|terms|student|legal|hours)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout|retry)$/.test(path) && !path.includes("/files") && !/^\/api\/members\/[a-z0-9-]+\/password$/.test(path) && !professionalAllowed)
     || (method === "POST" && path === "/api/organization/restore" && env.RESTORE_ENABLED === "true")
     || (method === "POST" && (path === "/api/invitations" || acceptPath.test(path)))
@@ -247,6 +249,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (gradebookAllowed) methods[path] = gradebookAllowed;
   if (groupSetAllowed) methods[path] = groupSetAllowed;
   if (gradingSchemeAllowed) methods[path] = gradingSchemeAllowed;
+  if (assessmentAllowed) methods[path] = assessmentAllowed;
   if (bibliographyAllowed) methods[path] = bibliographyAllowed;
   if (packageAllowed) methods[path] = packageAllowed;
   if (proposalAllowed) methods[path] = proposalAllowed;
@@ -382,6 +385,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (deliveryAllowed) return delivery(path, url, current, db);
   if (bookMapAllowed) return bookMap(path, method, input, current, db, env, () => env.ORGANIZATIONS.getByName(current.organizationId).schedule(current.organizationId));
   if (proposalAllowed) return proposals(path, method, input, current, db, env, () => env.ORGANIZATIONS.getByName(current.organizationId).schedule(current.organizationId));
+  if (/^\/api\/courses\/[a-z0-9-]+\/assessment(\/|$)/.test(path)) return courseAssessment(path, method, input, url, current, db);
   if (/^\/api\/courses(\/|$)/.test(path)) return courses(path, method, input, current, db, notifier);
   if (/^\/api\/programs(\/|$)/.test(path)) return programs(path, method, input, current, db);
   if (path === "/api/activity") return activity(url, current, db);

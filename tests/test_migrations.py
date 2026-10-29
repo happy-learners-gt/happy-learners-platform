@@ -1355,6 +1355,34 @@ class GroupSetTests(unittest.TestCase):
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
 
 
+class SectionActivitySetTests(unittest.TestCase):
+    """0062: usual groups land in «Grupos de la sección» and an evaluation's set is copied for its section."""
+
+    def test_default_set_and_section_assignment(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        paths = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        for path in paths:
+            if path.name.startswith("0054") or path.name.startswith("0062"):
+                continue
+            db.executescript(path.read_text())
+        org, group_id, course = db.execute("SELECT organization_id,id,course_id FROM course_groups ORDER BY id LIMIT 1").fetchone()
+        admin = db.execute("SELECT user_id FROM memberships WHERE organization_id=? AND active=1 ORDER BY user_id LIMIT 1", (org,)).fetchone()[0]
+        db.execute("UPDATE academic_years SET status='closed',closed_at='t' WHERE organization_id=? AND status='current'", (org,))
+        rules = '{"by":"size","size":4,"how":"random","seed":"seccion"}'
+        db.execute("INSERT INTO work_group_sets(id,organization_id,group_id,name,rules,source,created_by,created_at,updated_at) VALUES ('groupset-aaaa1111-1111-4111-8111-111111111111',?,?,'Equipo',?,'generated',?,'t','t')", (org, group_id, rules, admin))
+        db.execute("INSERT INTO work_groups(id,organization_id,course_id,group_id,name,created_at) VALUES ('legacy-before',?,?,?,'Grupo estable','t')", (org, course, group_id))
+        db.execute("INSERT INTO academic_years(id,organization_id,name,starts_on,ends_on,period_kind,status,created_by,created_at,updated_at,activated_at) VALUES ('set-y',?,'Ciclo','2032-01-01','2032-06-01','semester','current',?,'t','t','t')", (org, admin))
+        db.execute("INSERT INTO academic_periods(id,organization_id,year_id,position,name,starts_on,ends_on) VALUES ('set-p',?,'set-y',1,'Periodo','2032-01-01','2032-06-01')", (org,))
+        db.execute("INSERT INTO assessment_activities(id,organization_id,course_id,period_id,position,title,kind,points,created_by,created_at,updated_at,group_mode,work_group_set_id) VALUES ('set-a',?,?,'set-p',0,'Ensayo','project',100,?,'t','t','group','groupset-aaaa1111-1111-4111-8111-111111111111')", (org, course, admin))
+        db.executescript(next(path for path in paths if path.name.startswith("0062")).read_text())
+        landed = db.execute("SELECT s.name FROM work_groups w JOIN work_group_sets s ON s.id=w.set_id WHERE w.id='legacy-before'").fetchone()
+        self.assertEqual(landed, ("Grupos de la sección",))
+        assigned = db.execute("SELECT group_id, kind, set_id FROM section_activity_sets WHERE activity_id='set-a'").fetchone()
+        self.assertEqual(assigned, (group_id, "assessment", "groupset-aaaa1111-1111-4111-8111-111111111111"))
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
 class AcademicCalendarTests(unittest.TestCase):
     """0057: jornadas keep their configuration and blocks as JSON, one name per organization; a section may store a
     time per day as a JSON array next to its single-time columns. 0058 gives the demo its morning jornada."""

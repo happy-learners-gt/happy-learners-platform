@@ -11,10 +11,11 @@ import { Assistant } from "./Assistant";
 import { CourseSections } from "./Sections";
 import { Settings } from "./Settings";
 import { Plan } from "./Plan";
+import { Assessment } from "./Assessment";
 import { sectionPath } from "../sections/context";
 const LessonEditor = lazy(() => import("../LessonEditor").then(module => ({ default: module.LessonEditor })));
 
-const areas = ["", "plan", "contenido", "biblioteca", "secciones", "configuracion", "lecciones", "asistente"];
+const areas = ["", "plan", "evaluacion", "contenido", "biblioteca", "secciones", "configuracion", "lecciones", "asistente"];
 /** Locations from before v0.8.7, when classes, sections and schedules lived inside the course (DEC-024). */
 const sectionAreas = ["clases", "asignaciones", "horario", "grupos", "cronograma", "asistencia"];
 
@@ -51,6 +52,7 @@ export function CourseRoute({ id, area, item }: { id: string; area: string; item
     body = <CourseProvider data={data}>
       {area === "" && <Overview/>}
       {area === "plan" && <Plan/>}
+      {area === "evaluacion" && <Assessment/>}
       {area === "contenido" && <Content/>}
       {area === "biblioteca" && <CourseLibrary/>}
       {area === "asistente" && <Assistant/>}

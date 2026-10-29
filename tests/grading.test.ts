@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { GradingActivity, GradingPeriod, GradingScheme, Mark, Rubric } from "../packages/contracts/src/index";
 import {
+  activitySummary,
+  assessmentPeriodStatus,
   displayOf,
   learnerResult,
   markValue,
@@ -8,6 +10,7 @@ import {
   rubricInput,
   schemeFromSettings,
   schemeInput,
+  schemeExplanation,
   schemeTemplates,
 } from "../packages/domain/src/index";
 
@@ -194,5 +197,62 @@ describe("the data-driven grading engine", () => {
       .toEqual({ error: "Los pesos de la rúbrica deben sumar 100." });
     const invalidPanel = { ...activity("panel", "p1", 100), grading: "panel" as const, panel: {} as GradingActivity["panel"] };
     expect(markValue(invalidPanel, { kind: "panel", marks: [{ evaluator: "a", mark: { kind: "points", value: 80 } }] })).toBeNull();
+  });
+
+  it("explains each template in the same three lines", () => {
+    const expected: Record<string, string[]> = {
+      universidad: [
+        "La nota de cada periodo es Tareas 30 % + Proyectos 30 % + Examen final 40 %.",
+        "Se descarta la tarea más baja · Examen final mínimo 60 · Se muestra como GPA (4,0)",
+        "El ciclo promedia sus periodos según su peso · Aprueba con 60",
+      ],
+      colegio: [
+        "La nota de cada periodo es la suma de los puntos de Zona y Examen.",
+        "Se muestra de 0 a 100",
+        "El ciclo promedia sus periodos por igual · Aprueba con 60",
+      ],
+      idiomas: [
+        "La nota de cada periodo es el nivel en Comprensión y Expresión.",
+        "Se muestra con niveles",
+        "El ciclo usa el último periodo · Aprueba desde B1",
+      ],
+      tecnica: [
+        "La nota de cada periodo es aprobado o no en Competencias.",
+        "Se muestra como aprobado o no",
+        "El ciclo acumula los periodos · Aprueba con 100",
+      ],
+      artes: [
+        "La nota de cada periodo es Interpretación 60 % + Panel de recital 40 %.",
+        "Panel de recital mínimo 60 · Se muestra de 0 a 100",
+        "El ciclo promedia sus periodos por igual · Aprueba con 70",
+      ],
+      seminario: [
+        "La nota de cada periodo es aprobado o no en Asistencia y Entrega.",
+        "Se muestra como aprobado o no",
+        "Cada periodo se evalúa por separado · Aprueba con 100",
+      ],
+      doctorado: [
+        "La nota de cada periodo es aprobado o no en Dictamen del tribunal.",
+        "Se muestra como aprobado o no",
+        "El ciclo usa el último periodo · Aprueba con 50",
+      ],
+    };
+    for (const template of schemeTemplates) expect(schemeExplanation(template), template.id).toEqual(expected[template.id]);
+    const kept = rubricInput({ criteria: [{ id: "ideas", label: "Ideas", weight: 100, levels: [{ id: "alto", label: "Alto", points: 4, description: "Argumenta con evidencia." }, { id: "bajo", label: "Bajo", points: 1 }] }] });
+    expect(kept).toMatchObject({ criteria: [{ levels: [{ description: "Argumenta con evidencia." }, { id: "bajo" }] }] });
+  });
+
+  it("states a period by its method and summarizes the activity being designed", () => {
+    const universidad = schemeTemplates.find(scheme => scheme.id === "universidad")!;
+    const row = (categoryId: string, points: number) => ({ categoryId, points });
+    expect(assessmentPeriodStatus(universidad, [row("tareas", 30)])).toEqual({
+      state: "missing", tab: "Sin actividades en Proyectos y Examen final", line: "Sin actividades en Proyectos y Examen final",
+    });
+    expect(assessmentPeriodStatus(universidad, [row("tareas", 30), row("proyectos", 30), row("final", 40)])).toEqual({ state: "complete", tab: "", line: "Completo" });
+    expect(assessmentPeriodStatus(pointsScheme, [row("general", 80)])).toEqual({ state: "missing", tab: "faltan 20 pts", line: "80 de 100 puntos" });
+    expect(assessmentPeriodStatus(pointsScheme, [row("general", 100)])).toEqual({ state: "complete", tab: "", line: "100 de 100 puntos" });
+    expect(activitySummary({ points: 20, weight: 30, category: "Proyectos", grading: "rubric", criteria: 3, group: true }))
+      .toBe("Vale 20 de 30 % en Proyectos · se califica con rúbrica de 3 criterios · en grupos");
+    expect(activitySummary({ points: "20", category: "Actividades", grading: "points" })).toBe("Vale 20 en Actividades · se califica con puntos");
   });
 });
