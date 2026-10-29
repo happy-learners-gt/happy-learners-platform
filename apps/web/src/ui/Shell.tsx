@@ -176,6 +176,7 @@ function Sidebar() {
     <nav aria-label="Navegación principal"><ul className="nav-tree">
       {page({ href: "/inicio", label: "Inicio", icon: "home", hue: "violet", active: path === "/inicio" })}
       {page({ href: "/agenda", label: "Agenda", icon: "calendar", hue: "coral", active: path === "/agenda" })}
+      {page({ href: "/calendario", label: "Calendario", icon: "calendar", hue: "amber", active: path === "/calendario" })}
       {page({ href: "/horas", label: admin ? "Horas efectivas" : "Mis horas", icon: "clock", hue: "green", active: path === "/horas" })}
       <Node id="courses" href="/cursos" label="Cursos" icon="courses" hue="sky" open={open.has("courses")} active={path === "/cursos" || path === "/cursos/nuevo"}
         toggleLabel="Mostrar los cursos" onToggle={() => toggle("courses")} onSelect={select("courses", "/cursos")}

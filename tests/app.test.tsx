@@ -80,6 +80,76 @@ it("shows the school year with its periods in Organización and divides a new on
   expect(within(jornada).getByText("Cada periodo dura entre 20 y 180 minutos.")).toBeTruthy();
   expect((within(jornada).getByRole("button", { name: "Crear jornada" }) as HTMLButtonElement).disabled).toBe(true);
 });
+it("previews recurring calendar rules and confirms year generation only after its preview", async () => {
+  const member = { id: "user-0", username: "admin-demo", role: "admin", organizationId: "org-demo", permissions: { admin: true, coordination: null, grants: {} } };
+  const category = { id: "category-holiday", key: "holiday", label: "Feriado", noClassDefault: true, builtin: true };
+  const rule = { id: "rule-second-thursday", calendarId: "calendar-org", categoryId: category.id, noClass: true,
+    rule: { id: "rule-second-thursday", title: "Encuentro anual", anchor: { kind: "nth-weekday", month: 11, weekday: 4, n: 2 }, days: 1, part: "full" } };
+  const confirmed: string[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: string, init?: RequestInit) => {
+    if (input === "/api/session") return Response.json({ member, pending: [] });
+    if (input === "/api/organization") return Response.json({ organization: { id: "org-demo", name: "Escuela", timezone: "America/Guatemala", configured: true } });
+    if (input === "/api/sections") return Response.json({ sections: [] });
+    if (input === "/api/courses") return Response.json({ courses: [] });
+    if (input === "/api/programs") return Response.json({ programs: [] });
+    if (input === "/api/calendars") return Response.json({ calendars: [{ id: "calendar-org", scope: "organization", scopeId: null, name: "Calendario institucional", rules: [rule] }], categories: [category] });
+    if (input.startsWith("/api/calendars/view")) return Response.json({ events: [] });
+    if (input.endsWith("/generate?preview=1")) return Response.json({ plan: { create: [{ ...rule.rule, ruleId: rule.id, from: "2026-11-12", until: "2026-11-12", part: "full" }], update: [], keep: [] } });
+    if (input.endsWith("/generate") && init?.method === "POST") { confirmed.push(input); return Response.json({ plan: {}, applied: { created: 1, updated: 0, kept: 0 } }); }
+    return Response.json({});
+  }));
+  history.replaceState(null, "", "/calendario?año=2026");
+  render(<App/>);
+  expect(await screen.findByRole("heading", { level: 1, name: "Calendario" })).toBeTruthy();
+  fireEvent.click(await screen.findByRole("button", { name: "Editar Encuentro anual" }));
+  const editor = await screen.findByRole("dialog", { name: "Editar regla" });
+  expect(within(editor).getByText("Segundo jueves de noviembre")).toBeTruthy();
+  expect(within(editor).getByText(/2026-11-12/)).toBeTruthy();
+  fireEvent.click(within(editor).getByRole("button", { name: "Cancelar" }));
+  fireEvent.click(screen.getByRole("button", { name: "Generar 2026" }));
+  const preview = await screen.findByRole("dialog", { name: "Generar el año 2026" });
+  expect(within(preview).getByRole("heading", { name: /Se crean/ })).toBeTruthy();
+  expect(confirmed).toEqual([]);
+  fireEvent.click(within(preview).getByRole("button", { name: "Confirmar y generar 2026" }));
+  await waitFor(() => expect(confirmed).toEqual(["/api/calendars/calendar-org/years/2026/generate"]));
+});
+it("sends periodId when a section schedule follows a period", async () => {
+  const member = { id: "user-0", username: "admin-demo", role: "admin", organizationId: "org-demo", permissions: { admin: true, coordination: null, grants: {} } };
+  const course = { id: "course-1", title: "Matemáticas", objective: "Resolver.", educationType: "formal", level: "primary", modality: "in-person", pacing: "scheduled", format: "subject", programId: "program-1", settings: { attendance: true }, status: "active", version: 1, updatedAt: "t",
+    access: { role: "admin", assigned: [], configure: true, edit: true, publish: true, review: true, team: true, educators: true, sections: "all" } };
+  const section = { id: "group-1", courseId: course.id, name: "Sexto A", status: "active", learnerCount: 0, educators: [], course: { id: course.id, title: course.title, status: "active" }, pacing: "scheduled", schedule: null,
+    indicators: { learners: 0, classes: 0, taught: 0, upcoming: 0, unrecorded: 0, lessons: 0, covered: 0, attendance: null }, next: null, teaches: false };
+  const year = { id: "year-program", name: "Ciclo del programa", from: "2026-01-12", until: "2026-11-27", status: "current", periodKind: "bimester", programId: "program-1",
+    periods: [{ id: "period-2", position: 2, name: "Segundo bimestre", from: "2026-03-23", until: "2026-05-29", weight: 1 }], createdAt: "t", updatedAt: "t", activatedAt: "t", closedAt: null };
+  const saved: unknown[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: string, init?: RequestInit) => {
+    if (input === "/api/session") return Response.json({ member, pending: [] });
+    if (input === "/api/organization") return Response.json({ organization: { id: "org-demo", name: "Escuela", timezone: "America/Guatemala", configured: true } });
+    if (input === "/api/sections") return Response.json({ sections: [section] });
+    if (input === "/api/courses") return Response.json({ courses: [course] });
+    if (input === "/api/programs") return Response.json({ programs: [{ id: "program-1", name: "Primaria", status: "active", settings: {}, locked: [], courseCount: 1 }] });
+    if (input === "/api/sections/group-1") return Response.json({ section, today: "2026-02-02" });
+    if (input === "/api/courses/course-1") return Response.json({ course, units: [], curriculum: { competencies: [], outcomes: [] } });
+    if (input === "/api/courses/course-1/sessions") return Response.json({ sessions: [], today: "2026-02-02" });
+    if (input === "/api/calendar?section=group-1") return Response.json({ breaks: [], today: "2026-02-02" });
+    if (input === "/api/academic-years") return Response.json({ years: [year], today: "2026-02-02" });
+    if (input === "/api/bell-schedules") return Response.json({ schedules: [] });
+    if (input === "/api/calendars") return Response.json({ calendars: [{ id: "calendar-section", scope: "section", scopeId: "group-1", name: "Calendario de Sexto A", rules: [] }], categories: [] });
+    if (input === "/api/courses/course-1/groups/group-1/schedule" && init?.method === "PUT") { saved.push(JSON.parse(String(init.body))); return Response.json({ classes: 10 }); }
+    if (input.startsWith("/api/lessons")) return Response.json({ lessons: [] });
+    if (input.endsWith("/materials")) return Response.json({ materials: [] });
+    if (input === "/api/resources") return Response.json({ resources: [] });
+    return Response.json({});
+  }));
+  history.replaceState(null, "", "/secciones/group-1/horario");
+  render(<App/>);
+  expect(await screen.findByRole("heading", { level: 1, name: "Horario" })).toBeTruthy();
+  fireEvent.change(await screen.findByLabelText("Seguir un periodo"), { target: { value: "period-2" } });
+  fireEvent.click(screen.getByLabelText("Lunes"));
+  fireEvent.click(screen.getByRole("button", { name: "Guardar horario" }));
+  await waitFor(() => expect(saved).toHaveLength(1));
+  expect(saved[0]).toMatchObject({ periodId: "period-2", from: "2026-03-23", until: "2026-05-29" });
+});
 it("shows a section's gradebook with letters, the partial result and saves only the changed scores", async () => {
   const member = { id: "user-educator", username: "educador-demo", role: "educator", organizationId: "org-demo", permissions: { admin: false, coordination: null, grants: {} } };
   const course = { id: "course-1", title: "Comunicación y Lenguaje", objective: "Leer y escribir.", educationType: "formal", level: "primary", modality: "in-person", pacing: "scheduled", format: "subject", settings: { gradeScale: "letters_af" }, status: "active", version: 1, updatedAt: "t",

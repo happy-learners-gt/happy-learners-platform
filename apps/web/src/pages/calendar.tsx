@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { CalendarBreak } from "@happy-learners/contracts";
+import type { CalendarBreak, CalendarCategory, CalendarScope, InstitutionalCalendar } from "@happy-learners/contracts";
 import { api, message } from "../api";
 import { plural, sessionDay } from "../model";
 import { useFeedback } from "../ui/feedback";
@@ -9,11 +9,12 @@ import { ErrorState, Field, Loading, Section, StatusBadge } from "../ui/primitiv
 
 export const breakSpan = (item: Pick<CalendarBreak, "from" | "until">) => item.from === item.until ? sessionDay(item.from) : `Del ${sessionDay(item.from, "short")} al ${sessionDay(item.until, "short")}`;
 
-export type Breaks = { breaks: CalendarBreak[] | null; today: string; error: string; load: () => Promise<void> };
+type EffectiveBreak = CalendarBreak & { scope?: CalendarScope; calendarName?: string; calendarId?: string; categoryId?: string };
+export type Breaks = { breaks: EffectiveBreak[] | null; today: string; error: string; load: () => Promise<void> };
 /** The days without class that apply to a section (the organization's and its own), or the organization's alone. */
 export function useBreaks(sectionId?: string, enabled = true): Breaks {
-  const [breaks, setBreaks] = useState<CalendarBreak[] | null>(null), [today, setToday] = useState(""), [error, setError] = useState("");
-  const load = useCallback(() => api<{ breaks: CalendarBreak[]; today: string }>(`/calendar${sectionId ? `?section=${sectionId}` : ""}`)
+  const [breaks, setBreaks] = useState<EffectiveBreak[] | null>(null), [today, setToday] = useState(""), [error, setError] = useState("");
+  const load = useCallback(() => api<{ breaks: EffectiveBreak[]; today: string }>(`/calendar${sectionId ? `?section=${sectionId}` : ""}`)
     .then(result => { setBreaks(result.breaks); setToday(result.today); setError(""); }, cause => setError(message(cause))), [sectionId]);
   useEffect(() => { if (enabled) void load(); }, [load, enabled]);
   return { breaks, today, error, load };
@@ -28,6 +29,14 @@ export function DaysOff({ section, writable, onChanged, data }: { section?: { id
   const { toast, confirm } = useFeedback();
   const own = useBreaks(section?.id, !data);
   const { breaks, today, error, load } = data || own;
+  const [calendar, setCalendar] = useState<InstitutionalCalendar | null>(null), [categories, setCategories] = useState<CalendarCategory[]>([]);
+  useEffect(() => {
+    if (!section) return;
+    api<{ calendars: InstitutionalCalendar[]; categories: CalendarCategory[] }>("/calendars").then(result => {
+      setCalendar(result.calendars.find(item => item.scope === "section" && item.scopeId === section.id) || null);
+      setCategories(result.categories);
+    }, () => undefined);
+  }, [section?.id]);
   const [values, setValues] = useState({ title: "", from: "", until: "" }), [adding, setAdding] = useState(false), [busy, setBusy] = useState(false), [formError, setFormError] = useState(""), [showPast, setShowPast] = useState(false);
   const changed = (result: { sections: number; removed: number; added: number }, text: string) => {
     const moved = result.removed || result.added;
@@ -36,17 +45,23 @@ export function DaysOff({ section, writable, onChanged, data }: { section?: { id
   async function add(event: FormEvent) {
     event.preventDefault(); setBusy(true); setFormError("");
     try {
-      const result = await api<{ break: CalendarBreak; sections: number; removed: number; added: number }>("/calendar", "POST", { ...values, until: values.until || values.from, ...(section ? { groupId: section.id } : {}) });
-      changed(result, `${breakSpan(result.break)}: sin clase.`);
+      const category = categories.find(item => item.key === "no-class") || categories.find(item => item.noClassDefault);
+      const result = section && calendar && category
+        ? await api<{ event: EffectiveBreak; sections: number; removed: number; added: number }>(`/calendars/${calendar.id}/events`, "POST", { ...values, until: values.until || values.from, categoryId: category.id, noClass: true, part: "full" })
+        : await api<{ break: EffectiveBreak; sections: number; removed: number; added: number }>("/calendar", "POST", { ...values, until: values.until || values.from, ...(section ? { groupId: section.id } : {}) });
+      const saved = "event" in result ? result.event : result.break;
+      changed(result, `${breakSpan(saved)}: sin clase.`);
       setValues({ title: "", from: "", until: "" }); setAdding(false);
       await load(); await onChanged?.();
     } catch (cause) { setFormError(message(cause)); }
     finally { setBusy(false); }
   }
-  async function remove(item: CalendarBreak) {
+  async function remove(item: EffectiveBreak) {
     if (!await confirm({ title: `¿Quitar «${item.title}»?`, body: <p>{breakSpan(item)} vuelve a tener clase. Los horarios que lo incluyen generan de nuevo esas clases y lo planificado se reacomoda en orden.</p>, confirm: "Quitar", danger: true })) return;
     try {
-      const result = await api<{ sections: number; removed: number; added: number }>(`/calendar/${item.id}`, "DELETE");
+      const result = section && item.calendarId
+        ? await api<{ sections: number; removed: number; added: number }>(`/calendars/${item.calendarId}/events/${item.id}`, "DELETE")
+        : await api<{ sections: number; removed: number; added: number }>(`/calendar/${item.id}`, "DELETE");
       changed(result, `«${item.title}» se quitó.`);
       await load(); await onChanged?.();
     } catch (cause) { toast({ tone: "error", message: message(cause) }); }
@@ -61,7 +76,7 @@ export function DaysOff({ section, writable, onChanged, data }: { section?: { id
       : visible.length ? <ul className="days-off">{visible.map(item => <li key={item.id} className={item.until < today ? "is-past" : undefined}>
         <Icon name="calendar" size={18}/>
         <div><strong>{item.title}</strong><span className="muted small">{breakSpan(item)}</span></div>
-        {section && <StatusBadge tone={item.groupId ? "info" : "neutral"}>{item.groupId ? "Esta sección" : "Organización"}</StatusBadge>}
+        {section && <StatusBadge tone={item.scope === "section" ? "info" : item.scope === "program" ? "warning" : "neutral"}>{item.scope === "section" ? "Esta sección" : item.scope === "program" ? "Programa" : "Organización"}</StatusBadge>}
         {writable && mine(item) && <button type="button" className="icon-button" onClick={() => void remove(item)} aria-label={`Quitar «${item.title}»`}><Icon name="close" size={16}/></button>}
       </li>)}</ul>
       : !showForm && <p className="muted small">No hay días sin clase próximos.</p>}

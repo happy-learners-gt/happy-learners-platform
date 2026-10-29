@@ -23,7 +23,7 @@ export function academicYearMethods(path: string): string[] | null {
 }
 
 type YearRow = Omit<AcademicYear, "periods">;
-const yearColumns = "id,name,starts_on AS \"from\",ends_on AS until,status,period_kind AS periodKind,created_at AS createdAt,updated_at AS updatedAt,activated_at AS activatedAt,closed_at AS closedAt";
+const yearColumns = "id,name,starts_on AS \"from\",ends_on AS until,status,period_kind AS periodKind,created_at AS createdAt,updated_at AS updatedAt,activated_at AS activatedAt,closed_at AS closedAt,program_id AS programId";
 
 /** The organization's years, newest first, each with its periods in order. */
 export async function academicYears(db: Database, organizationId: string, id?: string): Promise<AcademicYear[]> {
@@ -35,8 +35,8 @@ export async function academicYears(db: Database, organizationId: string, id?: s
   return years.map(year => ({ ...year, periods: periods.filter(period => period.yearId === year.id).map(({ yearId: _, ...period }) => period) }));
 }
 /** The year in force today, if administration activated one. */
-export const currentAcademicYear = async (db: Database, organizationId: string) =>
-  (await db.prepare(`SELECT ${yearColumns} FROM academic_years WHERE organization_id=? AND status='current'`).bind(organizationId).first<YearRow>());
+export const currentAcademicYear = async (db: Database, organizationId: string, programId: string | null = null) =>
+  (await db.prepare(`SELECT ${yearColumns} FROM academic_years WHERE organization_id=? AND program_id IS ? AND status='current'`).bind(organizationId, programId).first<YearRow>());
 
 /** The statements that write a year's periods: removed ones go, kept ones keep their id, new ones get one. */
 function periodStatements(db: Database, organizationId: string, yearId: string, draft: AcademicYearDraft): Prepared[] {
@@ -48,16 +48,18 @@ function periodStatements(db: Database, organizationId: string, yearId: string, 
       : db.prepare("INSERT INTO academic_periods(id,organization_id,year_id,position,name,starts_on,ends_on,weight) VALUES (?,?,?,?,?,?,?,?)").bind(`period-${crypto.randomUUID()}`, organizationId, yearId, index + 1, period.name, period.from, period.until, period.weight)),
   ];
 }
-const nameTaken = (db: Database, organizationId: string, name: string, except: string) =>
-  db.prepare("SELECT 1 FROM academic_years WHERE organization_id=? AND lower(name)=lower(?) AND id<>?").bind(organizationId, name, except).first();
+const nameTaken = (db: Database, organizationId: string, programId: string | null, name: string, except: string) =>
+  db.prepare("SELECT 1 FROM academic_years WHERE organization_id=? AND program_id IS ? AND lower(name)=lower(?) AND id<>?").bind(organizationId, programId, name, except).first();
 const duplicateName = (name: string) => reply({ error: `Ya existe un ciclo llamado «${name}». Usa otro nombre.` }, 409);
 
-async function create(db: Database, current: Member, draft: AcademicYearDraft) {
-  if (await nameTaken(db, current.organizationId, draft.name, "")) return duplicateName(draft.name);
+async function create(db: Database, current: Member, draft: AcademicYearDraft, programId: string | null = null) {
+  if (programId && !await db.prepare("SELECT id FROM study_programs WHERE id=? AND organization_id=?").bind(programId, current.organizationId).first())
+    return reply({ error: "Elige un programa de tu organización." }, 400);
+  if (await nameTaken(db, current.organizationId, programId, draft.name, "")) return duplicateName(draft.name);
   const id = `year-${crypto.randomUUID()}`, now = new Date().toISOString();
-  const ok = await db.guardedBatch(db.prepare("SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM academic_years WHERE organization_id=? AND lower(name)=lower(?))").bind(current.organizationId, draft.name), [
-    db.prepare("INSERT INTO academic_years(id,organization_id,name,starts_on,ends_on,period_kind,status,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,'draft',?,?,?)")
-      .bind(id, current.organizationId, draft.name, draft.from, draft.until, draft.periodKind, current.id, now, now),
+  const ok = await db.guardedBatch(db.prepare("SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM academic_years WHERE organization_id=? AND program_id IS ? AND lower(name)=lower(?))").bind(current.organizationId, programId, draft.name), [
+    db.prepare("INSERT INTO academic_years(id,organization_id,name,starts_on,ends_on,period_kind,status,created_by,created_at,updated_at,program_id) VALUES (?,?,?,?,?,?,'draft',?,?,?,?)")
+      .bind(id, current.organizationId, draft.name, draft.from, draft.until, draft.periodKind, current.id, now, now, programId),
     ...periodStatements(db, current.organizationId, id, draft),
   ]);
   if (!ok) return duplicateName(draft.name);
@@ -68,10 +70,11 @@ export async function academicYearsApi(path: string, method: string, input: unkn
   if (path === "/api/academic-years" && method === "GET") return reply({ years: await academicYears(db, current.organizationId), today: await todayFor(db, current.organizationId) });
   if (current.role !== "admin") return forbidden();
   if (path === "/api/academic-years") {
+    const programId = typeof (input as Record<string, unknown> | null)?.programId === "string" ? String((input as Record<string, unknown>).programId) : null;
     const draft = academicYearInput(input);
     if ("error" in draft) return reply(draft, 400);
     if (draft.periods.some(period => period.id)) return reply({ error: "Revisa los periodos: uno no es válido." }, 400);
-    return create(db, current, draft);
+    return create(db, current, draft, programId);
   }
   const [, id, action] = itemPath.exec(path)!;
   const found = (await academicYears(db, current.organizationId, id))[0];
@@ -80,13 +83,13 @@ export async function academicYearsApi(path: string, method: string, input: unkn
   if (action === "next") {
     const draft = academicYearInput(nextAcademicYear(found));
     if ("error" in draft) return reply({ error: `No se pudo preparar el siguiente ciclo: ${draft.error}` }, 409);
-    return create(db, current, draft);
+    return create(db, current, draft, found.programId || null);
   }
   if (action === "activate") {
-    const anotherCurrent = !!await currentAcademicYear(db, current.organizationId);
+    const anotherCurrent = !!await currentAcademicYear(db, current.organizationId, found.programId || null);
     const blocked = activationBlocker(found, anotherCurrent);
     if (blocked) return reply({ error: blocked }, 409);
-    const ok = await db.guardedBatch(db.prepare("SELECT 1 FROM academic_years y WHERE y.id=? AND y.organization_id=? AND y.status='draft' AND EXISTS (SELECT 1 FROM academic_periods p WHERE p.year_id=y.id) AND NOT EXISTS (SELECT 1 FROM academic_years o WHERE o.organization_id=y.organization_id AND o.status='current')").bind(id, current.organizationId), [
+    const ok = await db.guardedBatch(db.prepare("SELECT 1 FROM academic_years y WHERE y.id=? AND y.organization_id=? AND y.status='draft' AND EXISTS (SELECT 1 FROM academic_periods p WHERE p.year_id=y.id) AND NOT EXISTS (SELECT 1 FROM academic_years o WHERE o.organization_id=y.organization_id AND o.program_id IS y.program_id AND o.status='current')").bind(id, current.organizationId), [
       db.prepare("UPDATE academic_years SET status=?,activated_at=?,updated_at=? WHERE id=? AND organization_id=? AND status='draft'").bind(academicYearTransition(found.status, "activate")!, now, now, id, current.organizationId),
     ]);
     if (!ok) return changed();
@@ -121,9 +124,9 @@ export async function academicYearsApi(path: string, method: string, input: unkn
   const kept = new Set(draft.periods.map(period => period.id)), removed = found.periods.filter(period => !kept.has(period.id));
   const graded = removed.length ? await db.prepare(`SELECT p.name FROM academic_periods p WHERE p.id IN (${removed.map(() => "?").join(",")}) AND (EXISTS (SELECT 1 FROM section_grades g WHERE g.period_id=p.id) OR EXISTS (SELECT 1 FROM assessment_activities a WHERE a.period_id=p.id)) LIMIT 1`).bind(...removed.map(period => period.id)).first<{ name: string }>() : null;
   if (graded) return reply({ error: `«${graded.name}» ya tiene notas registradas: no se puede quitar.` }, 409);
-  if (await nameTaken(db, current.organizationId, draft.name, id)) return duplicateName(draft.name);
+  if (await nameTaken(db, current.organizationId, found.programId || null, draft.name, id)) return duplicateName(draft.name);
   const status: AcademicYearStatus = found.status;
-  const ok = await db.guardedBatch(db.prepare("SELECT 1 FROM academic_years y WHERE y.id=? AND y.organization_id=? AND y.status=? AND NOT EXISTS (SELECT 1 FROM academic_years o WHERE o.organization_id=y.organization_id AND lower(o.name)=lower(?) AND o.id<>y.id)").bind(id, current.organizationId, status, draft.name), [
+  const ok = await db.guardedBatch(db.prepare("SELECT 1 FROM academic_years y WHERE y.id=? AND y.organization_id=? AND y.status=? AND NOT EXISTS (SELECT 1 FROM academic_years o WHERE o.organization_id=y.organization_id AND o.program_id IS y.program_id AND lower(o.name)=lower(?) AND o.id<>y.id)").bind(id, current.organizationId, status, draft.name), [
     db.prepare("UPDATE academic_years SET name=?,starts_on=?,ends_on=?,period_kind=?,updated_at=? WHERE id=? AND organization_id=? AND status=?").bind(draft.name, draft.from, draft.until, draft.periodKind, now, id, current.organizationId, status),
     ...periodStatements(db, current.organizationId, id, draft),
   ]);

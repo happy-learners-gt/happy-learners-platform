@@ -58,7 +58,9 @@ export async function delivery(path: string, url: URL, current: Member, db: Data
     db.prepare("SELECT published_content AS content FROM lessons WHERE course_unit_id=? AND archived=0 AND revision>0 AND published_content IS NOT NULL ORDER BY position,id").bind(unitId),
     db.prepare("SELECT COALESCE(u.display_name,u.username) AS name FROM section_educators e JOIN users u ON u.id=e.user_id WHERE e.group_id=? ORDER BY name").bind(sectionId),
     db.prepare("SELECT name,timezone FROM organizations WHERE id=?").bind(current.organizationId),
-    db.prepare("SELECT id,name FROM academic_years WHERE organization_id=? AND status='current'").bind(current.organizationId),
+    db.prepare(`SELECT y.id,y.name FROM academic_years y JOIN courses c ON c.id=? AND c.organization_id=y.organization_id
+      WHERE y.organization_id=? AND y.status='current' AND (y.program_id IS NULL OR y.program_id=c.program_id)
+      ORDER BY CASE WHEN y.program_id IS NULL THEN 1 ELSE 0 END LIMIT 1`).bind(courseId, current.organizationId),
     db.prepare("SELECT id,statement FROM course_outcomes WHERE course_id=?").bind(courseId),
   ]) as unknown as [{ content: string }[], { name: string }[], { name: string | null; timezone: string }[], { id: string; name: string }[], { id: string; statement: string }[]];
   if (!lessons.length) return reply({ error: "Este módulo aún no tiene lecciones publicadas. Solo el contenido publicado entra en el PDF de entrega." }, 409);

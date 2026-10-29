@@ -41,6 +41,7 @@ import { bookTextPath, proposalMethods, proposals } from "./proposals";
 import { delivery, deliveryMethods } from "./delivery";
 import { bookMap, bookMapMethods } from "./book-map";
 import { account, accountBody, accountMethods, clientOf, confirmEmail, emailConfirmPath, failedSignIn, openSession } from "./account";
+import { institutionalCalendarMethods, institutionalCalendars } from "./institutional-calendar";
 export { LessonCollaborationRoom };
 
 const headers = {
@@ -116,6 +117,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   const proposalAllowed = proposalMethods(path);
   const deliveryAllowed = deliveryMethods(path);
   const bookMapAllowed = bookMapMethods(path);
+  const institutionalCalendarAllowed = institutionalCalendarMethods(path);
   let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|account|organization|calendar|members|access|levels|units|resources|lessons|courses|programs|vocabularies|terms|student|legal|hours)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout|retry)$/.test(path) && !path.includes("/files") && !/^\/api\/members\/[a-z0-9-]+\/password$/.test(path) && !professionalAllowed)
     || (method === "POST" && path === "/api/organization/restore" && env.RESTORE_ENABLED === "true")
     || (method === "POST" && (path === "/api/invitations" || acceptPath.test(path)))
@@ -128,6 +130,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (contractAllowed && ["POST", "PUT"].includes(method) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   if (bellAllowed && ["POST", "PUT"].includes(method)) input = await body(request);
   if (academicYearAllowed && ["POST", "PUT"].includes(method) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
+  if (institutionalCalendarAllowed && ["POST", "PUT"].includes(method) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   if (gradebookAllowed && (method === "PUT" || (method === "POST" && request.headers.get("content-type")?.startsWith("application/json")))) input = await body(request);
   // DEC-046: publishing a legal document may carry the date from which the version applies.
   if (method === "POST" && /^\/api\/legal\/documents\/[a-z]+\/publish$/.test(path) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
@@ -241,6 +244,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (proposalAllowed) methods[path] = proposalAllowed;
   if (deliveryAllowed) methods[path] = deliveryAllowed;
   if (bookMapAllowed) methods[path] = bookMapAllowed;
+  if (institutionalCalendarAllowed) methods[path] = institutionalCalendarAllowed;
   // ST-158, ST-159: account settings, my data and closing the account.
   const accountAllowed = accountMethods(path);
   if (accountAllowed) methods[path] = accountAllowed;
@@ -360,6 +364,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (professionalAllowed) return professional(path, method, input, url, current, db);
   if (contractAllowed) return contracts(path, method, input, current, db);
   if (academicYearAllowed) return academicYearsApi(path, method, input, current, db);
+  if (institutionalCalendarAllowed) return institutionalCalendars(path, method, input, url, current, db);
   if (bellAllowed) return bellSchedulesApi(path, method, input, current, db);
   if (/^\/api\/(taxonomy|vocabularies|terms)(\/|$)/.test(path)) return taxonomy(path, method, input, current, db);
   if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions)(\/|$)/.test(path)) return classroom(path, method, input, current, db, url.searchParams, notifier);

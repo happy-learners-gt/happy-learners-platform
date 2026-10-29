@@ -173,9 +173,52 @@ export interface Material {
   fileId?: string; fileName?: string; mediaType?: string; sizeBytes?: number; sha256?: string;
 }
 /** A weekly class time of a section and the period it applies to; days use 0 for Sunday (ST-099). */
-export interface SectionSchedule { weekdays: number[]; startsAt: string; durationMinutes: number; from: string; until: string; meetings?: ScheduleMeeting[] }
+export interface SectionSchedule { weekdays: number[]; startsAt: string; durationMinutes: number; from: string; until: string; meetings?: ScheduleMeeting[]; periodId?: string }
 /** A weekly meeting with its own time (1.2.4): when present, each class day takes its time from here. */
 export interface ScheduleMeeting { weekday: number; startsAt: string; durationMinutes: number }
+/** A reusable calendar rule. Weekdays use 0 for Sunday, as section schedules do. */
+export type DateRule = {
+  id: string;
+  title: string;
+  anchor:
+    | { kind: "fixed"; month: number; day: number }
+    | { kind: "nth-weekday"; month: number; weekday: 0 | 1 | 2 | 3 | 4 | 5 | 6; n: 1 | 2 | 3 | 4 | 5 | -1 }
+    | { kind: "easter"; offset: number }
+    | { kind: "relative"; to: string; offset: number; weekday?: 0 | 1 | 2 | 3 | 4 | 5 | 6 }
+    | { kind: "once"; date: string };
+  days?: number;
+  part?: "full" | "morning" | "afternoon";
+  shift?: {
+    when: (0 | 1 | 2 | 3 | 4 | 5 | 6)[];
+    to: "previous" | "next" | "nearest";
+    onto: (0 | 1 | 2 | 3 | 4 | 5 | 6)[];
+  };
+  fromYear?: number;
+  untilYear?: number;
+  exceptYears?: number[];
+  onlyYear?: number;
+};
+/** One concrete date or date range produced by a calendar rule. */
+export type DateRuleOccurrence = {
+  ruleId: string;
+  title: string;
+  from: string;
+  until: string;
+  part: "full" | "morning" | "afternoon";
+  shiftedFrom: string | null;
+};
+export type CalendarScope = "organization" | "program" | "section";
+export interface CalendarCategory { id: string; key: string; label: string; noClassDefault: boolean; builtin: boolean }
+export interface InstitutionalCalendar { id: string; scope: CalendarScope; scopeId: string | null; name: string; categories?: CalendarCategory[]; rules?: InstitutionalCalendarRule[] }
+export interface InstitutionalCalendarRule {
+  id: string; calendarId: string; categoryId: string; rule: DateRule; noClass: boolean; createdAt?: string; updatedAt?: string;
+}
+export interface InstitutionalCalendarEvent {
+  id: string; calendarId: string; categoryId: string; title: string; from: string; until: string;
+  part: "full" | "morning" | "afternoon"; noClass: boolean; ruleId: string | null; year: number | null;
+  status: "active" | "skipped"; createdAt?: string; updatedAt?: string;
+  scope?: CalendarScope; scopeId?: string | null; calendarName?: string; categoryKey?: string; categoryLabel?: string;
+}
 /** A bell schedule (jornada) of the organization: its class periods and breaks, generated from its configuration (1.2.4). */
 export interface BellSchedule {
   id: string; name: string; weekdays: number[];
@@ -193,7 +236,7 @@ export type PeriodKind = "bimester" | "trimester" | "semester" | "unit";
 export interface AcademicPeriod { id: string; position: number; name: string; from: string; until: string; weight: number }
 export interface AcademicYear {
   id: string; name: string; from: string; until: string; status: AcademicYearStatus; periodKind: PeriodKind; periods: AcademicPeriod[];
-  createdAt: string; updatedAt: string; activatedAt: string | null; closedAt: string | null;
+  createdAt: string; updatedAt: string; activatedAt: string | null; closedAt: string | null; programId?: string | null;
 }
 /** «Proponer lecciones»: whether a course is ready and the state of its proposal jobs (rebanada 5a). */
 export type ProposalItemStatus = "queued" | "running" | "done" | "error";
