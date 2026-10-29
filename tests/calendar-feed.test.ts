@@ -7,6 +7,7 @@ import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { calendarFeed, escapeText, feedWindow, foldLine, zonedInstant, type FeedClass } from "../packages/domain/src/index";
+import { nextClassDays, type NoClassSpan } from "./class-days";
 
 /** Splits a feed into content lines (unfolded) after checking its physical form: CRLF, ≤ 75 octets per line. */
 function parse(ics: string) {
@@ -136,11 +137,10 @@ function client(cookie: string) {
   };
   return { get: (path: string) => call("GET", path), post: (path: string, data?: unknown) => call("POST", path, data), put: (path: string, data?: unknown) => call("PUT", path, data) };
 }
-const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Guatemala" });
 const fetchFeed = async (url: string) => { const response = await fetch(url.replace(/^https?:\/\/[^/]+/, origin)); return { status: response.status, type: response.headers.get("content-type"), cache: response.headers.get("cache-control"), text: await response.text() }; };
 
 /** A course led by `leadId` with one section taught by them, scheduled daily for the next five days at 08:00. */
-async function scheduledSection(admin: ReturnType<typeof client>, leadId: string, label: string) {
+async function scheduledSection(admin: ReturnType<typeof client>, leadId: string, label: string, days: string[]) {
   const course = await admin.post("/api/courses", { title: `Calendario ${label}`, objective: "Probar el calendario.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", area: "011", settings: { attendance: true }, programId: null, leadId });
   expect(course.status, course.text).toBe(201);
   const path = `/api/courses/${course.body.id}`;
@@ -148,7 +148,7 @@ async function scheduledSection(admin: ReturnType<typeof client>, leadId: string
   expect(group.status, group.text).toBe(201);
   const assigned = await admin.put(`${path}/groups/${group.body.id}/educators`, { userIds: [leadId], conflictReason: "Secciones de prueba con el mismo horario." });
   expect(assigned.status, assigned.text).toBe(200);
-  const schedule = await admin.put(`${path}/groups/${group.body.id}/schedule`, { weekdays: [0, 1, 2, 3, 4, 5, 6], startsAt: "08:00", durationMinutes: 45, from: day(1), until: day(5) });
+  const schedule = await admin.put(`${path}/groups/${group.body.id}/schedule`, { weekdays: [0, 1, 2, 3, 4, 5, 6], startsAt: "08:00", durationMinutes: 45, from: days[0], until: days[4] });
   expect(schedule.status, schedule.text).toBe(200);
   return { path, groupId: group.body.id as string };
 }
@@ -156,8 +156,9 @@ async function scheduledSection(admin: ReturnType<typeof client>, leadId: string
 describe("ST-125 subscription link in the local Worker", () => {
   it("criteria 1-3: the feed lists only the educator's classes, follows cancellations and reschedules, and regenerating stops the old link", async () => {
     const admin = client(await login("admin-demo")), educator = client(await login("educador-demo")), other = client(await login("instructor-demo"));
-    const mine = await scheduledSection(admin, "user-educator", "propia");
-    const theirs = await scheduledSection(admin, "user-1", "ajena");
+    const days = await nextClassDays(async () => (await admin.get("/api/calendar")).body as { breaks?: NoClassSpan[]; today: string }, 6);
+    const mine = await scheduledSection(admin, "user-educator", "propia", days);
+    const theirs = await scheduledSection(admin, "user-1", "ajena", days);
 
     // Signed out, nothing is offered; signed in, there is no link until the person creates one.
     expect((await fetch(`${origin}/api/feeds/calendar`)).status).toBe(401);
@@ -189,13 +190,13 @@ describe("ST-125 subscription link in the local Worker", () => {
     // Criterion 2: a cancelled class and a rescheduled one change in the next refresh, under the same UID.
     const [cancelled, moved] = minePlan;
     expect((await educator.post(`${mine.path}/sessions/${cancelled.id}/cancel`)).status).toBe(200);
-    const reschedule = await educator.put(`${mine.path}/sessions/${moved.id}`, { sessionDate: day(9), startsAt: "10:30", durationMinutes: 60, lessonIds: [], notes: "", version: moved.version });
+    const reschedule = await educator.put(`${mine.path}/sessions/${moved.id}`, { sessionDate: days[5], startsAt: "10:30", durationMinutes: 60, lessonIds: [], notes: "", version: moved.version });
     expect(reschedule.status, reschedule.text).toBe(200);
     events = parse((await fetchFeed(created.body.url)).text).events;
     const byId = (id: string) => events.find(event => event.UID === `${id}@127.0.0.1`)!;
     expect(byId(cancelled.id)).toMatchObject({ STATUS: "CANCELLED" });
     expect(Number(byId(cancelled.id).SEQUENCE)).toBeGreaterThan(0);
-    expect(byId(moved.id).DTSTART).toBe(zonedInstant(day(9), "10:30", "America/Guatemala").toISOString().replace(/[-:]/g, "").replace(".000", ""));
+    expect(byId(moved.id).DTSTART).toBe(zonedInstant(days[5], "10:30", "America/Guatemala").toISOString().replace(/[-:]/g, "").replace(".000", ""));
     expect(Number(byId(moved.id).SEQUENCE)).toBeGreaterThan(0);
 
     // Criterion 3: regenerating gives a new link and the previous one stops working.

@@ -23,6 +23,11 @@ export type Theme = typeof themes[number];
 export const motions = ["system", "reduce"] as const;
 export const densities = ["comfortable", "compact"] as const;
 export const hourCycles = ["h12", "h23"] as const;
+/** What the agenda shows, and which dates it shows. An empty view follows the screen: day on a phone, week on a desk. */
+export const agendaViews = ["day", "week", "month", "year"] as const;
+export type AgendaView = typeof agendaViews[number];
+export const agendaKinds = ["class", "no-class", "event", "due"] as const;
+export type AgendaKind = typeof agendaKinds[number];
 export type HourCycle = typeof hourCycles[number];
 /** Text size, as a percentage of the base size; the screen offers steps of 10. */
 export const minTextScale = 100, maxTextScale = 150, textScaleStep = 10;
@@ -43,10 +48,15 @@ export interface UserPreferences {
   highContrast: boolean;
   motion: typeof motions[number];
   density: typeof densities[number];
+  /** null until the person chooses; the screen then uses day on a phone and week on a desk. */
+  agendaView: AgendaView | null;
+  /** Which kinds of dated item the agenda shows. */
+  agendaShow: AgendaKind[];
 }
 export const defaultPreferences: UserPreferences = {
   language: "es", locale: null, timezone: null, weekStart: null, hourCycle: null, homePage: "inicio",
   theme: "system", textScale: 100, highContrast: false, motion: "system", density: "comfortable",
+  agendaView: null, agendaShow: [...agendaKinds],
 };
 
 /** A well-formed BCP 47 tag that the runtime can format with; returns its canonical spelling or null. */
@@ -88,8 +98,9 @@ export function effectivePreferences(stored: Partial<UserPreferences> | null | u
   const orgZone = organization.timezone && isTimezone(organization.timezone) ? organization.timezone : "UTC";
   const locale = canonicalLocale(own.locale) || orgLocale;
   const timezone = own.timezone && isTimezone(own.timezone) ? own.timezone : orgZone;
+  const agendaShow = (Array.isArray(own.agendaShow) ? own.agendaShow : defaultPreferences.agendaShow).filter((item, index, list) => agendaKinds.includes(item) && list.indexOf(item) === index);
   return {
-    ...own, locale, timezone,
+    ...own, locale, timezone, agendaView: own.agendaView && agendaViews.includes(own.agendaView) ? own.agendaView : null, agendaShow,
     weekStart: own.weekStart && own.weekStart >= 1 && own.weekStart <= 7 ? own.weekStart : localeWeekStart(locale),
     hourCycle: own.hourCycle || localeHourCycle(locale),
     chosen: { locale: own.locale, timezone: own.timezone, weekStart: own.weekStart, hourCycle: own.hourCycle },
@@ -104,6 +115,7 @@ const messages: Record<string, string> = {
   homePage: "Elige una página de inicio de la lista.", theme: "Elige el tema claro, oscuro o el del sistema.",
   textScale: `El tamaño del texto va de ${minTextScale} % a ${maxTextScale} %.`, highContrast: "Indica si quieres alto contraste.",
   motion: "Indica si quieres reducir el movimiento.", density: "Elige la densidad cómoda o compacta.",
+  agendaView: "Elige la vista Día, Semana, Mes o Año.", agendaShow: "Elige qué mostrar en la agenda.",
 };
 /**
  * A change to some preferences: only the keys sent are validated and returned. `null` resets locale, zone, first day
@@ -127,6 +139,12 @@ export function userPreferencesInput(value: unknown): { preferences: Partial<Use
       case "highContrast": if (typeof raw !== "boolean") return { error: messages[key] }; out.highContrast = raw; break;
       case "motion": if (!oneOf(motions, raw)) return { error: messages[key] }; out.motion = raw; break;
       case "density": if (!oneOf(densities, raw)) return { error: messages[key] }; out.density = raw; break;
+      case "agendaView": if (raw !== null && !oneOf(agendaViews, raw)) return { error: messages[key] }; out.agendaView = raw as AgendaView | null; break;
+      case "agendaShow": {
+        if (!Array.isArray(raw) || raw.length > agendaKinds.length || raw.some((item, index) => !oneOf(agendaKinds, item) || raw.indexOf(item) !== index)) return { error: messages[key] };
+        out.agendaShow = raw as AgendaKind[];
+        break;
+      }
       default: return { error: `«${key.slice(0, 40)}» no es una preferencia.` };
     }
   }

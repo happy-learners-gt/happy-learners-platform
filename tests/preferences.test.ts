@@ -24,6 +24,9 @@ describe("ST-160 regional and appearance rules", () => {
     expect(userPreferencesInput({ locale: "pt-br", timezone: "America/Sao_Paulo", weekStart: 7, hourCycle: "h12", language: "es" }))
       .toEqual({ preferences: { locale: "pt-BR", timezone: "America/Sao_Paulo", weekStart: 7, hourCycle: "h12", language: "es" } });
     expect(userPreferencesInput({ locale: null, timezone: null, weekStart: null, hourCycle: null })).toEqual({ preferences: { locale: null, timezone: null, weekStart: null, hourCycle: null } });
+    expect(userPreferencesInput({ agendaView: "month", agendaShow: ["class", "due"] })).toEqual({ preferences: { agendaView: "month", agendaShow: ["class", "due"] } });
+    expect(userPreferencesInput({ agendaView: null })).toEqual({ preferences: { agendaView: null } });
+    for (const bad of [{ agendaView: "hora" }, { agendaShow: "class" }, { agendaShow: ["class", "class"] }, { agendaShow: ["otro"] }]) expect(userPreferencesInput(bad), JSON.stringify(bad)).toHaveProperty("error");
     for (const bad of [null, {}, [], { theme: "sepia" }, { textScale: 99 }, { textScale: 151 }, { textScale: 120.5 }, { timezone: "Guatemala" }, { locale: "en_US" }, { locale: "zz-ZZZZZZZZZ" },
       { weekStart: 0 }, { weekStart: 8 }, { hourCycle: "h24" }, { language: "en" }, { homePage: "admin" }, { highContrast: "yes" }, { colour: "red" }])
       expect(userPreferencesInput(bad), JSON.stringify(bad)).toHaveProperty("error");

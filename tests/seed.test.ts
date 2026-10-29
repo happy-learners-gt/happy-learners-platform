@@ -16,6 +16,8 @@ import { book, bookPages, pilotSql } from "../scripts/seed/pilot.mjs";
 import { gradebookActivities, gradebookSql } from "../scripts/seed/gradebook.mjs";
 // @ts-expect-error — plain ESM scripts without type declarations
 import { calendarSql } from "../scripts/seed/calendar.mjs";
+// @ts-expect-error — plain ESM scripts without type declarations
+import { calendarEventsSql } from "../scripts/seed/calendar-events.mjs";
 
 type Seed = { id: string; title: string; program: string | null; lead: string; coTeachers: string[]; educationType: string; level: string; modality: string; pacing: string; format: string; settings: object; archived?: boolean;
   competencies: { outcomes: { id: string }[] }[]; resources: { id: string }[]; groups: { id: string; by: string }[];
@@ -162,5 +164,20 @@ describe("academic calendar seed (0058, 1.2.4)", () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatch(/^INSERT INTO bell_schedules\(.*WHERE EXISTS\(SELECT 1 FROM organizations WHERE id='org-demo'\) AND NOT EXISTS/);
     expect(lines[0]).toMatch(/'bell-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'/);
+  });
+});
+
+describe("institutional calendar events seed (0063, 1.3.4)", () => {
+  it("is generated from scripts/seed/calendar-events.mjs and checked in unchanged, only in org-demo", () => {
+    expect(readFileSync(new URL("../database/migrations/0063_demo_calendar_events.sql", import.meta.url), "utf8")).toBe(calendarEventsSql);
+    const lines = (calendarEventsSql as string).split("\n").filter(line => line && !line.startsWith("--"));
+    expect(lines.every(line => line.startsWith("INSERT INTO ") && line.endsWith(";"))).toBe(true);
+    expect(lines.every(line => line.includes("EXISTS(SELECT 1 FROM organizations WHERE id='org-demo')"))).toBe(true);
+    expect(lines.some(line => line.includes("Exámenes del cuarto bimestre") && line.includes("2026-11-16"))).toBe(true);
+    expect(lines.some(line => line.includes("Admisiones 2027") && line.includes("2027-01-11"))).toBe(true);
+    expect(lines.some(line => line.includes("Inscripciones 2027"))).toBe(true);
+    expect(lines.some(line => line.includes("Feria de ciencias"))).toBe(true);
+    expect(lines.some(line => line.includes("Acto de clausura") && line.includes("2026-11-27"))).toBe(true);
+    expect(lines.filter(line => line.startsWith("INSERT INTO calendar_rules"))).toHaveLength(13);
   });
 });

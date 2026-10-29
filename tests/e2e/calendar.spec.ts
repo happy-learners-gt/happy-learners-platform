@@ -1,9 +1,9 @@
 import { test, expect } from "./local-test";
+import { nextClassDays } from "../class-days";
 import { E2E_PREFIX, sessionToken, signIn } from "./helpers";
 
 type Session = { id: string; groupId: string; lessons: { id: string; outcome?: string | null }[]; sessionDate: string; status: string; version: number; notes: string };
 const ids = (session: Session) => session.lessons.map(lesson => lesson.id);
-const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Guatemala" });
 
 test("HL-143 ST-108 ST-109: days without class reschedule the section, cancelling moves or skips the plan and finishing records what was covered", async ({ page, playwright, baseURL }, info) => {
   const educator = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("educador-demo")}` } });
@@ -21,35 +21,36 @@ test("HL-143 ST-108 ST-109: days without class reschedule the section, cancellin
       lessons.push(lesson);
     }
     const [one, two, three] = lessons.map(lesson => lesson.id);
+    const days = await nextClassDays(async () => await (await admin.get("/api/calendar")).json(), 7);
     const groupId = (await (await admin.post(`${path}/groups`, { data: { name: `${E2E_PREFIX} Sección C` } })).json()).id;
     expect((await admin.put(`${path}/groups/${groupId}/educators`, { data: { userIds: ["user-educator"], conflictReason: "Sección de prueba E2E; su horario puede coincidir con otras secciones de prueba." } })).status()).toBe(200);
-    expect((await admin.put(`${path}/groups/${groupId}/schedule`, { data: { weekdays: [0, 1, 2, 3, 4, 5, 6], startsAt: "08:00", durationMinutes: 45, from: day(1), until: day(7) } })).status()).toBe(200);
+    expect((await admin.put(`${path}/groups/${groupId}/schedule`, { data: { weekdays: [0, 1, 2, 3, 4, 5, 6], startsAt: "08:00", durationMinutes: 45, from: days[0], until: days[6] } })).status()).toBe(200);
     expect((await educator.post(`${path}/groups/${groupId}/lessons`, { data: { perClass: 1 } })).status()).toBe(200);
     const sessions = async () => ((await (await educator.get(`${path}/sessions`)).json()).sessions as Session[]).filter(item => item.groupId === groupId && item.status !== "cancelled").sort((a, b) => a.sessionDate.localeCompare(b.sessionDate));
     const plan = async () => (await sessions()).map(item => [item.sessionDate, ids(item)]);
 
     // Only administration defines days without class, with a valid range.
-    expect((await educator.post("/api/calendar", { data: { title: "Asueto", from: day(2), groupId } })).status()).toBe(403);
-    expect((await admin.post("/api/calendar", { data: { title: "Asueto", from: day(3), until: day(2), groupId } })).status()).toBe(400);
+    expect((await educator.post("/api/calendar", { data: { title: "Asueto", from: days[1], groupId } })).status()).toBe(403);
+    expect((await admin.post("/api/calendar", { data: { title: "Asueto", from: days[2], until: days[1], groupId } })).status()).toBe(400);
     // A day off for the section removes its class; what was planned moves to the following classes, in order.
-    const added = await admin.post("/api/calendar", { data: { title: "Asueto", from: day(2), groupId } });
+    const added = await admin.post("/api/calendar", { data: { title: "Asueto", from: days[1], groupId } });
     expect(added.status(), await added.text()).toBe(201);
     const dayOff = await added.json();
-    expect(dayOff).toMatchObject({ break: { title: "Asueto", from: day(2), until: day(2), groupId }, sections: 1, removed: 1 });
-    expect(await plan()).toEqual([[day(1), [one]], [day(3), [two]], [day(4), [three]], [day(5), []], [day(6), []], [day(7), []]]);
-    expect((await (await educator.get(`${path}/sessions`)).json()).breaks).toEqual([expect.objectContaining({ id: dayOff.break.id, groupId })]);
+    expect(dayOff).toMatchObject({ break: { title: "Asueto", from: days[1], until: days[1], groupId }, sections: 1, removed: 1 });
+    expect(await plan()).toEqual([[days[0], [one]], [days[2], [two]], [days[3], [three]], [days[4], []], [days[5], []], [days[6], []]]);
+    expect((await (await educator.get(`${path}/sessions`)).json()).breaks).toEqual(expect.arrayContaining([expect.objectContaining({ id: dayOff.break.id, groupId })]));
 
     // Recorrer: the plan of the cancelled class goes to the next one and every later class moves one place.
     let list = await sessions();
     const shifted = await educator.post(`${path}/sessions/${list[0].id}/cancel`, { data: { plan: "shift" } });
     expect(shifted.status(), await shifted.text()).toBe(200);
-    expect(await plan()).toEqual([[day(3), [one]], [day(4), [two]], [day(5), [three]], [day(6), []], [day(7), []]]);
+    expect(await plan()).toEqual([[days[2], [one]], [days[3], [two]], [days[4], [three]], [days[5], []], [days[6], []]]);
     // Omitir: the plan stays with the cancelled class and the rest do not change.
     list = await sessions();
     expect((await educator.post(`${path}/sessions/${list[0].id}/cancel`, { data: { plan: "skip" } })).status()).toBe(200);
-    expect(await plan()).toEqual([[day(4), [two]], [day(5), [three]], [day(6), []], [day(7), []]]);
+    expect(await plan()).toEqual([[days[3], [two]], [days[4], [three]], [days[5], []], [days[6], []]]);
     expect((await educator.post(`${path}/sessions/${list[0].id}/restore`)).status()).toBe(200);
-    expect(await plan()).toEqual([[day(3), [one]], [day(4), [two]], [day(5), [three]], [day(6), []], [day(7), []]]);
+    expect(await plan()).toEqual([[days[2], [one]], [days[3], [two]], [days[4], [three]], [days[5], []], [days[6], []]]);
 
     // Finishing records how far each lesson got; what was not completed opens the next class.
     list = await sessions();
@@ -69,12 +70,12 @@ test("HL-143 ST-108 ST-109: days without class reschedule the section, cancellin
 
     // Removing the day off brings the class back and the plan settles in order again.
     expect((await admin.delete(`/api/calendar/${dayOff.break.id}`)).status()).toBe(200);
-    expect((await sessions()).map(item => item.sessionDate)).toEqual([day(2), day(3), day(4), day(5), day(6), day(7)]);
+    expect((await sessions()).map(item => item.sessionDate)).toEqual([days[1], days[2], days[3], days[4], days[5], days[6]]);
     // A day off for the whole organization reaches every section with a schedule.
-    const holiday = await (await admin.post("/api/calendar", { data: { title: `${E2E_PREFIX} Feriado`, from: day(6) } })).json();
+    const holiday = await (await admin.post("/api/calendar", { data: { title: `${E2E_PREFIX} Feriado`, from: days[5] } })).json();
     expect(holiday.break.groupId).toBeNull();
-    expect((await sessions()).map(item => item.sessionDate)).toEqual([day(2), day(3), day(4), day(5), day(7)]);
-    expect((await (await educator.get(`/api/calendar?section=${groupId}`)).json()).breaks.map((item: { id: string }) => item.id)).toEqual([holiday.break.id]);
+    expect((await sessions()).map(item => item.sessionDate)).toEqual([days[1], days[2], days[3], days[4], days[6]]);
+    expect((await (await educator.get(`/api/calendar?section=${groupId}`)).json()).breaks.map((item: { id: string }) => item.id)).toContain(holiday.break.id);
     expect((await admin.delete(`/api/calendar/${holiday.break.id}`)).status()).toBe(200);
 
     // Administration manages the section's days without class from its schedule page.
@@ -82,13 +83,13 @@ test("HL-143 ST-108 ST-109: days without class reschedule the section, cancellin
     await page.getByRole("region", { name: "Días sin clase" }).getByRole("button", { name: "Agregar", exact: true }).click();
     const form = page.getByRole("form", { name: `Agregar días sin clase a ${E2E_PREFIX} Sección C` });
     await form.getByLabel("Motivo").fill("Vacaciones");
-    await form.getByLabel("Desde").fill(day(6));
-    await form.getByLabel("Hasta").fill(day(7));
+    await form.getByLabel("Desde").fill(days[5]);
+    await form.getByLabel("Hasta").fill(days[6]);
     await form.getByRole("button", { name: "Agregar días sin clase" }).click();
     const daysOff = page.locator(".days-off");
     await expect(daysOff).toContainText("Vacaciones");
     await expect(daysOff).toContainText("Esta sección");
-    expect(await plan()).toEqual([[day(2), [one, two]], [day(3), [one]], [day(4), [three]], [day(5), []]]);
+    expect(await plan()).toEqual([[days[1], [one, two]], [days[2], [one]], [days[3], [three]], [days[4], []]]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
     // The educator cancels a planned class and chooses to move its plan forward, past the class already taught.

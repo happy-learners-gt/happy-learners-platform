@@ -179,7 +179,6 @@ function Sidebar() {
     <nav aria-label="Navegación principal"><ul className="nav-tree">
       {page({ href: "/inicio", label: "Inicio", icon: "home", hue: "violet", active: path === "/inicio" })}
       {page({ href: "/agenda", label: "Agenda", icon: "calendar", hue: "coral", active: path === "/agenda" })}
-      {page({ href: "/calendario", label: "Calendario", icon: "calendar", hue: "amber", active: path === "/calendario" })}
       {page({ href: "/horas", label: admin ? "Horas efectivas" : "Mis horas", icon: "clock", hue: "green", active: path === "/horas" })}
       <Node id="courses" href="/cursos" label="Cursos" icon="courses" hue="sky" open={open.has("courses")} active={path === "/cursos" || path === "/cursos/nuevo"}
         toggleLabel="Mostrar los cursos" onToggle={() => toggle("courses")} onSelect={select("courses", "/cursos")}
@@ -199,6 +198,7 @@ function Sidebar() {
     </ul></nav>
     {admin && <nav aria-label="Administración" className="sidebar-secondary"><span className="sidebar-eyebrow">Administración</span><ul className="nav-tree">
       {page({ href: "/organizacion", label: "Organización", icon: "settings", hue: "coral", active: path === "/organizacion" })}
+      {page({ href: "/organizacion/calendario", label: "Calendario institucional", icon: "calendar", hue: "amber", active: path === "/organizacion/calendario" })}
       {page({ href: "/educadores", label: "Educadores", icon: "users", hue: "pink", active: path === "/educadores" })}
       {page({ href: "/contratos", label: "Contratos y políticas", icon: "file", hue: "violet", active: path === "/contratos" })}
       {page({ href: "/perfiles", label: "Revisión de perfiles", icon: "check", hue: "sky", active: path === "/perfiles" })}

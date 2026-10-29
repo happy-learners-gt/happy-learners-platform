@@ -14,7 +14,7 @@ test("the institutional calendar applies a template, generates a year, skips one
     const view = await (await fetch(`/api/calendars/view?from=${year}-01-01&until=${year}-12-31&program=${programId}`)).json() as { events: { id: string; calendarId: string }[] };
     await Promise.all(view.events.filter(item => item.calendarId === calendar.id).map(item => fetch(`/api/calendars/${calendar.id}/events/${item.id}`, { method: "DELETE" })));
   }, { programId: program.id, year });
-  await page.goto(`/calendario?programa=${program.id}&año=${year}`);
+  await page.goto(`/configuracion-academica/calendario?programa=${program.id}&año=${year}`);
   await expect(page.getByRole("heading", { level: 1, name: "Calendario" })).toBeVisible();
 
   await page.getByRole("button", { name: "Más acciones del calendario" }).click();
@@ -27,9 +27,9 @@ test("the institutional calendar applies a template, generates a year, skips one
   const preview = page.getByRole("dialog", { name: `Generar el año ${year}` });
   await expect(preview.getByRole("heading", { name: /Se crean/ })).toBeVisible();
   await preview.getByRole("button", { name: `Confirmar y generar ${year}` }).click();
-  await expect(page.locator(".calendar-event").filter({ hasText: "Año Nuevo" })).toBeVisible();
+  await expect(page.locator(".agenda-event").filter({ hasText: "Año Nuevo" })).toBeVisible();
 
-  const newYear = page.locator(".calendar-event").filter({ hasText: "Año Nuevo" }).first();
+  const newYear = page.locator(".agenda-event").filter({ hasText: "Año Nuevo" }).first();
   await newYear.getByRole("button", { name: "Acciones de Año Nuevo" }).click();
   await page.getByRole("menuitem", { name: "Saltar esta ocurrencia" }).click();
   await expect(newYear).toContainText("Omitido");
@@ -42,7 +42,7 @@ test("the institutional calendar applies a template, generates a year, skips one
   await dialog.getByLabel("Desde").fill(`${year}-08-14`);
   await dialog.getByLabel("Hasta").fill(`${year}-08-15`);
   await dialog.getByRole("button", { name: "Guardar evento" }).click();
-  await expect(page.locator(".calendar-event").filter({ hasText: title })).toBeVisible();
+  await expect(page.locator(".agenda-event").filter({ hasText: title })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   if (process.env.CAPTURE_CALENDAR === "1") await page.screenshot({ path: `test-results/calendario-${info.project.name}.png`, fullPage: true });
 });
