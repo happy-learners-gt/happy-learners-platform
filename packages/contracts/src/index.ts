@@ -360,9 +360,10 @@ export interface Gradebook {
   scores: AssessmentScore[];
   marks?: AssessmentMark[];
   /** Groups, group marks and per-student adjustments of the year's group activities. */
-  workGroups?: { id: string; setId: string; name: string; learnerIds: string[] }[];
+  workGroups?: { id: string; setId: string; setName?: string; name: string; learnerIds: string[] }[];
   groupMarks?: { activityId: string; workGroupId: string; mark: AtomicMark }[];
   groupAdjustments?: { activityId: string; learnerId: string; kind: "factor" | "override" | "peer"; value: number; note: string | null }[];
+  peerRatings?: { activityId: string; raterId: string; rateeId: string; score: number }[];
   evaluators?: AssessmentEvaluator[];
   comments: GradeComment[];
   /** Where each period is in its closing: handed in, returned or approved. Absent while it is open. */
@@ -376,7 +377,7 @@ export interface AssessmentActivity {
   id: string; periodId: string; position: number; title: string; kind: AssessmentKind; points: number; dueOn: string | null;
   categoryId?: string; grading?: GradingActivity["grading"]; extra?: boolean; retakeOf?: string | null;
   rubric?: Rubric; panel?: GradingActivity["panel"];
-  groupMode?: "individual" | "group"; workGroupSetId?: string | null;
+  groupMode?: "individual" | "group"; workGroupSetId?: string | null; peerMin?: number; peerMax?: number;
 }
 export interface AssessmentScore { activityId: string; learnerId: string; points: number; source?: "individual" | "group" }
 export interface AssessmentMark { activityId: string; learnerId: string; evaluatorId: string | null; mark: AtomicMark; updatedAt: string; updatedBy: string; source?: "individual" | "group" }

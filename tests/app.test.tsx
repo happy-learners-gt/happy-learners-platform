@@ -484,3 +484,108 @@ it("grades a rubric and a level, exempts from the cell menu and shows the scheme
     { learnerId: "learner-a", activityId: "assessment-3", mark: { kind: "exempt" } },
   ]);
 });
+it("previews a group set with an unmet constraint and moves a student from the menu", async () => {
+  const member = { id: "user-educator", username: "educador-demo", role: "educator", organizationId: "org-demo", permissions: { admin: false, coordination: null, grants: {} } };
+  const course = { id: "course-1", title: "Taller", objective: "Trabajar en equipo.", educationType: "non-formal", level: "unspecified", modality: "in-person", pacing: "scheduled", format: "workshop", settings: { attendance: true, workGroups: true }, status: "active", version: 1, updatedAt: "t",
+    access: { role: "lead", assigned: ["group-1"], configure: false, edit: true, publish: true, review: true, team: false, educators: false, sections: "assigned" } };
+  const section = { id: "group-1", courseId: "course-1", name: "Taller", status: "active", learnerCount: 2, educators: [], course: { id: "course-1", title: course.title, status: "active" }, pacing: "scheduled", workGroups: true,
+    indicators: { learners: 2, classes: 1, taught: 0, upcoming: 1, unrecorded: 0, lessons: 0, covered: 0, attendance: null }, next: null, teaches: true };
+  const learners = [{ id: "learner-a", groupId: "group-1", displayName: "Ana", status: "active" }, { id: "learner-b", groupId: "group-1", displayName: "Leo", status: "active" }];
+  const sets = [{ id: "groupset-11111111-1111-4111-8111-111111111111", name: "Ensayo", sessionId: null, graded: false, rules: { by: "size", size: 1, how: "random", seed: "clase" }, groups: [{ id: "wg-1", name: "Grupo 1", learnerIds: ["learner-a"] }, { id: "wg-2", name: "Grupo 2", learnerIds: ["learner-b"] }] }];
+  const sent: unknown[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: string, init?: RequestInit) => {
+    if (input === "/api/session") return Response.json({ member, pending: [] });
+    if (input === "/api/organization") return Response.json({ organization: { id: "org-demo", name: "Escuela", timezone: "America/Guatemala", configured: true } });
+    if (input === "/api/sections/group-1") return Response.json({ section, today: "2026-10-28" });
+    if (input === "/api/courses/course-1") return Response.json({ course, units: [], curriculum: { competencies: [], outcomes: [] } });
+    if (input === "/api/courses/course-1/groups/group-1/work-groups") return Response.json({ workGroups: [], activities: [] });
+    if (input === "/api/courses/course-1/groups/group-1") return Response.json({ group: { learners } });
+    if (input === "/api/courses/course-1/sessions?section=group-1") return Response.json({ sessions: [{ id: "class-1", sessionDate: "2026-10-28", groupId: "group-1" }] });
+    if (input.startsWith("/api/sections/group-1/group-sets") && init?.method === "POST") {
+      sent.push(JSON.parse(String(init.body)));
+      return Response.json({ preview: true, groups: [{ name: "Grupo 1", learnerIds: ["learner-a", "learner-b"] }], unmet: [{ kind: "apart", learners: ["learner-a", "learner-b"], message: "No pude separar a Ana y Leo." }] });
+    }
+    if (input === "/api/sections/group-1/group-sets/groupset-11111111-1111-4111-8111-111111111111" && init?.method === "PUT") { sent.push(JSON.parse(String(init.body))); return Response.json({ set: sets[0] }); }
+    if (input === "/api/sections/group-1/group-sets") return Response.json({ sets });
+    if (input.startsWith("/api/lessons")) return Response.json({ lessons: [] });
+    if (input.endsWith("/materials")) return Response.json({ materials: [] });
+    if (input === "/api/resources") return Response.json({ resources: [] });
+    if (input === "/api/programs") return Response.json({ programs: [] });
+    return Response.json({});
+  }));
+  history.replaceState(null, "", "/secciones/group-1/grupos");
+  render(<App/>);
+  expect(await screen.findByRole("heading", { level: 1, name: "Grupos de trabajo" })).toBeTruthy();
+  fireEvent.click(await screen.findByRole("button", { name: "Mover a Ana" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Mover a Grupo 2" }));
+  await waitFor(() => expect(sent[0]).toMatchObject({ groups: [{ id: "wg-1", learnerIds: [] }, { id: "wg-2", learnerIds: ["learner-b", "learner-a"] }] }));
+  fireEvent.click(screen.getByRole("button", { name: "Formar grupos" }));
+  const dialog = await screen.findByRole("dialog", { name: "Formar grupos" });
+  fireEvent.click(within(dialog).getByRole("radio", { name: "Los presentes de una clase" }));
+  fireEvent.change(within(dialog).getByLabelText("Clase"), { target: { value: "class-1" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Separados" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Vista previa" }));
+  expect(await within(dialog).findByText("No pude separar a Ana y Leo.")).toBeTruthy();
+  const preview = sent.at(-1) as { rules: { by: string; how: string; apart: string[][]; seed: string }; sessionId: string };
+  expect(preview.sessionId).toBe("class-1");
+  expect(preview.rules).toMatchObject({ by: "size", how: "random", apart: [["learner-a", "learner-b"]] });
+  expect(preview.rules.seed).toBeTruthy();
+});
+it("grades a group, shows each member's origin, applies a factor and previews the coevaluation factor", async () => {
+  const member = { id: "user-educator", username: "educador-demo", role: "educator", organizationId: "org-demo", permissions: { admin: false, coordination: null, grants: {} } };
+  const course = { id: "course-1", title: "Taller", objective: "Calificar en grupo.", educationType: "non-formal", level: "unspecified", modality: "in-person", pacing: "scheduled", format: "workshop", settings: {}, status: "active", version: 1, updatedAt: "t",
+    access: { role: "lead", assigned: ["group-1"], configure: false, edit: true, publish: true, review: true, team: false, educators: false, sections: "assigned" } };
+  const section = { id: "group-1", courseId: "course-1", name: "Taller", status: "active", learnerCount: 3, educators: [], course: { id: "course-1", title: course.title, status: "active" }, pacing: "scheduled",
+    indicators: { learners: 3, classes: 0, taught: 0, upcoming: 0, unrecorded: 0, lessons: 0, covered: 0, attendance: null }, next: null, teaches: true };
+  const setId = "groupset-11111111-1111-4111-8111-111111111111";
+  const activity = { id: "assessment-11111111-1111-4111-8111-111111111111", periodId: "period-1", position: 0, title: "Ensayo", kind: "project", points: 60, dueOn: null, grading: "points", groupMode: "group", workGroupSetId: setId, peerMin: 0.5, peerMax: 1.5 };
+  const learners = [{ id: "learner-a", name: "Ana" }, { id: "learner-b", name: "Leo" }, { id: "learner-c", name: "Noa" }];
+  const workGroups = [{ id: "wg-1", setId, setName: "Ensayo", name: "Grupo 1", learnerIds: ["learner-a", "learner-b", "learner-c"] }];
+  let gradebook = { section: { id: "group-1", name: "Taller", courseId: "course-1", courseTitle: course.title, status: "active" }, year: { id: "year-1", name: "Ciclo 2026", from: "2026-01-12", until: "2026-11-27", status: "current" },
+    years: [{ id: "year-1", name: "Ciclo 2026", status: "current" }], periods: [{ id: "period-1", position: 1, name: "Primer bimestre", from: "2026-01-12", until: "2026-03-20", weight: 1, locked: false, lockedAt: null, lockedBy: null }],
+    learners, activities: [activity], scores: [] as { activityId: string; learnerId: string; points: number; source?: string }[], marks: [], grades: [], comments: [], reviews: [], evaluators: [], results: [],
+    workGroups, groupMarks: [] as { activityId: string; workGroupId: string; mark: unknown }[], groupAdjustments: [] as { activityId: string; learnerId: string; kind: string; value: number; note: string | null }[], peerRatings: [],
+    policy: { scale: "numeric_100", passingGrade: 60, letterThresholds: [90, 80, 70, 60], average: "simple" }, canEdit: true, canLock: false, canUnlock: false, canSubmit: true };
+  vi.stubGlobal("fetch", vi.fn(async (input: string, init?: RequestInit) => {
+    if (input === "/api/session") return Response.json({ member, pending: [] });
+    if (input === "/api/organization") return Response.json({ organization: { id: "org-demo", name: "Escuela", timezone: "America/Guatemala", configured: true } });
+    if (input === "/api/sections/group-1") return Response.json({ section, today: "2026-02-02" });
+    if (input === "/api/courses/course-1") return Response.json({ course, units: [], curriculum: { competencies: [], outcomes: [] } });
+    if (input.includes("/history")) return Response.json({ changes: [] });
+    if (input.includes("/groups") && init?.method === "PUT") {
+      gradebook = { ...gradebook, groupMarks: [{ activityId: activity.id, workGroupId: "wg-1", mark: { kind: "points", value: 60 } }], scores: learners.map(learner => ({ activityId: activity.id, learnerId: learner.id, points: 60, source: "group" })) };
+      return Response.json({ gradebook });
+    }
+    if (input.includes("/adjustments") && init?.method === "PUT") {
+      gradebook = { ...gradebook, groupAdjustments: [{ activityId: activity.id, learnerId: "learner-a", kind: "factor", value: 0.8, note: "Participó menos" }], scores: gradebook.scores.map(score => score.learnerId === "learner-a" ? { ...score, points: 48 } : score) };
+      return Response.json({ gradebook });
+    }
+    if (input.startsWith("/api/sections/group-1/grades")) return Response.json({ gradebook });
+    if (input.startsWith("/api/lessons")) return Response.json({ lessons: [] });
+    if (input.endsWith("/materials")) return Response.json({ materials: [] });
+    if (input === "/api/resources") return Response.json({ resources: [] });
+    if (input === "/api/programs") return Response.json({ programs: [] });
+    return Response.json({});
+  }));
+  history.replaceState(null, "", "/secciones/group-1/notas?periodo=period-1");
+  render(<App/>);
+  const cell = await screen.findByLabelText("Nota de Grupo 1 en Ensayo") as HTMLInputElement;
+  fireEvent.change(cell, { target: { value: "60" } });
+  fireEvent.blur(cell);
+  expect(await screen.findAllByText("del grupo")).toHaveLength(3);
+  fireEvent.click(screen.getByRole("button", { name: "Detalle de Ana" }));
+  const drawer = await screen.findByRole("dialog", { name: "Ana" });
+  fireEvent.change(within(drawer).getByLabelText("Factor de Ensayo"), { target: { value: "0,8" } });
+  fireEvent.change(within(drawer).getByLabelText("Nota del ajuste de Ensayo"), { target: { value: "Participó menos" } });
+  fireEvent.click(within(drawer).getByRole("button", { name: "Aplicar factor" }));
+  expect(await screen.findAllByText("ajustada ×0,8")).toHaveLength(2);
+  fireEvent.click(screen.getByRole("button", { name: "Coevaluación" }));
+  const matrix = await screen.findByRole("dialog", { name: /Coevaluación/ });
+  const rate = (from: string, to: string, score: string) => fireEvent.change(within(matrix).getByLabelText(`Calificación de ${from} a ${to}`), { target: { value: score } });
+  rate("Ana", "Leo", "3"); rate("Ana", "Noa", "1");
+  rate("Leo", "Ana", "5"); rate("Leo", "Noa", "1");
+  rate("Noa", "Ana", "5"); rate("Noa", "Leo", "3");
+  expect(within(matrix).getByText("Factor de Ana ×1,5")).toBeTruthy();
+  expect(within(matrix).getByText("Factor de Leo ×1,0")).toBeTruthy();
+  expect(within(matrix).getByText("Factor de Noa ×0,5")).toBeTruthy();
+});

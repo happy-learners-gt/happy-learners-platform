@@ -155,6 +155,11 @@ export async function groupGrades(
     if (typeof body.learnerId !== "string") return reply({ error: "Elige al estudiante del ajuste." }, 400);
     const member = await db.prepare("SELECT m.learner_id AS id FROM work_group_members m JOIN work_groups w ON w.id=m.work_group_id WHERE w.set_id=? AND m.learner_id=?").bind(activity.setId, body.learnerId).first();
     if (!member) return reply({ error: "Ese estudiante no está en un grupo de este conjunto." }, 400);
+    if (body.clear === true) {
+      await db.prepare("DELETE FROM assessment_group_adjustments WHERE activity_id=? AND learner_id=? AND group_id=?").bind(activity.id, body.learnerId, allowed.section.id).run();
+      await propagate(db, current, allowed.section, activity, `Quitó el ajuste grupal de un estudiante en «${activity.title}» de «${allowed.section.name}»`, recompute);
+      return null;
+    }
     if (body.kind !== "factor" && body.kind !== "override" && body.kind !== "peer") return reply({ error: "Elige un ajuste: factor, nota propia o coevaluación." }, 400);
     const value = body.kind === "override" ? pointsInput(body.value, activity.points) : typeof body.value === "number" && Number.isFinite(body.value) ? body.value : undefined;
     if (typeof value !== "number" || (body.kind !== "override" && (value < 0 || value > 2))) return reply({ error: body.kind === "override" ? `La nota propia va de 0 a ${activity.points}.` : "El factor va de 0 a 2." }, 400);
