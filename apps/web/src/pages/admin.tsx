@@ -326,7 +326,7 @@ function ProgramEditor() {
         <Menu label={`Acciones de ${program.name}`} items={[
           { label: "Editar", icon: "edit", onSelect: () => setEditing({ item: program }) },
           { label: "Requisitos entre cursos", icon: "list", onSelect: () => navigate(`/configuracion-academica?ruta=${program.id}`) },
-          { label: "Calendario del programa", icon: "calendar", onSelect: () => navigate(`/calendario?programa=${program.id}`) },
+          { label: "Calendario del programa", icon: "calendar", onSelect: () => navigate(`/configuracion-academica/calendario?programa=${program.id}`) },
           program.status === "active" ? { label: "Archivar", icon: "archive", danger: true, onSelect: () => void setStatus(program, "archived") } : { label: "Restaurar", icon: "archive", onSelect: () => void setStatus(program, "active") },
         ]}/>
       </li>)}</ul>}

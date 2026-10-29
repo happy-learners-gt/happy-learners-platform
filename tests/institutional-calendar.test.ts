@@ -104,7 +104,8 @@ describe("institutional calendar on the built Worker", () => {
 
     expect((await as(educator, `/calendars/${organization.id}/templates/guatemala`, "POST")).status).toBe(403);
     expect((await as(external, `/calendars/${organization.id}/templates/guatemala`, "POST")).status).toBe(404);
-    expect((await read<{ added: number }>(await as(admin, `/calendars/${organization.id}/templates/guatemala`, "POST"))).added).toBe(13);
+    // The demonstration already has the Guatemala template, so applying it again adds nothing.
+    expect((await read<{ added: number }>(await as(admin, `/calendars/${organization.id}/templates/guatemala`, "POST"))).added).toBe(0);
     expect((await read<{ added: number }>(await as(admin, `/calendars/${organization.id}/templates/guatemala`, "POST"))).added).toBe(0);
     const withRules = await read<{ calendars: { id: string; rules: { rule: { title: string } }[] }[] }>(await as(admin, "/calendars"));
     expect(withRules.calendars.find(item => item.id === organization.id)!.rules).toHaveLength(13);

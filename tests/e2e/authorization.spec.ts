@@ -206,8 +206,10 @@ test("HL-140 ST-102 ST-103: an educator sees only their own courses; administrat
   // The team works in the sections it teaches.
   await signIn(page, "lucia.herrera", "/agenda");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Agenda");
-  await expect(page.getByRole("region", { name: "Tus secciones" }).getByRole("link", { name: "3.º A", exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Tu semana" })).toContainText("Matemáticas 3.º primaria");
+  await page.getByRole("tab", { name: "Semana" }).click();
+  const week = page.getByRole("region", { name: "Tu semana" });
+  await expect(week.getByRole("button", { name: "3.º A", exact: false }).first()).toBeVisible();
+  await expect(week).toContainText("Matemáticas 3.º primaria");
   await page.goto("/secciones/seed-group-mat-3a/horario");
   await expect(page.locator(".timetable")).toContainText("08:00");
   await expect(page.locator(".timetable")).toContainText("3.º A");

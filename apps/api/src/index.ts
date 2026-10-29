@@ -44,6 +44,7 @@ import { delivery, deliveryMethods } from "./delivery";
 import { bookMap, bookMapMethods } from "./book-map";
 import { account, accountBody, accountMethods, clientOf, confirmEmail, emailConfirmPath, failedSignIn, openSession } from "./account";
 import { institutionalCalendarMethods, institutionalCalendars } from "./institutional-calendar";
+import { agenda, agendaMethods } from "./agenda";
 import { gradingSchemeMethods, gradingSchemesApi } from "./grading-schemes";
 export { LessonCollaborationRoom };
 
@@ -122,6 +123,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   const deliveryAllowed = deliveryMethods(path);
   const bookMapAllowed = bookMapMethods(path);
   const institutionalCalendarAllowed = institutionalCalendarMethods(path);
+  const agendaAllowed = agendaMethods(path);
   const gradingSchemeAllowed = gradingSchemeMethods(path);
   const assessmentAllowed = assessmentMethods(path);
   let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|account|organization|calendar|members|access|levels|units|resources|lessons|courses|programs|vocabularies|terms|student|legal|hours)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout|retry)$/.test(path) && !path.includes("/files") && !/^\/api\/members\/[a-z0-9-]+\/password$/.test(path) && !professionalAllowed)
@@ -256,6 +258,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (deliveryAllowed) methods[path] = deliveryAllowed;
   if (bookMapAllowed) methods[path] = bookMapAllowed;
   if (institutionalCalendarAllowed) methods[path] = institutionalCalendarAllowed;
+  if (agendaAllowed) methods[path] = agendaAllowed;
   // ST-158, ST-159: account settings, my data and closing the account.
   const accountAllowed = accountMethods(path);
   if (accountAllowed) methods[path] = accountAllowed;
@@ -376,6 +379,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (contractAllowed) return contracts(path, method, input, current, db);
   if (academicYearAllowed) return academicYearsApi(path, method, input, current, db);
   if (institutionalCalendarAllowed) return institutionalCalendars(path, method, input, url, current, db);
+  if (agendaAllowed) return agenda(url, current, db);
   if (bellAllowed) return bellSchedulesApi(path, method, input, current, db);
   if (/^\/api\/(taxonomy|vocabularies|terms)(\/|$)/.test(path)) return taxonomy(path, method, input, current, db);
   if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions)(\/|$)/.test(path)) return classroom(path, method, input, current, db, url.searchParams, notifier);

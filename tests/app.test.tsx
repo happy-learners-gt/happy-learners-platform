@@ -6,8 +6,14 @@ import { App } from "../apps/web/src/App";
 import { NavigationProvider } from "../apps/web/src/navigation";
 import { CourseForm } from "../apps/web/src/pages/Courses";
 import { SchemeDialog } from "../apps/web/src/pages/grading/Schemes";
+import { setRegional } from "../apps/web/src/regional";
 beforeEach(() => { vi.stubGlobal("scrollTo", vi.fn()); });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); history.replaceState(null, "", "/"); });
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  history.replaceState(null, "", "/");
+  setRegional({ locale: "es", timezone: "UTC", hourCycle: "h23", weekStart: 1, organization: { locale: "es", timezone: "UTC" } });
+});
 it("shows an accessible Spanish login with explicit synthetic account guidance", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ error: "Inicia sesión para continuar." }, { status: 401 })));
   render(<App/>);
@@ -102,9 +108,9 @@ it("previews recurring calendar rules and confirms year generation only after it
     if (input.endsWith("/generate") && init?.method === "POST") { confirmed.push(input); return Response.json({ plan: {}, applied: { created: 1, updated: 0, kept: 0 } }); }
     return Response.json({});
   }));
-  history.replaceState(null, "", "/calendario?año=2026");
+  history.replaceState(null, "", "/organizacion/calendario?año=2026");
   render(<App/>);
-  expect(await screen.findByRole("heading", { level: 1, name: "Calendario" })).toBeTruthy();
+  expect(await screen.findByRole("heading", { level: 1, name: "Calendario institucional" })).toBeTruthy();
   fireEvent.click(await screen.findByRole("button", { name: "Editar Encuentro anual" }));
   const editor = await screen.findByRole("dialog", { name: "Editar regla" });
   expect(within(editor).getByText("Segundo jueves de noviembre")).toBeTruthy();
@@ -116,6 +122,68 @@ it("previews recurring calendar rules and confirms year generation only after it
   expect(confirmed).toEqual([]);
   fireEvent.click(within(preview).getByRole("button", { name: "Confirmar y generar 2026" }));
   await waitFor(() => expect(confirmed).toEqual(["/api/calendars/calendar-org/years/2026/generate"]));
+});
+it("moves through the agenda week, hides a kind, opens a class and remembers the view", async () => {
+  const member = { id: "user-0", username: "admin-demo", role: "admin", organizationId: "org-demo", permissions: { admin: true, coordination: null, grants: {} } };
+  const preferences = {
+    language: "es", locale: "es-GT", timezone: "America/Guatemala", weekStart: 1, hourCycle: "h23", homePage: "inicio",
+    theme: "system", textScale: 100, highContrast: false, motion: "system", density: "comfortable",
+    agendaView: null as string | null, agendaShow: ["class", "no-class", "event", "due"],
+    chosen: { locale: "es-GT", timezone: "America/Guatemala", weekStart: 1, hourCycle: "h23" },
+    organization: { locale: "es-GT", timezone: "America/Guatemala" },
+  };
+  const klass = { type: "class", id: "class-1", date: "2026-10-30", startsAt: "10:30", durationMinutes: 45, status: "planned", moved: false, sectionId: "group-1", sectionName: "6.º A", courseId: "course-1", courseTitle: "Matemáticas", lessons: [{ id: "lesson-1", title: "Fracciones" }], attendance: { marked: 0, total: 4 }, link: "/secciones/group-1/clases/class-1", actions: [{ id: "open", label: "Abrir la clase", href: "/secciones/group-1/clases/class-1" }] };
+  const eighth = { ...klass, id: "class-8", date: "2026-10-08", startsAt: "09:00", courseTitle: "Día 8" };
+  const holiday = { type: "no-class", id: "event-1", title: "Día de Todos los Santos", from: "2026-11-01", until: "2026-11-01", part: "full", category: "Asueto", scope: "Toda la organización", movesClasses: true, classesMoved: 0 };
+  const saved: unknown[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: string, init?: RequestInit) => {
+    if (input === "/api/session") return Response.json({ member, pending: [], preferences });
+    if (input === "/api/organization") return Response.json({ organization: { id: "org-demo", name: "Escuela", timezone: "America/Guatemala", configured: true } });
+    if (input === "/api/sections") return Response.json({ sections: [] });
+    if (input === "/api/courses") return Response.json({ courses: [] });
+    if (input === "/api/programs") return Response.json({ programs: [] });
+    if (String(input).startsWith("/api/agenda")) return Response.json({ from: "2026-10-26", until: "2026-11-01", scope: "mine", today: "2026-10-29", canWiden: false, scopes: [], items: [klass, holiday, eighth], rail: { next: klass, breaks: [{ date: "2026-11-01", title: holiday.title, origin: holiday.scope }] } });
+    if (input === "/api/me/preferences" && init?.method === "PUT") { const body = JSON.parse(String(init.body)); Object.assign(preferences, body); saved.push(body); return Response.json({ preferences }); }
+    return Response.json({});
+  }));
+  history.replaceState(null, "", "/agenda?fecha=2026-10-30");
+  render(<App/>);
+  expect(await screen.findByRole("heading", { level: 1, name: "Agenda" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: "Semana" }));
+  const week = await screen.findByRole("region", { name: "La semana" });
+  expect(screen.getByRole("button", { name: "26 oct – 1 nov 2026" })).toBeTruthy();
+  expect(week.querySelector(".agenda-off")?.textContent).toContain("Día de Todos los Santos");
+  expect(within(week).getByRole("button", { name: /10:30 · 6\.º A/ })).toBeTruthy();
+  expect(within(week).getByRole("button", { name: /Matemáticas/ })).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: "Día" }));
+  expect(await screen.findByRole("button", { name: "Viernes, 30 de octubre de 2026" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: "Semana" }));
+  fireEvent.click(screen.getByRole("button", { name: "Semana siguiente" }));
+  await waitFor(() => expect(screen.getByRole("region", { name: "La semana" }).querySelector(".agenda-class")).toBeNull());
+  fireEvent.click(screen.getByRole("button", { name: "Semana anterior" }));
+  fireEvent.click(await screen.findByRole("button", { name: /Matemáticas/ }));
+  const panel = await screen.findByRole("dialog", { name: "Matemáticas" });
+  expect(within(panel).getByRole("link", { name: "Abrir la clase" })).toBeTruthy();
+  fireEvent.click(within(panel).getByRole("button", { name: "Cerrar" }));
+  fireEvent.click(screen.getByRole("button", { name: "Clases" }));
+  await waitFor(() => expect(screen.getByRole("region", { name: "La semana" }).querySelector(".agenda-class")).toBeNull());
+  fireEvent.click(screen.getByRole("button", { name: "Clases" }));
+  await waitFor(() => expect(screen.getByRole("region", { name: "La semana" }).querySelector(".agenda-class")).toBeTruthy());
+  fireEvent.click(screen.getByRole("tab", { name: "Año" }));
+  expect(await screen.findByRole("button", { name: "2026" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: "Mes" }));
+  const month = await screen.findByRole("region", { name: "El mes" });
+  expect(screen.getByRole("button", { name: "Octubre 2026" })).toBeTruthy();
+  expect(within(month).getByRole("button", { name: /Día 8/ })).toBeTruthy();
+  await waitFor(() => {
+    const covered = vi.mocked(fetch).mock.calls.map(call => String(call[0])).filter(url => url.startsWith("/api/agenda"))
+      .some(url => { const until = new URLSearchParams(url.split("?")[1]).get("until") || ""; return until >= "2026-11-08"; });
+    expect(covered).toBe(true);
+  });
+  await waitFor(() => expect(saved).toContainEqual(expect.objectContaining({ agendaView: "month" })));
+  fireEvent.click(screen.getByRole("link", { name: "Inicio" }));
+  fireEvent.click(screen.getByRole("link", { name: "Agenda" }));
+  expect(await screen.findByRole("region", { name: "El mes" })).toBeTruthy();
 });
 it("sends periodId when a section schedule follows a period", async () => {
   const member = { id: "user-0", username: "admin-demo", role: "admin", organizationId: "org-demo", permissions: { admin: true, coordination: null, grants: {} } };

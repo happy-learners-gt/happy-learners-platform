@@ -4,7 +4,7 @@ import type { EffectivePreferences, Member, Organization, PendingDocument } from
 import { homePages } from "@happy-learners/domain";
 import { api, ApiError, consentRequired, message, sessionExpired, sessionRestored } from "./api";
 import { NavigationProvider, useNavigation } from "./navigation";
-import { SessionContext } from "./session";
+import { SessionContext, useSession } from "./session";
 import type { Session } from "./session";
 import { FeedbackProvider, useFeedback } from "./ui/feedback";
 import { AppShell } from "./ui/Shell";
@@ -13,7 +13,7 @@ import { Home } from "./pages/Home";
 import { CourseList, CreateCourse } from "./pages/Courses";
 import { CourseRoute } from "./pages/course/CourseRoute";
 import { SectionRoute } from "./pages/sections/SectionRoute";
-import { Agenda } from "./pages/sections/SectionList";
+import { Agenda } from "./pages/agenda/Agenda";
 import { Library } from "./pages/Library";
 import { Search } from "./pages/Search";
 import { Help, NotFound } from "./pages/Help";
@@ -32,6 +32,7 @@ import { MyPanelsPage } from "./pages/grading/Panels";
 import { ConfirmEmail } from "./pages/account";
 import { isAccountSection, MyAccountPage } from "./pages/my-account";
 import { applyAppearance, appearanceOf } from "./appearance";
+import { Loading } from "./ui/primitives";
 import { setRegional } from "./regional";
 const StudentLesson = lazy(() => import("./pages/StudentLesson").then(module => ({ default: module.StudentLesson })));
 const StudentSpace = lazy(() => import("./pages/StudentSpace").then(module => ({ default: module.StudentSpace })));
@@ -156,18 +157,30 @@ function Routes() {
     : page(first || "inicio", second, url)}</AppShell>;
 }
 
+function CalendarRedirect({ url }: { url: URL }) {
+  const { navigate } = useNavigation();
+  const { member } = useSession();
+  const program = url.searchParams.get("programa");
+  const grant = member.permissions?.grants["sections.assign"] || member.permissions?.coordination;
+  const manages = member.role === "admin" || !!grant;
+  const year = url.searchParams.get("año");
+  const target = program && manages ? `/configuracion-academica/calendario?programa=${program}${year ? `&año=${year}` : ""}` : "/agenda?vista=año";
+  useEffect(() => { navigate(target, true); }, [target]);
+  return <Loading label="Abriendo la agenda…"/>;
+}
+
 function page(first: string, second: string | undefined, url: URL) {
   switch (first) {
     case "inicio": return <Home/>;
     case "cursos": return second === "nuevo" ? <CreateCourse/> : <CourseList/>;
     case "agenda": return <Agenda/>;
-    case "calendario": return <InstitutionalCalendarPage/>;
+    case "calendario": return <CalendarRedirect url={url}/>;
     case "secciones": return <Redirect to="/agenda"/>;
     case "biblioteca": return <Library/>;
     case "buscar": return <Search/>;
     case "ayuda": return <Help/>;
     case "guia-de-estilo": return <StyleGuide/>;
-    case "organizacion": return <OrganizationSettings/>;
+    case "organizacion": return second === "calendario" ? <InstitutionalCalendarPage/> : <OrganizationSettings/>;
     case "educadores": return <Members/>;
     case "contratos": return <ContractsPage/>;
     case "mi-cuenta": return isAccountSection(second) ? <MyAccountPage section={second}/> : <Redirect to="/mi-cuenta/perfil"/>;
@@ -177,7 +190,7 @@ function page(first: string, second: string | undefined, url: URL) {
     case "cuenta": return <Redirect to={`/mi-cuenta/cuenta${url.hash}`}/>;
     case "preferencias": return <Redirect to={url.hash === "#notificaciones" ? "/mi-cuenta/notificaciones" : `/mi-cuenta/preferencias${url.hash}`}/>;
     case "horas": return <HoursPage/>;
-    case "configuracion-academica": return <AcademicSettings/>;
+    case "configuracion-academica": return second === "calendario" ? <InstitutionalCalendarPage/> : <AcademicSettings/>;
     case "tribunales": return <MyPanelsPage/>;
     case "roles-y-accesos": return <AccessPage/>;
     case "notificaciones": return <NotificationsAdmin/>;
