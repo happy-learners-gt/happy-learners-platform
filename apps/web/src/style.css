@@ -369,6 +369,8 @@ fieldset:disabled input, fieldset:disabled select, fieldset:disabled textarea { 
 dialog.modal { width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 48px); margin: auto; padding: 0; border: 1px solid var(--colorTransparentStroke, transparent); border-radius: var(--radius-lg); background: var(--color-surface); color: var(--color-ink); box-shadow: var(--shadow-dialog); }
 dialog.modal.wide { width: min(880px, calc(100vw - 24px)); }
 dialog.modal.drawer { width: min(32rem, 100vw); max-height: 100vh; height: 100vh; margin: 0 0 0 auto; border-radius: var(--radius-lg) 0 0 var(--radius-lg); }
+/* A wide drawer holds editors that need room, such as a rubric matrix. */
+dialog.modal.drawer.wide { width: min(56rem, 100vw); }
 dialog.modal.drawer[open] { animation: drawer-in var(--motion-slow) var(--ease-enter); }
 @keyframes drawer-in { from { transform: translateX(1.5rem); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { dialog.modal.drawer[open] { animation: none; } }
