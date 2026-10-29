@@ -285,6 +285,10 @@ fieldset:disabled input, fieldset:disabled select, fieldset:disabled textarea { 
 .form-card { display: grid; gap: var(--space-4); padding: var(--space-6); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
 .form-actions, .inline-form-actions, .modal-actions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .modal-actions { justify-content: flex-end; }
+/* A dialog's closing actions stay in view while its body scrolls (sticky footer), so the main action of a long form
+   is always reachable. The row covers the body's bottom padding so content never shows beneath it. */
+.modal-body .modal-actions:last-child { position: sticky; z-index: 1; bottom: calc(var(--space-5) * -1); margin-bottom: calc(var(--space-5) * -1); padding: var(--space-3) 0 var(--space-5); border-top: 1px solid var(--color-border); background: var(--color-surface); }
+@media (max-width: 639px) { .modal-body .modal-actions:last-child { bottom: calc(var(--space-4) * -1); margin-bottom: calc(var(--space-4) * -1); padding-bottom: var(--space-4); } }
 .choice-group { display: grid; gap: var(--space-3); }
 .choice-row { display: grid; gap: var(--space-2); }
 .choice-label { color: var(--color-muted); font-size: var(--text-sm); }
@@ -375,7 +379,9 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: dialog-in
 @keyframes fade-in { from { opacity: 0; } }
 .modal-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-5) var(--space-4) var(--space-2) var(--space-6); }
 .modal-header h2 { font-size: var(--text-lg); }
-.modal-body { display: grid; gap: var(--space-4); padding: var(--space-2) var(--space-6) var(--space-5); overflow-y: auto; }
+/* The body scrolls inside the dialog: without min-height: 0 a flex item never shrinks, so a long form pushed the footer
+   (and its main action) out of reach on short screens. */
+.modal-body { display: grid; gap: var(--space-4); min-height: 0; padding: var(--space-2) var(--space-6) var(--space-5); overflow-y: auto; }
 .modal-footer { display: flex; justify-content: flex-end; gap: var(--space-2); flex-wrap: wrap; padding: var(--space-3) var(--space-6) var(--space-5); }
 .confirm-body { color: var(--color-ink-soft); }
 

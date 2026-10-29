@@ -3,7 +3,7 @@ import type { FormEvent, PointerEvent } from "react";
 import type { GroupLearner, WorkGroup } from "@happy-learners/contracts";
 import { groupRulesInput, type GroupRules, type UnmetConstraint } from "@happy-learners/domain";
 import { api, message } from "../../api";
-import { plural } from "../../model";
+import { plural, sessionDay } from "../../model";
 import { Modal, useFeedback } from "../../ui/feedback";
 import { Icon } from "../../ui/icons";
 import { Menu } from "../../ui/Menu";
@@ -189,7 +189,7 @@ function FormationDialog({ path, courseId, sectionId, learners, workGroups, onCl
       <fieldset className="stack"><legend>Quiénes</legend>
         <label className="lock"><input type="radio" name="who" checked={who === "all"} onChange={() => setWho("all")}/><span>Toda la lista</span></label>
         <label className="lock"><input type="radio" name="who" checked={who === "class"} onChange={() => setWho("class")}/><span>Los presentes de una clase</span></label>
-        {who === "class" && <Field label="Clase"><select aria-label="Clase" value={sessionId} onChange={event => setSessionId(event.target.value)}><option value="">Elegir clase…</option>{sessions.map(session => <option key={session.id} value={session.id}>{session.sessionDate}</option>)}</select></Field>}
+        {who === "class" && <Field label="Clase"><select aria-label="Clase" value={sessionId} onChange={event => setSessionId(event.target.value)}><option value="">Elegir clase…</option>{sessions.map(session => <option key={session.id} value={session.id}>{sessionDay(session.sessionDate, "short")}{"startsAt" in session && session.startsAt ? `, ${session.startsAt}` : ""}</option>)}</select></Field>}
       </fieldset>
       <fieldset className="stack"><legend>Cuántos</legend>
         <label className="lock"><input type="radio" name="by" checked={by === "size"} onChange={() => setBy("size")}/><span>Por tamaño</span></label>

@@ -52,6 +52,8 @@ test("forms a set from the students present in a class, grades the group and rec
   await expect(preview.getByText(names[0])).toBeVisible();
   await expect(preview.getByText(names[3])).toHaveCount(0);
   await shot(page, "asistente", wizard);
+  // The dialog's body scrolls and its footer stays on screen, even on a phone with the preview open.
+  await expect(wizard.getByRole("button", { name: "Crear conjunto" })).toBeInViewport({ ratio: 1 });
   await wizard.getByRole("button", { name: "Crear conjunto" }).click();
   await expect(page.getByRole("heading", { name: "Ensayo" })).toBeVisible();
   await shot(page, "conjunto");
