@@ -12,6 +12,7 @@ import { CourseCard } from "../ui/cards";
 import { useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction } from "../ui/primitives";
+import { schemeOptions, useGradingSchemes } from "./grading/Schemes";
 
 export function useCourseActions(reload: () => Promise<void>) {
   const { toast, confirm } = useFeedback();
@@ -124,6 +125,7 @@ export function CourseForm({ course, onSaved, cancelHref, readOnly = false }: { 
   const { guard } = useNavigation();
   useUnsavedChanges(dirty);
   useEffect(() => { api<{ programs: StudyProgram[] }>("/programs").then(result => setPrograms(result.programs)).catch(() => undefined); }, []);
+  const schemes = useGradingSchemes();
   useEffect(() => { if (!course) api<{ people: typeof people }>("/people").then(result => setPeople(result.people)).catch(() => undefined); }, []);
   const program = programs.find(item => item.id === dims.programId) || null;
   const choosable = programs.filter(item => item.status === "active" || item.id === course?.programId);
@@ -197,7 +199,7 @@ export function CourseForm({ course, onSaved, cancelHref, readOnly = false }: { 
         <ul className="settings-list">{settingDefinitions.map(definition => {
           const key = definition.key, source = resolved.source[key], locked = source === "program-locked";
           const inherited = program?.settings[key] !== undefined ? program.settings[key] : derivedSettings({ ...profile, format: dims.format })[key];
-          const options = settingChoices(key, settings[key]);
+          const options = key === "gradingSchemeId" ? schemeOptions(schemes, settings[key]) : settingChoices(key, settings[key]);
           return <li key={key} className="setting-item">
             <div><strong id={`setting-${key}`}>{definition.label}</strong><p className="muted small">{definition.description}</p></div>
             <div className="setting-control">
