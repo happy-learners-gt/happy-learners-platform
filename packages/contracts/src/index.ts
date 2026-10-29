@@ -376,6 +376,13 @@ export interface AssessmentActivity {
 export interface AssessmentScore { activityId: string; learnerId: string; points: number }
 export interface AssessmentMark { activityId: string; learnerId: string; evaluatorId: string | null; mark: AtomicMark; updatedAt: string; updatedBy: string }
 export interface AssessmentEvaluator { activityId: string; userId: string; name: string; chair: boolean }
+/** GET /api/me/panels: tribunal activities assigned to the signed-in person, one row per section. */
+export interface MyPanel {
+  activityId: string; title: string; points: number; courseId: string; courseTitle: string;
+  sectionId: string; sectionName: string; periodName: string; rubric: Rubric | null;
+  combine: "average" | "median" | "majority" | "chair"; evaluators: number;
+  learners: { id: string; name: string; marked: boolean; mark: AtomicMark | null; combined: number | null }[];
+}
 export interface GradeComment { learnerId: string; periodId: string; body: string; updatedAt: string; updatedBy: string }
 export interface PeriodReview { periodId: string; status: "submitted" | "returned" | "approved"; note: string | null; submittedBy: string; submittedAt: string; reviewedBy: string | null; reviewedAt: string | null }
 /** One change of a score: the period's score or an activity's points, before and after (null is empty). */

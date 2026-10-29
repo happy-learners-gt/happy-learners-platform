@@ -132,6 +132,10 @@ describe("data-driven grading on the built Worker", () => {
     await read(await as(admin, `${path}/activities/${defense}/panel`, "PUT", { learnerId: learner, mark: { kind: "pass", value: false } }));
     const majorityFail = (await read<{ gradebook: Gradebook }>(await as(educator, `${path}/activities/${defense}/panel`, "PUT", { learnerId: learner, mark: { kind: "pass", value: false } }))).gradebook;
     expect(scoreOf(majorityFail)!).toBeLessThan(majorityPass!);
+    const mine = await read<{ panels: { activityId: string; learners: { id: string; marked: boolean }[] }[] }>(await as(carlos, "/me/panels"));
+    expect(mine.panels.map(item => item.activityId)).toContain(defense);
+    expect(mine.panels.find(item => item.activityId === defense)!.learners.find(item => item.id === learner)!.marked).toBe(true);
+    expect((await read<{ panels: unknown[] }>(await as(outsider, "/me/panels"))).panels).toEqual([]);
   }, 30_000);
 
   it("prints a level in PDF and CSV and archives an in-use scheme", async () => {

@@ -84,7 +84,7 @@ export type ModuleNoun = ReturnType<typeof moduleNoun>;
 
 export type SettingKey = keyof CourseSettings;
 /** Settings registry: everything a course's configuration changes in the product, with its meaning. */
-export const settingDefinitions: { key: SettingKey; label: string; description: string; hidden?: boolean }[] = [
+export const settingDefinitions: { key: SettingKey; label: string; description: string }[] = [
   { key: "moduleLabel", label: "Nombre de las partes del curso", description: "Cómo se llaman en pantalla los módulos del curso." },
   { key: "defaultSequence", label: "Secuencia didáctica de las lecciones nuevas", description: "Los momentos con que empieza cada lección nueva." },
   { key: "attendance", label: "Secciones y asistencia", description: "Organizar a los estudiantes en secciones con su lista, sus clases y su asistencia." },
@@ -95,10 +95,8 @@ export const settingDefinitions: { key: SettingKey; label: string; description: 
   { key: "passingGrade", label: "Nota mínima para aprobar", description: "El promedio desde el que una persona aprueba el curso." },
   { key: "letterThresholds", label: "Umbrales de las letras", description: "La nota mínima de la A, la B, la C y la D; por debajo de la D es F. Solo se usan con la escala de letras." },
   { key: "gradeAverage", label: "Promedio de los periodos", description: "Promedio simple o ponderado por el peso de cada periodo del ciclo lectivo. Un periodo sin nota no cuenta como cero." },
-  { key: "gradingSchemeId", label: "Esquema de evaluación", description: "La forma configurable de calcular y mostrar los resultados de evaluación.", hidden: true },
+  { key: "gradingSchemeId", label: "Esquema de evaluación", description: "La forma configurable de calcular y mostrar los resultados de evaluación." },
 ];
-/** Settings offered by the generic course and program forms. The grading scheme waits for its own picker. */
-export const visibleSettingDefinitions = settingDefinitions.filter(definition => !definition.hidden);
 const sequences: SequenceTemplate[] = ["free", "start-develop-close", "five-e", "ppp", "workshop"];
 
 /** Defaults that follow from the course's dimensions when nobody has set a value. */

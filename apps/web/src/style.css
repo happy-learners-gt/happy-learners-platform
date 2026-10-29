@@ -1888,3 +1888,11 @@ section.panel[id^="profile-"] { scroll-margin-top: calc(var(--topbar-h) + var(--
 .notice, .form-alert { display: block; position: relative; padding-left: calc(var(--space-4) + 18px + var(--space-2)); overflow-wrap: anywhere; }
 .notice > .icon:first-child, .form-alert > .icon:first-child { position: absolute; left: var(--space-4); top: calc(var(--space-3) + 1px); }
 .notice > .button, .notice > button, .form-alert > .button { margin-left: var(--space-2); vertical-align: middle; }
+.scheme-preview { margin: 0; padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-sunken); }
+.grade-reasons { margin: var(--space-1) 0 0; color: var(--color-ink-soft); font-size: var(--text-xs); }
+.panel-progress { font-variant-numeric: tabular-nums; }
+.panel-mark { align-items: start; }
+.panel-heading { flex-wrap: wrap; align-items: baseline; }
+.panel-heading h2 { flex: 0 0 auto; }
+.panel-heading p { flex: 1 1 14rem; margin: 0; min-width: 0; }
+.template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--space-2); margin: 0; padding: 0; list-style: none; }

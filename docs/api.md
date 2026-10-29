@@ -410,6 +410,10 @@ conserva exactamente su cálculo anterior de puntos, escala, mínimo, letras y p
   `{ evaluators: [{ userId, chair }] }`; exige integrantes distintos, una presidencia y que aún no existan marcas.
 - `PUT …/grades/activities/:activityId/panel` recibe `{ learnerId, mark }`. Cada integrante escribe solo su marca.
   Antes de completar el tribunal ve únicamente la propia; administración y quienes imparten ven todas.
+- Una exoneración (`{ kind: "exempt" }`) también vale en una actividad de puntos. `mark: null` la quita.
+- `GET /api/me/panels` responde `{ panels }` con las actividades de tribunal asignadas a quien consulta, una por
+  sección activa del ciclo vigente. Cada estudiante trae solo la marca propia (`marked`, `mark`) y `combined` (el
+  punteo ya combinado) cuando todas las personas del tribunal marcaron. Otra persona recibe una lista vacía.
 - `GET …/grades/report.csv[?year=]` exporta los mismos resultados mostrados por la boleta PDF. Ambos usan el texto del
   esquema (letra, GPA, nivel o aprobado/no aprobado) e incluyen las razones que impiden aprobar.
 

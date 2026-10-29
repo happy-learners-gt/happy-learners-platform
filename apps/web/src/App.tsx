@@ -28,6 +28,7 @@ import { ProfileReviewsPage, TeamDirectory, TeamProfilePage } from "./pages/prof
 import { HoursPage } from "./pages/hours";
 import { OnboardingWizard } from "./pages/onboarding";
 import { InstitutionalCalendarPage } from "./pages/institutional-calendar";
+import { MyPanelsPage } from "./pages/grading/Panels";
 import { ConfirmEmail } from "./pages/account";
 import { isAccountSection, MyAccountPage } from "./pages/my-account";
 import { applyAppearance, appearanceOf } from "./appearance";
@@ -177,6 +178,7 @@ function page(first: string, second: string | undefined, url: URL) {
     case "preferencias": return <Redirect to={url.hash === "#notificaciones" ? "/mi-cuenta/notificaciones" : `/mi-cuenta/preferencias${url.hash}`}/>;
     case "horas": return <HoursPage/>;
     case "configuracion-academica": return <AcademicSettings/>;
+    case "tribunales": return <MyPanelsPage/>;
     case "roles-y-accesos": return <AccessPage/>;
     case "notificaciones": return <NotificationsAdmin/>;
     case "clasificaciones": return <Redirect to="/configuracion-academica"/>;

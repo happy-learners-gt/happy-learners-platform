@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { AcademicProfile, Contract, ContractPhase, CourseFormat, EffectivePreferences, CourseSettings, EducationLevel, EducationType, Member, Modality, OnboardingPerson, Organization, Pacing, StudyProgram, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
-import { accountInput, areaLabel, contractPhaseLabels, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, pacings, settingChoices, settingDefinitions, visibleSettingDefinitions, settingText, settingValue, suggestedLocales, timezoneGroups, utcOffset } from "@happy-learners/domain";
+import { accountInput, areaLabel, contractPhaseLabels, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, pacings, settingChoices, settingDefinitions, settingText, settingValue, suggestedLocales, timezoneGroups, utcOffset } from "@happy-learners/domain";
 import type { SettingKey } from "@happy-learners/domain";
 import { plural } from "../model";
 import { Avatar } from "../ui/progress";
@@ -11,6 +11,7 @@ import { useSession } from "../session";
 import { Modal, useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import { Menu } from "../ui/Menu";
+import { GradingSchemes, schemeOptions, useGradingSchemes } from "./grading/Schemes";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section, StatusBadge } from "../ui/primitives";
 import type { Tone } from "../ui/primitives";
 import { CalendarSummary } from "./institutional-calendar";
@@ -277,6 +278,7 @@ function TemporaryPassword({ issued, onClose }: { issued: Issued; onClose: () =>
 export function AcademicSettings() {
   return <AdminOnly title="Configuración académica"><PageHeader title="Configuración académica" description="Programas que agrupan cursos y comparten su configuración, etiquetas para la biblioteca y los estándares con que se describe cada curso."/>
     <ProgramEditor/>
+    <GradingSchemes/>
     <TaxonomyEditor/>
     <CurriculumPackages/>
     <StandardsReference/>
@@ -337,6 +339,7 @@ function ProgramDialog({ item, onClose, onSave }: { item?: StudyProgram; onClose
   const [profile, setProfile] = useState<AcademicProfile & { format: CourseFormat; area: string }>(item ? { educationType: item.educationType, level: item.level, modality: item.modality, pacing: item.pacing, format: item.format, area: item.area || "" } : { ...coursePresets[2].values, area: "" });
   const [settings, setSettings] = useState<CourseSettings>(item?.settings || {}), [locked, setLocked] = useState<SettingKey[]>(item?.locked || []), [busy, setBusy] = useState(false);
   const derived = derivedSettings(profile);
+  const schemes = useGradingSchemes();
   const change = (patch: Partial<typeof profile>) => setProfile(current => { const next = { ...current, ...patch }; if (next.educationType === "formal" && next.level === "unspecified") next.level = "primary"; return next; });
   function setSetting(key: SettingKey, value: string) {
     setSettings(current => { const next = { ...current } as Record<string, unknown>; const parsed = settingValue(key, value); if (parsed === undefined) delete next[key]; else next[key] = parsed; return next as CourseSettings; });
@@ -363,9 +366,9 @@ function ProgramDialog({ item, onClose, onSave }: { item?: StudyProgram; onClose
       </div>
       <fieldset className="config-section"><legend>Ajustes para sus cursos</legend>
         <p className="muted small">Sin valor, cada curso usa lo que corresponde a su tipo. Con valor, es el punto de partida de sus cursos; si lo fijas, ningún curso del programa puede cambiarlo.</p>
-        <ul className="settings-list">{visibleSettingDefinitions.map(definition => {
+        <ul className="settings-list">{settingDefinitions.map(definition => {
           const key = definition.key;
-          const options = settingChoices(key, settings[key]);
+          const options = key === "gradingSchemeId" ? schemeOptions(schemes, settings[key]) : settingChoices(key, settings[key]);
           return <li key={key} className="setting-item">
             <div><strong id={`program-setting-${key}`}>{definition.label}</strong><p className="muted small">{definition.description}</p></div>
             <div className="setting-control">

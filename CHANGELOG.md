@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.1 — 2026-10-28
+
+- Esquemas de evaluación en Configuración académica: plantillas, editor y vista previa del resultado de un estudiante.
+- Cursos y programas eligen un esquema activo o siguen con puntos acumulados.
+- El plan de evaluación indica categoría, forma de calificar, rúbrica, tribunal, puntos extra y reposición.
+- La libreta adapta cada celda (puntos, rúbrica, nivel, aprobado o tribunal), permite exonerar y muestra el resultado del esquema con sus razones.
+- Mis tribunales lista las actividades asignadas y cada integrante registra solo su marca.
+
 ## 1.3.0 — 2026-10-29
 
 - Nuevo **Calendario** anual de la organización, programas y secciones, con filtros por categoría y nivel.

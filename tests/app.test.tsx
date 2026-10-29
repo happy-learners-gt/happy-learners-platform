@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { schemeTemplates } from "../packages/domain/src/index";
 import { App } from "../apps/web/src/App";
 import { NavigationProvider } from "../apps/web/src/navigation";
 import { CourseForm } from "../apps/web/src/pages/Courses";
+import { SchemeDialog } from "../apps/web/src/pages/grading/Schemes";
 beforeEach(() => { vi.stubGlobal("scrollTo", vi.fn()); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); history.replaceState(null, "", "/"); });
 it("shows an accessible Spanish login with explicit synthetic account guidance", async () => {
@@ -416,10 +418,69 @@ it("guides «Planificar con IA» step by step: review of an AI proposal, coverag
   expect(await screen.findByText("«Área y volumen de prismas» se publicó.")).toBeTruthy();
   expect(published).toEqual(["POST"]);
 });
-it("keeps the grading scheme out of the course configuration form", async () => {
-  vi.stubGlobal("fetch", vi.fn(async (input: string) => Response.json(String(input).endsWith("/people") ? { people: [] } : { programs: [] })));
+it("offers active grading schemes in the course configuration form", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (input: string) => Response.json(String(input).endsWith("/grading-schemes")
+    ? { schemes: [{ id: "scheme-11111111-1111-4111-8111-111111111111", name: "Universidad", status: "active", method: "weighted-categories", categories: [], display: { kind: "numeric", max: 100, decimals: 0 }, passing: { min: 60 }, periods: "simple", retakes: "replace", builtin: false, createdAt: "t", updatedAt: "t" }] }
+    : String(input).endsWith("/people") ? { people: [] } : { programs: [] })));
   render(<NavigationProvider><CourseForm cancelHref="/cursos" onSaved={() => undefined}/></NavigationProvider>);
   expect(await screen.findByRole("heading", { name: "Comportamiento del curso" })).toBeTruthy();
-  expect(screen.getByText("Escala de las notas")).toBeTruthy();
-  expect(screen.queryByText("Esquema de evaluación")).toBeNull();
+  const select = await screen.findByLabelText("Esquema de evaluación");
+  expect(within(select).getByRole("option", { name: "Universidad" })).toBeTruthy();
+  expect(within(select).getByRole("option", { name: /Puntos acumulados/ })).toBeTruthy();
+});
+it("updates the scheme editor preview when a category weight changes", async () => {
+  const scheme = { ...schemeTemplates.find(item => item.id === "universidad")!, id: "scheme-11111111-1111-4111-8111-111111111111" };
+  render(<SchemeDialog scheme={scheme} onClose={() => undefined} onSave={async () => undefined}/>);
+  expect((await screen.findByRole("status", { name: "Vista previa" })).textContent).toContain("2,00");
+  fireEvent.change(screen.getByLabelText("Peso de Examen final"), { target: { value: "10" } });
+  expect(screen.getByRole("status", { name: "Vista previa" }).textContent).toContain("3,00");
+});
+it("grades a rubric and a level, exempts from the cell menu and shows the scheme's reason", async () => {
+  const member = { id: "user-educator", username: "educador-demo", role: "educator", organizationId: "org-demo", permissions: { admin: false, coordination: null, grants: {} } };
+  const course = { id: "course-1", title: "Matemáticas", objective: "Resolver.", educationType: "formal", level: "primary", modality: "in-person", pacing: "scheduled", format: "subject", settings: {}, status: "active", version: 1, updatedAt: "t",
+    access: { role: "lead", assigned: ["group-1"], configure: false, edit: true, publish: true, review: true, team: false, educators: false, sections: "assigned" } };
+  const section = { id: "group-1", courseId: "course-1", name: "Sexto A", status: "active", learnerCount: 1, educators: [], course: { id: "course-1", title: course.title, status: "active" }, pacing: "scheduled",
+    indicators: { learners: 1, classes: 0, taught: 0, upcoming: 0, unrecorded: 0, lessons: 0, covered: 0, attendance: null }, next: null, teaches: true };
+  const scheme = { ...schemeTemplates.find(item => item.id === "universidad")!, id: "scheme-11111111-1111-4111-8111-111111111111", levels: [{ id: "alto", label: "Alto", value: 100 }, { id: "bajo", label: "Bajo", value: 40 }] };
+  const rubric = { criteria: [{ id: "argumento", label: "Argumentación", weight: 100, levels: [{ id: "solida", label: "Sólida", points: 100 }, { id: "inicial", label: "Inicial", points: 0 }] }] };
+  const gradebook = { section: { id: "group-1", name: "Sexto A", courseId: "course-1", courseTitle: course.title, status: "active" }, year: { id: "year-1", name: "Ciclo 2026", from: "2026-01-12", until: "2026-11-27", status: "current" },
+    years: [{ id: "year-1", name: "Ciclo 2026", status: "current" }], learners: [{ id: "learner-a", name: "Ana" }],
+    periods: [{ id: "period-4", position: 4, name: "Cuarto bimestre", from: "2026-09-07", until: "2026-11-27", weight: 1, locked: false, lockedAt: null, lockedBy: null }],
+    activities: [
+      { id: "assessment-1", periodId: "period-4", position: 0, title: "Ensayo", kind: "task", points: 30, dueOn: null, categoryId: "tareas", grading: "rubric", rubric },
+      { id: "assessment-2", periodId: "period-4", position: 1, title: "Oral", kind: "quiz", points: 30, dueOn: null, categoryId: "proyectos", grading: "level" },
+      { id: "assessment-3", periodId: "period-4", position: 2, title: "Examen final", kind: "exam", points: 40, dueOn: null, categoryId: "final", grading: "points" },
+    ],
+    scores: [{ activityId: "assessment-3", learnerId: "learner-a", points: 20 }], grades: [], comments: [], reviews: [], marks: [], evaluators: [],
+    results: [{ learnerId: "learner-a", average: 20, letter: null, passed: false, complete: false, display: "0,00", reasons: ["No alcanzó el mínimo de 60 en «Examen final»."] }],
+    scheme, policy: { scale: "numeric_100", passingGrade: 60, letterThresholds: [90, 80, 70, 60], average: "simple" }, canEdit: true, canLock: false, canUnlock: false, canSubmit: true };
+  const saved: { marks?: { mark: unknown }[] }[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: string, init?: RequestInit) => {
+    if (input === "/api/session") return Response.json({ member, pending: [] });
+    if (input === "/api/organization") return Response.json({ organization: { id: "org-demo", name: "Escuela", timezone: "America/Guatemala", configured: true } });
+    if (input === "/api/sections/group-1") return Response.json({ section, today: "2026-10-28" });
+    if (input === "/api/courses/course-1") return Response.json({ course, units: [], curriculum: { competencies: [], outcomes: [] } });
+    if (input.startsWith("/api/sections/group-1/grades")) {
+      if (init?.method === "PUT") saved.push(JSON.parse(String(init.body)));
+      return Response.json({ gradebook });
+    }
+    return Response.json({ programs: [], panels: [] });
+  }));
+  history.replaceState(null, "", "/secciones/group-1/notas?periodo=period-4");
+  render(<App/>);
+  expect(await screen.findByText(/No alcanzó el mínimo de 60 en «Examen final»/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Rúbrica de Ensayo de Ana" }));
+  fireEvent.change(await screen.findByLabelText("Argumentación"), { target: { value: "solida" } });
+  fireEvent.click(screen.getByRole("button", { name: "Guardar rúbrica" }));
+  fireEvent.change(screen.getByLabelText("Nivel de Oral de Ana"), { target: { value: "alto" } });
+  fireEvent.click(screen.getByRole("button", { name: "Acciones de Examen final de Ana" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Exonerar" }));
+  expect(screen.getByText("Exonerado")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /Guardar \d+ cambios/ }));
+  await waitFor(() => expect(saved).toHaveLength(1));
+  expect(saved[0].marks).toEqual([
+    { learnerId: "learner-a", activityId: "assessment-1", mark: { kind: "rubric", choices: { argumento: "solida" } } },
+    { learnerId: "learner-a", activityId: "assessment-2", mark: { kind: "level", value: "alto" } },
+    { learnerId: "learner-a", activityId: "assessment-3", mark: { kind: "exempt" } },
+  ]);
 });
