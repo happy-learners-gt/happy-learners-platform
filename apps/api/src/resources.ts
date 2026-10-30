@@ -102,6 +102,8 @@ export async function resources(path: string, method: string, input: unknown, cu
   if (value.role === "primary") await db.prepare("UPDATE course_resources SET role='required',updated_at=? WHERE course_id=? AND organization_id=? AND role='primary' AND id<>?").bind(now, course.id, current.organizationId, found!.id).run();
   await db.prepare("UPDATE course_resources SET type=?,title=?,authors=?,year=?,metadata=?,language=?,license=?,shareable=?,level=?,area=?,role=?,citation_override=?,updated_at=? WHERE id=? AND course_id=? AND organization_id=?")
     .bind(value.type, value.title, JSON.stringify(value.authors), value.year, JSON.stringify(value.metadata), value.language, value.license, value.shareable ? 1 : 0, value.level, value.area, value.role, value.citationOverride, now, found!.id, course.id, current.organizationId).run();
+  // A material and its resource are one item: the library shows the same title (a new version, so a stale edit conflicts).
+  if (found!.materialId) await db.prepare("UPDATE materials SET title=?,version=version+1,updated_at=? WHERE id=? AND course_id=? AND organization_id=? AND title<>?").bind(value.title, now, found!.materialId, course.id, current.organizationId, value.title).run();
   const saved = (await rowsOf(db, current.organizationId, course.id)).find(row => row.id === found!.id)!;
   return reply({ resource: viewOf(saved) });
 }

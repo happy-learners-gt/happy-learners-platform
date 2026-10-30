@@ -53,7 +53,8 @@ con apoyo puntual.
 3. ~~1.3.6 Libertad de cátedra por sección~~ (hecho, #90) (lotes 4a–4c): diseño `docs/design/libertad-de-catedra.md` y ficha
    `docs/handoff/cursor/lote-4a-libertad-de-catedra.md` listos (incluye unidades propias, revisión opcional, copiar a
    otra sección y proponer al curso). Siguiente: Cursor implementa; revisar, PR, desplegar.
-4. **1.3.7 Biblioteca de recursos didácticos** (lote 5): diseño `docs/design/recursos-didacticos.md` y ficha listos; tipos más allá del libro, metadatos y cita,
+4. **1.3.7 Biblioteca de recursos didácticos** (lote 5, en PR #92; pendiente: las lecturas van en una sección aparte de
+   Contenido y no dentro de cada unidad como pide el diseño, se corrige en 1.4.1): diseño `docs/design/recursos-didacticos.md` y ficha listos; tipos más allá del libro, metadatos y cita,
    índice por capítulos, mapeo a resultados, varias fuentes para la IA.
 5. **1.4.0 Asistente pedagógico como harness** (lote 6): diseño primero; revisión con puntaje basado en hechos, mejoras,
    cronograma y horarios con reglas (solver determinista), redacción en toda la plataforma, registro de consumo de IA.
