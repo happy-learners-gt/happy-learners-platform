@@ -1661,3 +1661,29 @@ class CourseResourceMigrationTests(unittest.TestCase):
                 self.assertEqual(db.execute("SELECT count(*) FROM materials m WHERE NOT EXISTS (SELECT 1 FROM course_resources r WHERE r.material_id=m.id)").fetchone()[0], 0)
                 self.assertEqual(db.execute("SELECT count(*) FROM course_files f WHERE f.status!='uploading' AND NOT EXISTS (SELECT 1 FROM course_resources r WHERE r.file_id=f.id)").fetchone()[0], 0)
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class AiRunsMigrationTests(unittest.TestCase):
+    def test_runs_keep_no_text_and_prices_are_unique_per_model_and_date(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            db.executescript(path.read_text())
+        columns = [row[1] for row in db.execute("PRAGMA table_info(ai_runs)").fetchall()]
+        self.assertFalse(any(name in columns for name in ("input", "output", "prompt", "text")))
+        user = db.execute("SELECT id FROM users LIMIT 1").fetchone()[0]
+        run = "INSERT INTO ai_runs(id,organization_id,user_id,course_id,task,prompt_version,generator,model,input_chars,input_tokens,output_tokens,duration_ms,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        db.execute(run, ("run-1", "org-demo", user, None, "lesson-proposal", "v3", "openai", "un-modelo", 4000, 1200, 800, 950, "ok", "2026-10-30T00:00:00Z"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(run, ("run-2", "org-demo", user, None, "otra-tarea", "v3", "openai", "un-modelo", 1, None, None, 1, "ok", "t"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(run, ("run-3", "org-demo", user, None, "write", "v1", "openai", "un-modelo", 1, -1, None, 1, "ok", "t"))
+        price = "INSERT INTO ai_prices(id,organization_id,model,effective_from,input_per_million,output_per_million,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?)"
+        db.execute(price, ("price-1", "org-demo", "un-modelo", "2026-10-01", 1.25, 10, user, "t"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(price, ("price-2", "org-demo", "un-modelo", "2026-10-01", 2, 10, user, "t"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(price, ("price-3", "org-demo", "un-modelo", "1 de octubre", 2, 10, user, "t"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(price, ("price-4", "org-demo", "otro", "2026-10-01", -1, 10, user, "t"))
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])

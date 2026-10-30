@@ -1,3 +1,4 @@
+import type { AiTokenUsage } from "./ai-usage";
 import type { BookPage } from "./lesson-proposals";
 import { relevantPages } from "./lesson-proposals";
 
@@ -20,7 +21,9 @@ export interface MapInput { outcome: { statement: string; code: string | null; c
 /** What a mapper answers, page by page. */
 export interface MapOutput { pages: { page: number; relevant: boolean; quote: string }[] }
 /** The port: a language model in production, a deterministic fixture in tests and local demonstrations. */
-export interface BookMapper { readonly kind: "fixture" | "openai"; map(input: MapInput): Promise<MapOutput> }
+/** Version of the map prompt, recorded with every run (1.4.0). */
+export const mapPromptVersion = "2026-10-29.1";
+export interface BookMapper { readonly kind: "fixture" | "openai"; map(input: MapInput, observe?: (usage: AiTokenUsage) => void): Promise<MapOutput> }
 
 export const mapSchema = {
   type: "object", additionalProperties: false, required: ["pages"],

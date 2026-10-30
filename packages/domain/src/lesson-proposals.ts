@@ -1,3 +1,4 @@
+import type { AiTokenUsage } from "./ai-usage";
 import type { Activity, ActivityBlock, ActivityGrouping, ActivityPurpose } from "@happy-learners/contracts";
 
 /**
@@ -57,7 +58,8 @@ export interface ProposalOutput {
   activities: { title: string; phase: string; purpose: ActivityPurpose; grouping: ActivityGrouping; minutes: number; instructions: string; question: { prompt: string; options: string[]; answer: number } | null }[];
 }
 /** The port: a language model in production, a deterministic fixture in tests and local demonstrations. */
-export interface LessonDraftGenerator { readonly kind: "fixture" | "openai"; generate(input: ProposalInput): Promise<ProposalOutput> }
+/** A generator may report the tokens it used to `observe` (the harness records them, 1.4.0). */
+export interface LessonDraftGenerator { readonly kind: "fixture" | "openai"; generate(input: ProposalInput, observe?: (usage: AiTokenUsage) => void): Promise<ProposalOutput> }
 
 /** The structured output a model must follow (JSON Schema, strict: every field required, nothing else). */
 export const proposalSchema = {

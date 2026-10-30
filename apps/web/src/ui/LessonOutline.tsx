@@ -60,12 +60,14 @@ export type OutlineActions = {
 };
 
 /** writable: the team creates, renames and duplicates lessons. organize: the lead also orders and archives modules and lessons. */
-export function LessonOutline({ courseId, units, lessons, writable, organize, showArchived, actions, expanded, setExpanded, focusUnit, noun, core, sectionPlan }: {
+export function LessonOutline({ courseId, units, lessons, writable, organize, showArchived, actions, expanded, setExpanded, focusUnit, noun, core, sectionPlan, quality }: {
   courseId: string; noun: ModuleNoun; units: LearningUnit[]; lessons: Lesson[]; writable: boolean; organize: boolean; showArchived: boolean; actions: OutlineActions;
   expanded: Set<string>; setExpanded: (ids: Set<string>) => void; focusUnit?: string;
   /** Course lead marks the core. Absent when the course is the same for every section. */
   core?: { isCore: (lesson: Lesson) => boolean; markLesson?: (lesson: Lesson, core: boolean) => void; markUnit?: (unit: LearningUnit, core: boolean) => void };
   /** A section's own plan: chips, hide and show, without the course's archive actions. */
+  /** 1.4.0: the lesson's review score, as a chip. */
+  quality?: (lesson: Lesson) => ReactNode;
   sectionPlan?: { chip: (lesson: Lesson) => ReactNode; lessonItems: (lesson: Lesson) => MenuItem[]; hidden: (unitId: string) => Lesson[]; show: (lesson: Lesson) => void; unitChip?: (unit: LearningUnit) => ReactNode; unitItems?: (unit: LearningUnit) => MenuItem[] };
 }) {
   const [renaming, setRenaming] = useState<string | null>(null), [creating, setCreating] = useState<string | null>(null);
@@ -115,6 +117,7 @@ export function LessonOutline({ courseId, units, lessons, writable, organize, sh
               <small>{plural(lesson.activities.length, "actividad", "actividades")} · {lesson.duration} min</small>
             </div>
             {sectionPlan ? sectionPlan.chip(lesson) : core?.isCore(lesson) && <FreedomChip mark="core"/>}
+            {quality?.(lesson)}
             <LessonBadge lesson={lesson}/>
             <Menu label={`Acciones de la lección ${lesson.title}`} items={[
               { label: writable ? "Editar" : "Abrir", icon: "edit", onSelect: () => actions.openLesson(lesson) },

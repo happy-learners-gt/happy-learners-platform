@@ -1,10 +1,11 @@
 import type { BookMapView, Member } from "@happy-learners/contracts";
-import { fixtureMapper, mapCandidatePages, maxCandidateText, pagesInput, relevantPages, verifiedPages } from "@happy-learners/domain";
+import { fixtureMapper, mapCandidatePages, mapPromptVersion, maxCandidateText, pagesInput, relevantPages, verifiedPages } from "@happy-learners/domain";
 import type { MapEvidence, MapSource } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { accessTo } from "./access";
 import { contentsOf, generatorKind, readiness } from "./proposals";
 import { openAiMapper, openAiSettings, TransientError } from "./openai";
+import { tracked } from "./ai-runs";
 
 /**
  * The book map (rebanada 5b): GET /api/courses/:id/book-map shows, for the main book and each indicator of the plan,
@@ -124,8 +125,8 @@ export async function bookMap(path: string, method: string, input: unknown, curr
 export async function processBookMaps(db: Database, env: Env, scope: string): Promise<boolean> {
   await db.prepare("UPDATE book_maps SET ai_status='queued' WHERE ai_status='running' AND ai_started_at<? AND organization_id=?").bind(new Date(Date.now() - 10 * 60_000).toISOString(), scope).run();
   const settings = openAiSettings(env), mapper = settings ? openAiMapper(settings) : env.LESSON_GENERATOR === "fixture" ? fixtureMapper : null;
-  const queued = (await db.prepare("SELECT course_id AS courseId,sha256,outcome_id AS outcomeId,file_id AS fileId,candidates,ai_attempts AS attempts FROM book_maps WHERE ai_status='queued' AND organization_id=? LIMIT 3").bind(scope)
-    .all<{ courseId: string; sha256: string; outcomeId: string; fileId: string; candidates: string; attempts: number }>()).results;
+  const queued = (await db.prepare("SELECT course_id AS courseId,sha256,outcome_id AS outcomeId,file_id AS fileId,candidates,ai_attempts AS attempts,updated_by AS userId FROM book_maps WHERE ai_status='queued' AND organization_id=? LIMIT 3").bind(scope)
+    .all<{ courseId: string; sha256: string; outcomeId: string; fileId: string; candidates: string; attempts: number; userId: string }>()).results;
   for (const row of queued) {
     const startedAt = new Date().toISOString(), key = [row.courseId, row.sha256, row.outcomeId];
     if (!await db.prepare("UPDATE book_maps SET ai_status='running',ai_attempts=ai_attempts+1,ai_started_at=? WHERE course_id=? AND sha256=? AND outcome_id=? AND ai_status='queued' RETURNING outcome_id").bind(startedAt, ...key).first()) continue;
@@ -139,7 +140,12 @@ export async function processBookMaps(db: Database, env: Env, scope: string): Pr
     if (!outcome[0]) { await finish("error", "El indicador ya no está en el plan."); continue; }
     const candidates = texts.map(page => ({ page: page.page, text: page.text.slice(0, maxCandidateText) }));
     try {
-      const result = verifiedPages(await mapper.map({ outcome: { ...outcome[0], contents: (await contentsOf(db, row.courseId)).get(row.outcomeId) || [] }, candidates }), candidates);
+      const input = { outcome: { ...outcome[0], contents: (await contentsOf(db, row.courseId)).get(row.outcomeId) || [] }, candidates };
+      const answer = await tracked(db, {
+        organizationId: scope, userId: row.userId, courseId: row.courseId, task: "book-map", promptVersion: mapPromptVersion,
+        generator: mapper.kind, model: mapper.kind === "openai" ? settings!.model : "fixture", inputChars: JSON.stringify(input).length,
+      }, observe => mapper.map(input, observe));
+      const result = verifiedPages(answer, candidates);
       // The team may have confirmed this indicator meanwhile: its decision is kept.
       await db.prepare("UPDATE book_maps SET pages=?,evidence=?,source='ai',ai_status='done',ai_error=? WHERE course_id=? AND sha256=? AND outcome_id=? AND ai_status='running' AND ai_started_at=? AND status='proposed'")
         .bind(JSON.stringify(result.pages), JSON.stringify(result.evidence), result.dropped ? `Se descartaron ${result.dropped} páginas sin una cita verificable.` : null, ...key, startedAt).run();

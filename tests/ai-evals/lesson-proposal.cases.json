@@ -1,0 +1,20 @@
+[
+  {
+    "name": "Primaria · inicio, desarrollo y cierre",
+    "sequence": "start-develop-close", "minutes": 45, "course": "Matemáticas 6.º", "grade": "Primaria",
+    "outcome": { "id": "o-area", "statement": "Calcula perímetro y área de diferentes polígonos y del círculo.", "code": "1.2", "competency": null, "contents": ["Cálculo del área del círculo.", "Perímetro de polígonos regulares."] },
+    "book": { "title": "Matemáticas 6", "fileId": "f-1", "pages": [12, 13], "excerpt": "[p. 12] El perímetro es la suma de los lados de un polígono. [p. 13] El área del círculo es pi por el radio al cuadrado." }
+  },
+  {
+    "name": "Ciencias · 5E",
+    "sequence": "five-e", "minutes": 60, "course": "Ciencias Naturales 4.º", "grade": "Primaria",
+    "outcome": { "id": "o-agua", "statement": "Describe los estados del agua y los cambios entre ellos.", "code": "2.1", "competency": null, "contents": ["Evaporación y condensación."] },
+    "book": { "title": "Ciencias 4", "fileId": "f-2", "pages": [40], "excerpt": "[p. 40] El agua cambia de estado: se evapora con el calor y se condensa al enfriarse." }
+  },
+  {
+    "name": "Idiomas · PPP",
+    "sequence": "ppp", "minutes": 40, "course": "English Explorers A1", "grade": "Básico",
+    "outcome": { "id": "o-greet", "statement": "Saluda y se presenta con expresiones sencillas.", "code": "A1.1", "competency": null, "contents": ["Greetings and introductions."] },
+    "book": { "title": "English Explorers", "fileId": "f-3", "pages": [5, 6], "excerpt": "[p. 5] Hello! My name is Ana. [p. 6] Nice to meet you." }
+  }
+]

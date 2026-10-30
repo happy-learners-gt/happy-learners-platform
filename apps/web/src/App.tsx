@@ -28,6 +28,7 @@ import { ProfileReviewsPage, TeamDirectory, TeamProfilePage } from "./pages/prof
 import { HoursPage } from "./pages/hours";
 import { OnboardingWizard } from "./pages/onboarding";
 import { InstitutionalCalendarPage } from "./pages/institutional-calendar";
+import { AiUsagePage } from "./pages/ai-usage";
 import { MyPanelsPage } from "./pages/grading/Panels";
 import { ConfirmEmail } from "./pages/account";
 import { isAccountSection, MyAccountPage } from "./pages/my-account";
@@ -180,7 +181,7 @@ function page(first: string, second: string | undefined, url: URL) {
     case "buscar": return <Search/>;
     case "ayuda": return <Help/>;
     case "guia-de-estilo": return <StyleGuide/>;
-    case "organizacion": return second === "calendario" ? <InstitutionalCalendarPage/> : <OrganizationSettings/>;
+    case "organizacion": return second === "calendario" ? <InstitutionalCalendarPage/> : second === "ia" ? <AiUsagePage/> : <OrganizationSettings/>;
     case "educadores": return <Members/>;
     case "contratos": return <ContractsPage/>;
     case "mi-cuenta": return isAccountSection(second) ? <MyAccountPage section={second}/> : <Redirect to="/mi-cuenta/perfil"/>;
