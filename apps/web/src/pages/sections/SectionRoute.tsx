@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import type { SectionSummary } from "@happy-learners/contracts";
 import { scheduleSummary } from "@happy-learners/domain";
 import { api, message } from "../../api";
-import { Link } from "../../navigation";
+import { Link, useNavigation } from "../../navigation";
 import { plural, sessionDay } from "../../model";
 import { useFeedback } from "../../ui/feedback";
 import { Icon } from "../../ui/icons";
@@ -19,9 +19,10 @@ import { SectionProvider, sectionCrumbs, sectionPath, useSection } from "./conte
 import { SectionProgressPage } from "./Progress";
 import { SectionWorkGroupsPage } from "./WorkGroups";
 import { SectionGradesPage } from "./Grades";
+import { SectionPlan } from "./SectionPlan";
 import { classMoment } from "../../regional";
 
-const areas = ["", "clases", "estudiantes", "grupos", "horario", "avance", "notas"];
+const areas = ["", "clases", "estudiantes", "grupos", "horario", "avance", "notas", "plan"];
 type State = { status: "loading" } | { status: "error"; error: string; code: number } | { status: "ready"; section: SectionSummary; today: string };
 
 /**
@@ -56,6 +57,7 @@ function SectionWithCourse({ section, today, base, reload, area, item }: { secti
   const data = { ...state.data, ...courseConfiguration(state.data.course, state.data.program), ...capabilities(state.data.course), reload: load };
   const selfPaced = section.pacing === "self-paced";
   const elsewhere = selfPaced ? ["clases", "horario"].includes(area) : area === "avance";
+  const sharedPlan = area === "plan" && data.settings.sectionFreedom === "shared";
   return <CourseProvider data={data}><SectionProvider value={{ section, today, base, reload }}>
     {!data.settings.attendance && <p className="notice"><Icon name="info" size={18}/>{selfPaced ? "Las secciones están desactivadas en la configuración del curso: la sección se consulta, pero no recibe estudiantes nuevos." : "La asistencia está desactivada en la configuración del curso: la sección se consulta, pero no recibe clases ni marcas nuevas."}</p>}
     {elsewhere ? <EmptyState level={1} icon="info" title={selfPaced ? "Este curso es a tu ritmo" : "Este curso es con calendario"} action={<Link href={selfPaced ? `${base}/avance` : `${base}/clases`} className="button primary">{selfPaced ? "Ver el avance" : "Ver el cronograma"}</Link>}>{selfPaced ? "Sus secciones no tienen horario ni clases: cada estudiante avanza por las lecciones publicadas y la sección sigue su avance." : "Sus secciones avanzan juntas con un horario y clases; el avance se sigue en el cronograma."}</EmptyState> : <>
@@ -66,8 +68,15 @@ function SectionWithCourse({ section, today, base, reload, area, item }: { secti
       {area === "horario" && <Timetable/>}
       {area === "avance" && <SectionProgressPage/>}
       {area === "notas" && <SectionGradesPage/>}
+      {area === "plan" && (sharedPlan ? <SharedPlanRedirect to={base}/> : <SectionPlan/>)}
     </>}
   </SectionProvider></CourseProvider>;
+}
+
+function SharedPlanRedirect({ to }: { to: string }) {
+  const { navigate } = useNavigation();
+  useEffect(() => { navigate(to, true); }, [to, navigate]);
+  return <Loading label="Volviendo al resumen de la sección…"/>;
 }
 
 /** The section's header: its name, course, pacing or schedule, status, and administration's rename and close actions. */

@@ -14,6 +14,8 @@ import { matches, plural, rosterNames, sessionDay, timeAgo } from "../../model";
 import { useCourse } from "./context";
 import { SectionCards } from "../sections/SectionCard";
 import { sectionCrumbs, sectionPath, useSection } from "../sections/context";
+import { SectionDifferences } from "./Differences";
+import { Tabs } from "../../ui/Tabs";
 
 /** A section of the course: its educators, assigned students, access code and schedule. */
 export type SectionView = { id: string; name: string; status: "active" | "archived"; learnerCount: number; learners?: GroupLearner[]; educators: SectionEducator[]; accessCode?: string | null; schedule?: SectionSchedule | null };
@@ -23,8 +25,8 @@ export type SectionView = { id: string; name: string; status: "active" | "archiv
  * sees all of them; each educator sees only the sections they teach.
  */
 export function CourseSections() {
-  const { course, configurable, access, pacing } = useCourse();
-  const { navigate } = useNavigation();
+  const { course, configurable, access, pacing, settings, publisher, reviewer } = useCourse();
+  const { navigate, url } = useNavigation();
   const { toast } = useFeedback();
   const [sections, setSections] = useState<SectionSummary[] | null>(null), [today, setToday] = useState(""), [error, setError] = useState("");
   const [creating, setCreating] = useState(false), [busy, setBusy] = useState(false);
@@ -45,6 +47,9 @@ export function CourseSections() {
     } catch (cause) { toast({ tone: "error", message: message(cause) }); setBusy(false); }
   }
   const mine = access.sections !== "all";
+  const differences = settings.sectionFreedom !== "shared" && (publisher || reviewer || access.sections === "all");
+  const tab = differences && url.searchParams.get("vista") === "diferencias" ? "diferencias" : "lista";
+  const choose = (next: string) => { const target = new URL(url); if (next === "lista") target.searchParams.delete("vista"); else target.searchParams.set("vista", next); navigate(target.pathname + target.search, true); };
   const header = <PageHeader crumbs={[{ label: "Cursos", href: "/cursos" }, { label: course.title, href: `/cursos/${course.id}` }, { label: "Secciones" }]} title="Secciones"
     description={pacing === "self-paced"
       ? mine ? "Las secciones de este curso que impartes. Sus estudiantes avanzan a su ritmo por las lecciones publicadas y cada sección sigue su avance." : "Cada sección es una impartición del curso a tu ritmo: sus estudiantes entran con su código y avanzan por las lecciones publicadas; la sección sigue el avance de cada uno."
@@ -55,6 +60,8 @@ export function CourseSections() {
   const open = sections.filter(item => item.status === "active"), closed = sections.filter(item => item.status === "archived");
   return <>
     {header}
+    {differences && <Tabs label="Secciones" value={tab} onChange={choose} items={[{ value: "lista", label: "Lista" }, { value: "diferencias", label: "Diferencias" }]}>{tab === "diferencias" ? <SectionDifferences/> : null}</Tabs>}
+    {tab === "lista" && <>
     {(creating || (!sections.length && configurable)) && course.status === "active" && configurable && <form className="inline-form" aria-label="Nueva sección" onSubmit={create}>
       <h2>Nueva sección</h2>
       <fieldset disabled={busy}>
@@ -65,6 +72,7 @@ export function CourseSections() {
     {open.length ? <SectionCards sections={open} today={today} showCourse={false}/>
       : !configurable && <EmptyState icon="users" title={mine ? "No tienes secciones asignadas en este curso" : "Este curso no tiene secciones"}>Administración crea las secciones y asigna quién imparte cada una.</EmptyState>}
     {closed.length > 0 && <details className="closed-groups"><summary>Secciones cerradas ({closed.length})</summary><SectionCards sections={closed} today={today} showCourse={false}/></details>}
+    </>}
   </>;
 }
 

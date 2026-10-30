@@ -434,6 +434,19 @@ Si la actividad ya tiene notas, se puede cambiar el nombre y la fecha. Cambiar l
 
 `PUT /api/sections/:id/grades/periods/:periodId/plan` sigue aceptando el plan completo, incluido `workGroupSetId`. Además de la columna anterior, guarda el conjunto en `section_activity_sets` de esa sección. La libreta y la calificación grupal leen esa tabla, no la columna.
 
+### Libertad de cátedra por sección (0065)
+
+El ajuste `sectionFreedom` del curso (o del programa, si lo fija) vale `shared`, `flexible` o `free`. Con `shared` las respuestas de contenido, cronograma, notas, PDF de entrega y espacio del estudiante no cambian. Con otra política devuelven el plan efectivo de la sección.
+
+- `GET /api/sections/:id/plan` responde el contenido y la evaluación efectivos, su origen, la cobertura del núcleo y `canEdit`. Con `shared` responde 404: «Esta sección sigue el contenido del curso.»
+- `POST /api/sections/:id/lessons` crea una lección propia (el mismo cuerpo que una lección del curso, con `courseUnitId`). La publica quien imparte la sección.
+- `POST /api/sections/:id/activities` crea una actividad propia. Con `free`, `replaces` señala la actividad del núcleo que sustituye, de la misma categoría y los mismos puntos.
+- `PUT /api/sections/:id/content-overrides` guarda un ajuste `{ itemType, itemId, position, hidden, replaces }`. `DELETE` lo quita. No se oculta una lección del núcleo, una lección ya impartida en la sección ni una actividad con notas.
+- `PUT /api/courses/:id/core` marca o quita del núcleo lecciones, unidades y actividades. Solo el responsable, y solo si la política no es `shared`. Responde cuántas secciones vuelven a mostrar lo marcado.
+- `GET /api/courses/:id/sections/differences` lo consultan el responsable, coordinación y administración. Con `shared` responde 404.
+
+Cambiar `sectionFreedom` en el curso o en el programa se rechaza con 409 y `affected` (sección y actividad) cuando hay notas en lo que dejaría de contar.
+
 ### Conjuntos de grupos y calificación grupal (0061, 0062)
 
 Los grupos que no pertenecían a un conjunto pasan al conjunto **Grupos de la sección**. Un conjunto nuevo es otro reparto, reutilizable, de esa misma sección. `set_id` sigue pudiendo quedar vacío: un grupo insertado sin conjunto conserva el nombre único de ese cubo.

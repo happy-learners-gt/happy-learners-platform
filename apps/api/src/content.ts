@@ -7,6 +7,7 @@ import { filesFor } from "./files";
 import { accessTo, forbidden, reachableCourses } from "./access";
 import { scopedCourses } from "./permissions";
 import { digest } from "./auth";
+import { freedomPolicyOf } from "./freedom-plan";
 import { pathLesson, studentAccess, studentToken } from "./classes";
 import { studentActivityGroups } from "./workgroups";
 import { notify, type Notice, type Notifier } from "./notify";
@@ -17,10 +18,10 @@ type LessonRow = { id: string; content: string; published_content: string | null
 const reviewColumn = `(SELECT json_object('id',r.id,'status',r.status,'note',r.note,'requestedById',r.requested_by,'requestedByName',COALESCE(ru.display_name,ru.username),'requestedAt',r.requested_at,'decidedByName',COALESCE(du.display_name,du.username),'decidedAt',r.decided_at,'decisionNote',r.decision_note)
   FROM lesson_reviews r JOIN users ru ON ru.id=r.requested_by LEFT JOIN users du ON du.id=r.decided_by WHERE r.lesson_id=l.id ORDER BY r.requested_at DESC,r.rowid DESC LIMIT 1) AS review`;
 const lessonQuery = `SELECT l.*,c.id AS course_id,(SELECT count(*) FROM lesson_completions lc WHERE lc.lesson_id=l.id) AS completions,${reviewColumn} FROM lessons l JOIN programs p ON p.id=l.program_id LEFT JOIN courses c ON c.legacy_program_id=p.id LEFT JOIN learning_units cu ON cu.id=l.course_unit_id LEFT JOIN units u ON u.id=l.unit_id LEFT JOIN levels lv ON lv.id=u.level_id WHERE p.organization_id=?`;
-function lessonView(row: LessonRow, draft: boolean): Lesson {
+function lessonView(row: LessonRow, draft: boolean, isCore?: boolean): Lesson {
   const review = draft && row.review ? JSON.parse(row.review) as LessonReview : null;
   return { ...JSON.parse(draft ? row.content : row.published_content || row.content), unitId: row.unit_id || undefined, courseUnitId: row.course_unit_id || undefined, courseId: row.course_id || undefined, position: row.position, status: row.archived ? "archived" : row.status, revision: row.revision, draftVersion: row.draft_version, hasDraft: row.draft_version !== row.published_version, updatedAt: row.updated_at, completions: row.completions,
-    ...(draft ? { review: review && review.status !== "approved" ? review : null } : {}) };
+    ...(draft ? { review: review && review.status !== "approved" ? review : null } : {}), ...(isCore === undefined ? {} : { isCore }), ...((row as LessonRow & { group_id?: string | null }).group_id ? { groupId: (row as LessonRow & { group_id?: string | null }).group_id } : {}) };
 }
 export async function resources(db: Database, organization: string) {
   const rows = await db.prepare("SELECT id,title,description,level,skill,topic,tags,content,status,archived,kind,updated_at AS updatedAt FROM resources WHERE organization_id=? ORDER BY title").bind(organization).all<Omit<Resource, "tags"> & { tags: string; archived: number }>();
@@ -95,7 +96,21 @@ export async function content(url: URL, method: string, input: unknown, current:
   }
   const row = rows.find(r => r.id === id);
   if (id && (!row || (method === "GET" && !draft && (!row.published_content || row.archived)))) return reply({ error: "Lección no disponible." }, 404);
-  if (method === "GET") return id ? reply({ lesson: lessonView(row!, draft) }) : reply({ lessons: courseOwned.filter(r => draft || (r.published_content && !r.archived)).map(r => lessonView(r, draft)) });
+  if (method === "GET" && !id) {
+    const shown = courseOwned.filter(r => draft || (r.published_content && !r.archived));
+    const adapts = new Map<string, boolean>();
+    const lessons = [];
+    for (const item of shown) {
+      let core: boolean | undefined;
+      if (item.course_id) {
+        if (!adapts.has(item.course_id)) adapts.set(item.course_id, (await freedomPolicyOf(db, current.organizationId, item.course_id)) !== "shared");
+        if (adapts.get(item.course_id)) core = (item as LessonRow & { is_core?: number }).is_core !== 0;
+      }
+      lessons.push(lessonView(item, draft, core));
+    }
+    return reply({ lessons });
+  }
+  if (method === "GET") return reply({ lesson: lessonView(row!, draft) });
   const access = row ? await accessOf(row.course_id) : null;
   // Publishing and returning a review belong to whoever reviews the course: its lead, or coordination in its scope.
   const deciding = method === "POST" && (path.endsWith("/publish") || path.endsWith("/review/return"));

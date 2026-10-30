@@ -2,6 +2,7 @@ import type { Activity, CourseAccess, GroupActivity, Member, SectionWorkGroups, 
 import { maxWorkGroups, teachesSection, workGroupInput } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { event } from "./team";
+import { effectiveLessonIds } from "./freedom-plan";
 import { forbidden } from "./access";
 
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
@@ -26,12 +27,16 @@ const ids = (json: string | null) => (JSON.parse(json || "[]") as (string | null
 export async function sectionWorkGroups(db: Database, courseId: string, groupId: string): Promise<SectionWorkGroups> {
   const [groups, lessons, assigned] = await db.batch([
     db.prepare(`SELECT w.id,w.name,(SELECT json_group_array(m.learner_id) FROM work_group_members m JOIN group_learners l ON l.id=m.learner_id AND l.status='active' WHERE m.work_group_id=w.id) AS learners FROM work_groups w WHERE w.group_id=? AND (w.set_id IS NULL OR w.set_id=(SELECT id FROM work_group_sets WHERE group_id=w.group_id AND archived=0 AND name=? COLLATE NOCASE LIMIT 1)) ORDER BY w.name COLLATE NOCASE,w.created_at`).bind(groupId, sectionSetName),
-    db.prepare("SELECT l.id,COALESCE(json_extract(l.published_content,'$.title'),'Lección') AS title,json_extract(l.published_content,'$.activities') AS activities,u.name AS unitName FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id AND u.status='active' WHERE u.course_id=? AND l.archived=0 AND l.revision>0 AND l.published_content IS NOT NULL ORDER BY u.position,l.position,l.id").bind(courseId),
+    db.prepare("SELECT l.id,l.group_id AS groupId,COALESCE(json_extract(l.published_content,'$.title'),'Lección') AS title,json_extract(l.published_content,'$.activities') AS activities,u.name AS unitName FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id AND u.status='active' WHERE u.course_id=? AND l.archived=0 AND l.revision>0 AND l.published_content IS NOT NULL AND (l.group_id IS NULL OR l.group_id=?) ORDER BY u.position,l.position,l.id").bind(courseId, groupId),
     db.prepare("SELECT lesson_id AS lessonId,activity_id AS activityId,work_group_id AS workGroupId FROM activity_work_groups WHERE group_id=?").bind(groupId),
-  ]) as unknown as [{ id: string; name: string; learners: string | null }[], { id: string; title: string; activities: string | null; unitName: string }[], { lessonId: string; activityId: string; workGroupId: string }[]];
-  const activities: GroupActivity[] = lessons.flatMap(lesson => (JSON.parse(lesson.activities || "[]") as Activity[])
+  ]) as unknown as [{ id: string; name: string; learners: string | null }[], { id: string; groupId: string | null; title: string; activities: string | null; unitName: string }[], { lessonId: string; activityId: string; workGroupId: string }[]];
+  const organization = await db.prepare("SELECT organization_id AS id FROM courses WHERE id=?").bind(courseId).first<{ id: string }>();
+  const allowed = organization ? await effectiveLessonIds(db, organization.id, courseId, groupId) : null;
+  const shown = allowed ? lessons.filter(lesson => allowed.includes(lesson.id)) : lessons.filter(lesson => !lesson.groupId);
+  const activities: GroupActivity[] = shown.flatMap(lesson => (JSON.parse(lesson.activities || "[]") as Activity[])
     .filter((activity): activity is Activity & { id: string; grouping: "pairs" | "teams" } => !!activity.id && (activity.grouping === "pairs" || activity.grouping === "teams"))
     .map(activity => ({ lessonId: lesson.id, lessonTitle: lesson.title, unitName: lesson.unitName, activityId: activity.id, title: activity.title, grouping: activity.grouping,
+      ...(lesson.groupId ? { own: true } : {}),
       workGroupIds: assigned.filter(row => row.lessonId === lesson.id && row.activityId === activity.id).map(row => row.workGroupId) })));
   return { workGroups: groups.map(group => ({ id: group.id, name: group.name, learnerIds: ids(group.learners) })), activities };
 }

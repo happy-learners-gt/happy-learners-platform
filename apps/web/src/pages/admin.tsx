@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { AcademicProfile, Contract, ContractPhase, CourseFormat, EffectivePreferences, CourseSettings, EducationLevel, EducationType, Member, Modality, OnboardingPerson, Organization, Pacing, StudyProgram, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
 import { accountInput, areaLabel, contractPhaseLabels, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, pacings, settingChoices, settingDefinitions, settingText, settingValue, suggestedLocales, timezoneGroups, utcOffset } from "@happy-learners/domain";
-import type { SettingKey } from "@happy-learners/domain";
+import type { FreedomPolicy, SettingKey } from "@happy-learners/domain";
 import { plural } from "../model";
 import { Avatar } from "../ui/progress";
 import { api, message } from "../api";
@@ -13,6 +13,7 @@ import { Icon } from "../ui/icons";
 import { Menu } from "../ui/Menu";
 import { GradingSchemes, schemeOptions, useGradingSchemes } from "./grading/Schemes";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section, StatusBadge } from "../ui/primitives";
+import { FreedomChangeDialog, FreedomPolicyField } from "../ui/freedom";
 import type { Tone } from "../ui/primitives";
 import { CalendarSummary } from "./institutional-calendar";
 import { AcademicYears } from "./academic-years";
@@ -337,7 +338,7 @@ function ProgramEditor() {
 
 function ProgramDialog({ item, onClose, onSave }: { item?: StudyProgram; onClose: () => void; onSave: (body: Record<string, unknown>) => Promise<void> }) {
   const [profile, setProfile] = useState<AcademicProfile & { format: CourseFormat; area: string }>(item ? { educationType: item.educationType, level: item.level, modality: item.modality, pacing: item.pacing, format: item.format, area: item.area || "" } : { ...coursePresets[2].values, area: "" });
-  const [settings, setSettings] = useState<CourseSettings>(item?.settings || {}), [locked, setLocked] = useState<SettingKey[]>(item?.locked || []), [busy, setBusy] = useState(false);
+  const [settings, setSettings] = useState<CourseSettings>(item?.settings || {}), [locked, setLocked] = useState<SettingKey[]>(item?.locked || []), [busy, setBusy] = useState(false), [pendingPolicy, setPendingPolicy] = useState<FreedomPolicy | null>(null);
   const derived = derivedSettings(profile);
   const schemes = useGradingSchemes();
   const change = (patch: Partial<typeof profile>) => setProfile(current => { const next = { ...current, ...patch }; if (next.educationType === "formal" && next.level === "unspecified") next.level = "primary"; return next; });
@@ -379,7 +380,10 @@ function ProgramDialog({ item, onClose, onSave }: { item?: StudyProgram; onClose
             </div>
           </li>;
         })}</ul>
+        <FreedomPolicyField name="program-section-freedom" value={settings.sectionFreedom || derived.sectionFreedom} onChoose={setPendingPolicy}/>
+        <label className="lock"><input type="checkbox" disabled={settings.sectionFreedom === undefined} checked={locked.includes("sectionFreedom")} onChange={event => setLocked(current => event.target.checked ? [...current, "sectionFreedom"] : current.filter(entry => entry !== "sectionFreedom"))}/><span>Fijar para los cursos del programa</span></label>
       </fieldset>
+      {pendingPolicy && <FreedomChangeDialog from={settings.sectionFreedom || derived.sectionFreedom} to={pendingPolicy} blocked={null} busy={false} onClose={() => setPendingPolicy(null)} onConfirm={() => { setSetting("sectionFreedom", pendingPolicy); setPendingPolicy(null); }}/>}
       <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">{busy ? "Guardando…" : "Guardar programa"}</button></div>
     </fieldset></form>
   </Modal>;
