@@ -77,8 +77,14 @@ E2E lleva `e2eName`.
 4. `tests/app.test.tsx` y E2E nueva `tests/e2e/resources.spec.ts` (escritorio y móvil, nombres con `e2eName`): agregar
    un libro con su ficha, ver su cita, indexarlo a mano, mapear un resultado, asignar una lectura y marcarla como
    estudiante; Fuentes en Planificar con IA con dos recursos. Rutas nuevas en `accessibility.spec.ts` y `layout.spec.ts`.
-5. Las pruebas existentes de biblioteca, bibliografía, mapa del libro y propuestas **sin cambios** en sus aserciones
-   (solo navegación si el menú cambia de nombre).
+5. Las pruebas de **API y dominio** de biblioteca, bibliografía, mapa del libro y propuestas **sin cambios** en sus
+   aserciones. Las pruebas de **interfaz** de la página que el diseño reemplaza (`tests/app.test.tsx`, bibliografía;
+   `tests/e2e/studio.spec.ts`, biblioteca del curso) se **reescriben al flujo nuevo conservando cada comportamiento que
+   comprueban**: el título pasa a «Recursos»; «Agregar referencia» y su diálogo pasan a asignar un rol en la ficha del
+   recurso, con la petición a la API nueva y el recurso visible en «Bibliografía APA» con su cita; «Documento», «Archivo»
+   y «Subir documento» pasan al paso 1 del panel («Archivo») y la ficha del paso 2, y todo lo que esas pruebas verifican
+   después (el archivo listado, su vista previa, Office, archivar) se mantiene igual. Ninguna aserción se elimina sin
+   su equivalente. El mensaje del commit 5b lista cada aserción sustituida y por cuál.
 
 ## Definición de terminado
 
