@@ -5,6 +5,7 @@ import { api, message } from "../../api";
 import { Link } from "../../navigation";
 import { timeAgo } from "../../model";
 import { EmptyState, ErrorState, Loading, PageHeader, Section, StatTiles } from "../../ui/primitives";
+import { ReadingProgress } from "../course/Readings";
 import { sectionCrumbs, useSection } from "./context";
 
 /**
@@ -30,6 +31,7 @@ export function SectionProgressPage() {
       { label: "Terminaron el curso", value: stats.finished, icon: "check", hue: "green" },
       { label: "Avance promedio", value: stats.pathAverage === null ? "—" : `${stats.pathAverage} %`, icon: "overview", hue: "coral" },
     ]}/>
+    <ReadingProgress sectionId={section.id}/>
     <Section title="Por estudiante">
       {!data.learners.length ? <EmptyState compact icon="users" title="La sección aún no tiene estudiantes" action={<Link className="button secondary small" href={`${base}/estudiantes`}>Ver estudiantes</Link>}>Cuando administración inscriba estudiantes, cada uno podrá elegir su nombre al entrar con el código y su avance aparecerá aquí.</EmptyState>
         : !total ? <p className="muted">El curso aún no tiene lecciones publicadas.</p>

@@ -134,7 +134,9 @@ function PlayerBlock({ block, library, fileUrl, answer, onAnswer }: { block: Act
   return <>
     {text && <div className="player-content">{text}</div>}
     {block.kind === "resource" && library.filter(item => item.id === block.resourceId).map(item => <section key={item.id} className="player-resource" aria-label={`Recurso: ${item.title}`}>
-      <h2>{item.title}</h2>{item.description && ("fileId" in item ? !item.fileId : true) && <p className="muted">{item.description}</p>}
+      <h2>{item.title}</h2>
+      {(block.chapter || block.pages) && <p className="resource-citation">{[block.chapter, block.pages].filter(Boolean).join(" · ")}</p>}
+      {item.description && ("fileId" in item ? !item.fileId : true) && <p className="muted">{item.description}</p>}
       {item.kind === "link" ? <a className="button secondary" href={item.content} target="_blank" rel="noopener noreferrer"><Icon name="link" size={18}/>Abrir el recurso en otra pestaña</a>
         : "fileId" in item && item.kind === "file" && item.fileId ? <FileViewer url={fileUrl(item.fileId)} name={item.fileName || item.title}/>
         : <p className="preserve-lines player-text">{item.content}</p>}

@@ -30,6 +30,8 @@ export type { BellBlock, BellBreak, BellConfig, BellScheduleDraft } from "./bell
 export { acceptsAttendance, cancelPlanInput, classActions, classPlanInput, classStatusLabels, completionInput, inSessionFilter, lessonOutcomeLabels, maxClassLessons, groupCodePattern, localDay, newGroupCode, nextClassStatus, normalizeGroupCode, sessionFilterAllowed, sessionFilterInput, upcomingClasses } from "./classes";
 export type { ClassAction, ClassPlan, SessionFilter } from "./classes";
 export { materialInput, record, cleanText, validTermIds, completeOrder } from "./courses";
+export { apaBibliography, citation, detectHeadings, indexFromOutline, indexRanges, lookupIdentifier, resourceCoverage, resourceFields, resourceInput, resourceLicenses, resourceRoleLabel, resourceRoles, resourceTypeLabel, resourceTypes } from "./resources";
+export type { BibliographyEntry, CitationResource, CoverageMap, IndexEntry, LookupRecord, LookupResult, OutlineNode, ResourceAuthor, ResourceField, ResourceKind, ResourceLicense, ResourceMetadata, ResourceRole, ResourceType } from "./resources";
 export { coreCoverage, freedomPolicies, freedomPolicyLabel, policyChange, sectionContent, sectionDifferences } from "./section-freedom";
 export type { CoreCoverage, EffectiveActivity, EffectiveLesson, EffectiveUnit, FreedomActivity, FreedomLesson, FreedomOverride, FreedomPolicy, FreedomUnit, SectionContent, SectionDifference, SectionDifferenceSource } from "./section-freedom";
 export { educationTypes, educationLevels, knowledgeAreas, areaLabel, courseFormats, modalities, pacings, moduleLabels, moduleNoun, settingDefinitions, derivedSettings, sourceLabel, effectiveProfile, resolveSettings, settingsInput, settingChoices, settingText, settingValue, profileInput, courseInput, programInput, coursePresets, labelOf } from "./academic";
@@ -166,7 +168,7 @@ export type { Activity as GradingActivity, AtomicMark, GradingPeriod, GradingSch
 export { bibliographyRoleLabel, bibliographyRoles, isBibliographyRole, maxCitation, maxReferences, primaryBlocker, referenceInput } from "./bibliography";
 export { competencyDescription, competencyName, curriculumPackages, indicatorEvidence, linkPlan, maxPickedIndicators, packageOf, packageProblems, packageSummary } from "./curriculum-packages";
 export type { CurriculumPackage, PackageCompetency, PackageIndicator } from "./curriculum-packages";
-export { draftFromOutput, fixtureGenerator, maxExcerpt, maxProposalItems, pagesLabel, pagesPerProposal, proposalBatch, proposalProblem, proposalPrompt, proposalPromptVersion, proposalSchema, proposalStatusLabels, relevantPages, terms } from "./lesson-proposals";
+export { draftFromOutput, fixtureGenerator, maxExcerpt, maxProposalItems, pagesLabel, pagesPerProposal, proposalBatch, proposalProblem, proposalPrompt, proposalPromptVersion, proposalSchema, proposalStatusLabels, relevantPages, sourceCitationVerified, sourceQuote, terms } from "./lesson-proposals";
 export type { BookPage, LessonDraftGenerator, ProposalInput, ProposalOutput } from "./lesson-proposals";
 export { pdfFile, pdfString, wrap } from "./pdf";
 export type { PdfBlock, PdfDocument } from "./pdf";

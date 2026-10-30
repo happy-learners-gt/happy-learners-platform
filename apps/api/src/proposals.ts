@@ -1,6 +1,6 @@
 import type { Member, ProposalJob, ProposalReadiness } from "@happy-learners/contracts";
 import {
-  draftFromOutput, educationLevels, fixtureGenerator, lessonMinutes, maxExcerpt, maxProposalItems, packageOf, proposalBatch, proposalProblem, proposalPromptVersion,
+  draftFromOutput, educationLevels, fixtureGenerator, lessonMinutes, maxExcerpt, maxProposalItems, packageOf, proposalBatch, proposalProblem, proposalPromptVersion, sourceCitationVerified, sourceQuote,
   relevantPages, sequenceOf, sharePrefix, validActivities,
 } from "@happy-learners/domain";
 import type { ProposalInput, ProposalOutput } from "@happy-learners/domain";
@@ -125,6 +125,9 @@ export async function proposals(path: string, method: string, input: unknown, cu
   if (!Array.isArray(ids) || !ids.length || ids.length > maxProposalItems || new Set(ids).size !== ids.length || ids.some(id => !state.outcomes.some(outcome => outcome.id === id))) return reply({ error: `Elige de 1 a ${maxProposalItems} indicadores activos del plan curricular.` }, 400);
   const minutes = value.minutes === undefined ? 45 : Number(value.minutes);
   if (!Number.isInteger(minutes) || minutes < 10 || minutes > 300) return reply({ error: "La duración de cada clase va de 10 a 300 minutos." }, 400);
+  const requested = Array.isArray(value.resourceIds) ? [...new Set(value.resourceIds.filter((id): id is string => typeof id === "string"))] : [];
+  const sources = requested.length ? (await db.prepare(`SELECT r.id AS resourceId,r.file_id AS fileId,r.title FROM course_resources r WHERE r.course_id=? AND r.organization_id=? AND r.status<>'archived' AND r.id IN (${requested.map(() => "?").join(",")}) AND EXISTS (SELECT 1 FROM book_maps m JOIN course_files f ON f.sha256=m.sha256 AND f.id=r.file_id WHERE m.course_id=r.course_id AND m.status='confirmed' AND m.pages<>'[]')`).bind(courseId, current.organizationId, ...requested).all<{ resourceId: string; fileId: string; title: string }>()).results : []; // nosemgrep: sql-interpolated-text -- los ? son parámetros, no texto
+  if (requested.length && sources.length !== requested.length) return reply({ error: "Solo puedes usar recursos indexados de este curso." }, 400);
   const planned = byPlan ? (await db.prepare("SELECT o.outcome_id AS outcomeId,o.unit_id AS unitId FROM unit_outcomes o JOIN learning_units u ON u.id=o.unit_id WHERE o.course_id=? AND u.status='active' ORDER BY u.position,u.id").bind(courseId).all<{ outcomeId: string; unitId: string }>()).results : [];
   const unitOf = (outcomeId: string) => chosen || state.units.find(item => item.id === planned.find(row => row.outcomeId === outcomeId)?.unitId) || state.units[0];
 
@@ -137,7 +140,8 @@ export async function proposals(path: string, method: string, input: unknown, cu
     // The team's confirmed map wins over the search; an empty, confirmed list means the book does not cover it.
     const found = confirmed.get(outcomeId) ?? relevantPages([outcome.statement, ...(contents.get(outcomeId) || [])].join(" "), pages).map(page => page.page);
     // Retrying the same request (same outcome, module, book, instructions and generator) never makes a second lesson.
-    const key = await digest([courseId, unit.id, outcomeId, state.book!.sha256, proposalPromptVersion, generator, minutes, found.join(",")].join("|"));
+    const base = [courseId, unit.id, outcomeId, state.book!.sha256, proposalPromptVersion, generator, minutes, found.join(",")].join("|");
+    const key = await digest(sources.length ? `${base}|${sources.map(source => source.resourceId).sort().join(",")}` : base);
     return { id: `item-${crypto.randomUUID()}`, outcomeId, position, key, pages: found, unit };
   }));
   const existing = new Set((await db.prepare(`SELECT idempotency_key AS key FROM proposal_items WHERE idempotency_key IN (${items.map(() => "?").join(",")})`).bind(...items.map(item => item.key)).all<{ key: string }>()).results.map(row => row.key));
@@ -147,7 +151,7 @@ export async function proposals(path: string, method: string, input: unknown, cu
   const groups = [...new Map(fresh.map(item => [item.unit.id, item.unit])).values()].map(unit => ({ unit, job: `proposal-${crypto.randomUUID()}`, items: fresh.filter(item => item.unit.id === unit.id) }));
   await db.batch([
     ...groups.flatMap(({ unit, job, items: own }) => [
-      db.prepare("INSERT INTO proposal_jobs(id,organization_id,course_id,unit_id,book_file_id,sequence,minutes,generator,requested_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(job, current.organizationId, courseId, unit.id, state.book!.fileId, state.sequenceId, minutes, generator, current.id, now),
+      db.prepare("INSERT INTO proposal_jobs(id,organization_id,course_id,unit_id,book_file_id,sequence,minutes,generator,requested_by,created_at,sources) VALUES (?,?,?,?,?,?,?,?,?,?,?)").bind(job, current.organizationId, courseId, unit.id, state.book!.fileId, state.sequenceId, minutes, generator, current.id, now, JSON.stringify(sources.map(source => ({ resourceId: source.resourceId, fileId: source.fileId, title: source.title })))),
       ...own.map((item, index) => db.prepare("INSERT INTO proposal_items(id,job_id,organization_id,course_id,outcome_id,position,idempotency_key,status,error,pages) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(idempotency_key) DO NOTHING")
         .bind(item.id, job, current.organizationId, courseId, item.outcomeId, index, item.key, item.pages.length ? "queued" : "error", item.pages.length ? null : confirmed.has(item.outcomeId) ? "En el mapa del libro marcaron que el libro no trata este indicador." : "El libro principal no parece tratar este indicador: no se encontraron páginas.", JSON.stringify(item.pages))),
     ]),
@@ -164,7 +168,7 @@ export async function contentsOf(db: Database, courseId: string) {
   return new Map(links.map(link => [link.outcomeId, packageOf(link.packageId)?.competencies.flatMap(competency => competency.indicators).find(indicator => indicator.code === link.code)?.contents || []]));
 }
 
-type Item = { id: string; jobId: string; courseId: string; outcomeId: string; pages: string; attempts: number; startedAt: string; unitId: string; unitName: string; legacyUnitId: string | null; bookFileId: string; sequence: string; minutes: number; generator: "fixture" | "openai"; requestedBy: string; organizationId: string };
+type Item = { id: string; jobId: string; courseId: string; outcomeId: string; pages: string; attempts: number; startedAt: string; unitId: string; unitName: string; legacyUnitId: string | null; bookFileId: string; sequence: string; minutes: number; generator: "fixture" | "openai"; requestedBy: string; organizationId: string; sources: string };
 
 /**
  * One batch of the organization's queued proposals, run by its Durable Object alarm: claim an item, ask the generator,
@@ -175,7 +179,7 @@ export async function processProposals(db: Database, env: Env, scope: string): P
   // An item left running by an interrupted wake goes back to the queue; its lesson was never written.
   await db.prepare("UPDATE proposal_items SET status='queued' WHERE status='running' AND started_at<?").bind(new Date(Date.now() - 10 * 60_000).toISOString()).run();
   const queued = (await db.prepare(`SELECT i.id,i.job_id AS jobId,i.course_id AS courseId,i.outcome_id AS outcomeId,i.pages,i.attempts,j.unit_id AS unitId,u.name AS unitName,u.legacy_unit_id AS legacyUnitId,j.book_file_id AS bookFileId,
-    j.sequence,j.minutes,j.generator,j.requested_by AS requestedBy,j.organization_id AS organizationId FROM proposal_items i JOIN proposal_jobs j ON j.id=i.job_id JOIN learning_units u ON u.id=j.unit_id
+    j.sequence,j.minutes,j.generator,j.requested_by AS requestedBy,j.organization_id AS organizationId,j.sources FROM proposal_items i JOIN proposal_jobs j ON j.id=i.job_id JOIN learning_units u ON u.id=j.unit_id
     WHERE i.status='queued' AND j.organization_id=? ORDER BY j.created_at,i.position LIMIT ?`).bind(scope, proposalBatch).all<Omit<Item, "startedAt">>()).results;
   for (const row of queued) {
     const startedAt = now();
@@ -188,6 +192,20 @@ export async function processProposals(db: Database, env: Env, scope: string): P
 
 const fail = (db: Database, item: Item, message: string, retry = false) =>
   db.prepare("UPDATE proposal_items SET status=?,error=?,finished_at=? WHERE id=? AND status='running' AND started_at=?").bind(retry ? "queued" : "error", retry ? null : message, new Date().toISOString(), item.id, item.startedAt).run();
+
+async function sourceInputs(db: Database, item: Item): Promise<NonNullable<ProposalInput["sources"]>> {
+  const stored = JSON.parse(item.sources || "[]") as { resourceId: string; fileId: string; title: string }[];
+  const built = [];
+  for (const source of stored) {
+    const confirmed = await db.prepare("SELECT m.pages FROM book_maps m JOIN course_files f ON f.sha256=m.sha256 AND f.id=? WHERE m.course_id=? AND m.outcome_id=? AND m.status='confirmed'").bind(source.fileId, item.courseId, item.outcomeId).first<{ pages: string }>();
+    const pages = (confirmed ? JSON.parse(confirmed.pages) as number[] : []).slice(0, 3);
+    const index = pages.length ? await db.prepare("SELECT title,start_page AS startPage,end_page AS endPage FROM resource_index WHERE resource_id=? AND start_page IS NOT NULL ORDER BY position").bind(source.resourceId).all<{ title: string; startPage: number; endPage: number | null }>() : { results: [] as { title: string; startPage: number; endPage: number | null }[] };
+    const chapter = index.results.find(entry => pages.some(page => page >= entry.startPage && page <= (entry.endPage ?? entry.startPage)))?.title || null;
+    const texts = pages.length ? (await db.prepare(`SELECT page,text FROM book_pages WHERE file_id=? AND page IN (${pages.map(() => "?").join(",")}) ORDER BY page`).bind(source.fileId, ...pages).all<{ page: number; text: string }>()).results : []; // nosemgrep: sql-interpolated-text -- los ? son parámetros, no texto
+    built.push({ resourceId: source.resourceId, fileId: source.fileId, title: source.title, chapter, pages, excerpt: texts.map(page => `[p. ${page.page}] ${page.text}`).join("\n").slice(0, maxExcerpt) });
+  }
+  return built;
+}
 
 async function propose(item: Item, db: Database, env: Env) {
   const settings = openAiSettings(env);
@@ -207,7 +225,9 @@ async function propose(item: Item, db: Database, env: Env) {
     sequence: { label: sequence.label, phases: sequence.phases.map(({ id, label, hint }) => ({ id, label, hint })) },
     outcome: { id: outcome[0].id, statement: outcome[0].statement, code: outcome[0].code, competency: outcome[0].competency, contents: (await contentsOf(db, item.courseId)).get(item.outcomeId) || [] },
     book: { title: book[0].title, fileId: item.bookFileId, pages, excerpt: texts.map(page => `[p. ${page.page}] ${page.text}`).join("\n").slice(0, maxExcerpt) },
+    sources: await sourceInputs(db, item),
   };
+  if (!input.sources?.length) delete input.sources;
   let output: ProposalOutput;
   try { output = await generator.generate(input); }
   catch (error) {
@@ -224,7 +244,8 @@ async function propose(item: Item, db: Database, env: Env) {
     id, title: draft.title, objective: draft.objective, program: item.unitName, courseId: item.courseId, courseUnitId: item.unitId, duration: lessonMinutes({ activities: draft.activities }),
     materials: [], reflection: "¿Qué aprendiste y cómo lo aplicarías?", activities: draft.activities, publishedAt: "", sequence: item.sequence, outcomeIds: [item.outcomeId],
     // Provenance travels with the lesson: the editor and the content say it is a proposal until a person publishes it.
-    generated: { source: generator.kind, model: generator.kind === "openai" ? settings!.model : "fixture", pages, indicator: outcome[0].code, at: new Date().toISOString() },
+    generated: { source: generator.kind, model: generator.kind === "openai" ? settings!.model : "fixture", pages, indicator: outcome[0].code, at: new Date().toISOString(),
+      ...(input.sources?.length ? { resources: input.sources.map(source => ({ resourceId: source.resourceId, title: source.title, chapter: source.chapter, pages: source.pages, verified: sourceCitationVerified(sourceQuote(source.excerpt), source.excerpt.replace(/\[p\. \d+\]\s*/g, "")) })) } : {}) },
     shareCode: sharePrefix(item.organizationId) + crypto.randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase(),
   };
   // The draft and the item's state are one transaction: a retried or concurrent wake never writes a second lesson.

@@ -29,6 +29,7 @@ export function StudentSpace() {
       <button type="button" className="button ghost small" onClick={() => void leave()}><Icon name="logout" size={16}/>Salir</button>
     </div>
     <header><h1>{space.group.name}</h1><p className="page-description">{space.course.title}</p></header>
+    <StudentReadings/>
     <section className="student-next" aria-labelledby="next-title">
       <span className="eyebrow">Próxima clase</span>
       {space.next ? <ClassCard item={space.next} today={space.today} headingId="next-title" big/> : <><h2 id="next-title">No hay clases programadas</h2><p className="muted">Cuando tu educador programe la siguiente clase, aparecerá aquí con su lección y sus recursos.</p></>}
@@ -76,6 +77,7 @@ function SelfPaced({ space, reload, leave }: { space: Space; reload: () => Promi
       <button type="button" className="button ghost small" onClick={() => void leave()}><Icon name="logout" size={16}/>Salir</button>
     </div>
     <header><h1>{space.group.name}</h1><p className="page-description">{space.course.title} · A tu ritmo</p></header>
+    <StudentReadings/>
     {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
     {choosing ? <section className="student-next" aria-labelledby="who-title">
       <h2 id="who-title">¿Quién eres?</h2>
@@ -114,6 +116,22 @@ function ClassCard({ item, today, headingId, big }: { item: StudentClass; today:
     {item.lessons.length ? <p className="button-row">{item.lessons.map((lesson, index) => <Link key={lesson.shareCode} className={big && !index ? "button primary" : "button secondary small"} href={`/aprender/${lesson.shareCode}`}><Icon name="play" size={16}/>Abrir lección: {lesson.title}{lesson.core && <FreedomChip mark="core"/>}{lesson.own && <FreedomChip mark="own"/>}</Link>)}</p> : big && <p className="muted">Las lecciones de esta clase aún no están disponibles.</p>}
     {big && item.resources.length > 0 && <ul className="student-resources" aria-label="Recursos de la clase">{item.resources.map(resource => <li key={resource.id}><ResourceLink resource={resource}/></li>)}</ul>}
   </>;
+}
+
+function StudentReadings() {
+  const [rows, setRows] = useState<{ id: string; title: string; chapter: string | null; pages: string; required: boolean; read: boolean }[]>([]);
+  const [note, setNote] = useState("");
+  useEffect(() => { api<{ readings: typeof rows }>("/student/readings").then(result => setRows(result.readings)).catch(() => setRows([])); }, []);
+  if (!rows.length) return null;
+  async function mark(id: string) {
+    try { await api(`/student/readings/${id}/mark`, "POST"); setRows(current => current.map(item => item.id === id ? { ...item, read: true } : item)); setNote(""); }
+    catch (cause) { setNote(message(cause)); }
+  }
+  return <section className="stack" aria-labelledby="readings-title">
+    <h2 id="readings-title">Lecturas</h2>
+    {note && <p className="form-alert" role="alert">{note}</p>}
+    <ul className="student-resources">{rows.map(item => <li key={item.id}><span>{item.title}{item.chapter ? ` · ${item.chapter}` : ""}{item.pages ? ` · ${item.pages}` : ""} · {item.required ? "Obligatoria" : "Recomendada"}</span>{item.read ? <span className="muted small">Leída</span> : <button type="button" className="button secondary small" onClick={() => void mark(item.id)}>Marcar como leída</button>}</li>)}</ul>
+  </section>;
 }
 
 function ResourceLink({ resource }: { resource: ClassResource }) {

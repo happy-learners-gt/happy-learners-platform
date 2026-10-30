@@ -14,15 +14,18 @@ Reemplaza la necesidad de recordar el historial. Se actualiza al cerrar cada lot
 | 1.3.3 | Rediseño de la evaluación y grupos unificados (`docs/design/evaluacion.md`) | En producción (#86) |
 | 1.3.4 | Agenda y calendario institucional rediseñados (`docs/design/agenda-y-calendario.md`) | En producción (#87) |
 | 1.3.5 | Respaldo restaurable en cualquier espacio (invitaciones sin el hash de su enlace) | En producción (#88); `Release drill` verde |
-| 1.3.6 | Libertad de cátedra por sección (`docs/design/libertad-de-catedra.md`, lotes 4a–4c) | Revisado; en PR |
+| 1.3.6 | Libertad de cátedra por sección (`docs/design/libertad-de-catedra.md`, lotes 4a–4c) | En producción (#90) |
+| 1.3.7 | Biblioteca de recursos didácticos (`docs/design/recursos-didacticos.md`, lotes 5a–5c) | Revisado; en PR |
 
-Siguiente migración libre: **0068** (el lote 4 usa 0065, 0066 y 0067). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
+Siguiente migración libre: **0070** (el lote 5 reserva 0068 y 0069). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
 
 ## 2. Cómo se trabaja (no repetir errores)
 
 - **Diseño primero.** Toda funcionalidad con interfaz tiene un documento en `docs/design/` (lugar, momento, flujo,
   pantallas en texto) antes de la ficha. Las fichas sin diseño produjeron interfaces mediocres (1.3.1–1.3.2).
-- **Cursor implementa, el equipo de desarrollo supervisa.** Fichas en `docs/handoff/cursor/`. Revisión en este orden: pruebas
+- **Desde el 30-oct el equipo de desarrollo implementa directamente** (decisión del usuario): los lotes 6 y 7 ya no pasan por
+  Cursor. Se mantiene diseño primero y la misma revisión (pruebas, capturas, código) antes de cada PR.
+- **Antes, Cursor implementaba y el equipo de desarrollo supervisaba.** Fichas en `docs/handoff/cursor/`. Revisión en este orden: pruebas
   (aserciones flojas, pruebas existentes modificadas), capturas contra el diseño, código; migraciones aplicadas sobre una
   copia de producción. Los arreglos pequeños los hace el equipo de desarrollo directamente.
 - **Carpeta compartida.** Cursor trabaja en la misma carpeta: el equipo de desarrollo nunca usa `git stash` ni cambia de rama ahí;
@@ -30,6 +33,9 @@ Siguiente migración libre: **0068** (el lote 4 usa 0065, 0066 y 0067). Producci
 - **Verificación local.** Antes de `./scripts/verify`, cerrar servidores sobrantes de corridas E2E (`wrangler dev` y
   `workerd`); los fallos en paralelo por carga se confirman corriendo esos archivos en serie. La suite E2E completa la
   corre CI.
+- **Minutos de Actions.** Integrar `main` en la rama antes del último push del PR: así `main` reutiliza la verificación
+  del PR (52 s en lugar de unos 16 min, #91). Ensayar localmente lo que pueda fallar (Semgrep, E2E afectadas) antes de
+  empujar; un push por PR cuando sea posible.
 - **Despliegue.** Fusionar a `main` despliega producción: requiere autorización explícita del usuario; tras fusionar,
   vigilar `verify`, `deploy` y `critical-flows` en `main`; un fallo intermitente se reintenta con `gh run rerun --failed`.
 - **Pruebas sin fechas frágiles.** Nada de «todos los días desde hoy tienen clase»: la semilla tiene asuetos.
@@ -44,10 +50,11 @@ con apoyo puntual.
 
 1. ~~1.3.3 en producción~~ (hecho).
 2. ~~1.3.4 Agenda y calendario~~ (hecho).
-3. **1.3.6 Libertad de cátedra por sección** (lotes 4a–4c): diseño `docs/design/libertad-de-catedra.md` y ficha
+3. ~~1.3.6 Libertad de cátedra por sección~~ (hecho, #90) (lotes 4a–4c): diseño `docs/design/libertad-de-catedra.md` y ficha
    `docs/handoff/cursor/lote-4a-libertad-de-catedra.md` listos (incluye unidades propias, revisión opcional, copiar a
    otra sección y proponer al curso). Siguiente: Cursor implementa; revisar, PR, desplegar.
-4. **1.3.7 Biblioteca de recursos didácticos** (lote 5): diseño primero; tipos más allá del libro, metadatos y cita,
+4. **1.3.7 Biblioteca de recursos didácticos** (lote 5, en PR #92; pendiente: las lecturas van en una sección aparte de
+   Contenido y no dentro de cada unidad como pide el diseño, se corrige en 1.4.1): diseño `docs/design/recursos-didacticos.md` y ficha listos; tipos más allá del libro, metadatos y cita,
    índice por capítulos, mapeo a resultados, varias fuentes para la IA.
 5. **1.4.0 Asistente pedagógico como harness** (lote 6): diseño primero; revisión con puntaje basado en hechos, mejoras,
    cronograma y horarios con reglas (solver determinista), redacción en toda la plataforma, registro de consumo de IA.
@@ -62,7 +69,7 @@ con apoyo puntual.
    con autorización).
 2. ~~Escáneres en CI~~ (hecho, #89): gitleaks, OSV-Scanner y Semgrep con la regla propia `sql-interpolated-text`
    (`docs/operations/escaneres.md`). Pendiente: hacerlos obligatorios tras dos semanas; actualizar wrangler (vence la
-   excepción de miniflare el 30-nov); CodeQL solo con GitHub Code Security (decisión del usuario, carril D).
+   excepción de miniflare el 30-nov); CodeQL: el usuario decidió no pagar GitHub Code Security por ahora (30-oct); se revisa al constituir la empresa.
 3. **Auditoría de seguridad manual** con modelo de amenazas: aislamiento entre organizaciones, permisos por ruta
    (matriz exhaustiva generada desde el enrutador), sesiones, archivos y PDF, datos de menores, IA (entradas del libro y
    salidas). Resultado: `docs/security/auditoria-2026-11.md` con hallazgos priorizados y lotes de corrección.
@@ -116,3 +123,7 @@ con apoyo puntual.
 - 2026-10-29: carril B.1 en PR (1.3.5). La libertad de cátedra pasa a 1.3.6.
 - 2026-10-30: 1.3.5 (#88) en producción y `Release drill` verde; escáneres (#89) integrados; se amplió el presupuesto
   de GitHub Actions (el de octubre se agotó). Lote 4 (1.3.6) revisado: pruebas, capturas y permisos; en PR.
+- 2026-10-30: 1.3.6 (#90) en producción. #91: `main` reutiliza la verificación del PR (52 s). Lote 5 diseñado y entregado a
+  Cursor en `feat/HL-15-recursos`. Las semillas nuevas declaran sus nombres para la prueba de contaminación.
+- 2026-10-30: lote 5 (1.3.7) revisado y corregido (cita APA sin autoría, edición numérica, etiqueta «Editar ficha»); en PR.
+  Desde hoy el equipo de desarrollo implementa los lotes 6 (IA como harness) y 7 (constructor de reportes) sin Cursor. Sin CodeQL por ahora.

@@ -1636,3 +1636,28 @@ class SectionFreedomMigrationTests(unittest.TestCase):
             db.execute("INSERT INTO section_content_overrides(group_id,item_type,item_id,hidden,updated_by,updated_at) VALUES (?,?,?,1,?,?)", (group, "lesson", lesson, user, "t"))
         self.assertEqual(db.execute("SELECT count(*) FROM section_content_overrides WHERE group_id!='seed-group-catedra-a'").fetchone()[0], 0)
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class CourseResourceMigrationTests(unittest.TestCase):
+    def test_library_items_become_resources_and_the_book_map_stays(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        maps = pages = None
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            if path.name == "0068_course_resources.sql":
+                db.execute("INSERT INTO materials(id,course_id,organization_id,title,description,kind,content,status,updated_at) VALUES ('material-recurso','course-exploradores','org-demo','Guía extra','','text','Texto','published','t')")
+                user = db.execute("SELECT id FROM users LIMIT 1").fetchone()[0]
+                db.execute("""INSERT INTO course_bibliography(id,organization_id,course_id,material_id,file_id,role,is_primary,citation,created_by,created_at,updated_at)
+                  VALUES ('reference-recurso','org-demo','course-exploradores','material-recurso',NULL,'other',0,'Cita manual',?,'t','t')""", (user,))
+                maps = db.execute("SELECT course_id,sha256,outcome_id,pages,status FROM book_maps ORDER BY course_id,sha256,outcome_id").fetchall()
+                pages = db.execute("SELECT file_id,page,text FROM book_pages ORDER BY file_id,page").fetchall()
+            db.executescript(path.read_text())
+            if path.name == "0068_course_resources.sql":
+                self.assertEqual(db.execute("SELECT course_id,sha256,outcome_id,pages,status FROM book_maps ORDER BY course_id,sha256,outcome_id").fetchall(), maps)
+                self.assertEqual(db.execute("SELECT file_id,page,text FROM book_pages ORDER BY file_id,page").fetchall(), pages)
+                self.assertEqual(db.execute("SELECT type,role,citation_override FROM course_resources WHERE material_id='material-recurso'").fetchone(), ("other", "recommended", "Cita manual"))
+                self.assertEqual(db.execute("SELECT type,role,citation_override FROM course_resources WHERE file_id='seed-file-m6-libro'").fetchone(), ("book", "primary", "Edición de demostración, Colegio Horizonte, 2026"))
+                self.assertEqual(db.execute("SELECT role FROM course_resources WHERE material_id='seed-res-m6-geogebra'").fetchone()[0], "support")
+                self.assertEqual(db.execute("SELECT count(*) FROM materials m WHERE NOT EXISTS (SELECT 1 FROM course_resources r WHERE r.material_id=m.id)").fetchone()[0], 0)
+                self.assertEqual(db.execute("SELECT count(*) FROM course_files f WHERE f.status!='uploading' AND NOT EXISTS (SELECT 1 FROM course_resources r WHERE r.file_id=f.id)").fetchone()[0], 0)
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])

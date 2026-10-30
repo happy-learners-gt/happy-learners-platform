@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.7 — 2026-10-29
+
+- Cada recurso del curso tiene una ficha. La bibliografía es la de los que tienen un rol, en APA 7.
+- El índice se extrae, se propone o se escribe a mano, y el mapa al plan vale para cualquier recurso, no solo para el libro principal.
+- Las unidades y las secciones asignan lecturas. El estudiante marca la suya y la sección ve cuántas se leyeron.
+- Planificar con IA muestra las fuentes indexadas y guarda cuáles usó cada propuesta. Una cita solo se marca verificada si la frase está en esa página.
+
 ## 1.3.6 — 2026-10-29
 
 - Un curso puede dejar que cada sección adapte lo que no es núcleo, u obligar solo los resultados y permitir reemplazar una actividad del núcleo.

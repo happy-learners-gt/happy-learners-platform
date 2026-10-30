@@ -38,7 +38,8 @@ export function Plan() {
   const { course, units, lessons, curriculum, writable: team, publisher: writable, reload, settings, noun } = useCourse();
   const { toast, confirm } = useFeedback();
   const { navigate } = useNavigation();
-  const [editing, setEditing] = useState<Editing | null>(null), [creating, setCreating] = useState<OutcomeCoverage | null>(null), [showArchived, setShowArchived] = useState(false);
+  const [editing, setEditing] = useState<Editing | null>(null), [creating, setCreating] = useState<OutcomeCoverage | null>(null), [showArchived, setShowArchived] = useState(false), [withoutResource, setWithoutResource] = useState(false);
+  const resourcePlan = useResourcePlan(course.id);
   const base = `/cursos/${course.id}`;
   const delivery = useDelivery(course.id, settings.attendance && course.status === "active");
   const [section, setSection] = useState("");
@@ -88,6 +89,7 @@ export function Plan() {
       <div className="outcome-text">
         <strong><span className="sr-only">{item ? `${item.code}: ` : "Archivado: "}</span>{outcome.statement}</strong>
         <span className="muted small">{levelLabel[outcome.level]}{outcome.evidence ? ` · Evidencia: ${outcome.evidence}` : ""}</span>
+        <ResourceChips items={resourcePlan?.byOutcome.find(row => row.outcomeId === outcome.id)?.resources || []} base={base}/>
       </div>
       {item ? <CoverageBadge item={item}/> : <StatusBadge>Archivado</StatusBadge>}
       {writable && <Menu label={`Acciones de ${item?.code || "resultado archivado"}`} items={[
@@ -102,7 +104,7 @@ export function Plan() {
   const groups = [
     ...curriculum.competencies.filter(c => visible(c.status)).map(competency => ({ competency, outcomes: ordered.filter(o => o.competencyId === competency.id && visible(o.status)) })),
     { competency: null, outcomes: ordered.filter(o => (!o.competencyId || !curriculum.competencies.some(c => c.id === o.competencyId && visible(c.status))) && visible(o.status)) },
-  ].filter(group => group.competency || group.outcomes.length);
+  ].map(group => ({ ...group, outcomes: withoutResource ? group.outcomes.filter(outcome => !(resourcePlan?.byOutcome.find(row => row.outcomeId === outcome.id)?.resources.length)) : group.outcomes })).filter(group => group.competency || group.outcomes.length);
   const activeUnits = map.units;
 
   return <>
@@ -119,6 +121,8 @@ export function Plan() {
       ...(delivery ? [{ label: "Impartidos en clase", value: map.summary.delivered, icon: "calendar" as const, hue: "violet" as const }] : []),
       { label: "Resultados con huecos", value: map.summary.gaps, icon: "alert", hue: "coral" },
     ]}/>}
+    {resourcePlan && resourcePlan.total > 0 && <p className="resource-coverage">{resourcePlan.covered} de {resourcePlan.total} resultados tienen al menos un recurso indexado.</p>}
+    {!!curriculum.outcomes.length && <label className="switch"><input type="checkbox" checked={withoutResource} onChange={event => setWithoutResource(event.target.checked)}/><span>Sin recurso</span></label>}
     {!curriculum.outcomes.length && !curriculum.competencies.length ? <EmptyState icon="spark" title="Define lo que aprenderán"
       action={writable && <div className="plan-empty-actions"><Button icon="plus" onClick={() => setEditing({ kind: "competency" })}>Nueva competencia</Button><PrimaryAction icon="plus" onClick={() => setEditing({ kind: "outcome" })}>Nuevo resultado</PrimaryAction></div>}>
       Escribe los resultados de aprendizaje del curso: lo que cada estudiante podrá demostrar al terminar. Después planifícalos en {noun.theMany} y alinea cada lección; el mapa de cobertura te mostrará qué falta.
@@ -266,4 +270,15 @@ function CreateLessonDialog({ item, onClose, onCreate }: { item: OutcomeCoverage
       <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">{busy ? "Creando…" : "Crear y editar"}</button></div>
     </fieldset></form>
   </Modal>;
+}
+
+type PlanResource = { resourceId: string; title: string; pages: number[]; chapter: string | null };
+function useResourcePlan(courseId: string) {
+  const [plan, setPlan] = useState<{ covered: number; total: number; byOutcome: { outcomeId: string; resources: PlanResource[] }[] } | null>(null);
+  useEffect(() => { api<{ plan?: { covered: number; total: number; byOutcome: { outcomeId: string; resources: PlanResource[] }[] } }>(`/courses/${courseId}/resources`).then(result => setPlan(result.plan || null)).catch(() => setPlan(null)); }, [courseId]);
+  return plan;
+}
+function ResourceChips({ items, base }: { items: PlanResource[]; base: string }) {
+  if (!items.length) return null;
+  return <span className="resource-chips">{items.map(item => <Link key={item.resourceId} className="resource-chip" href={`${base}/biblioteca/${item.resourceId}`}>{item.title}{item.chapter ? ` · ${item.chapter}` : item.pages.length ? ` · ${item.pages[0]}–${item.pages.at(-1)}` : ""}</Link>)}</span>;
 }

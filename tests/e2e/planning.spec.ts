@@ -1,6 +1,7 @@
 import type { APIRequestContext } from "@playwright/test";
 import { test, expect } from "./local-test";
 import { E2E_PREFIX, sessionToken, signIn, toast } from "./helpers";
+import { nextClassDays } from "../class-days";
 
 type Session = { id: string; groupId: string; sessionDate: string; version: number; lessons: { id: string }[] };
 const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Guatemala" });
@@ -74,9 +75,11 @@ test("ST-118: assigning an educator who teaches at the same time asks for a reco
   await declare([1, 2, 3, 4, 5, 6, 7].map(day => ({ day, start: "00:00", end: "23:59" })));
   try {
     const { path } = await course(admin, educator, `${E2E_PREFIX} Choques ${info.project.name}`);
+    // The next two days with class after today: a holiday in between (the seed has them) gives no class to overlap.
+    const [, from, until] = await nextClassDays(async () => await (await admin.get("/api/calendar")).json(), 3);
     const section = async (name: string, startsAt: string) => {
       const id = (await (await admin.post(`${path}/groups`, { data: { name: `${E2E_PREFIX} ${name}` } })).json()).id as string;
-      expect((await admin.put(`${path}/groups/${id}/schedule`, { data: { weekdays: [0, 1, 2, 3, 4, 5, 6], startsAt, durationMinutes: 45, from: day(1), until: day(2) } })).status()).toBe(200);
+      expect((await admin.put(`${path}/groups/${id}/schedule`, { data: { weekdays: [0, 1, 2, 3, 4, 5, 6], startsAt, durationMinutes: 45, from, until } })).status()).toBe(200);
       return id;
     };
     const first = await section("Mañana", `${hour}:00`), second = await section("Misma hora", `${hour}:30`), later = await section("Más tarde", `${hour + 1}:20`);
@@ -84,7 +87,7 @@ test("ST-118: assigning an educator who teaches at the same time asks for a reco
     // Classes last 45 minutes: :30 overlaps the class at :00 on both days; an hour later, :20 starts after both end.
     const refused = await admin.put(`${path}/groups/${second}/educators`, { data: { userIds: ["user-educator"] } });
     expect(refused.status()).toBe(409);
-    expect((await refused.json()).conflicts).toEqual([expect.objectContaining({ userId: "user-educator", otherGroupId: first, overlaps: 2, firstDate: day(1), confirmation: null })]);
+    expect((await refused.json()).conflicts).toEqual([expect.objectContaining({ userId: "user-educator", otherGroupId: first, overlaps: 2, firstDate: from, confirmation: null })]);
     expect((await admin.put(`${path}/groups/${second}/educators`, { data: { userIds: ["user-educator"], conflictReason: "ok" } })).status()).toBe(400);
     expect((await admin.get(`${path}/groups/${second}`).then(response => response.json())).group.educators).toEqual([]);
     expect((await admin.put(`${path}/groups/${later}/educators`, { data: { userIds: ["user-educator"] } })).status()).toBe(200);
