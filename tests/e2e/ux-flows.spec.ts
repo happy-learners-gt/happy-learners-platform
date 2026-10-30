@@ -23,7 +23,7 @@ test("1 · login → course → content, with one navigation system and working 
   await openNavigation(page);
   await expect(global.getByRole("link", { name: "Exploradores", exact: true })).toHaveAttribute("aria-current", "true");
   // The course is the definition of what is taught; classes, students and schedules live in each section.
-  for (const label of ["Resumen", "Contenido", "Plan curricular", "Biblioteca del curso", "Secciones", "Configuración"]) await expect(courseNav(page).getByRole("link", { name: label, exact: true })).toBeVisible();
+  for (const label of ["Resumen", "Contenido", "Plan curricular", "Recursos", "Secciones", "Configuración"]) await expect(courseNav(page).getByRole("link", { name: label, exact: true })).toBeVisible();
   for (const label of ["Clases", "Asignaciones", "Horario"]) await expect(courseNav(page).getByRole("link", { name: label, exact: true })).toHaveCount(0);
   await courseNav(page).getByRole("link", { name: "Contenido", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Contenido");

@@ -132,25 +132,27 @@ function BookStep({ data, reload, next }: { data: CourseProposals; reload: () =>
 }
 
 /** Mapa: which pages work on each indicator; the AI only accepts a page with a quote that is on it. */
-function MapStep({ map, path, setMap, canEdit, next }: { map: BookMapView; path: string; setMap: (map: BookMapView) => void; canEdit: boolean; next: () => void }) {
+export function MapStep({ map, path, setMap, canEdit, next, resourceId }: { map: BookMapView; path: string; setMap: (map: BookMapView) => void; canEdit: boolean; next?: () => void; resourceId?: string }) {
+  const at = (suffix = "") => `${path}${suffix}${resourceId ? `?resourceId=${encodeURIComponent(resourceId)}` : ""}`;
   const { toast } = useFeedback();
   const [busy, setBusy] = useState(""), [drafts, setDrafts] = useState<Record<string, string>>({});
   async function run(label: string, work: () => Promise<BookMapView>, done: string) {
     setBusy(label);
     try { setMap(await work()); toast({ message: done }); } catch (cause) { toast({ tone: "error", message: message(cause) }); } finally { setBusy(""); }
   }
-  if (!map.book) return <EmptyState icon="library" title="Primero lee el libro principal">El mapa necesita el texto del libro principal. Vuelve al paso «Libro».</EmptyState>;
+  if (!map.book) return <EmptyState icon="library" title={resourceId ? "Este recurso no tiene un PDF" : "Primero lee el libro principal"}>{resourceId ? "Sin archivo no hay páginas que mapear. Escribe el índice a mano y asigna sus capítulos." : "El mapa necesita el texto del libro principal. Vuelve al paso «Libro»."}</EmptyState>;
   const searched = map.outcomes.some(row => row.status), checking = map.outcomes.some(row => row.aiStatus === "queued" || row.aiStatus === "running");
   const pending = map.outcomes.filter(row => row.status === "proposed").length, { summary } = map;
-  const save = (outcomeId: string, code: string | null, pages: string) => run(outcomeId, () => api<BookMapView>(`${path}/outcomes/${outcomeId}`, "PUT", { pages }), pages.trim() ? `Páginas de ${code || "el indicador"} confirmadas.` : `Marcaste que el libro no trata ${code || "el indicador"}.`)
+  const save = (outcomeId: string, code: string | null, pages: string) => run(outcomeId, () => api<BookMapView>(at(`/outcomes/${outcomeId}`), "PUT", { pages }), pages.trim() ? `Páginas de ${code || "el indicador"} confirmadas.` : `Marcaste que el libro no trata ${code || "el indicador"}.`)
     .then(() => setDrafts(current => { const copy = { ...current }; delete copy[outcomeId]; return copy; }));
   // One main action at a time: search, then review with AI, then confirm, then go on.
-  const primary = !canEdit ? null : !searched ? <PrimaryAction icon="search" busy={busy === "search"} disabled={!!busy} onClick={() => void run("search", () => api<BookMapView>(path, "POST", {}), "Se buscaron las páginas de cada indicador.")}>Buscar en el libro</PrimaryAction>
+  const canSearch = map.bookText === "ready";
+  const primary = !canEdit ? null : !canSearch ? null : !searched ? <PrimaryAction icon="search" busy={busy === "search"} disabled={!!busy} onClick={() => void run("search", () => api<BookMapView>(at(), "POST", {}), "Se buscaron las páginas de cada indicador.")}>Buscar en el libro</PrimaryAction>
     : checking ? <PrimaryAction icon="sparkles" busy disabled>La IA revisa las páginas…</PrimaryAction>
-    : pending && map.mapper && map.outcomes.some(row => row.status === "proposed" && row.source === "lexical" && row.candidates.length) ? <PrimaryAction icon="sparkles" busy={busy === "check"} disabled={!!busy} onClick={() => void run("check", () => api<BookMapView>(`${path}/check`, "POST", {}), "La IA revisa las páginas: verás el avance aquí.")}>Revisar con IA</PrimaryAction>
-    : pending ? <PrimaryAction icon="check" busy={busy === "confirm"} disabled={!!busy} onClick={() => void run("confirm", () => api<BookMapView>(`${path}/confirm`, "POST", {}), "Se confirmó el mapa del libro.")}>Confirmar el mapa ({pending})</PrimaryAction>
-    : <PrimaryAction icon="chevronRight" onClick={next}>Siguiente: propuestas</PrimaryAction>;
-  return <Section title={`${map.book.title} · ${map.book.pages} páginas`} action={canEdit && searched && !checking && <button type="button" className="button ghost small" disabled={!!busy} onClick={() => void run("search", () => api<BookMapView>(path, "POST", {}), "Se buscaron de nuevo las páginas sin confirmar.")}><Icon name="search" size={16}/>Buscar de nuevo</button>}>
+    : pending && map.mapper && map.outcomes.some(row => row.status === "proposed" && row.source === "lexical" && row.candidates.length) ? <PrimaryAction icon="sparkles" busy={busy === "check"} disabled={!!busy} onClick={() => void run("check", () => api<BookMapView>(at("/check"), "POST", {}), "La IA revisa las páginas: verás el avance aquí.")}>Revisar con IA</PrimaryAction>
+    : pending ? <PrimaryAction icon="check" busy={busy === "confirm"} disabled={!!busy} onClick={() => void run("confirm", () => api<BookMapView>(at("/confirm"), "POST", {}), "Se confirmó el mapa del libro.")}>Confirmar el mapa ({pending})</PrimaryAction>
+    : next ? <PrimaryAction icon="chevronRight" onClick={next}>Siguiente: propuestas</PrimaryAction> : null;
+  return <Section title={`${map.book.title} · ${map.book.pages} páginas`} action={canEdit && searched && !checking && <button type="button" className="button ghost small" disabled={!!busy} onClick={() => void run("search", () => api<BookMapView>(at(), "POST", {}), "Se buscaron de nuevo las páginas sin confirmar.")}><Icon name="search" size={16}/>Buscar de nuevo</button>}>
     <StatTiles items={[
       { label: "Indicadores", value: summary.total, icon: "spark", hue: "violet" },
       { label: "Con páginas", value: summary.mapped - summary.uncovered, icon: "library", hue: "sky" },
@@ -175,7 +177,7 @@ function MapStep({ map, path, setMap, canEdit, next }: { map: BookMapView; path:
             {rowBusy && <StatusBadge tone="warning">IA: {proposalStatusLabels[row.aiStatus as "queued" | "running"].toLocaleLowerCase("es")}</StatusBadge>}
             {row.aiStatus === "error" && <StatusBadge tone="danger">IA: error</StatusBadge>}
           </div>{row.aiError && <p className="muted small">{row.aiError}</p>}</td>
-          {canEdit && <td>{row.status && <div className="map-edit">
+          {canEdit && <td>{(row.status || !canSearch) && <div className="map-edit">
             <input className="map-pages" aria-label={`Páginas de ${row.code || row.statement}`} value={draft} placeholder="Sin páginas" disabled={rowBusy || !!busy} onChange={event => setDrafts({ ...drafts, [row.outcomeId]: event.target.value })}/>
             <button type="button" className="button secondary small" disabled={rowBusy || !!busy} onClick={() => void save(row.outcomeId, row.code, draft)}>Confirmar</button>
           </div>}</td>}

@@ -30,7 +30,7 @@ export type { BellBlock, BellBreak, BellConfig, BellScheduleDraft } from "./bell
 export { acceptsAttendance, cancelPlanInput, classActions, classPlanInput, classStatusLabels, completionInput, inSessionFilter, lessonOutcomeLabels, maxClassLessons, groupCodePattern, localDay, newGroupCode, nextClassStatus, normalizeGroupCode, sessionFilterAllowed, sessionFilterInput, upcomingClasses } from "./classes";
 export type { ClassAction, ClassPlan, SessionFilter } from "./classes";
 export { materialInput, record, cleanText, validTermIds, completeOrder } from "./courses";
-export { apaBibliography, citation, detectHeadings, indexFromOutline, indexRanges, lookupIdentifier, resourceCoverage, resourceFields, resourceInput, resourceRoleLabel, resourceTypeLabel, resourceTypes } from "./resources";
+export { apaBibliography, citation, detectHeadings, indexFromOutline, indexRanges, lookupIdentifier, resourceCoverage, resourceFields, resourceInput, resourceLicenses, resourceRoleLabel, resourceRoles, resourceTypeLabel, resourceTypes } from "./resources";
 export type { BibliographyEntry, CitationResource, CoverageMap, IndexEntry, LookupRecord, LookupResult, OutlineNode, ResourceAuthor, ResourceField, ResourceKind, ResourceLicense, ResourceMetadata, ResourceRole, ResourceType } from "./resources";
 export { coreCoverage, freedomPolicies, freedomPolicyLabel, policyChange, sectionContent, sectionDifferences } from "./section-freedom";
 export type { CoreCoverage, EffectiveActivity, EffectiveLesson, EffectiveUnit, FreedomActivity, FreedomLesson, FreedomOverride, FreedomPolicy, FreedomUnit, SectionContent, SectionDifference, SectionDifferenceSource } from "./section-freedom";

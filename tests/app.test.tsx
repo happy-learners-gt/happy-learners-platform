@@ -340,7 +340,7 @@ it("grades a period with its assessment plan: points per activity, keyboard, pas
   expect(screen.queryByRole("button", { name: "Editar el plan" })).toBeNull();
   expect(screen.getByRole("link", { name: "Ver la evaluación del curso" }).getAttribute("href")).toBe("/cursos/course-1/evaluacion");
 });
-it("shows the course's bibliography with its main book and links a library item from the dialog", async () => {
+it("shows the course's resources with its main book and assigns a bibliography role from the record", async () => {
   const member = { id: "user-educator", username: "educador-demo", role: "educator", organizationId: "org-demo", permissions: { admin: false, coordination: null, grants: {} } };
   const course = { id: "course-1", title: "Comunicación y Lenguaje", objective: "Leer y escribir.", educationType: "formal", level: "primary", modality: "in-person", pacing: "scheduled", format: "subject", settings: {}, status: "active", version: 1, updatedAt: "t",
     access: { role: "lead", assigned: [], configure: false, edit: true, publish: true, review: true, team: false, educators: false, sections: "assigned" } };
@@ -348,17 +348,28 @@ it("shows the course's bibliography with its main book and links a library item 
     { id: "course-file-1", fileId: "course-file-1", courseId: "course-1", title: "Libro de lectura 5", description: "PDF · 2.0 MB", kind: "file", content: "", status: "published", version: 1, updatedAt: "2026-10-01T00:00:00Z", termIds: [], fileName: "Libro de lectura 5.pdf", mediaType: "application/pdf" },
     { id: "material-2", courseId: "course-1", title: "Diccionario en línea", description: "Consulta", kind: "link", content: "https://dle.rae.es", status: "published", version: 1, updatedAt: "2026-10-02T00:00:00Z", termIds: [] },
   ];
-  let references = [{ id: "reference-1", courseId: "course-1", itemId: "course-file-1", kind: "file", title: "Libro de lectura 5", status: "published", fileName: "Libro de lectura 5.pdf", role: "text", primary: true, citation: "Editorial escolar, 2026", updatedAt: "t" }];
-  const posted: unknown[] = [];
+  const record = (patch: Record<string, unknown>) => ({ courseId: "course-1", authors: [{ kind: "institution", name: "Editorial escolar" }], year: 2026, metadata: {}, language: "es", license: "reserved", shareable: false, level: "", area: "", citationOverride: null, manual: false, status: "published", updatedAt: "t", indexState: "none", ...patch });
+  let resources = [
+    record({ id: "resource-book", materialId: null, fileId: "course-file-1", kind: "file", type: "book", title: "Libro de lectura 5", role: "primary", citation: "Editorial escolar, 2026", fileName: "Libro de lectura 5.pdf", mediaType: "application/pdf" }),
+    record({ id: "resource-dict", materialId: "material-2", fileId: null, kind: "link", type: "website", title: "Diccionario en línea", authors: [{ kind: "institution", name: "Real Academia Española" }], year: null, role: null, citation: "Real Academia Española. (s. f.). Diccionario en línea." }),
+  ];
+  const posted: { url: string; body: { role?: string } }[] = [];
   vi.stubGlobal("fetch", vi.fn(async (input: string, init?: RequestInit) => {
     if (input === "/api/session") return Response.json({ member, pending: [] });
     if (input === "/api/organization") return Response.json({ organization: { id: "org-demo", name: "Escuela", timezone: "America/Guatemala", configured: true } });
     if (input === "/api/courses/course-1") return Response.json({ course, units: [], curriculum: { competencies: [], outcomes: [] } });
     if (input === "/api/courses/course-1/materials") return Response.json({ materials });
-    if (input === "/api/courses/course-1/bibliography") {
-      if (init?.method === "POST") { posted.push(JSON.parse(String(init.body))); references = [...references, { id: "reference-2", courseId: "course-1", itemId: "material-2", kind: "link", title: "Diccionario en línea", status: "published", role: "support", primary: false, citation: "", updatedAt: "t" }] as typeof references; return Response.json({ references, canManage: true }, { status: 201 }); }
-      return Response.json({ references, canManage: true });
+    if (input === "/api/courses/course-1/resources" && init?.method !== "POST") return Response.json({ resources, canManage: true, plan: { covered: 0, total: 0, byOutcome: [] } });
+    if (input === "/api/courses/course-1/resources/resource-dict" && init?.method === "PUT") {
+      const body = JSON.parse(String(init.body)) as { role?: string };
+      posted.push({ url: input, body });
+      resources = resources.map(item => item.id === "resource-dict" ? { ...item, role: body.role } : item);
+      return Response.json({ resource: resources[1] });
     }
+    if (input === "/api/courses/course-1/bibliography?format=apa7") return Response.json({ text: "Editorial escolar, 2026\n\nReal Academia Española. (s. f.). Diccionario en línea.", html: "", entries: [
+      { role: "primary", citation: "Editorial escolar, 2026", manual: false },
+      { role: "support", citation: "Real Academia Española. (s. f.). Diccionario en línea.", manual: false },
+    ] });
     if (input.startsWith("/api/lessons")) return Response.json({ lessons: [] });
     if (input === "/api/resources") return Response.json({ resources: [] });
     if (input === "/api/programs") return Response.json({ programs: [] });
@@ -366,18 +377,24 @@ it("shows the course's bibliography with its main book and links a library item 
   }));
   history.replaceState(null, "", "/cursos/course-1/biblioteca");
   render(<App/>);
-  expect(await screen.findByRole("heading", { name: "Bibliografía del curso" })).toBeTruthy();
-  expect(await screen.findByText("Libro principal")).toBeTruthy();
+  expect(await screen.findByRole("heading", { name: "Recursos" })).toBeTruthy();
+  expect(await screen.findByText("Texto principal ★")).toBeTruthy();
   expect(screen.getByText(/Editorial escolar, 2026/)).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Agregar referencia" }));
-  const dialog = await screen.findByRole("dialog", { name: "Agregar a la bibliografía" });
-  // Only items not yet referenced are offered.
-  expect([...dialog.querySelectorAll("option")].map(option => option.textContent)).toContain("Diccionario en línea");
+  // The book already has its role, so the record we assign is the one still outside the bibliography.
+  expect(screen.getByRole("link", { name: "Diccionario en línea" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Editar ficha de Diccionario en línea" }));
+  const dialog = await screen.findByRole("dialog", { name: "Editar ficha" });
+  expect((dialog.querySelector("input[name=title]") as HTMLInputElement).value).toBe("Diccionario en línea");
   expect([...dialog.querySelectorAll("option")].map(option => option.textContent)).not.toContain("Libro de lectura 5 (Libro de lectura 5.pdf)");
-  fireEvent.change(screen.getByLabelText("Rol"), { target: { value: "support" } });
-  fireEvent.click(within(dialog).getByRole("button", { name: "Agregar referencia" }));
-  expect(await screen.findByText("Diccionario en línea", { selector: ".bibliography strong" })).toBeTruthy();
-  expect(posted).toEqual([{ role: "support", citation: "", primary: false, itemId: "material-2" }]);
+  fireEvent.change(within(dialog).getByLabelText("Rol"), { target: { value: "support" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Guardar ficha" }));
+  await waitFor(() => expect(posted).toHaveLength(1));
+  expect(posted[0].url).toBe("/api/courses/course-1/resources/resource-dict");
+  expect(posted[0].body.role).toBe("support");
+  fireEvent.click(screen.getByRole("button", { name: "Bibliografía APA" }));
+  const apa = await screen.findByRole("dialog", { name: "Bibliografía APA" });
+  expect(within(apa).getByText(/Diccionario en línea/)).toBeTruthy();
+  expect(within(apa).getByText(/Real Academia Española/)).toBeTruthy();
 });
 it("lets the course's lead pick CNB indicators for the curriculum plan, with those already in it fixed", async () => {
   const { packageOf, packageSummary } = await import("../packages/domain/src/index");

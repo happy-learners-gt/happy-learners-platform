@@ -43,11 +43,15 @@ export async function bookMap(path: string, method: string, input: unknown, curr
   const state = await readiness(db, env, current.organizationId, courseId);
   const canEdit = access.edit && course.status === "active";
   let book = state.book && state.bookText === "ready" ? state.book : null;
+  let bookText = state.bookText;
   if (resourceId) {
     const chosen = await db.prepare("SELECT r.title,r.file_id AS fileId,f.sha256,f.media_type AS mediaType,f.status AS fileStatus,t.status AS textStatus,t.sha256 AS textSha,t.pages FROM course_resources r LEFT JOIN course_files f ON f.id=r.file_id LEFT JOIN book_texts t ON t.file_id=f.id WHERE r.id=? AND r.course_id=? AND r.organization_id=?").bind(resourceId, courseId, current.organizationId).first<{ title: string; fileId: string | null; sha256: string | null; mediaType: string | null; fileStatus: string | null; textStatus: string | null; textSha: string | null; pages: number | null }>();
     if (!chosen) return reply({ error: "Ese recurso no está en este curso." }, 404);
-    if (!chosen.fileId || chosen.mediaType !== "application/pdf" || chosen.fileStatus !== "ready" || chosen.textStatus !== "ready" || chosen.textSha !== chosen.sha256) return reply({ error: "Ese recurso no tiene un PDF con texto leído." }, 409);
-    book = { fileId: chosen.fileId, title: chosen.title, sha256: chosen.sha256!, pages: chosen.pages || 0, text: "ready" };
+    if (!chosen.fileId || chosen.mediaType !== "application/pdf" || chosen.fileStatus !== "ready") return reply({ error: "Ese recurso no tiene un PDF." }, 409);
+    const ready = chosen.textStatus === "ready" && chosen.textSha === chosen.sha256;
+    const indexed = ready ? 0 : (await db.prepare("SELECT max(end_page) AS pages FROM resource_index WHERE resource_id=?").bind(resourceId).first<{ pages: number | null }>())?.pages || 0;
+    bookText = ready ? "ready" : chosen.textStatus === "no_text" ? "no_text" : "missing";
+    book = { fileId: chosen.fileId, title: chosen.title, sha256: chosen.sha256!, pages: ready ? chosen.pages || 0 : Math.max(indexed, 1), text: bookText };
   }
   const view = async (): Promise<BookMapView> => {
     const rows = book ? await rowsOf(db, courseId, book.sha256) : [];
@@ -59,13 +63,14 @@ export async function bookMap(path: string, method: string, input: unknown, curr
     });
     const mapped = outcomes.filter(item => item.status);
     return {
-      book: book && { title: book.title, pages: book.pages }, bookText: state.bookText, mapper: generatorKind(env), canEdit, outcomes,
+      book: book && { title: book.title, pages: book.pages }, bookText, mapper: generatorKind(env), canEdit, outcomes,
       summary: { total: outcomes.length, mapped: mapped.length, confirmed: mapped.filter(item => item.status === "confirmed").length, uncovered: mapped.filter(item => !item.pages.length).length },
     };
   };
   if (method === "GET") return reply(await view());
   if (!canEdit) return reply({ error: course.status !== "active" ? "Restaura el curso antes de cambiar el mapa del libro." : "Solo el equipo docente del curso revisa el mapa del libro." }, 403);
   if (!book) return reply({ error: state.book ? "Lee primero el texto del libro principal en «Proponer lecciones»." : "Marca un libro principal en PDF en la bibliografía del curso." }, 409);
+  if (resourceId && book.text !== "ready" && !outcomePath.exec(path) && checkPath.exec(path)?.[2] !== "confirm") return reply({ error: "Ese recurso no tiene un PDF con texto leído. Mapea a mano los capítulos del índice." }, 409);
   const now = new Date().toISOString();
 
   const outcomeMatch = outcomePath.exec(path);
