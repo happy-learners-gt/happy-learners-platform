@@ -1,0 +1,19 @@
+rules:
+  - id: sql-interpolated-text
+    languages: [typescript]
+    severity: ERROR
+    message: >-
+      SQL armado con texto interpolado. Pasa los valores como parámetros (?) o, si es un identificador o una lista
+      de marcadores, constrúyelo con un valor de una lista fija y explícalo en un comentario `nosemgrep`.
+    patterns:
+      - pattern-either:
+          - pattern: $DB.prepare(`...${$X}...`)
+          - pattern: $SQL.exec(`...${$X}...`, ...)
+          - pattern: $SQL.exec<$T>(`...${$X}...`, ...)
+      # Lists of placeholders built from a count are safe: "?, ?, ?".
+      - metavariable-pattern:
+          metavariable: $X
+          patterns:
+            - pattern-not: $A.map(() => "?").join($S)
+            - pattern-not: $A.map(() => '?').join($S)
+            - pattern-not: placeholders(...)

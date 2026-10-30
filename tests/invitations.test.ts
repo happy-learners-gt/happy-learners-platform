@@ -177,12 +177,14 @@ describe("HL-167 ST-121 invitations on the built Worker", () => {
     expect((await as(admin, "/invitations", "POST", { email: "paula.invitada@example.test", displayName: "Otra", role: "admin" })).status).toBe(409);
     const text = await (await as(admin, "/invitations")).text();
     expect(text).toContain("paula.invitada@example.test"); expect(text).not.toContain(tokenOf(body.link));
-    // Neither the activity nor the backup holds the link; the backup skips invitations and the outbox.
+    // Neither the activity nor the backup holds the link: the backup copies invitations without their link hash
+    // (a contract can come with one) and skips the outbox.
     expect(await summaries(admin)).toContain("Invitó a Paula Invitada con rol Educador");
     const backup = await (await as(admin, "/organization/backup")).text();
     expect(backup).not.toContain(tokenOf(body.link));
     const tables = JSON.parse(backup).tables;
-    expect(tables.invitations).toBeUndefined(); expect(tables.mail_outbox).toBeUndefined(); expect(tables.users.columns).toContain("email");
+    expect(tables.invitations.columns).toContain("email"); expect(tables.invitations.columns).not.toContain("token_hash");
+    expect(tables.mail_outbox).toBeUndefined(); expect(tables.users.columns).toContain("email");
   });
 
   it("CA3 reenviar rota el enlace (el anterior deja de funcionar) y revocar lo invalida", async () => {

@@ -9,11 +9,18 @@ lógica en JSON de esa base:
 
 | Incluye | No incluye |
 | --- | --- |
-| Organización, cuentas y membresías, cursos, programas y requisitos, módulos, lecciones y revisiones, recursos y materiales, clasificaciones, secciones, horarios, clases, asistencia, estudiantes, grupos de trabajo, calendario, actividad, metadatos de documentos y las versiones de términos y privacidad con sus aceptaciones. | Contraseñas (sal y hash), sesiones abiertas de educadores y estudiantes, enlaces de calendario (`calendar_feeds`), invitaciones por correo (`invitations`, con el hash de su enlace) y la bandeja de salida de correo (`mail_outbox`), límites de inicio de sesión y el registro de migraciones. |
+| Organización, cuentas y membresías, cursos, programas y requisitos, módulos, lecciones y revisiones, recursos y materiales, clasificaciones, secciones, horarios, clases, asistencia, estudiantes, grupos de trabajo, calendario, actividad, metadatos de documentos y las versiones de términos y privacidad con sus aceptaciones, contratos e invitaciones (sin el hash de su enlace). | Contraseñas (sal y hash), sesiones abiertas de educadores y estudiantes, enlaces de calendario (`calendar_feeds`), el hash del enlace de cada invitación (`invitations.token_hash`) y la bandeja de salida de correo (`mail_outbox`), límites de inicio de sesión y el registro de migraciones. |
 
 El correo de las cuentas del equipo (`users.email`, ST-121) es un dato personal y sí se copia: el respaldo es solo
-para administración y ya contiene los datos personales de la organización. Restaurar no toca las invitaciones ni la
-bandeja de salida del espacio; quita las invitaciones de cuentas que ya no existen.
+para administración y ya contiene los datos personales de la organización. Restaurar no toca la bandeja de salida del
+espacio.
+
+Las invitaciones se copian sin el hash de su enlace porque un contrato puede llegar con una (DEC-046) y debe poder
+restaurarse en cualquier espacio. Al restaurar, una invitación que el espacio ya tiene conserva su enlace; las demás
+quedan con un enlace que no abre nada hasta que administración la **reenvía** desde **Educadores** (reenviar emite un
+enlace nuevo). Una copia tomada antes de la versión 1.3.5, sin la tabla de invitaciones, se sigue aceptando: deja las
+invitaciones del espacio como están y quita las de cuentas que ya no existen; esa copia solo se restaura donde existen
+las invitaciones a las que apuntan sus contratos (el espacio que la emitió).
 
 El contenido de los documentos Office está en el bucket R2 privado y no forma parte del respaldo. El respaldo
 conserva sus metadatos (curso, nombre, tamaño, clave del objeto y estado). Los documentos no se eliminan: archivarlos
@@ -54,6 +61,7 @@ transacción. La restauración:
 3. Rechaza con 409 una copia de otra organización, de otra versión del esquema o con otras tablas.
 4. Conserva las contraseñas que el espacio ya tenía, y con ellas si son temporales (ST-093). Una cuenta que solo
    existe en la copia queda sin contraseña utilizable hasta que administración la restablezca desde **Educadores**.
+   Lo mismo con el enlace de las invitaciones: se conserva el del espacio y las que solo existen en la copia se reenvían.
 5. Cierra las sesiones y los enlaces de calendario de cuentas, secciones o estudiantes que ya no existen.
 6. Compara cada tabla con la copia y revierte todo si alguna difiere.
 
