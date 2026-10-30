@@ -15,7 +15,7 @@ Reemplaza la necesidad de recordar el historial. Se actualiza al cerrar cada lot
 | 1.3.4 | Agenda y calendario institucional rediseñados (`docs/design/agenda-y-calendario.md`) | En producción (#87) |
 | 1.3.5 | Respaldo restaurable en cualquier espacio (invitaciones sin el hash de su enlace) | En producción (#88); `Release drill` verde |
 | 1.3.6 | Libertad de cátedra por sección (`docs/design/libertad-de-catedra.md`, lotes 4a–4c) | En producción (#90) |
-| 1.3.7 | Biblioteca de recursos didácticos (`docs/design/recursos-didacticos.md`, lotes 5a–5c) | Diseño y ficha en `feat/HL-15-recursos`; pendiente de Cursor |
+| 1.3.7 | Biblioteca de recursos didácticos (`docs/design/recursos-didacticos.md`, lotes 5a–5c) | Revisado; en PR |
 
 Siguiente migración libre: **0070** (el lote 5 reserva 0068 y 0069). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
 
@@ -23,7 +23,9 @@ Siguiente migración libre: **0070** (el lote 5 reserva 0068 y 0069). Producció
 
 - **Diseño primero.** Toda funcionalidad con interfaz tiene un documento en `docs/design/` (lugar, momento, flujo,
   pantallas en texto) antes de la ficha. Las fichas sin diseño produjeron interfaces mediocres (1.3.1–1.3.2).
-- **Cursor implementa, Claude Code supervisa.** Fichas en `docs/handoff/cursor/`. Revisión en este orden: pruebas
+- **Desde el 30-oct Claude Code implementa directamente** (decisión del usuario): los lotes 6 y 7 ya no pasan por
+  Cursor. Se mantiene diseño primero y la misma revisión (pruebas, capturas, código) antes de cada PR.
+- **Antes, Cursor implementaba y Claude Code supervisaba.** Fichas en `docs/handoff/cursor/`. Revisión en este orden: pruebas
   (aserciones flojas, pruebas existentes modificadas), capturas contra el diseño, código; migraciones aplicadas sobre una
   copia de producción. Los arreglos pequeños los hace Claude Code directamente.
 - **Carpeta compartida.** Cursor trabaja en la misma carpeta: Claude Code nunca usa `git stash` ni cambia de rama ahí;
@@ -66,7 +68,7 @@ con apoyo puntual.
    con autorización).
 2. ~~Escáneres en CI~~ (hecho, #89): gitleaks, OSV-Scanner y Semgrep con la regla propia `sql-interpolated-text`
    (`docs/operations/escaneres.md`). Pendiente: hacerlos obligatorios tras dos semanas; actualizar wrangler (vence la
-   excepción de miniflare el 30-nov); CodeQL solo con GitHub Code Security (decisión del usuario, carril D).
+   excepción de miniflare el 30-nov); CodeQL: el usuario decidió no pagar GitHub Code Security por ahora (30-oct); se revisa al constituir la empresa.
 3. **Auditoría de seguridad manual** con modelo de amenazas: aislamiento entre organizaciones, permisos por ruta
    (matriz exhaustiva generada desde el enrutador), sesiones, archivos y PDF, datos de menores, IA (entradas del libro y
    salidas). Resultado: `docs/security/auditoria-2026-11.md` con hallazgos priorizados y lotes de corrección.
@@ -122,3 +124,5 @@ con apoyo puntual.
   de GitHub Actions (el de octubre se agotó). Lote 4 (1.3.6) revisado: pruebas, capturas y permisos; en PR.
 - 2026-10-30: 1.3.6 (#90) en producción. #91: `main` reutiliza la verificación del PR (52 s). Lote 5 diseñado y entregado a
   Cursor en `feat/HL-15-recursos`. Las semillas nuevas declaran sus nombres para la prueba de contaminación.
+- 2026-10-30: lote 5 (1.3.7) revisado y corregido (cita APA sin autoría, edición numérica, etiqueta «Editar ficha»); en PR.
+  Desde hoy Claude Code implementa los lotes 6 (IA como harness) y 7 (constructor de reportes) sin Cursor. Sin CodeQL por ahora.
