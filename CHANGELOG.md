@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.0 — 2026-10-30
+
+- Organización › Documentos: plantillas de la boleta y la constancia con membrete y logotipo, títulos y textos con campos, tablas de datos, imágenes, firmas y saltos de página; vista previa con datos reales, versiones e historial. La plantilla de un programa reemplaza la de la organización.
+- La boleta usa la plantilla publicada; sin ella conserva su formato de siempre. La constancia de inscripción o finalización se descarga desde la ficha del estudiante en Notas.
+- El motor de PDF agrega tamaños de página, imágenes JPEG, tablas con bordes y encabezado repetido, texto alineado y en cursiva, y líneas de firma, sin cambiar los documentos que ya generaba.
+
 ## 1.4.3 — 2026-10-30
 
 - Organización › Horarios: genera el horario semanal de las secciones elegidas sobre la jornada, con reglas (disponibilidad, carga diaria, secciones que comparten estudiantes, días sin clase o preferidos) y un algoritmo que nunca rompe una regla; si no hay solución, explica qué impide ubicar cada sección. Se aplica a las secciones en las fechas elegidas.

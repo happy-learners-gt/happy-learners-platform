@@ -203,7 +203,7 @@ export function DocumentDesigner({ id }: { id: string }) {
       <select aria-label="Sección de la vista previa" value={previewSection} onChange={event => setPreviewSection(event.target.value)}>{sections.map(item => <option key={item.id} value={item.id}>{item.course.title} · {item.name}</option>)}</select>
       <Button icon="eye" busy={busy === "preview"} disabled={!previewSection || !!busy} onClick={() => void showPreview()}>Ver con datos reales</Button>
     </div>}>
-      {preview ? <iframe className="document-preview" title="Vista previa del documento" src={preview}/> : <p className="muted">Elige una sección y genera la vista previa: es el PDF real, con los datos de la sección y sin registrar el documento.</p>}
+      {preview ? <><iframe className="document-preview" title="Vista previa del documento" src={preview}/><p><a href={preview} target="_blank" rel="noopener">Abrir el PDF en otra pestaña</a></p></> : <p className="muted">Elige una sección y genera la vista previa: es el PDF real, con los datos de la sección y sin registrar el documento.</p>}
     </Section>
     {history && <Modal title="Historial de versiones" onClose={() => setHistory(false)}>
       {versions.length ? <ul className="document-versions">{versions.map(item => <li key={item.version}>
