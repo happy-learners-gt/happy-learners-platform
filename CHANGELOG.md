@@ -7,6 +7,10 @@
 - Si el curso lo pide, lo propio queda en revisión hasta que el responsable lo aprueba. Una sección puede copiar lo propio a otra o proponerlo al curso.
 - Coordinación ve las diferencias entre secciones. Con «Igual en todas las secciones» el curso se ve y se comporta como hasta ahora.
 
+## 1.3.5 — 2026-10-29
+
+- El respaldo se restaura en cualquier espacio aunque un contrato haya llegado con una invitación: las invitaciones se copian sin el hash de su enlace y, donde no existían, se reenvían para emitir un enlace nuevo. Las copias anteriores se siguen aceptando.
+
 ## 1.3.4 — 2026-10-29
 
 - La Agenda es el único lugar del menú para consultar fechas: Día, Semana, Mes y Año, con clases a su hora, días sin clase sombreados, eventos y entregas.
