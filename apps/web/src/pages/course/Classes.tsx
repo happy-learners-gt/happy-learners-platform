@@ -5,6 +5,7 @@ import { classLoad, classSequence, classStatusLabels, formatMinutes, isCalendarD
 import { api, ApiError, message } from "../../api";
 import { Link, useNavigation, useUnsavedChanges } from "../../navigation";
 import { plural, sessionDay } from "../../model";
+import type { TimetableProposal } from "@happy-learners/domain";
 import { Modal, useFeedback } from "../../ui/feedback";
 import { Icon } from "../../ui/icons";
 import { moveItem, SortHandle } from "../../ui/Sortable";
@@ -217,24 +218,41 @@ function LessonWarning({ id }: { id: string }) {
 function FillDialog({ groups, sessions, today, initialGroup, onClose, onDone }: { groups: Pick<SectionView, "id" | "name">[]; sessions: ClassSession[]; today: string; initialGroup: string; onClose: () => void; onDone: () => Promise<void> }) {
   const { course } = useCourse();
   const { toast } = useFeedback();
-  const [groupId, setGroupId] = useState(groups.some(group => group.id === initialGroup) ? initialGroup : groups[0]?.id || ""), [perClass, setPerClass] = useState("1"), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [groupId, setGroupId] = useState(groups.some(group => group.id === initialGroup) ? initialGroup : groups[0]?.id || ""), [perClass, setPerClass] = useState("fit"), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  // 1.4.2: «según la duración de cada clase» shows the proposal first; applying sends it back, and the server refuses it if it changed.
+  const [proposal, setProposal] = useState<TimetableProposal | null>(null);
   const empty = sessions.filter(session => session.groupId === groupId && session.status === "planned" && session.sessionDate >= today && !session.lessons.length).length;
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
     try {
-      const { assigned, classes } = await api<{ assigned: number; classes: number }>(`/courses/${course.id}/groups/${groupId}/lessons`, "POST", { perClass: Number(perClass) });
+      if (perClass === "fit" && !proposal) {
+        const shown = (await api<{ proposal: TimetableProposal }>(`/courses/${course.id}/groups/${groupId}/lessons`, "POST", { mode: "fit" })).proposal;
+        setProposal(shown); setBusy(false);
+        if (!shown.assignments.length) setError("No quedan lecciones publicadas por asignar, o las clases próximas ya tienen lecciones.");
+        return;
+      }
+      const { assigned, classes } = await api<{ assigned: number; classes: number }>(`/courses/${course.id}/groups/${groupId}/lessons`, "POST",
+        perClass === "fit" ? { mode: "fit", expected: proposal!.assignments.map(item => ({ sessionId: item.sessionId, lessonIds: item.lessons.map(lesson => lesson.id) })) } : { perClass: Number(perClass) });
       toast({ message: assigned ? `Se planificaron ${plural(assigned, "lección", "lecciones")} en ${plural(classes, "clase", "clases")}, en orden.` : "No quedan lecciones publicadas por asignar a esta sección." });
       await onDone();
-    } catch (cause) { setError(message(cause)); setBusy(false); }
+    } catch (cause) { setError(message(cause)); setBusy(false); setProposal(null); }
   }
   return <Modal title="Asignar lecciones en orden" onClose={onClose}>
     <form className="stack" onSubmit={submit}>
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
       <fieldset disabled={busy} className="stack">
-        {groups.length > 1 && <Field label="Sección"><select value={groupId} onChange={event => setGroupId(event.target.value)} required>{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select></Field>}
-        <Field label="Lecciones por clase" hint="Usa más de una cuando el horario es extenso y se cubren varias lecciones en la misma clase."><select value={perClass} onChange={event => setPerClass(event.target.value)}><option value="1">1 lección</option><option value="2">2 lecciones</option><option value="3">3 lecciones</option></select></Field>
+        {groups.length > 1 && <Field label="Sección"><select value={groupId} onChange={event => { setGroupId(event.target.value); setProposal(null); }} required>{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select></Field>}
+        <Field label="Lecciones por clase" hint="Según la duración, cada clase recibe las lecciones que caben en sus minutos y ves la propuesta antes de aplicarla."><select value={perClass} onChange={event => { setPerClass(event.target.value); setProposal(null); }}><option value="fit">Según la duración de cada clase</option><option value="1">1 lección</option><option value="2">2 lecciones</option><option value="3">3 lecciones</option></select></Field>
         <p className="muted">{empty ? `${plural(empty, "clase próxima no tiene", "clases próximas no tienen")} lecciones.` : "Todas las clases próximas de esta sección tienen lecciones."} Se usan las lecciones publicadas en el orden de Contenido y se omiten las que la sección ya tiene en una clase. Las clases que ya tienen lecciones no cambian.</p>
-        <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary" disabled={!empty}>{busy ? "Asignando…" : "Asignar lecciones"}</button></div>
+        {proposal && proposal.assignments.length > 0 && <div className="timetable-proposal" role="region" aria-label="Cronograma propuesto">
+          <ol>{proposal.assignments.map(item => <li key={item.sessionId} className={item.overflow ? "is-overflow" : undefined}>
+            <strong>{sessionDay(item.sessionDate)}{item.startsAt ? ` · ${item.startsAt}` : ""}</strong>
+            <span>{item.lessons.map(lesson => lesson.title).join(" · ")}</span>
+            <small>{item.minutes} de {item.capacity} min{item.overflow ? " · la lección dura más que la clase" : ""}</small>
+          </li>)}</ol>
+          <p className="muted small">{proposal.unplanned.length ? `${plural(proposal.unplanned.length, "lección queda", "lecciones quedan")} sin clase: faltan clases en el horario.` : "Todas las lecciones pendientes tienen clase."}{proposal.keptSessions ? ` ${plural(proposal.keptSessions, "clase que ya tenía lecciones las conserva", "clases que ya tenían lecciones las conservan")}.` : ""}</p>
+        </div>}
+        <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary" disabled={!empty || (perClass === "fit" && !!proposal && !proposal.assignments.length)}>{busy ? "Asignando…" : perClass !== "fit" ? "Asignar lecciones" : proposal ? "Aplicar cronograma" : "Proponer cronograma"}</button></div>
       </fieldset>
     </form>
   </Modal>;
