@@ -94,8 +94,9 @@ ponderada sobre lo aplicable, de 0 a 100, y es **reproducible**: la misma lecci�
 
 ## 6e · Redacción en toda la plataforma (1.4.1)
 
-- Componente **Redactar con IA** junto a los campos de texto largos: objetivo de la lección, descripción del curso y de la
-  unidad, comentarios de boleta, avisos y descripción de un recurso. Opciones: «Redactar», «Mejorar redacción»,
+- Componente **Redactar con IA** junto a los campos de texto largos: objetivo de la lección, del curso y de la unidad,
+  comentarios de boleta y descripción de un recurso. La API ya admite «aviso» (`notice`); el botón aparecerá cuando la
+  plataforma tenga una pantalla para redactar avisos (hoy no la hay). Opciones: «Redactar», «Mejorar redacción»,
   «Más breve». Devuelve una propuesta debajo del campo con «Usar» y «Descartar»; nunca reemplaza sin confirmación.
 - Tarea `write` con el tipo de campo, el contexto mínimo (curso, unidad, nivel) y el texto actual; sin datos personales
   de estudiantes salvo el nombre de pila en comentarios de boleta.

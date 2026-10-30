@@ -15,7 +15,7 @@ test("the review proposes improvements, accepted ones raise the score and stay; 
   await panel.getByRole("button", { name: "Proponer mejoras" }).click();
   const changes = panel.locator(".improve-changes > li");
   await expect(changes.first()).toBeVisible();
-  await expect(changes.filter({ hasText: "Objetivo de la lección" })).toContainText("Al terminar la clase, cada estudiante fracciones y lo demuestra en una actividad.");
+  await expect(changes.filter({ hasText: "Objetivo de la lección" })).toContainText("Al terminar la clase, cada estudiante explica y aplica en una actividad lo aprendido sobre fracciones.");
   // Discarding one leaves it out; accepting the rest applies them to the draft.
   const count = await changes.count();
   await changes.filter({ hasText: "Objetivo de la lección" }).getByRole("button", { name: /^Descartar/ }).click();
@@ -34,8 +34,8 @@ test("the review proposes improvements, accepted ones raise the score and stay; 
   // «Redactar con IA» under the objective: a proposal, and the field changes only with «Usar».
   const objective = page.getByLabel("Objetivo", { exact: true });
   await objective.fill("Comparar fracciones con regletas. Después explicarlo a la clase.");
-  await page.getByRole("group", { name: "Redactar con IA: Objetivo" }).getByRole("button", { name: "Más breve" }).click();
-  const proposal = page.getByRole("region", { name: "Propuesta para Objetivo" });
+  await page.getByRole("group", { name: "Redactar con IA" }).getByRole("button", { name: "Más breve" }).click();
+  const proposal = page.getByRole("region", { name: "Propuesta de la IA" });
   await expect(proposal).toContainText("Comparar fracciones con regletas.");
   await expect(objective).toHaveValue("Comparar fracciones con regletas. Después explicarlo a la clase.");
   await proposal.getByRole("button", { name: "Usar" }).click();

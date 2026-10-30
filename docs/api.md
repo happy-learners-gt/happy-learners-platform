@@ -740,3 +740,20 @@ sus clases (`classMinutesOf` sobre los horarios de sus secciones). No se guarda.
 `npm run ai:eval` corre `tests/ai-evals.test.ts` contra el modelo configurado (`OPENAI_API_KEY`, `OPENAI_MODEL` en el
 entorno) y deja el informe en `.release-evidence/ai-evals/`; sin `AI_EVAL_LIVE` usa el generador local y forma parte de
 `./scripts/verify`.
+
+### Mejora asistida y redacción (1.4.1)
+
+`POST /api/lessons/:id/improve` con el borrador del editor `{ objective, activities, sequence, outcomeIds, materials }`
+(equipo del curso con edición; 403 al resto; 404 si la lección no existe; 400 si el borrador no tiene la forma de una
+lección, aunque una actividad puede estar vacía). Revisa el borrador con las mismas reglas que el navegador y devuelve
+`{ review, changes }`: cambios revisados (`objective`, un campo de una actividad o `new-activity`), cada uno con `before`,
+`after` y `reason`; los que nombran una actividad inexistente o un valor imposible se descartan. **No guarda nada**: el
+editor aplica al borrador lo que la persona acepta (los textos de los bloques, a través de la sala de colaboración).
+503 si la IA no está configurada; 502 si no respondió.
+
+`POST /api/ai/write` `{ field, action, text, context, courseId? }` con `field` en `lesson-objective`, `course-objective`,
+`unit-objective`, `report-comment`, `resource-description` o `notice` y `action` en `draft`, `improve` o `shorten`.
+Devuelve `{ text }`; 400 con un campo o una acción desconocidos; 422 si la propuesta no cabe en el campo; 403 si
+`courseId` es de un curso ajeno. Del contexto, de un estudiante solo pasa el nombre de pila y solo en `report-comment`.
+Ambas rutas dejan su ejecución en `ai_runs` (`lesson-improve`, `write`).
+
