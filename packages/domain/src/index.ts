@@ -182,3 +182,9 @@ export { applyChanges, checkedChanges, fixtureImprover, improveInput, improvePro
 export type { ImproveChange, ImproveField, ImproveInput, ImproveOutput, LessonImprover, NewActivity } from "./lesson-improve";
 export { fixtureWriter, writeActionLabels, writeFields, writeInput, writePrompt, writePromptVersion, writeSchema, writtenText } from "./ai-write";
 export type { AiWriter, WriteAction, WriteField, WriteInput, WriteOutput } from "./ai-write";
+export { defaultClassMinutes, proposeTimetable } from "./timetable-proposal";
+export type { ProposalLesson, ProposalSession, TimetableAssignment, TimetableProposal } from "./timetable-proposal";
+export { solveTimetable, weekdayNames } from "./timetable-solver";
+export type { FixedMeeting, SolverBlock, SolverDay, SolverEducator, SolverInput, SolverMeeting, SolverResult, SolverRule, SolverSection, UnplacedSection } from "./timetable-solver";
+export { fixtureRulesTranslator, ruleText, rulesPrompt, rulesPromptVersion, rulesSchema, solverRule } from "./timetable-rules";
+export type { RuleContext, RulesInput, RulesOutput, RulesTranslator } from "./timetable-rules";

@@ -757,3 +757,24 @@ Devuelve `{ text }`; 400 con un campo o una acción desconocidos; 422 si la prop
 `courseId` es de un curso ajeno. Del contexto, de un estudiante solo pasa el nombre de pila y solo en `report-comment`.
 Ambas rutas dejan su ejecución en `ai_runs` (`lesson-improve`, `write`).
 
+### Cronograma propuesto (1.4.2)
+
+`POST /api/courses/:id/groups/:gid/lessons` `{ mode: "fit" }` (quien imparte la sección) devuelve `{ proposal }` sin cambiar
+nada: las lecciones pendientes del contenido efectivo de la sección, en orden, repartidas en sus clases futuras
+planificadas y sin lecciones, tantas como quepan en los minutos de cada clase (`proposeTimetable` del dominio; una
+lección más larga que su clase va sola con `overflow`; sin duración, 45 min). `{ mode: "fit", expected: [{ sessionId,
+lessonIds }] }` la aplica solo si sigue siendo la misma; si algo cambió, 409. El modo anterior `{ perClass }` sigue igual.
+
+### Horarios con reglas (1.4.3)
+
+Solo administración (403 al resto). `GET /api/timetables` devuelve las jornadas (`bellSchedules`, con sus periodos y
+recreos), las secciones activas con sus docentes y clases por semana actuales, los docentes y las fechas del ciclo
+vigente. `POST /api/timetables/solve` `{ bellScheduleId, sections: [{ id, meetingsPerWeek 1–7, blocksPerMeeting 1–4 }],
+rules }` resuelve con `solveTimetable` del dominio (los horarios de las demás secciones quedan fijos) y devuelve `{ result,
+names }`: `solved` con las clases, o `impossible` con lo que sí se ubicó y, por sección, las razones que bloquean cada
+espacio. Reglas: `unavailable`, `max-daily`, `shared-students`, `not-on`, `preferred-days` (400 si nombran algo que no
+existe). `POST /api/timetables/apply` `{ from, until, meetings }` guarda el horario de cada sección como `PUT …/schedule`
+y devuelve el resultado por sección (207 si alguna falló). `POST /api/timetables/rules` `{ text }` interpreta una regla
+escrita con la IA (tarea `rules-to-constraints`, en el harness) y devuelve las reglas válidas con su texto para
+confirmarlas, y cuántas partes se omitieron.
+
