@@ -34,14 +34,21 @@ export async function confirmedMap(db: Database, courseId: string, sha: string) 
   return new Map((await rowsOf(db, courseId, sha)).filter(row => row.status === "confirmed").map(row => [row.outcomeId, JSON.parse(row.pages) as number[]]));
 }
 
-export async function bookMap(path: string, method: string, input: unknown, current: Member, db: Database, env: Env, wake: () => Promise<void>): Promise<Response> {
+export async function bookMap(path: string, method: string, input: unknown, current: Member, db: Database, env: Env, wake: () => Promise<void>, resourceId: string | null = null): Promise<Response> {
   const courseId = (mapPath.exec(path) || checkPath.exec(path) || outcomePath.exec(path))![1];
   const course = await db.prepare("SELECT id,status FROM courses WHERE id=? AND organization_id=?").bind(courseId, current.organizationId).first<{ id: string; status: string }>();
   if (!course) return reply({ error: "Curso no disponible." }, 404);
   const access = await accessTo(db, current, courseId);
   if (!access) return reply({ error: "Este curso no está asignado a tu cuenta." }, 403);
   const state = await readiness(db, env, current.organizationId, courseId);
-  const canEdit = access.edit && course.status === "active", book = state.book && state.bookText === "ready" ? state.book : null;
+  const canEdit = access.edit && course.status === "active";
+  let book = state.book && state.bookText === "ready" ? state.book : null;
+  if (resourceId) {
+    const chosen = await db.prepare("SELECT r.title,r.file_id AS fileId,f.sha256,f.media_type AS mediaType,f.status AS fileStatus,t.status AS textStatus,t.sha256 AS textSha,t.pages FROM course_resources r LEFT JOIN course_files f ON f.id=r.file_id LEFT JOIN book_texts t ON t.file_id=f.id WHERE r.id=? AND r.course_id=? AND r.organization_id=?").bind(resourceId, courseId, current.organizationId).first<{ title: string; fileId: string | null; sha256: string | null; mediaType: string | null; fileStatus: string | null; textStatus: string | null; textSha: string | null; pages: number | null }>();
+    if (!chosen) return reply({ error: "Ese recurso no está en este curso." }, 404);
+    if (!chosen.fileId || chosen.mediaType !== "application/pdf" || chosen.fileStatus !== "ready" || chosen.textStatus !== "ready" || chosen.textSha !== chosen.sha256) return reply({ error: "Ese recurso no tiene un PDF con texto leído." }, 409);
+    book = { fileId: chosen.fileId, title: chosen.title, sha256: chosen.sha256!, pages: chosen.pages || 0, text: "ready" };
+  }
   const view = async (): Promise<BookMapView> => {
     const rows = book ? await rowsOf(db, courseId, book.sha256) : [];
     const outcomes = state.outcomes.map(outcome => {
