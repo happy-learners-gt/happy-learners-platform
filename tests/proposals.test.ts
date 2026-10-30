@@ -306,3 +306,41 @@ describe("book map on the built Worker (rebanada 5b)", () => {
     expect(calendar.code).toBe("7.3");
   }, 60_000);
 });
+
+// 1.4.0 (docs/design/asistente-ia.md §6a): the proposals and map checks above went through the harness.
+type AiUsageView = {
+  month: string; summary: { total: { runs: number; errors: number; cost: number | null }; byTask: { task: string; runs: number }[]; byPerson: { userId: string | null; runs: number }[] };
+  prices: { model: string; effectiveFrom: string; inputPerMillion: number; outputPerMillion: number }[]; unpriced: string[]; recent: Record<string, unknown>[];
+};
+describe("AI harness on the built Worker (1.4.0)", () => {
+  it("records every run without its text, and only administration sees the usage and sets prices", async () => {
+    const admin = await signIn("admin-demo"), educator = await signIn("educador-demo");
+    let usage = await read<AiUsageView>(await as(admin, "/organization/ai-usage"));
+    for (let attempt = 0; attempt < 100 && !["lesson-proposal", "book-map"].every(task => usage.summary.byTask.some(item => item.task === task)); attempt++) {
+      await delay(150);
+      usage = await read<AiUsageView>(await as(admin, "/organization/ai-usage"));
+    }
+    expect(usage.summary.byTask.map(item => item.task).sort()).toEqual(["book-map", "lesson-proposal"]);
+    expect(usage.summary.total).toMatchObject({ errors: 0, cost: 0 });
+    expect(usage.summary.total.runs).toBe(usage.recent.length);
+    expect(usage.unpriced).toEqual([]);
+    for (const run of usage.recent) {
+      // What a run keeps: never the input, the prompt or the answer.
+      expect(Object.keys(run).sort()).toEqual(["cost", "courseId", "courseTitle", "createdAt", "durationMs", "generator", "id", "inputChars", "inputTokens", "model", "outputTokens", "promptVersion", "status", "task", "userId", "userName"]);
+      expect(run).toMatchObject({ generator: "fixture", model: "fixture", status: "ok", cost: 0, inputTokens: null });
+      expect(run.userId).toEqual(expect.stringMatching(/\S/));
+      expect(run.inputChars).toBeGreaterThan(100);
+    }
+    expect((await read<AiUsageView>(await as(admin, "/organization/ai-usage?mes=2020-01"))).summary.total.runs).toBe(0);
+
+    expect(await errorOf(await as(educator, "/organization/ai-usage"), 403)).toBe("Solo administración ve el uso de IA de la organización.");
+    expect((await as(educator, "/organization/ai-prices", "POST", { model: "m", effectiveFrom: "2026-10-01", inputPerMillion: 1, outputPerMillion: 1 })).status).toBe(403);
+    expect(await errorOf(await as(admin, "/organization/ai-prices", "POST", { model: "m", effectiveFrom: "ayer", inputPerMillion: 1, outputPerMillion: 1 }), 400)).toBe("Indica desde qué fecha rige el precio.");
+    const first = await read<AiUsageView>(await as(admin, "/organization/ai-prices", "POST", { model: "modelo-prueba", effectiveFrom: "2026-10-01", inputPerMillion: "1,25", outputPerMillion: 10 }));
+    expect(first.prices).toEqual([{ model: "modelo-prueba", effectiveFrom: "2026-10-01", inputPerMillion: 1.25, outputPerMillion: 10 }]);
+    // The same model and date replace the price; another date adds one.
+    await read(await as(admin, "/organization/ai-prices", "POST", { model: "modelo-prueba", effectiveFrom: "2026-10-01", inputPerMillion: 2, outputPerMillion: 8 }));
+    const both = await read<AiUsageView>(await as(admin, "/organization/ai-prices", "POST", { model: "modelo-prueba", effectiveFrom: "2026-11-01", inputPerMillion: 1, outputPerMillion: 4 }));
+    expect(both.prices.map(price => [price.effectiveFrom, price.inputPerMillion])).toEqual([["2026-11-01", 1], ["2026-10-01", 2]]);
+  }, 60_000);
+});

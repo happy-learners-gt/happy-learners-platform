@@ -12,7 +12,8 @@ import type { OutlineActions } from "../../ui/LessonOutline";
 import { Button, EmptyState, Field, PageHeader, PrimaryAction } from "../../ui/primitives";
 import { moveItem } from "../../ui/Sortable";
 import { useCourse } from "./context";
-import { Readings } from "./Readings";
+import { UnitReadings, useReadings } from "./Readings";
+import { QualityChip, reviewOf, useReviewBasis } from "./LessonReview";
 
 /** Renames and archives change only lesson metadata, so activities are omitted and kept by the API. */
 export function metadataBody(courseId: string, lesson: Lesson, patch: { title?: string; archived?: boolean }) {
@@ -21,7 +22,7 @@ export function metadataBody(courseId: string, lesson: Lesson, patch: { title?: 
 }
 
 export function Content() {
-  const { course, units, lessons, writable, publisher, reload, settings, noun } = useCourse();
+  const { course, units, lessons, curriculum, writable, publisher, reload, settings, noun } = useCourse();
   const { url, navigate } = useNavigation();
   const { toast, confirm } = useFeedback();
   const [expanded, setExpanded] = useState(() => new Set(units.map(unit => unit.id)));
@@ -32,6 +33,12 @@ export function Content() {
   const [delivering, setDelivering] = useState(false);
   const base = `/cursos/${course.id}`;
   const stats = courseStats(units, lessons);
+  // 1.4.0: each lesson's review score and the course's average, from the same domain function as the editor.
+  const reviewBasis = useReviewBasis(course.id, curriculum.outcomes.length);
+  const readings = useReadings(course.id);
+  const reviews = new Map(reviewBasis ? lessons.filter(lesson => lesson.status !== "archived").map(lesson => [lesson.id, reviewOf(lesson, reviewBasis)]) : []);
+  const scores = [...reviews.values()].map(review => review.score);
+  const quality = scores.length ? ` · Calidad media ${Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)}${scores.filter(score => score < 60).length ? ` · ${plural(scores.filter(score => score < 60).length, "lección", "lecciones")} por debajo de 60` : ""}` : "";
   const adapt = settings.sectionFreedom !== "shared";
   const coreCount = lessons.filter(lesson => lesson.status !== "archived" && lesson.isCore !== false).length;
   async function markCore(body: { lessons?: { id: string; core: boolean }[]; units?: { id: string; core: boolean }[] }, done: string) {
@@ -115,7 +122,7 @@ export function Content() {
   return <>
     {delivering && <DeliveryDialog courseId={course.id} units={units.filter(unit => unit.status === "active")} onClose={() => setDelivering(false)}/>}
     <PageHeader crumbs={[{ label: "Cursos", href: "/cursos" }, { label: course.title, href: base }, { label: "Contenido" }]} title="Contenido"
-      description={`${plural(stats.units, noun.one, noun.many)} · ${plural(stats.lessons, "lección", "lecciones")} · ${stats.published} publicadas${adapt ? ` · ${coreCount} en el núcleo` : ""}`}
+      description={`${plural(stats.units, noun.one, noun.many)} · ${plural(stats.lessons, "lección", "lecciones")} · ${stats.published} publicadas${adapt ? ` · ${coreCount} en el núcleo` : ""}${quality}`}
       actions={units.length > 0 && <>{writable && <Button icon="sparkles" href={`${base}/asistente`}>Planificar con IA</Button>}<Button icon="download" onClick={() => setDelivering(true)}>PDF de entrega</Button><Button variant="ghost" onClick={() => setExpanded(expanded.size ? new Set() : new Set(units.map(unit => unit.id)))}>{expanded.size ? "Contraer todo" : "Expandir todo"}</Button></>}
       primary={publisher && units.length > 0 && <PrimaryAction icon="plus" onClick={() => creating ? document.getElementById("new-unit-name")?.focus() : setCreating(true)}>{`Crear ${noun.one}`}</PrimaryAction>}/>
     {!writable && <p className="notice"><Icon name="info" size={18}/>{course.status === "archived" ? "El curso está archivado. Administración puede restaurarlo desde Configuración." : "Consulta el contenido del curso. Su equipo docente lo prepara y su responsable lo publica."}</p>}
@@ -123,9 +130,8 @@ export function Content() {
     {(archivedCount > 0 || showArchived) && <label className="switch"><input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)}/><span>Mostrar archivados ({archivedCount})</span></label>}
     {adapt && <p className="freedom-notice"><Icon name="info" size={18}/><span>Las secciones pueden adaptar lo que no es núcleo. <Link href={`${base}/secciones?vista=diferencias`}>Ver diferencias entre secciones</Link></span></p>}
     {adapt && publisher && <SectionProposals courseId={course.id} kinds={["lesson", "unit"]} onChanged={() => void reload()}/>}
-    {units.length ? <><LessonOutline courseId={course.id} units={units} lessons={lessons} writable={writable && !busy} organize={publisher && !busy} noun={noun} showArchived={showArchived} actions={actions} expanded={expanded} setExpanded={setExpanded} focusUnit={focusUnit}
-      core={adapt ? { isCore: lesson => lesson.isCore !== false, ...(publisher ? { markLesson: (lesson: Lesson, next: boolean) => void markCore({ lessons: [{ id: lesson.id, core: next }] }, next ? "Quedó en el núcleo." : "Salió del núcleo."), markUnit: (unit: LearningUnit, next: boolean) => void markCore({ units: [{ id: unit.id, core: next }] }, next ? "La unidad quedó en el núcleo." : "La unidad salió del núcleo.") } : {}) } : undefined}/>
-      <Readings courseId={course.id} units={units} canEdit={!!writable}/></>
+    {units.length ? <><LessonOutline unitFooter={unit => <UnitReadings unit={unit} data={readings} canEdit={!!writable}/>} quality={lesson => reviews.has(lesson.id) ? <QualityChip review={reviews.get(lesson.id)!}/> : null} courseId={course.id} units={units} lessons={lessons} writable={writable && !busy} organize={publisher && !busy} noun={noun} showArchived={showArchived} actions={actions} expanded={expanded} setExpanded={setExpanded} focusUnit={focusUnit}
+      core={adapt ? { isCore: lesson => lesson.isCore !== false, ...(publisher ? { markLesson: (lesson: Lesson, next: boolean) => void markCore({ lessons: [{ id: lesson.id, core: next }] }, next ? "Quedó en el núcleo." : "Salió del núcleo."), markUnit: (unit: LearningUnit, next: boolean) => void markCore({ units: [{ id: unit.id, core: next }] }, next ? "La unidad quedó en el núcleo." : "La unidad salió del núcleo.") } : {}) } : undefined}/></>
       : !creating && <EmptyState icon="content" title={`Este curso aún no tiene ${noun.many}`} action={publisher && <PrimaryAction icon="plus" onClick={() => setCreating(true)}>{`Crear ${noun.one}`}</PrimaryAction>}>{`${noun.A} agrupa lecciones sobre un mismo tema. Por ejemplo: “Greetings” o “Colores”.`}</EmptyState>}
     {publisher && creating && <form className="inline-form unit-form" onSubmit={createUnit} aria-label={noun.New} onKeyDown={event => { if (event.key === "Escape" && units.length) setCreating(false); }}>
       <h2>{noun.New}</h2>

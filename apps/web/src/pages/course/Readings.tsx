@@ -3,7 +3,7 @@ import type { LearningUnit } from "@happy-learners/contracts";
 import { api, message } from "../../api";
 import { Modal, useFeedback } from "../../ui/feedback";
 import { Icon } from "../../ui/icons";
-import { Field, Section } from "../../ui/primitives";
+import { Field } from "../../ui/primitives";
 import { FreedomChip } from "../../ui/freedom";
 import type { CourseResource } from "./course-resource";
 
@@ -20,13 +20,10 @@ export function ReadingProgress({ sectionId }: { sectionId: string }) {
   </section>;
 }
 
-/** Lecturas of a course, or of one section (its own plus the course's). */
-export function Readings({ courseId, units, sectionId, canEdit }: { courseId: string; units: LearningUnit[]; sectionId?: string; canEdit: boolean }) {
-  const { toast } = useFeedback();
+/** The readings of a course, or of one section (its own plus the course's), with the resources a reading can use. */
+export function useReadings(courseId: string, sectionId?: string) {
   const [rows, setRows] = useState<Reading[] | null>(null);
   const [resources, setResources] = useState<CourseResource[]>([]);
-  const [adding, setAdding] = useState<string | null>(null);
-  const active = units.filter(unit => unit.status === "active");
   async function load() {
     const [readings, listed] = await Promise.all([
       api<{ readings: Reading[] }>(sectionId ? `/sections/${sectionId}/readings` : `/courses/${courseId}/readings`),
@@ -36,19 +33,26 @@ export function Readings({ courseId, units, sectionId, canEdit }: { courseId: st
     setResources(listed.resources.filter(item => item.status !== "archived"));
   }
   useEffect(() => { void load().catch(() => setRows([])); }, [courseId, sectionId]);
-  if (!active.length || !rows) return null;
-  return <Section title="Lecturas">
-    {active.map(unit => {
-      const mine = rows.filter(item => item.unitId === unit.id);
-      return <article key={unit.id} className="resource-readings">
-        {/* The unit's name is not a heading: Contenido already has one per unit. */}
-        <header><strong className="resource-readings-unit">{unit.name}</strong>{canEdit && <button type="button" className="button secondary small" onClick={() => setAdding(unit.id)}><Icon name="plus" size={16}/>Agregar lectura</button>}</header>
-        {mine.length ? <ul>{mine.map(item => <li key={item.id}>{item.groupId && <FreedomChip mark="own"/>}<strong>{item.title}</strong>{item.chapter ? ` · ${item.chapter}` : ""}{item.pages ? ` · ${item.pages}` : ""} · {item.required ? "Obligatoria" : "Recomendada"}{item.note ? ` · ${item.note}` : ""}</li>)}</ul>
-          : <p className="muted small">Sin lecturas.</p>}
-      </article>;
-    })}
-    {adding && <AddReading courseId={courseId} unitId={adding} sectionId={sectionId} resources={resources} onClose={() => setAdding(null)} onSaved={async () => { setAdding(null); await load(); toast({ message: "Lectura agregada." }); }}/>}
-  </Section>;
+  return { rows, resources, reload: load, courseId, sectionId };
+}
+export type ReadingsData = ReturnType<typeof useReadings>;
+
+/** A unit's readings, inside its card in Contenido or in the section's plan (docs/design/recursos-didacticos.md §4). */
+export function UnitReadings({ unit, data, canEdit }: { unit: LearningUnit; data: ReadingsData; canEdit: boolean }) {
+  const { toast } = useFeedback();
+  const [adding, setAdding] = useState(false);
+  if (!data.rows || unit.status !== "active") return null;
+  const mine = data.rows.filter(item => item.unitId === unit.id);
+  if (!mine.length && !canEdit) return null;
+  return <section className="resource-readings" aria-labelledby={`lecturas-${unit.id}`}>
+    <header>
+      <h3 id={`lecturas-${unit.id}`}>Lecturas<span className="sr-only"> de {unit.name}</span></h3>
+      {canEdit && <button type="button" className="button ghost small" onClick={() => setAdding(true)}><Icon name="plus" size={16}/>Agregar lectura<span className="sr-only"> en {unit.name}</span></button>}
+    </header>
+    {mine.length ? <ul>{mine.map(item => <li key={item.id}>{item.groupId && <FreedomChip mark="own"/>}<strong>{item.title}</strong>{item.chapter ? ` · ${item.chapter}` : ""}{item.pages ? ` · ${item.pages}` : ""} · {item.required ? "Obligatoria" : "Recomendada"}{item.note ? ` · ${item.note}` : ""}</li>)}</ul>
+      : <p className="muted small">Sin lecturas.</p>}
+    {adding && <AddReading courseId={data.courseId} unitId={unit.id} sectionId={data.sectionId} resources={data.resources} onClose={() => setAdding(false)} onSaved={async () => { setAdding(false); await data.reload(); toast({ message: "Lectura agregada." }); }}/>}
+  </section>;
 }
 
 function AddReading({ courseId, unitId, sectionId, resources, onClose, onSaved }: { courseId: string; unitId: string; sectionId?: string; resources: CourseResource[]; onClose: () => void; onSaved: () => Promise<void> }) {
