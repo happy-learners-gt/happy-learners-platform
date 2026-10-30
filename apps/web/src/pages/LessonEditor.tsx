@@ -1,14 +1,14 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { Activity, ActivityBlock, LearningOutcome, Lesson, Material, Resource, RichTextDocument, SequenceTemplate } from "@happy-learners/contracts";
-import { blockKinds, pagesLabel, formatMinutes, groupings, lessonMinutes, outcomeCodes, phaseOf, publishChecklist, purposes, resourceIdsOf, sequenceOf, sequenceTemplates, studentActivities, suggestedResources } from "@happy-learners/domain";
-import type { CheckItem } from "@happy-learners/domain";
+import { applyChanges, blockKinds, blocksOf, pagesLabel, formatMinutes, groupings, lessonMinutes, outcomeCodes, phaseOf, publishChecklist, purposes, resourceIdsOf, sequenceOf, sequenceTemplates, studentActivities, suggestedResources } from "@happy-learners/domain";
+import type { CheckItem, ImproveChange } from "@happy-learners/domain";
 import type { Phase } from "@happy-learners/domain";
 import type { Editor } from "@tiptap/react";
 import * as Y from "yjs";
 import { api, ApiError, message, sessionExpired, sessionRestored } from "../api";
 import { CollaborationProvider } from "../collaboration";
-import { seedMissingFields } from "../collab-seed";
+import { replaceFieldText, seedMissingFields } from "../collab-seed";
 import { hasStructure, observeStructure, readStructure, recordSaved, savedVersion, seedStructure, writeStructure } from "../lesson-structure";
 import type { CollaborationStatus } from "../collaboration";
 import { Link, useNavigation, useUnsavedChanges } from "../navigation";
@@ -24,6 +24,7 @@ import { moveItem, SortHandle } from "../ui/Sortable";
 import { Breadcrumbs, Button, EmptyState, ErrorState, Field, Loading, PrimaryAction, StatusBadge } from "../ui/primitives";
 import { useCourse } from "./course/context";
 import { QualityChip, ReviewPanel, reviewOf, useReviewBasis } from "./course/LessonReview";
+import { AiWrite } from "../ui/AiWrite";
 import { LessonPlayer } from "./StudentLesson";
 import { FileViewer } from "../FileViewer";
 const RichText = lazy(() => import("../RichText").then(module => ({ default: module.RichText })));
@@ -404,6 +405,32 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     card?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
     if (focus) setTimeout(() => card?.querySelector<HTMLElement>("input, textarea, [contenteditable=true]")?.focus({ preventScroll: true }), 250);
   };
+  // 1.4.1: the improvement is asked for the draft as it is now, and what the person accepts goes into the draft.
+  const improveDraft = async () => (await api<{ changes: ImproveChange[] }>(`/lessons/${lessonId}/improve`, "POST", {
+    objective: draft.objective, activities: draft.activities, sequence: draft.sequence, outcomeIds: draft.outcomeIds, materials: lesson.materials,
+  })).changes;
+  function applyImprovement(accepted: ImproveChange[]) {
+    // Ids are made once, so applying again to the latest activities gives the same ones.
+    const created = accepted.filter(change => change.kind === "new-activity").flatMap(() => [`activity-${crypto.randomUUID()}`, `block-${crypto.randomUUID()}`]);
+    const ids = () => { let next = 0; return () => created[next++]; };
+    const result = applyChanges({ objective: draft!.objective, activities: draft!.activities, sequence: draft!.sequence }, accepted, ids());
+    if (result.objective !== draft!.objective) update({ objective: result.objective });
+    const activityChanges = accepted.filter(change => change.kind !== "objective");
+    if (activityChanges.length) {
+      updateActivities(current => applyChanges({ objective: "", activities: current, sequence: draft!.sequence }, activityChanges, ids()).activities);
+    }
+    // Block texts live in the room: write them there, or the save would read the old text back.
+    const room = collaboration?.doc;
+    if (!room) return;
+    for (const change of accepted) {
+      const activity = change.kind === "new-activity" ? result.activities.find(item => item.id === created[accepted.filter(item => item.kind === "new-activity").indexOf(change) * 2])
+        : change.field === "instructions" ? result.activities.find(item => item.id === change.activityId) : undefined;
+      if (!activity) continue;
+      const block = blocksOf(activity).find(item => item.kind === "text");
+      const text = change.kind === "new-activity" ? change.activity!.instructions : change.after;
+      if (block) replaceFieldText(room, block.id, text);
+    }
+  }
   const reviewProblem = () => problem && goTo(problem.target === "title" ? "details" : problem.target);
   const phases = template.phases.map((phase, order) => ({ phase, order, activities: draft.activities.filter(activity => phaseOf(activity, draft.sequence) === phase.id) }));
   return <div className="editor">
@@ -421,7 +448,8 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
           {reviewBasis && <Button icon="check" onClick={() => setChecking(true)}>Revisar <QualityChip review={reviewOf({ ...draft, materials: lesson.materials }, reviewBasis)}/></Button>}
           <Button icon="eye" onClick={() => navigate(`${base}/lecciones/${lessonId}?vista=previa`)}>Vista previa</Button>
           {primary}
-          {checking && reviewBasis && <ReviewPanel review={reviewOf({ ...draft, materials: lesson.materials }, reviewBasis)} onClose={() => setChecking(false)} onGoTo={id => { setChecking(false); goTo(id); }}/>}
+          {checking && reviewBasis && <ReviewPanel review={reviewOf({ ...draft, materials: lesson.materials }, reviewBasis)} onClose={() => setChecking(false)} onGoTo={id => { setChecking(false); goTo(id); }}
+            improve={writable && !draft.archived ? { load: () => improveDraft(), apply: applyImprovement } : undefined}/>}
           <Menu label="Más acciones de la lección" items={[
             ...(lesson.revision && lesson.shareCode && !draft.archived ? [{ label: "Abrir como estudiante", icon: "eye" as const, onSelect: () => window.open(`/aprender/${lesson.shareCode}`, "_blank", "noopener") }, { label: "Copiar enlace", icon: "copy" as const, onSelect: () => void copyLink(lesson.shareCode!) }] : []),
             { label: "Volver al contenido", icon: "back", onSelect: () => navigate(`${base}/contenido`) },
@@ -458,7 +486,8 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
         <section id="lesson-details" className="canvas-card details-card tone-violet" aria-labelledby="details-title" onFocusCapture={() => setSelected("details")}>
           <div className="card-head"><span className="type-chip" aria-hidden="true"><Icon name="info" size={16}/></span><h2 id="details-title">Detalles de la lección</h2></div>
           <fieldset className="stack" disabled={!writable}>
-            <Field label="Objetivo" hint="Qué podrán hacer los estudiantes al terminar. Lo ven al abrir la lección."><textarea rows={2} maxLength={1000} value={draft.objective} onChange={event => update({ objective: event.target.value })}/></Field>
+            <Field label="Objetivo" hint="Qué podrán hacer los estudiantes al terminar. Lo ven al abrir la lección."><textarea data-ai-write="lesson-objective" rows={2} maxLength={1000} value={draft.objective} onChange={event => update({ objective: event.target.value })}/></Field>
+            {writable && <AiWrite field="lesson-objective" target="lesson-objective" label="Objetivo" courseId={course.id} context={{ course: course.title, lesson: draft.title, unit: unit?.name }}/>}
             <Field label="Secuencia didáctica" hint={structured ? `${template.description} Momentos: ${template.phases.map(phase => phase.label).join(" → ")}.` : template.description}>
               <select value={draft.sequence} onChange={event => changeTemplate(event.target.value as SequenceTemplate)}>{sequenceTemplates.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
             </Field>

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.1 — 2026-10-30
+
+- Proponer mejoras en la revisión de una lección: la IA propone cambios para lo que falla, cada uno con lo que había, lo que propone y su razón; se aceptan o descartan uno por uno y lo aceptado entra en el borrador.
+- Redactar con IA bajo los objetivos de lección, curso y unidad, el comentario de boleta y la descripción de un recurso: redactar, mejorar la redacción o acortar; solo cambia el campo al elegir «Usar».
+- Las lecturas de cada unidad aparecen dentro de su tarjeta en Contenido y en el plan de la sección.
+
 ## 1.4.0 — 2026-10-30
 
 - Revisar en el editor de lecciones: puntaje de 0 a 100 con ocho criterios basados en hechos (objetivo, alineación con el plan, secuencia, tiempo frente a la duración de las clases, evaluación, agrupación, recursos e instrucciones), con su evidencia, qué cambiar y un enlace a la actividad. El mismo puntaje en cada lección de Contenido y la calidad media del curso.

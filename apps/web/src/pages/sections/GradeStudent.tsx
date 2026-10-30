@@ -8,6 +8,7 @@ import { Icon } from "../../ui/icons";
 import { Field, Loading } from "../../ui/primitives";
 import { currentRegional } from "../../regional";
 import { originLabel, resultText } from "./group-grade";
+import { AiWrite } from "../../ui/AiWrite";
 
 function GroupAdjustments({ book, learnerId, activities, editable, onSaved }: { book: Gradebook; learnerId: string; activities: Gradebook["activities"]; editable: boolean; onSaved: (book: Gradebook) => void }) {
   const [factor, setFactor] = useState("0,8"), [own, setOwn] = useState(""), [note, setNote] = useState(""), [busy, setBusy] = useState(""), [error, setError] = useState("");
@@ -77,7 +78,8 @@ export function GradeStudentDrawer({ book, learnerId, periodId, editable, onSave
         {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
         {editable
           ? <>
-            <textarea rows={4} maxLength={maxCommentLength} value={comment} aria-label={`Comentario de ${learner.name} en ${period.name}`} onChange={event => setComment(event.target.value)} placeholder="Logros, aspectos por mejorar o recomendaciones. Aparece en la boleta."/>
+            <textarea data-ai-write="report-comment" rows={4} maxLength={maxCommentLength} value={comment} aria-label={`Comentario de ${learner.name} en ${period.name}`} onChange={event => setComment(event.target.value)} placeholder="Logros, aspectos por mejorar o recomendaciones. Aparece en la boleta."/>
+            <AiWrite field="report-comment" target="report-comment" label={`Comentario de ${learner.name}`} courseId={book.section.courseId} context={{ learner: learner.name, course: book.section.courseTitle }}/>
             <div className="button-row">
               <button className="button primary" disabled={busy || comment.trim() === (stored?.body || "")}>{busy ? "Guardando…" : comment.trim() ? "Guardar comentario" : "Quitar comentario"}</button>
               <span className="muted small">{comment.length} de {maxCommentLength}</span>

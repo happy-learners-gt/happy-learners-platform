@@ -14,6 +14,7 @@ import { moveItem } from "../../ui/Sortable";
 import { useCourse } from "./context";
 import { UnitReadings, useReadings } from "./Readings";
 import { QualityChip, reviewOf, useReviewBasis } from "./LessonReview";
+import { AiWrite } from "../../ui/AiWrite";
 
 /** Renames and archives change only lesson metadata, so activities are omitted and kept by the API. */
 export function metadataBody(courseId: string, lesson: Lesson, patch: { title?: string; archived?: boolean }) {
@@ -147,7 +148,8 @@ export function Content() {
         if (await run(() => api(`/courses/${course.id}/units/${editing.id}`, "PUT", unitBody(editing, { name: String(data.get("name")).trim(), objective: String(data.get("objective")).trim() })), `${noun.One} ${noun.saved}.`)) setEditing(null);
       }}>
         <Field label={`Nombre ${noun.ofThe}`}><input name="name" required maxLength={100} defaultValue={editing.name}/></Field>
-        <Field label="Objetivo" optional><textarea name="objective" maxLength={1000} rows={3} defaultValue={editing.objective}/></Field>
+        <Field label="Objetivo" optional><textarea data-ai-write="unit-objective" name="objective" maxLength={1000} rows={3} defaultValue={editing.objective}/></Field>
+        <AiWrite field="unit-objective" target="unit-objective" label="Objetivo" courseId={course.id} context={{ course: course.title, unit: editing.name }}/>
         <div className="modal-actions"><button type="button" className="button ghost" onClick={() => setEditing(null)}>Cancelar</button><button className="button primary" disabled={busy}>{`Guardar ${noun.one}`}</button></div>
       </form>
     </Modal>}

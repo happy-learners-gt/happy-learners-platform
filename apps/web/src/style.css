@@ -2111,3 +2111,20 @@ section.panel[id^="profile-"] { scroll-margin-top: calc(var(--topbar-h) + var(--
 .review-checks header .review-status { margin-left: auto; font-size: var(--text-sm); color: var(--color-ink-soft); white-space: nowrap; }
 .review-checks p { margin: var(--space-2) 0 0; }
 .review-evidence { margin: var(--space-1) 0 0; padding-left: 1.2rem; font-size: var(--text-sm); color: var(--color-ink-soft); }
+/* Assisted improvement (1.4.1). */
+.improve-draft { margin: var(--space-3) 0; padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-muted); }
+.improve-draft > header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.improve-draft > header p { margin: var(--space-1) 0 0; }
+.improve-changes { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: var(--space-2); }
+.improve-changes > li { padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+.improve-changes p { margin: var(--space-1) 0 0; }
+.improve-before { color: var(--color-ink-soft); text-decoration: line-through; text-decoration-color: var(--color-danger); }
+.improve-after { padding-left: var(--space-2); border-left: 3px solid var(--color-success); }
+.improve-actions { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
+.improve-all { display: flex; justify-content: flex-end; margin-top: var(--space-3); }
+@media (max-width: 720px) { .improve-draft > header { flex-direction: column; } }
+/* «Redactar con IA» (1.4.1). */
+.ai-write { display: grid; gap: var(--space-2); margin-top: var(--space-1); }
+.ai-write-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }
+.ai-write-proposal { padding: var(--space-2) var(--space-3); border: 1px dashed var(--color-primary); border-radius: var(--radius-md); background: var(--color-surface); }
+.ai-write-proposal p { margin: 0 0 var(--space-2); white-space: pre-wrap; }

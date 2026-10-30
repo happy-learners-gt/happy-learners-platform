@@ -10,6 +10,7 @@ import { Modal } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import { Field } from "../ui/primitives";
 import { TermChoices } from "./Courses";
+import { AiWrite } from "../ui/AiWrite";
 
 export function legacyItem(resource: Resource, usedIn: number): LibraryItem {
   return { id: resource.id, courseId: "", title: resource.title, description: resource.description, kind: resource.kind === "link" ? "link" : "text", content: resource.content, status: resource.status, version: 1, updatedAt: resource.updatedAt || "", termIds: [], usedIn, legacy: true };
@@ -67,7 +68,8 @@ export function ResourceForm({ courseId: fixedCourse, courses, item, onClose, on
       <fieldset disabled={busy} className="stack">
         {kind === "file" ? <Field label="Archivo" hint="Presentaciones, documentos y hojas (PPTX, DOCX, XLSX) hasta 15 MB; PDF hasta 25 MB; video MP4 o WebM hasta 100 MB. Es privado: solo lo reciben estudiantes dentro de una lección publicada."><input name="file" type="file" accept={fileAccept} required/></Field> : <>
           <Field label="Título"><input name="title" required maxLength={160} defaultValue={item?.title}/></Field>
-          <Field label="Descripción breve"><input name="description" required maxLength={1000} defaultValue={item?.description} placeholder="Para qué sirve en clase"/></Field>
+          <Field label="Descripción breve"><input data-ai-write="resource-description" name="description" required maxLength={1000} defaultValue={item?.description} placeholder="Para qué sirve en clase"/></Field>
+          <AiWrite field="resource-description" target="resource-description" label="Descripción breve"/>
           {kind === "link"
             ? <Field label="Dirección web" hint="Empieza con https://"><input name="content" type="url" required maxLength={2000} defaultValue={item?.content} placeholder="https://"/></Field>
             : <Field label="Texto"><textarea name="content" required maxLength={8000} rows={6} defaultValue={item?.content}/></Field>}

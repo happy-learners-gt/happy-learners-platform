@@ -24,3 +24,12 @@ export function seedMissingFields(doc: Y.Doc, activities: Activity[]) {
     }
   }, "seed");
 }
+
+/** Replaces the text of one collaborative field (1.4.1: an accepted improvement), as one change everyone sees. */
+export function replaceFieldText(doc: Y.Doc, fieldId: string, text: string) {
+  doc.transact(() => {
+    const fragment = doc.getXmlFragment(fieldId);
+    if (fragment.length) fragment.delete(0, fragment.length);
+    prosemirrorJSONToYXmlFragment(schema, { type: "doc", content: text.split(/\n+/).filter(Boolean).map(line => ({ type: "paragraph", content: [{ type: "text", text: line }] })) }, fragment);
+  }, "improve");
+}
