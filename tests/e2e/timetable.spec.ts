@@ -131,3 +131,55 @@ test("ST-099 ST-097 ST-101 ST-029 ST-100: the section schedule generates its cla
     await expect(page.getByRole("form", { name: `Horario de ${E2E_PREFIX} Sección A` })).toHaveCount(0);
   } finally { await educator.dispose(); await admin.dispose(); }
 });
+
+test("1.4.2: the proposed timetable fits lessons in each class's minutes, shows itself first and refuses a stale proposal", async ({ page, playwright, baseURL }, info) => {
+  const educator = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("educador-demo")}` } });
+  const admin = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("admin-demo")}` } });
+  try {
+    const body = { title: `${E2E_PREFIX} Cronograma ${info.project.name}`, objective: "Proponer el cronograma.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", area: "011", settings: { attendance: true } };
+    const courseId = (await (await admin.post("/api/courses", { data: { ...body, leadId: "user-educator" } })).json()).id, path = `/api/courses/${courseId}`;
+    const version = async () => (await (await educator.get(path)).json()).course.version as number;
+    const courseUnitId = (await (await educator.post(`${path}/units`, { data: { name: `${E2E_PREFIX} Módulo`, objective: "Practicar.", status: "active", version: await version() } })).json()).id;
+    const lessons: { id: string; activities: { minutes: number }[] }[] = [];
+    for (const title of ["Uno", "Dos", "Tres", "Cuatro"]) {
+      const lesson = (await (await educator.post("/api/lessons", { data: { title: `${E2E_PREFIX} ${title}`, objective: "Practicar.", courseId, courseUnitId, instructions: "Sigue las indicaciones.", duration: 15 } })).json()).lesson;
+      expect((await educator.post(`/api/lessons/${lesson.id}/publish`)).status()).toBe(200);
+      lessons.push(lesson);
+    }
+    const days = await nextClassDays(async () => await (await admin.get("/api/calendar")).json(), 3);
+    const groupId = (await (await admin.post(`${path}/groups`, { data: { name: `${E2E_PREFIX} Sección cronograma` } })).json()).id;
+    expect((await admin.put(`${path}/groups/${groupId}/educators`, { data: { userIds: ["user-educator"], conflictReason: "Sección de prueba E2E; su horario puede coincidir con otras secciones de prueba." } })).status()).toBe(200);
+    expect((await admin.put(`${path}/groups/${groupId}/schedule`, { data: { weekdays: [0, 1, 2, 3, 4, 5, 6], startsAt: "06:00", durationMinutes: 45, from: days[0], until: days[2] } })).status()).toBe(200);
+    const fill = (data: unknown) => educator.post(`${path}/groups/${groupId}/lessons`, { data });
+
+    // A lesson lasts what its activities add up to: each of these has one 20-minute activity.
+    expect(lessons.map(lesson => lesson.activities.reduce((sum, activity) => sum + activity.minutes, 0))).toEqual([20, 20, 20, 20]);
+    // The proposal changes nothing: two lessons (40 min) fit in each 45-minute class; the third class stays free.
+    const { proposal } = await (await fill({ mode: "fit" })).json();
+    expect(proposal.assignments.map((item: { lessons: { id: string }[]; minutes: number; capacity: number }) => [item.lessons.map(lesson => lesson.id), item.minutes, item.capacity]))
+      .toEqual([[lessons.slice(0, 2).map(lesson => lesson.id), 40, 45], [lessons.slice(2).map(lesson => lesson.id), 40, 45]]);
+    expect(proposal).toMatchObject({ unplanned: [], freeSessions: 1 });
+    const expected = proposal.assignments.map((item: { sessionId: string; lessons: { id: string }[] }) => ({ sessionId: item.sessionId, lessonIds: item.lessons.map(lesson => lesson.id) }));
+    expect((await (await fill({ mode: "fit" })).json()).proposal).toEqual(proposal);
+    // A proposal that is not the current one is refused.
+    const stale = await fill({ mode: "fit", expected: [{ ...expected[0], lessonIds: [lessons[0].id] }, expected[1]] });
+    expect(stale.status()).toBe(409);
+    expect((await stale.json()).error).toBe("El cronograma cambió desde que se propuso. Vuelve a proponerlo.");
+
+    // In the section's Cronograma, the dialog shows the proposal and applies it.
+    await signIn(page, "educador-demo", `/secciones/${groupId}/clases`);
+    await page.getByRole("button", { name: "Asignar lecciones en orden" }).click();
+    const dialog = page.getByRole("dialog", { name: "Asignar lecciones en orden" });
+    await expect(dialog.getByLabel("Lecciones por clase")).toHaveValue("fit");
+    await dialog.getByRole("button", { name: "Proponer cronograma" }).click();
+    const shown = dialog.getByRole("region", { name: "Cronograma propuesto" });
+    await expect(shown.locator("li")).toHaveCount(2);
+    await expect(shown.locator("li").first()).toContainText("40 de 45 min");
+    await expect(shown).toContainText("Todas las lecciones pendientes tienen clase.");
+    await dialog.getByRole("button", { name: "Aplicar cronograma" }).click();
+    await expect(dialog).toBeHidden();
+    const sessions = ((await (await educator.get(`${path}/sessions`)).json()).sessions as Session[]).filter(item => item.groupId === groupId).sort((a, b) => a.sessionDate.localeCompare(b.sessionDate));
+    expect(sessions.map(ids)).toEqual([lessons.slice(0, 2).map(lesson => lesson.id), lessons.slice(2).map(lesson => lesson.id), []]);
+    expect((await (await fill({ mode: "fit" })).json()).proposal.assignments).toEqual([]);
+  } finally { await educator.dispose(); await admin.dispose(); }
+});

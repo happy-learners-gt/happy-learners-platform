@@ -27,7 +27,8 @@ reglas y redacción asistida. Fecha: 30 de octubre de 2026. Lo implementa el equ
 | --- | --- |
 | 1.4.0 | 6a harness (registro, uso y costo, evaluaciones con fixtures) y 6b revisión con puntaje |
 | 1.4.1 | 6c mejora asistida (borradores con diferencias) y 6e redacción en toda la plataforma |
-| 1.4.2 | 6d planificación: cronograma propuesto y horarios con un solver de reglas |
+| 1.4.2 | 6d planificación: cronograma propuesto |
+| 1.4.3 | 6d planificación: horarios con un solver de reglas y reglas en lenguaje natural |
 
 ## 6a · El harness
 
@@ -83,12 +84,14 @@ ponderada sobre lo aplicable, de 0 a 100, y es **reproducible**: la misma lecci�
 
 ## 6d · Planificación (1.4.2)
 
-- **Cronograma propuesto:** en Sección › Cronograma, «Proponer cronograma» reparte las lecciones del contenido efectivo de
+- **Cronograma propuesto (1.4.2):** en Sección › Cronograma, «Asignar lecciones en orden» con «Según la duración de
+  cada clase» (el modo por omisión) reparte las lecciones del contenido efectivo de
   la sección en sus clases futuras, según su duración, el orden del curso y los días sin clase (función determinista
   `proposeTimetable`). Se muestra como borrador sobre el cronograma, con «Aplicar» y «Descartar».
-- **Horarios con reglas:** en Organización › Horarios, «Generar horario» toma secciones, docentes, aulas y bloques de la
-  jornada y reglas (disponibilidad docente, carga máxima diaria y semanal, sin choques de docente, aula ni grupo, días
-  preferidos). Un **solver determinista** (búsqueda con retroceso y heurísticas, en el dominio) devuelve una solución o
+- **Horarios con reglas (1.4.3):** en Organización › Horarios (`/organizacion/horarios`), «Generar horario» toma secciones, docentes, aulas y bloques de la
+  jornada y reglas (disponibilidad docente, carga máxima diaria, sin choques de docente ni de secciones que comparten
+  estudiantes, días sin clase y días preferidos). Las aulas no están en el modelo de datos: quedan para una entrega
+  posterior. Un **solver determinista** (búsqueda con retroceso y heurísticas, en el dominio) devuelve una solución o
   las reglas que no se pueden cumplir. La IA solo traduce reglas escritas en lenguaje natural («la profesora Herrera no
   da clases los viernes») a restricciones, que la persona confirma antes de usarlas (tarea `rules-to-constraints`).
 

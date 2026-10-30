@@ -1,6 +1,6 @@
 import type { CalendarBreak, ClassLesson, ClassLessonPlan, ClassResource, ClassSession, ClassStatus, CourseAccess, InstitutionalCalendarEvent, Lesson, Material, Member, Pacing, Resource, ScheduleMeeting, SectionSchedule, StudentClass, StudentPathModule, StudentSpace } from "@happy-learners/contracts";
 import { acceptsAttendance, breakInput, cancelPlanInput, carryOver, classActions, classPlanInput, classStatusLabels, completionInput, groupCodePattern, inSessionFilter, lessonsInOrder, meetingOn, maxClassLessons, localDay, nextClassStatus, noClassDays, normalizeGroupCode, resourceIdsOf, scheduleDates, scheduleInput, scheduleSummary, seesSection, sessionFilterAllowed, sessionFilterInput, teachesSection, upcomingClasses } from "@happy-learners/domain";
-import { tokenPattern, tokenPrefix } from "@happy-learners/domain";
+import { proposeTimetable, tokenPattern, tokenPrefix } from "@happy-learners/domain";
 import type { ClassAction } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
 import { studentReadings } from "./resources";
@@ -482,11 +482,14 @@ export async function calendar(path: string, method: string, input: unknown, url
 
 /**
  * POST /api/courses/:id/groups/:gid/lessons {perClass} — gives the upcoming classes without lessons the next published
- * lessons in content order, one to three per class.
+ * lessons in content order, one to three per class. With {mode: "fit"} (1.4.2) it proposes as many lessons as fit in
+ * each class's minutes and changes nothing; with {mode: "fit", expected} it applies that proposal, only if it is still
+ * the same (409 otherwise: something changed since it was shown).
  */
 export async function fillLessons(input: unknown, current: Member, db: Database, courseId: string, group: Group) {
   const now = new Date().toISOString();
   const today = await todayFor(db, current.organizationId);
+  if ((input as Record<string, unknown> | null)?.mode === "fit") return fitLessons(input as Record<string, unknown>, current, db, courseId, group, today, now);
   const perClass = Number((input as Record<string, unknown> | null)?.perClass ?? 1);
   if (![1, 2, 3].includes(perClass)) return reply({ error: "Elige de 1 a 3 lecciones por clase." }, 400);
   const [ordered, classes, planned] = await Promise.all([
@@ -505,6 +508,33 @@ export async function fillLessons(input: unknown, current: Member, db: Database,
     event(db, current, { action: "planned", targetType: "group", targetId: group.id, courseId, summary: `Planificó en orden ${plan.length === 1 ? "1 clase" : `${plan.length} clases`} de «${group.name}»` }),
   ]);
   return reply({ assigned: plan.reduce((sum, item) => sum + item.lessonIds.length, 0), classes: plan.length });
+}
+
+async function fitLessons(input: Record<string, unknown>, current: Member, db: Database, courseId: string, group: Group, today: string, now: string) {
+  const [ordered, published, classes, planned] = await Promise.all([
+    courseLessons(db, current.organizationId, courseId, group.id),
+    db.prepare(`SELECT l.id,json_extract(l.published_content,'$.title') AS title,
+        (SELECT COALESCE(sum(json_extract(a.value,'$.minutes')),0) FROM json_each(l.published_content,'$.activities') a) AS minutes
+      FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id WHERE u.course_id=? AND l.archived=0 AND l.revision>0`).bind(courseId).all<{ id: string; title: string; minutes: number }>(),
+    db.prepare("SELECT id,session_date AS sessionDate,starts_at AS startsAt,duration_minutes AS durationMinutes,status FROM class_sessions WHERE group_id=?").bind(group.id)
+      .all<{ id: string; sessionDate: string; startsAt: string | null; durationMinutes: number | null; status: ClassStatus }>(),
+    db.prepare("SELECT p.session_id AS sessionId,p.lesson_id AS lessonId FROM class_session_lessons p JOIN class_sessions s ON s.id=p.session_id WHERE s.group_id=? ORDER BY p.position").bind(group.id).all<{ sessionId: string; lessonId: string }>(),
+  ]);
+  const byId = new Map(published.results.map(row => [row.id, row]));
+  const lessons = ordered.filter(id => byId.has(id)).map(id => ({ id, title: byId.get(id)!.title || "", minutes: Number(byId.get(id)!.minutes) || 0 }));
+  const proposal = proposeTimetable(lessons, classes.results.map(row => ({ ...row, lessonIds: planned.results.filter(item => item.sessionId === row.id).map(item => item.lessonId) })), today, maxClassLessons);
+  if (!Array.isArray(input.expected)) return reply({ proposal });
+  const shown = (input.expected as { sessionId?: unknown; lessonIds?: unknown }[]).map(item => `${item?.sessionId}:${Array.isArray(item?.lessonIds) ? item.lessonIds.join(",") : ""}`);
+  const current_ = proposal.assignments.map(item => `${item.sessionId}:${item.lessons.map(lesson => lesson.id).join(",")}`);
+  if (!proposal.assignments.length || shown.length !== current_.length || shown.some((item, index) => item !== current_[index])) return reply({ error: "El cronograma cambió desde que se propuso. Vuelve a proponerlo." }, 409);
+  await db.batch([
+    ...proposal.assignments.flatMap(item => [
+      ...item.lessons.map((lesson, position) => db.prepare("INSERT INTO class_session_lessons(session_id,lesson_id,position) SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM class_sessions WHERE id=? AND status='planned')").bind(item.sessionId, lesson.id, position, item.sessionId)),
+      db.prepare("UPDATE class_sessions SET lesson_id=?,version=version+1,updated_at=? WHERE id=? AND status='planned'").bind(item.lessons[0].id, now, item.sessionId),
+    ]),
+    event(db, current, { action: "planned", targetType: "group", targetId: group.id, courseId, summary: `Aplicó el cronograma propuesto en ${proposal.assignments.length === 1 ? "1 clase" : `${proposal.assignments.length} clases`} de «${group.name}»` }),
+  ]);
+  return reply({ assigned: proposal.assignments.reduce((sum, item) => sum + item.lessons.length, 0), classes: proposal.assignments.length });
 }
 
 const studentCookie = (token: string, request: Request, remove = false) => `hl_group=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${remove ? 0 : 28800}${new URL(request.url).protocol === "https:" ? "; Secure" : ""}`;

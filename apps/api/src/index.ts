@@ -46,6 +46,7 @@ import { delivery, deliveryMethods } from "./delivery";
 import { bookMap, bookMapMethods } from "./book-map";
 import { aiUsage, aiUsageMethods } from "./ai-usage";
 import { aiAssist, aiAssistMethods } from "./ai-assist";
+import { timetableMethods, timetables } from "./timetables";
 import { account, accountBody, accountMethods, clientOf, confirmEmail, emailConfirmPath, failedSignIn, openSession } from "./account";
 import { institutionalCalendarMethods, institutionalCalendars } from "./institutional-calendar";
 import { agenda, agendaMethods } from "./agenda";
@@ -129,11 +130,12 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   const bookMapAllowed = bookMapMethods(path);
   const aiUsageAllowed = aiUsageMethods(path);
   const aiAssistAllowed = aiAssistMethods(path);
+  const timetableAllowed = timetableMethods(path);
   const institutionalCalendarAllowed = institutionalCalendarMethods(path);
   const agendaAllowed = agendaMethods(path);
   const gradingSchemeAllowed = gradingSchemeMethods(path);
   const assessmentAllowed = assessmentMethods(path);
-  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|account|organization|calendar|members|access|levels|units|resources|lessons|courses|programs|vocabularies|terms|student|legal|hours|ai)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout|retry)$/.test(path) && !path.includes("/files") && !/^\/api\/members\/[a-z0-9-]+\/password$/.test(path) && !professionalAllowed)
+  let input = (["POST", "PUT"].includes(method) && /^\/api\/(login|account|organization|calendar|members|access|levels|units|resources|lessons|courses|programs|vocabularies|terms|student|legal|hours|ai|timetables)(\/[a-z0-9-]+){0,5}$/.test(path) && !/\/(publish|duplicate|start|complete|cancel|restore|code|logout|retry)$/.test(path) && !path.includes("/files") && !/^\/api\/members\/[a-z0-9-]+\/password$/.test(path) && !professionalAllowed)
     || (method === "POST" && path === "/api/organization/restore" && env.RESTORE_ENABLED === "true")
     || (method === "POST" && (path === "/api/invitations" || acceptPath.test(path)))
     ? await body(request) : undefined;
@@ -276,6 +278,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (bookMapAllowed) methods[path] = bookMapAllowed;
   if (aiUsageAllowed) methods[path] = aiUsageAllowed;
   if (aiAssistAllowed) methods[path] = aiAssistAllowed;
+  if (timetableAllowed) methods[path] = timetableAllowed;
   if (institutionalCalendarAllowed) methods[path] = institutionalCalendarAllowed;
   if (agendaAllowed) methods[path] = agendaAllowed;
   // ST-158, ST-159: account settings, my data and closing the account.
@@ -432,6 +435,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (path.startsWith("/api/members")) return roles(path, method, input, current, db, username => usernameTaken(env, username), notifier);
   if (aiUsageAllowed) return aiUsage(path, method, input, url, current, db);
   if (aiAssistAllowed) return aiAssist(path, method, input, current, db, env);
+  if (timetableAllowed) return timetables(path, method, input, current, db, env);
   if (path === "/api/organization/backup" || path === "/api/organization/restore") {
     if (current.role !== "admin") return json({ error: "Solo administración respalda o restaura la organización." }, 403);
     if (path.endsWith("/backup")) {
