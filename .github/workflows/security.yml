@@ -1,0 +1,75 @@
+name: Security scanners
+
+# Track B.2 of docs/roadmap/2026-10-29-hoja-de-ruta.md. Three open scanners that need no GitHub Advanced Security:
+# secrets (gitleaks), dependencies (OSV-Scanner) and code (Semgrep with public rules and the project's own in
+# .semgrep/). On a pull request they look only at what it adds and fail on a new finding; the weekly run reads the
+# whole repository and reports what is open in the job summary (docs/operations/escaneres.md).
+
+on:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '41 12 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: gitleaks
+        env:
+          RANGE: ${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || 'HEAD' }}
+        run: |
+          docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.28.0 \
+            git /repo --no-banner --redact --log-opts="$RANGE" --gitleaks-ignore-path /repo/.gitleaksignore
+
+  dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: OSV-Scanner
+        run: |
+          docker run --rm -v "$PWD:/src:ro" ghcr.io/google/osv-scanner:v2.2.2 \
+            scan source --config /src/osv-scanner.toml --lockfile /src/package-lock.json
+
+  code:
+    runs-on: ubuntu-latest
+    container: semgrep/semgrep:1.140.0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Semgrep, only what the pull request adds
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          semgrep scan --metrics=off --error --baseline-commit "$BASE" \
+            --config p/typescript --config p/react --config p/nodejs --config p/javascript --config .semgrep
+      - name: Semgrep, whole repository
+        if: github.event_name != 'pull_request'
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          semgrep scan --metrics=off --config p/typescript --config p/react --config p/nodejs --config p/javascript --config .semgrep \
+            --json --output semgrep.json || true
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import collections, json
+          results = json.load(open("semgrep.json"))["results"]
+          print(f"### Semgrep: {len(results)} hallazgos abiertos\n")
+          for (rule, path), count in collections.Counter((r["check_id"].split(".")[-1], r["path"]) for r in results).most_common():
+              print(f"- `{rule}` · `{path}` · {count}")
+          PY
