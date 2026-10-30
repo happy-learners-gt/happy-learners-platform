@@ -21,5 +21,5 @@ export default defineConfig({
     { name: "desktop", use: { browserName: "chromium", viewport: { width: 1365, height: 900 } } },
     { name: "mobile", use: { browserName: "chromium", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1 } },
   ],
-  ...(external ? {} : { webServer: { command: `node_modules/.bin/wrangler dev --local --config build/wrangler.json --persist-to "${storage}" --ip 127.0.0.1 --port ${port} --inspector-port 0 --var RESTORE_ENABLED:true`, url: `${localUrl}/api/health`, timeout: 60000, reuseExistingServer: false } }),
+  ...(external ? {} : { webServer: { command: `node_modules/.bin/wrangler dev --local --config build/wrangler.json --persist-to "${storage}" --ip 127.0.0.1 --port ${port} --inspector-port 0 --var RESTORE_ENABLED:true --var LESSON_GENERATOR:fixture`, url: `${localUrl}/api/health`, timeout: 60000, reuseExistingServer: false } }),
 });
