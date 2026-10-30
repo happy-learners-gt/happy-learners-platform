@@ -171,7 +171,7 @@ export type { CurriculumPackage, PackageCompetency, PackageIndicator } from "./c
 export { draftFromOutput, fixtureGenerator, maxExcerpt, maxProposalItems, pagesLabel, pagesPerProposal, proposalBatch, proposalProblem, proposalPrompt, proposalPromptVersion, proposalSchema, proposalStatusLabels, relevantPages, sourceCitationVerified, sourceQuote, terms } from "./lesson-proposals";
 export type { BookPage, LessonDraftGenerator, ProposalInput, ProposalOutput } from "./lesson-proposals";
 export { pdfFile, pdfString, wrap } from "./pdf";
-export type { PdfBlock, PdfDocument } from "./pdf";
+export type { PdfAlign, PdfBlock, PdfDocument, PdfImage, PdfPage, PdfTable } from "./pdf";
 export { fixtureMapper, mapCandidatePages, mapCandidates, mapPrompt, mapPromptVersion, mapSchema, mapSourceLabels, maxCandidateText, pagesInput, verifiedPages } from "./book-map";
 export type { BookMapper, MapEvidence, MapInput, MapOutput, MapSource } from "./book-map";
 export { classMinutesOf, lessonReview } from "./lesson-review";
@@ -188,3 +188,6 @@ export { solveTimetable, weekdayNames } from "./timetable-solver";
 export type { FixedMeeting, SolverBlock, SolverDay, SolverEducator, SolverInput, SolverMeeting, SolverResult, SolverRule, SolverSection, UnplacedSection } from "./timetable-solver";
 export { fixtureRulesTranslator, ruleText, rulesPrompt, rulesPromptVersion, rulesSchema, solverRule } from "./timetable-rules";
 export type { RuleContext, RulesInput, RulesOutput, RulesTranslator } from "./timetable-rules";
+export { defaultTemplate, fieldsIn, fill, renderReport, reportKinds, templateInput } from "./report-templates";
+export type { ReportKind, ReportKindSpec, ReportRecord, ReportTemplate, TemplateBlock } from "./report-templates";
+export { jpegImage } from "./pdf";
