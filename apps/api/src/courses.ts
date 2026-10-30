@@ -1,5 +1,6 @@
 import type { Competency, Course, CourseFormat, CourseSettings, Curriculum, EducationLevel, LearningOutcome, LearningUnit, Material, Member, StudyProgram, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
 import { cleanText, competencyInput, competencyLimit, completeOrder, courseInput, effectiveProfile, materialInput, outcomeInput, outcomeLimit, programInput, record, resolveSettings, validOutcomeIds } from "@happy-learners/domain";
+import { rejectPolicyChange } from "./freedom-plan";
 import type { Database } from "./storage";
 import { filesFor } from "./files";
 import { event, recordEvent, teamsFor, updateTeam } from "./team";
@@ -158,6 +159,12 @@ export async function courses(path: string, method: string, input: unknown, curr
     }
     const schemeError = await gradingSchemeError(db, current.organizationId, data.settings.gradingSchemeId);
     if (schemeError) return schemeError;
+    if (course) {
+      const program = data.programId ? (await programsFor(db, current.organizationId)).find(item => item.id === data.programId) ?? null : null;
+      const next = { ...course, settings: data.settings, educationType: data.educationType, level: data.level, modality: data.modality, pacing: data.pacing, format: data.format };
+      const blocked = await rejectPolicyChange(db, current.organizationId, course.id, resolveSettings(course, program).values.sectionFreedom ?? "shared", resolveSettings(next, program).values.sectionFreedom ?? "shared");
+      if (blocked) return blocked;
+    }
     const cid = id || `course-${crypto.randomUUID()}`;
     const values = [data.title, data.objective, legacyProfile(data.format, data.level), data.programId, data.educationType, data.level, data.format, data.modality, data.pacing, data.area || null, JSON.stringify(data.settings), data.status, now] as const;
     if (course) {
@@ -283,6 +290,14 @@ export async function programs(path: string, method: string, input: unknown, cur
   if (list.some(item => item.id !== id && item.name.toLocaleLowerCase("es") === nameKey)) return reply({ error: "Ya existe un programa con ese nombre." }, 409);
   const schemeError = await gradingSchemeError(db, current.organizationId, data.settings.gradingSchemeId);
   if (schemeError) return schemeError;
+  if (old) {
+    const nextProgram = { ...old, settings: data.settings, locked: data.locked };
+    const coursesOfProgram = (await coursesFor(db, current.organizationId)).filter(item => item.programId === old.id);
+    for (const item of coursesOfProgram) {
+      const blocked = await rejectPolicyChange(db, current.organizationId, item.id, resolveSettings(item, old).values.sectionFreedom ?? "shared", resolveSettings(item, nextProgram).values.sectionFreedom ?? "shared");
+      if (blocked) return blocked;
+    }
+  }
   const now = new Date().toISOString(), pid = id || `program-${crypto.randomUUID()}`;
   const values = [data.name, nameKey, data.description, data.educationType, data.level, data.format, data.modality, data.pacing, data.area || null, JSON.stringify(data.settings), JSON.stringify(data.locked), data.status, now] as const;
   if (old) {

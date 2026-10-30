@@ -366,7 +366,7 @@ function ProgramDialog({ item, onClose, onSave }: { item?: StudyProgram; onClose
       </div>
       <fieldset className="config-section"><legend>Ajustes para sus cursos</legend>
         <p className="muted small">Sin valor, cada curso usa lo que corresponde a su tipo. Con valor, es el punto de partida de sus cursos; si lo fijas, ningún curso del programa puede cambiarlo.</p>
-        <ul className="settings-list">{settingDefinitions.map(definition => {
+        <ul className="settings-list">{settingDefinitions.filter(definition => definition.key !== "sectionFreedom").map(definition => {
           const key = definition.key;
           const options = key === "gradingSchemeId" ? schemeOptions(schemes, settings[key]) : settingChoices(key, settings[key]);
           return <li key={key} className="setting-item">

@@ -196,7 +196,7 @@ export function CourseForm({ course, onSaved, cancelHref, readOnly = false }: { 
       <section className="config-section" aria-labelledby="behaviour-title">
         <h2 id="behaviour-title">Comportamiento del curso</h2>
         <p className="muted small">Cada ajuste toma su valor del tipo de curso o del programa. Cámbialo solo si este curso necesita algo distinto.</p>
-        <ul className="settings-list">{settingDefinitions.map(definition => {
+        <ul className="settings-list">{settingDefinitions.filter(definition => definition.key !== "sectionFreedom").map(definition => {
           const key = definition.key, source = resolved.source[key], locked = source === "program-locked";
           const inherited = program?.settings[key] !== undefined ? program.settings[key] : derivedSettings({ ...profile, format: dims.format })[key];
           const options = key === "gradingSchemeId" ? schemeOptions(schemes, settings[key]) : settingChoices(key, settings[key]);
