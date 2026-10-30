@@ -13,10 +13,10 @@ Reemplaza la necesidad de recordar el historial. Se actualiza al cerrar cada lot
 | 1.3.2 | Grupos de trabajo y calificación grupal (WebPA) | En producción |
 | 1.3.3 | Rediseño de la evaluación y grupos unificados (`docs/design/evaluacion.md`) | En producción (#86) |
 | 1.3.4 | Agenda y calendario institucional rediseñados (`docs/design/agenda-y-calendario.md`) | En producción (#87) |
-| 1.3.5 | Respaldo restaurable en cualquier espacio (invitaciones sin el hash de su enlace) | En revisión (PR) |
-| 1.3.6 | Libertad de cátedra por sección (`docs/design/libertad-de-catedra.md`, lotes 4a–4c) | Diseño y ficha listos; pendiente de Cursor |
+| 1.3.5 | Respaldo restaurable en cualquier espacio (invitaciones sin el hash de su enlace) | En producción (#88); `Release drill` verde |
+| 1.3.6 | Libertad de cátedra por sección (`docs/design/libertad-de-catedra.md`, lotes 4a–4c) | Revisado; en PR |
 
-Siguiente migración libre: **0065** (reservadas por la ficha del lote 4: 0065, 0066 y 0067). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
+Siguiente migración libre: **0068** (el lote 4 usa 0065, 0066 y 0067). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
 
 ## 2. Cómo se trabaja (no repetir errores)
 
@@ -56,13 +56,13 @@ con apoyo puntual.
 
 ### Carril B · Seguridad y confiabilidad (empieza ya)
 
-1. **Restauración de respaldos** (1.3.5, en PR): las invitaciones se copian sin el hash de su enlace, así que un contrato
+1. ~~Restauración de respaldos~~ (1.3.5, hecho; el ensayo `Release drill` restauró la copia de producción): las invitaciones se copian sin el hash de su enlace, así que un contrato
    que llegó con una se restaura en cualquier espacio. Tras desplegar: correr `Release drill` (restaura la copia de
    producción en la vista previa). Pendiente: simulacro en cada cambio con una copia anónima (requiere tocar `.github/`
    con autorización).
-2. **Escáneres en CI** (sin tocar `.github/` sin autorización explícita): CodeQL o Semgrep (incluidas reglas propias:
-   SQL armado con texto, rutas sin verificación de permisos, `organization_id` ausente en consultas), escaneo de
-   dependencias (OSV/Dependabot) y de secretos.
+2. ~~Escáneres en CI~~ (hecho, #89): gitleaks, OSV-Scanner y Semgrep con la regla propia `sql-interpolated-text`
+   (`docs/operations/escaneres.md`). Pendiente: hacerlos obligatorios tras dos semanas; actualizar wrangler (vence la
+   excepción de miniflare el 30-nov); CodeQL solo con GitHub Code Security (decisión del usuario, carril D).
 3. **Auditoría de seguridad manual** con modelo de amenazas: aislamiento entre organizaciones, permisos por ruta
    (matriz exhaustiva generada desde el enrutador), sesiones, archivos y PDF, datos de menores, IA (entradas del libro y
    salidas). Resultado: `docs/security/auditoria-2026-11.md` con hallazgos priorizados y lotes de corrección.
@@ -114,3 +114,5 @@ con apoyo puntual.
 - 2026-10-29: 1.3.3 (#86) y 1.3.4 (#87) en producción. Correcciones de CI en #87: selector de fecha oculto que
   desbordaba y sección de prueba sin prefijo E2E. Diseño y ficha del lote 4 listos (4a–4c).
 - 2026-10-29: carril B.1 en PR (1.3.5). La libertad de cátedra pasa a 1.3.6.
+- 2026-10-30: 1.3.5 (#88) en producción y `Release drill` verde; escáneres (#89) integrados; se amplió el presupuesto
+  de GitHub Actions (el de octubre se agotó). Lote 4 (1.3.6) revisado: pruebas, capturas y permisos; en PR.

@@ -571,7 +571,7 @@ export async function student(path: string, method: string, input: unknown, requ
   const base = { group: { name: access.groupName }, course: { title: access.courseTitle }, organization: access.organizationName, today, pacing: access.pacing, learner: access.learnerId ? { id: access.learnerId, name: access.learnerName! } : null };
   if (selfPaced) {
     const [lessons, done, roster] = await db.batch([
-      db.prepare(`${pathLessons} ORDER BY u.position,l.position,l.id`).bind(access.courseId, access.groupId),
+      db.prepare(`${pathLessons} ORDER BY u.position,l.position,l.id`).bind(access.courseId, access.groupId), // nosemgrep: sql-interpolated-text -- pathLessons es una consulta constante
       db.prepare("SELECT lesson_id AS lessonId,completed_at IS NOT NULL AS completed FROM learner_progress WHERE group_id=? AND learner_id=?").bind(access.groupId, access.learnerId || ""),
       db.prepare("SELECT id,display_name AS name FROM group_learners WHERE group_id=? AND status='active' ORDER BY display_name,id").bind(access.groupId),
     ]) as unknown as [{ id: string; title: string | null; shareCode: string; unitId: string; unitName: string; groupId: string | null; core: number }[], { lessonId: string; completed: number }[], { id: string; name: string }[]];
@@ -619,7 +619,7 @@ export async function studentAccess(db: Database, tokenHash: string) {
 const pathLessons = "SELECT l.id,l.group_id AS groupId,l.is_core AS core,json_extract(l.published_content,'$.title') AS title,json_extract(l.published_content,'$.shareCode') AS shareCode,u.id AS unitId,u.name AS unitName FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id AND u.status='active' WHERE u.course_id=? AND l.archived=0 AND l.revision>0 AND json_extract(l.published_content,'$.shareCode') IS NOT NULL AND (l.group_id IS NULL OR l.group_id=?)";
 export async function pathLesson(db: Database, courseId: string, shareCode: unknown, groupId = "") {
   if (typeof shareCode !== "string" || shareCode.length > 64) return null;
-  const row = await db.prepare(`${pathLessons} AND json_extract(l.published_content,'$.shareCode')=?`).bind(courseId, groupId, shareCode).first<{ id: string; groupId: string | null }>();
+  const row = await db.prepare(`${pathLessons} AND json_extract(l.published_content,'$.shareCode')=?`).bind(courseId, groupId, shareCode).first<{ id: string; groupId: string | null }>(); // nosemgrep: sql-interpolated-text -- pathLessons es una consulta constante
   if (!row) return null;
   const organization = groupId ? await db.prepare("SELECT organization_id AS id FROM courses WHERE id=?").bind(courseId).first<{ id: string }>() : null;
   const allowed = organization ? await effectiveLessonIds(db, organization.id, courseId, groupId) : null;
