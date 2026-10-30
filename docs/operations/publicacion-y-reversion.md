@@ -13,7 +13,11 @@ cambio descrito en el manual de despliegue de `happy-learners-ops`.
 ## Publicación
 
 1. El PR pasa `Platform delivery`: verificación, pruebas de navegador, accesibilidad y la vista previa aislada.
-2. La integración en `main` construye un artefacto, lo verifica y lo publica en producción.
+2. La integración en `main` construye un artefacto, lo verifica y lo publica en producción. Si el PR estaba al día con
+   `main` (el commit de integración tiene el mismo árbol que la cabeza del PR) y esa cabeza pasó `Platform delivery`
+   completo, no se repiten la verificación ni las pruebas de navegador: solo se reconstruye el artefacto con el SHA de
+   `main` (ahorra unos 15 minutos de Actions por integración). Para aprovecharlo, integrar `main` en la rama antes del
+   último push del PR.
 3. El pipeline ejecuta `scripts/critical-flows.mjs` contra producción con `EXPECTED_SHA` igual al commit publicado:
    página, salud, versión, acceso anónimo denegado, inicio de sesión, organización, lección publicada, errores y cierre
    de sesión.
