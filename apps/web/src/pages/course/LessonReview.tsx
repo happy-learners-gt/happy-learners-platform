@@ -51,7 +51,7 @@ const shown = (value: string) => valueLabels[value] || value;
 function changeTitle(change: ImproveChange) {
   if (change.kind === "objective") return "Objetivo de la lección";
   if (change.kind === "new-activity") return "Nueva actividad";
-  return `${change.activityTitle || "Actividad"} · ${fieldLabels[change.field!]}`;
+  return `${change.activityTitle ? `«${change.activityTitle}»` : "Actividad"} · ${fieldLabels[change.field!]}`;
 }
 
 /** The improvement as a draft: each change with what it replaces, accepted or discarded one by one (1.4.1). */
