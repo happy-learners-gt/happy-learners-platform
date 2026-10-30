@@ -43,6 +43,12 @@ describe("resource records (1.3.7)", () => {
       .toBe("López, A. (s. f.). Fracciones equivalentes [Video]. YouTube. https://youtu.be/abc");
     expect(citation(source({ type: "website", title: "Fracciones", authors: [institution("Mate fácil")], year: null, metadata: { site: "Mate fácil", retrieved: "2026-10-15", url: "https://mate.example/fracciones" } }), "apa7"))
       .toBe("Mate fácil. (s. f.). Fracciones. Mate fácil. Recuperado el 15 de octubre de 2026, de https://mate.example/fracciones");
+    // Without authorship the title moves to the author's place (APA 7, 9.12).
+    expect(citation(source({ type: "other", title: "Geometría interactiva", authors: [], year: null }), "apa7")).toBe("Geometría interactiva. (s. f.).");
+    expect(citation(source({ type: "book", title: "Manual de geometría", authors: [], year: 2024, metadata: { edition: "2", publisher: "Editorial escolar" } }), "apa7"))
+      .toBe("Manual de geometría (2.ª ed.). (2024). Editorial escolar.");
+    expect(citation(source({ type: "video", title: "Fracciones", authors: [], year: null, metadata: { platform: "YouTube", url: "https://youtu.be/x" } }), "apa7"))
+      .toBe("Fracciones [Video]. (s. f.). YouTube. https://youtu.be/x");
     expect(citation(source({ type: "book", title: "Otra", authors: [person("López", "Ana")], citationOverride: "López, Ana. Otra, s. f." }), "apa7")).toBe("López, Ana. Otra, s. f.");
   });
 
