@@ -14,6 +14,7 @@
     "build:web": "npm run build --workspace @happy-learners/web",
     "typecheck": "tsc -p apps/web/tsconfig.json && tsc -p apps/api/tsconfig.json && tsc -p packages/domain/tsconfig.json && tsc -p tsconfig.json",
     "types": "wrangler types --config infrastructure/wrangler.jsonc apps/api/worker-configuration.d.ts",
+    "ai:eval": "AI_EVAL_LIVE=1 vitest run tests/ai-evals.test.ts",
     "test": "vitest run",
     "dev": "npm run build && wrangler dev --local --config build/wrangler.json",
     "verify": "./scripts/verify",
@@ -35,5 +36,5 @@
     "wrangler": "4.132.0",
     "yaml": "2.9.1"
   },
-  "version": "1.3.7"
+  "version": "1.4.0"
 }

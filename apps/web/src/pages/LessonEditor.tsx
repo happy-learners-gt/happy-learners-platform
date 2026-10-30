@@ -23,6 +23,7 @@ import { Menu } from "../ui/Menu";
 import { moveItem, SortHandle } from "../ui/Sortable";
 import { Breadcrumbs, Button, EmptyState, ErrorState, Field, Loading, PrimaryAction, StatusBadge } from "../ui/primitives";
 import { useCourse } from "./course/context";
+import { QualityChip, ReviewPanel, reviewOf, useReviewBasis } from "./course/LessonReview";
 import { LessonPlayer } from "./StudentLesson";
 import { FileViewer } from "../FileViewer";
 const RichText = lazy(() => import("../RichText").then(module => ({ default: module.RichText })));
@@ -40,6 +41,8 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
   const { member } = useSession();
   const { url, navigate } = useNavigation();
   const { toast, confirm } = useFeedback();
+  // 1.4.0: the review with a fact-based score, recomputed from the draft as it changes.
+  const reviewBasis = useReviewBasis(course.id, curriculum.outcomes.length), [checking, setChecking] = useState(false);
   const [lesson, setLesson] = useState<Lesson | null>(null), [draft, setDraft] = useState<LessonDraft | null>(null), [loadError, setLoadError] = useState<ApiError | null>(null);
   const [save, setSave] = useState<Save>({ state: "saved" });
   const [selected, setSelected] = useState("details"), [publishing, setPublishing] = useState(false), [activeEditor, setActiveEditor] = useState<Editor | null>(null), [reviewing, setReviewing] = useState<"send" | "return" | null>(null);
@@ -415,8 +418,10 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
           {writable && <SaveIndicator save={save} published={!!lesson.revision} problem={problem?.message} waiting={!collabReady && save.state === "pending"} failed={collabStatus === "failed"} onReview={reviewProblem} onRetry={() => setSave({ state: "pending" })}/>}
           <div className="editor-buttons">
           <StatusBadge tone={stateTone[state]}>{lessonStateLabel[state]}</StatusBadge>
+          {reviewBasis && <Button icon="check" onClick={() => setChecking(true)}>Revisar <QualityChip review={reviewOf({ ...draft, materials: lesson.materials }, reviewBasis)}/></Button>}
           <Button icon="eye" onClick={() => navigate(`${base}/lecciones/${lessonId}?vista=previa`)}>Vista previa</Button>
           {primary}
+          {checking && reviewBasis && <ReviewPanel review={reviewOf({ ...draft, materials: lesson.materials }, reviewBasis)} onClose={() => setChecking(false)} onGoTo={id => { setChecking(false); goTo(id); }}/>}
           <Menu label="Más acciones de la lección" items={[
             ...(lesson.revision && lesson.shareCode && !draft.archived ? [{ label: "Abrir como estudiante", icon: "eye" as const, onSelect: () => window.open(`/aprender/${lesson.shareCode}`, "_blank", "noopener") }, { label: "Copiar enlace", icon: "copy" as const, onSelect: () => void copyLink(lesson.shareCode!) }] : []),
             { label: "Volver al contenido", icon: "back", onSelect: () => navigate(`${base}/contenido`) },

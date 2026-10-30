@@ -1,0 +1,76 @@
+/**
+ * AI usage (1.4.0, docs/design/asistente-ia.md §6a): what each run cost, from the price administration set for its
+ * model and date, and the month's totals by task, course and person. Prices are never fixed in code: they change.
+ */
+export type AiTask = "lesson-proposal" | "book-map" | "lesson-review-explain" | "lesson-improve" | "write" | "rules-to-constraints";
+/** Tokens a model reports for one answer. */
+export interface AiTokenUsage { inputTokens: number; outputTokens: number }
+export type AiRunStatus = "ok" | "error" | "transient" | "refused" | "incomplete";
+export interface AiRun {
+  id: string; userId: string | null; userName?: string | null; courseId: string | null; courseTitle?: string | null;
+  task: AiTask; promptVersion: string; generator: "openai" | "fixture"; model: string;
+  inputChars: number; inputTokens: number | null; outputTokens: number | null; durationMs: number; status: AiRunStatus; createdAt: string;
+}
+export interface AiPrice { model: string; effectiveFrom: string; inputPerMillion: number; outputPerMillion: number }
+export interface AiTotals { runs: number; errors: number; inputTokens: number; outputTokens: number; cost: number | null; averageMs: number }
+export interface AiUsageSummary { total: AiTotals; byTask: (AiTotals & { task: AiTask; label: string })[]; byCourse: (AiTotals & { courseId: string | null; label: string })[]; byPerson: (AiTotals & { userId: string | null; label: string })[] }
+
+export const aiTasks: AiTask[] = ["lesson-proposal", "book-map", "lesson-review-explain", "lesson-improve", "write", "rules-to-constraints"];
+export const aiTaskLabels: Record<AiTask, string> = {
+  "lesson-proposal": "Propuestas de lecciones", "book-map": "Mapa al plan", "lesson-review-explain": "Explicación de la revisión",
+  "lesson-improve": "Mejora de lecciones", write: "Redacción", "rules-to-constraints": "Reglas de horario",
+};
+
+/** The price in force for a model on a day: the latest one that started on or before it. */
+export function priceOn(prices: AiPrice[], model: string, day: string): AiPrice | null {
+  return prices.filter(price => price.model === model && price.effectiveFrom <= day).sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0] || null;
+}
+
+/** A run's cost in USD; 0 for the local fixture, null when its model has no price or its tokens are unknown. */
+export function runCost(run: AiRun, prices: AiPrice[]): number | null {
+  if (run.generator === "fixture") return 0;
+  const price = priceOn(prices, run.model, run.createdAt.slice(0, 10));
+  if (!price || run.inputTokens === null || run.outputTokens === null) return null;
+  return (run.inputTokens * price.inputPerMillion + run.outputTokens * price.outputPerMillion) / 1_000_000;
+}
+
+function totals(runs: AiRun[], prices: AiPrice[]): AiTotals {
+  const costs = runs.map(run => runCost(run, prices));
+  return {
+    runs: runs.length,
+    errors: runs.filter(run => run.status !== "ok").length,
+    inputTokens: runs.reduce((sum, run) => sum + (run.inputTokens || 0), 0),
+    outputTokens: runs.reduce((sum, run) => sum + (run.outputTokens || 0), 0),
+    // A cost that cannot be known makes the total unknown too, rather than silently smaller.
+    cost: costs.some(cost => cost === null) ? null : Math.round(costs.reduce<number>((sum, cost) => sum + (cost || 0), 0) * 1_000_000) / 1_000_000,
+    averageMs: runs.length ? Math.round(runs.reduce((sum, run) => sum + run.durationMs, 0) / runs.length) : 0,
+  };
+}
+function grouped<K extends string | null>(runs: AiRun[], key: (run: AiRun) => K, label: (run: AiRun) => string, prices: AiPrice[]) {
+  const groups = new Map<K, AiRun[]>();
+  for (const run of runs) groups.set(key(run), [...(groups.get(key(run)) || []), run]);
+  return [...groups.entries()].map(([value, list]) => ({ value, label: label(list[0]), ...totals(list, prices) })).sort((a, b) => b.runs - a.runs || a.label.localeCompare(b.label));
+}
+
+/** The month's usage: the total and the same totals by task, by course and by person. */
+export function aiUsageSummary(runs: AiRun[], prices: AiPrice[]): AiUsageSummary {
+  return {
+    total: totals(runs, prices),
+    byTask: grouped(runs, run => run.task, run => aiTaskLabels[run.task], prices).map(({ value, ...rest }) => ({ task: value, ...rest })),
+    byCourse: grouped(runs, run => run.courseId, run => run.courseTitle || "Sin curso", prices).map(({ value, ...rest }) => ({ courseId: value, ...rest })),
+    byPerson: grouped(runs, run => run.userId, run => run.userName || "Proceso automático", prices).map(({ value, ...rest }) => ({ userId: value, ...rest })),
+  };
+}
+
+/** A price as administration writes it: a model, a date and two amounts in USD per million tokens. */
+export function aiPriceInput(value: unknown): AiPrice | { error: string } {
+  const input = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const model = typeof input.model === "string" ? input.model.trim() : "";
+  if (!model || model.length > 80) return { error: "Escribe el nombre del modelo, de 1 a 80 caracteres." };
+  const effectiveFrom = typeof input.effectiveFrom === "string" ? input.effectiveFrom : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom) || Number.isNaN(Date.parse(`${effectiveFrom}T00:00:00Z`))) return { error: "Indica desde qué fecha rige el precio." };
+  const amount = (raw: unknown) => typeof raw === "number" ? raw : typeof raw === "string" && raw.trim() ? Number(raw.replace(",", ".")) : NaN;
+  const inputPerMillion = amount(input.inputPerMillion), outputPerMillion = amount(input.outputPerMillion);
+  if (![inputPerMillion, outputPerMillion].every(price => Number.isFinite(price) && price >= 0 && price <= 1000)) return { error: "Los precios son montos en USD por millón de tokens, de 0 a 1000." };
+  return { model, effectiveFrom, inputPerMillion, outputPerMillion };
+}

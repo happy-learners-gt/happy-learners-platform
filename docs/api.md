@@ -716,3 +716,27 @@ nada, 403 para otras cuentas, 404 si la clase no existe y 409 si no está finali
 actividad `updated`/`session` «Corrigió las horas efectivas de la clase del … : antes → después[, atribuidas a …]. Motivo:
 …». Responde `{ row }`. El respaldo incluye `class_hour_adjustments`.
 
+## Uso de IA y revisión de lecciones (1.4.0)
+
+Migración `0070_ai_runs.sql`. Toda llamada a un modelo (o al generador local) pasa por el harness (`apps/api/src/ai-runs.ts`)
+y deja una fila en `ai_runs`: persona, curso, tarea (`lesson-proposal`, `book-map`, …), versión del prompt, generador,
+modelo, caracteres de entrada, tokens de entrada y salida (de `usage` de la Responses API), duración y estado (`ok`,
+`error`, `transient`, `refused`, `incomplete`). **Nunca** el texto de la entrada ni de la respuesta.
+
+`GET /api/organization/ai-usage?mes=YYYY-MM` (solo administración; 403 al resto) devuelve `summary` del mes (total y por
+tarea, curso y persona: ejecuciones, errores, tokens, costo estimado y duración media), `previous` (total del mes anterior),
+`prices`, `unpriced` (modelos usados sin precio) y `recent` (las 50 últimas ejecuciones con su costo). El costo usa el
+precio vigente en la fecha de cada ejecución; `null` si el modelo no tiene precio o faltan los tokens; 0 con el generador
+local.
+
+`POST /api/organization/ai-prices` `{ model, effectiveFrom: "YYYY-MM-DD", inputPerMillion, outputPerMillion }` (USD por
+millón de tokens, de 0 a 1000; acepta coma decimal) registra o reemplaza el precio de ese modelo en esa fecha y devuelve
+`prices`. 400 con el mensaje de validación.
+
+La revisión de una lección no tiene ruta: el puntaje se calcula en el navegador con `lessonReview` del dominio, a partir
+de la lección, la secuencia, la cantidad de resultados del plan, si el curso tiene recursos indexados y la duración de
+sus clases (`classMinutesOf` sobre los horarios de sus secciones). No se guarda.
+
+`npm run ai:eval` corre `tests/ai-evals.test.ts` contra el modelo configurado (`OPENAI_API_KEY`, `OPENAI_MODEL` en el
+entorno) y deja el informe en `.release-evidence/ai-evals/`; sin `AI_EVAL_LIVE` usa el generador local y forma parte de
+`./scripts/verify`.
