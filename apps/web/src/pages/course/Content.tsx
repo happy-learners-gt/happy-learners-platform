@@ -12,6 +12,7 @@ import type { OutlineActions } from "../../ui/LessonOutline";
 import { Button, EmptyState, Field, PageHeader, PrimaryAction } from "../../ui/primitives";
 import { moveItem } from "../../ui/Sortable";
 import { useCourse } from "./context";
+import { Readings } from "./Readings";
 
 /** Renames and archives change only lesson metadata, so activities are omitted and kept by the API. */
 export function metadataBody(courseId: string, lesson: Lesson, patch: { title?: string; archived?: boolean }) {
@@ -122,8 +123,9 @@ export function Content() {
     {(archivedCount > 0 || showArchived) && <label className="switch"><input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)}/><span>Mostrar archivados ({archivedCount})</span></label>}
     {adapt && <p className="freedom-notice"><Icon name="info" size={18}/><span>Las secciones pueden adaptar lo que no es núcleo. <Link href={`${base}/secciones?vista=diferencias`}>Ver diferencias entre secciones</Link></span></p>}
     {adapt && publisher && <SectionProposals courseId={course.id} kinds={["lesson", "unit"]} onChanged={() => void reload()}/>}
-    {units.length ? <LessonOutline courseId={course.id} units={units} lessons={lessons} writable={writable && !busy} organize={publisher && !busy} noun={noun} showArchived={showArchived} actions={actions} expanded={expanded} setExpanded={setExpanded} focusUnit={focusUnit}
+    {units.length ? <><LessonOutline courseId={course.id} units={units} lessons={lessons} writable={writable && !busy} organize={publisher && !busy} noun={noun} showArchived={showArchived} actions={actions} expanded={expanded} setExpanded={setExpanded} focusUnit={focusUnit}
       core={adapt ? { isCore: lesson => lesson.isCore !== false, ...(publisher ? { markLesson: (lesson: Lesson, next: boolean) => void markCore({ lessons: [{ id: lesson.id, core: next }] }, next ? "Quedó en el núcleo." : "Salió del núcleo."), markUnit: (unit: LearningUnit, next: boolean) => void markCore({ units: [{ id: unit.id, core: next }] }, next ? "La unidad quedó en el núcleo." : "La unidad salió del núcleo.") } : {}) } : undefined}/>
+      <Readings courseId={course.id} units={units} canEdit={!!writable}/></>
       : !creating && <EmptyState icon="content" title={`Este curso aún no tiene ${noun.many}`} action={publisher && <PrimaryAction icon="plus" onClick={() => setCreating(true)}>{`Crear ${noun.one}`}</PrimaryAction>}>{`${noun.A} agrupa lecciones sobre un mismo tema. Por ejemplo: “Greetings” o “Colores”.`}</EmptyState>}
     {publisher && creating && <form className="inline-form unit-form" onSubmit={createUnit} aria-label={noun.New} onKeyDown={event => { if (event.key === "Escape" && units.length) setCreating(false); }}>
       <h2>{noun.New}</h2>

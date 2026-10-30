@@ -83,7 +83,7 @@ export async function resources(path: string, method: string, input: unknown, cu
   if (method === "GET" && !resourceId) {
     const rows = await rowsOf(db, current.organizationId, course.id);
     const coverage = await resourceCoverage(db, course.id, rows);
-    return reply({ resources: rows.map(row => viewOf(row, coverage.get(row.id))), canManage: manage });
+    return reply({ resources: rows.map(row => viewOf(row, coverage.get(row.id))), plan: await planCoverage(db, course.id, rows), canManage: manage });
   }
   if (method === "GET") return reply({ resource: viewOf(found!, (await resourceCoverage(db, course.id, [found!])).get(found!.id)) });
   if (method === "DELETE") {
@@ -104,6 +104,21 @@ export async function resources(path: string, method: string, input: unknown, cu
     .bind(value.type, value.title, JSON.stringify(value.authors), value.year, JSON.stringify(value.metadata), value.language, value.license, value.shareable ? 1 : 0, value.level, value.area, value.role, value.citationOverride, now, found!.id, course.id, current.organizationId).run();
   const saved = (await rowsOf(db, current.organizationId, course.id)).find(row => row.id === found!.id)!;
   return reply({ resource: viewOf(saved) });
+}
+
+async function planCoverage(db: Database, courseId: string, rows: ResourceRow[]) {
+  const outcomes = (await db.prepare("SELECT id FROM course_outcomes WHERE course_id=? AND status='active' ORDER BY position,id").bind(courseId).all<{ id: string }>()).results;
+  const maps = (await db.prepare("SELECT r.id AS resourceId,r.title,m.outcome_id AS outcomeId,m.pages FROM book_maps m JOIN course_files f ON f.sha256=m.sha256 AND f.course_id=m.course_id JOIN course_resources r ON r.file_id=f.id AND r.course_id=m.course_id WHERE m.course_id=? AND m.status='confirmed'").bind(courseId).all<{ resourceId: string; title: string; outcomeId: string; pages: string }>()).results;
+  const index = rows.length ? (await db.prepare("SELECT resource_id AS resourceId,title,start_page AS startPage,end_page AS endPage FROM resource_index WHERE resource_id IN (SELECT id FROM course_resources WHERE course_id=?)").bind(courseId).all<{ resourceId: string; title: string; startPage: number | null; endPage: number | null }>()).results : [];
+  const byOutcome = outcomes.map(outcome => ({
+    outcomeId: outcome.id,
+    resources: maps.filter(item => item.outcomeId === outcome.id && JSON.parse(item.pages).length).map(item => {
+      const pages = JSON.parse(item.pages) as number[];
+      const chapter = index.find(entry => entry.resourceId === item.resourceId && entry.startPage !== null && pages.some(page => page >= entry.startPage! && page <= (entry.endPage ?? entry.startPage!)))?.title || null;
+      return { resourceId: item.resourceId, title: item.title, pages, chapter };
+    }),
+  }));
+  return { covered: byOutcome.filter(item => item.resources.length).length, total: outcomes.length, byOutcome };
 }
 
 async function resourceCoverage(db: Database, courseId: string, rows: ResourceRow[]) {
@@ -248,12 +263,17 @@ async function courseReadings(path: string, method: string, input: unknown, curr
 async function sectionReadings(db: Database, organizationId: string, courseId: string, section: { id: string; name: string; status: string }, access: NonNullable<Awaited<ReturnType<typeof accessTo>>>, manage: boolean) {
   if (access.sections !== "all" && !access.configure && !teachesSection(access, section.id)) return reply({ error: "Esta sección no está asignada a tu cuenta." }, 403);
   const rows = (await db.prepare(`${readingColumns} WHERE g.course_id=? AND g.organization_id=? AND (g.group_id IS NULL OR g.group_id=?) ORDER BY u.position,g.position`).bind(courseId, organizationId, section.id).all<ReadingRow>()).results; // nosemgrep: sql-interpolated-text -- readingColumns es una consulta constante
-  const learners = (await db.prepare("SELECT id FROM group_learners WHERE group_id=? AND status='active'").bind(section.id).all<{ id: string }>()).results;
+  const learners = (await db.prepare("SELECT id,display_name AS name FROM group_learners WHERE group_id=? AND status='active' ORDER BY display_name").bind(section.id).all<{ id: string; name: string }>()).results;
   const marks = rows.length ? (await db.prepare(`SELECT reading_id AS readingId,learner_id AS learnerId FROM reading_marks WHERE group_id=?`).bind(section.id).all<{ readingId: string; learnerId: string }>()).results : [];
   const required = rows.filter(row => row.required);
   const read = required.reduce((sum, row) => sum + marks.filter(mark => mark.readingId === row.id).length, 0);
   const percent = required.length && learners.length ? Math.round(read / (required.length * learners.length) * 100) : null;
-  return reply({ readings: rows.map(readingView), progress: { required: required.length, learners: learners.length, percent }, canManage: manage });
+  return reply({
+    readings: rows.map(readingView),
+    progress: { required: required.length, learners: learners.length, percent },
+    learners: learners.map(learner => ({ id: learner.id, name: learner.name, read: marks.filter(mark => mark.learnerId === learner.id).map(mark => mark.readingId) })),
+    canManage: manage,
+  });
 }
 const readingView = (row: ReadingRow) => ({ id: row.id, unitId: row.unitId, unitName: row.unitName, groupId: row.groupId, resourceId: row.resourceId, title: row.title, shareable: !!row.shareable, indexId: row.indexId, chapter: row.chapter, pages: row.pages, required: !!row.required, note: row.note, position: row.position, ...(row.groupId ? { own: true } : {}) });
 

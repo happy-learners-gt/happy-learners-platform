@@ -83,7 +83,7 @@ export interface Unit { id: string; levelId: string; name: string; objective: st
 export interface RichTextNode { type: string; text?: string; attrs?: Record<string, string | number | boolean | null>; marks?: { type: string; attrs?: Record<string, string | number | boolean | null> }[]; content?: RichTextNode[] }
 export interface RichTextDocument { type: "doc"; content: RichTextNode[] }
 /** One piece of an activity. Teacher notes guide the educator and are never published to students. */
-export interface ActivityBlock { id: string; kind: "text" | "resource" | "question" | "teacher-note"; instructions?: string; richContent?: RichTextDocument; resourceId?: string; options?: string[]; answer?: number }
+export interface ActivityBlock { id: string; kind: "text" | "resource" | "question" | "teacher-note"; instructions?: string; richContent?: RichTextDocument; resourceId?: string; chapter?: string; pages?: string; options?: string[]; answer?: number }
 export type ActivityPurpose = "explain" | "explore" | "practice" | "assess" | "reflect";
 export type ActivityGrouping = "individual" | "pairs" | "teams" | "whole-class";
 export type SequenceTemplate = "free" | "start-develop-close" | "five-e" | "ppp" | "workshop";

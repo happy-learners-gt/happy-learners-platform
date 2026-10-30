@@ -95,7 +95,7 @@ test("a legacy lesson without activity IDs opens with its text and saves", async
 
 test("private Office documents preview in the course library and reach students only through a published lesson", async ({ page, context }, info) => {
   await signIn(page, "educador-demo", "/cursos/course-exploradores/biblioteca");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Biblioteca del curso");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Recursos");
   const formats = [
     { ext: "docx" as const, marker: "Documento de demostración validado" },
     { ext: "pptx" as const, marker: "Presentación de demostración" },
@@ -105,7 +105,8 @@ test("private Office documents preview in the course library and reach students 
     const title = e2eName(info, `Documento ${ext}`), filename = `${title}.${ext}`;
     await page.getByRole("button", { name: "Agregar recurso", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Agregar recurso" });
-    await dialog.getByLabel("Documento").check();
+    await dialog.getByRole("radio", { name: "Archivo" }).check();
+    await dialog.getByRole("button", { name: "Continuar" }).click();
     await dialog.getByLabel("Archivo").setInputFiles({ name: filename, mimeType: "application/octet-stream", buffer: officePackage(ext) });
     await dialog.getByRole("button", { name: "Subir documento" }).click();
     await expect(toast(page)).toContainText(`«${filename}» se agregó`);
@@ -185,7 +186,8 @@ test("PDF and video upload, open in a full-size viewer, page through and go full
   async function upload(filename: string, buffer: Buffer) {
     await page.getByRole("button", { name: "Agregar recurso", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Agregar recurso" });
-    await dialog.getByLabel("Documento").check();
+    await dialog.getByRole("radio", { name: "Archivo" }).check();
+    await dialog.getByRole("button", { name: "Continuar" }).click();
     await dialog.getByLabel("Archivo").setInputFiles({ name: filename, mimeType: "application/octet-stream", buffer });
     await dialog.getByRole("button", { name: "Subir documento" }).click();
     return dialog;

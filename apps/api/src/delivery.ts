@@ -4,6 +4,7 @@ import type { PdfBlock } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { scopedCourses } from "./permissions";
 import { effectiveLessonIds } from "./freedom-plan";
+import { apaOf } from "./resources";
 
 /**
  * GET /api/courses/:id/units/:unitId/delivery.pdf?section=:groupId[&period=:periodId] — the delivery copy of a module
@@ -35,6 +36,7 @@ function lessonBlocks(lesson: Lesson, index: number, outcomes: Map<string, strin
       if (block.kind === "teacher-note") continue;
       const text = block.richContent ? richPlainText(block.richContent) : block.instructions || "";
       if (text.trim()) blocks.push({ text: text.trim(), indent: 22 });
+      if (block.kind === "resource" && (block.chapter || block.pages)) blocks.push({ text: [block.chapter, block.pages ? `págs. ${block.pages}` : ""].filter(Boolean).join(", "), indent: 22, size: 9.5 });
       if (block.kind === "question" && block.options) blocks.push(...block.options.map((option, choice) => ({ text: `${String.fromCharCode(97 + choice)}) ${option}`, indent: 32, size: 10 })));
     }
   });
@@ -90,9 +92,15 @@ export async function delivery(path: string, url: URL, current: Member, db: Data
     const label = tagged.groupId ? " · Propia de la sección" : tagged.core ? " · Núcleo" : "";
     return { ...lesson, title: `${lesson.title}${label}` };
   });
+  const bibliography = await apaOf(db, current.organizationId, courseId);
   const file = pdfFile({
     title: `${course[0].title} · ${unit[0].name}`, header, footer: deliveryFooter,
-    blocks: [{ text: unit[0].name, bold: true, size: 16 }, { text: `${published.length === 1 ? "1 lección publicada" : `${published.length} lecciones publicadas`}`, size: 9.5, space: 2 }, ...published.flatMap((lesson, index) => lessonBlocks(lesson, index, named))],
+    blocks: [
+      { text: unit[0].name, bold: true, size: 16 },
+      { text: `${published.length === 1 ? "1 lección publicada" : `${published.length} lecciones publicadas`}`, size: 9.5, space: 2 },
+      ...published.flatMap((lesson, index) => lessonBlocks(lesson, index, named)),
+      ...(bibliography.entries.length ? [{ text: "Bibliografía", bold: true, size: 13, space: 14 } as PdfBlock, ...bibliography.text.split("\n").filter(Boolean).map(text => ({ text, size: 9.5, space: 2 }))] : []),
+    ],
   });
   await db.prepare("INSERT INTO activity_events(id,organization_id,actor_id,action,target_type,target_id,course_id,group_id,summary,occurred_at) VALUES (?,?,?,'recorded','group',?,?,?,?,?)")
     .bind(`event-${crypto.randomUUID()}`, current.organizationId, current.id, sectionId, courseId, sectionId, `Generó el PDF de entrega de «${unit[0].name}» para «${section[0].title}»`.slice(0, 240), now.toISOString()).run();

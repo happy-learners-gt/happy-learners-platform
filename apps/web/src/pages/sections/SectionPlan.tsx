@@ -16,6 +16,7 @@ import { Tabs } from "../../ui/Tabs";
 import { ActivityPanel } from "../course/Assessment";
 import type { Activity, Period } from "../course/Assessment";
 import { useCourse } from "../course/context";
+import { Readings } from "../course/Readings";
 import { sectionCrumbs, useSection } from "./context";
 
 type Coverage = { lessons: { total: number; taught: number; planned: number; unplanned: number; unplannedIds: string[] }; outcomes: { total: number; covered: number; withoutLessons: number; withoutLessonIds: string[] }; behind: boolean };
@@ -138,6 +139,7 @@ export function SectionPlan() {
             },
           }}/>
         {(plan.hiddenUnits || []).length > 0 && <details className="freedom-hidden"><summary>Unidades ocultas en esta sección ({plan.hiddenUnits.length})</summary><ul className="freedom-list">{plan.hiddenUnits.map(unit => <li key={unit.id} className="freedom-row"><span className="freedom-title">{unit.title}</span><FreedomChip mark="hidden"/>{plan.canEdit && <button type="button" className="button ghost small" onClick={() => void override({ itemType: "unit", itemId: unit.id, position: null, hidden: false, replaces: null }, `«${unit.title}» vuelve a mostrarse.`)}>Mostrar</button>}</li>)}</ul></details>}
+        <Readings courseId={course.id} units={outlineUnits} sectionId={section.id} canEdit={plan.canEdit}/>
       </> : <SectionEvaluation plan={plan} assessment={assessment} periodId={periodId} onPeriod={setPeriodId} canEdit={plan.canEdit} policy={plan.policy} onAdd={setAdding} onHide={activity => void override({ itemType: "activity", itemId: activity.id, position: null, hidden: true, replaces: null }, `«${activity.title}» quedó oculta en esta sección.`)} onShare={activity => setShare({ itemType: "activity", itemId: activity.id, title: activity.title })} onPropose={activity => void propose("activity", activity.id, activity.title)}/>}
     </Tabs>
     {creating && <OwnLessonDialog units={outlineUnits} onClose={() => setCreating(false)} onCreate={async (unitId, title, objective) => {

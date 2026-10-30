@@ -12,6 +12,7 @@ import { InlineName } from "../../ui/LessonOutline";
 import { ActivityFeed } from "../../ui/progress";
 import { EmptyState, ErrorState, Loading, PageHeader, PrimaryAction, Progress, Section, StatTiles, StatusBadge } from "../../ui/primitives";
 import { CourseProvider, capabilities, courseConfiguration, useCourse, useCourseLoader } from "../course/context";
+import { ReadingProgress } from "../course/Readings";
 import { Classes } from "../course/Classes";
 import { SectionEducators, SectionStudents } from "../course/Sections";
 import { Timetable } from "../course/Timetable";
@@ -125,6 +126,7 @@ function SelfPacedOverview() {
           <Progress value={stats.started} max={stats.learners} label="Estudiantes que empezaron"/>
           <Progress value={stats.finished} max={stats.learners} label="Estudiantes que terminaron todas las lecciones"/>
           <p className="muted small">Sobre {plural(stats.lessonsPublished, "lección publicada", "lecciones publicadas")} del curso. Cada estudiante registra su avance al terminar una lección con el código de la sección.</p>
+          <ReadingProgress sectionId={section.id}/>
         </Section>
         <Section title="Actividad de la sección" className="order-3">
           <ActivityFeed section={section.id} limit={6} empty="Lo que se registre en esta sección aparecerá aquí."/>

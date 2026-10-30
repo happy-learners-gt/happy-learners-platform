@@ -7,6 +7,7 @@ import { CourseProvider, capabilities, courseConfiguration, useCourseLoader } fr
 import { Overview } from "./Overview";
 import { Content } from "./Content";
 import { CourseLibrary } from "./CourseLibrary";
+import { ResourcePage } from "./ResourcePage";
 import { Assistant } from "./Assistant";
 import { CourseSections } from "./Sections";
 import { Settings } from "./Settings";
@@ -54,7 +55,7 @@ export function CourseRoute({ id, area, item }: { id: string; area: string; item
       {area === "plan" && <Plan/>}
       {area === "evaluacion" && <Assessment/>}
       {area === "contenido" && <Content/>}
-      {area === "biblioteca" && <CourseLibrary/>}
+      {area === "biblioteca" && (item ? <ResourcePage resourceId={item}/> : <CourseLibrary/>)}
       {area === "asistente" && <Assistant/>}
       {area === "secciones" && <CourseSections/>}
       {area === "configuracion" && <Settings/>}
