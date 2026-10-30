@@ -11,10 +11,12 @@ Reemplaza la necesidad de recordar el historial. Se actualiza al cerrar cada lot
 | 1.3.0 | Calendario institucional (motor de reglas de fechas, calendarios por nivel) | En producción |
 | 1.3.1 | Evaluación agnóstica (esquemas, rúbricas, tribunal, niveles) | En producción |
 | 1.3.2 | Grupos de trabajo y calificación grupal (WebPA) | En producción |
-| 1.3.3 | Rediseño de la evaluación y grupos unificados (`docs/design/evaluacion.md`) | Integrado en `main`; despliegue pendiente de un reintento de CI (prueba intermitente) |
-| 1.3.4 | Agenda y calendario institucional rediseñados (`docs/design/agenda-y-calendario.md`) | En curso en `feat/HL-15-agenda` (ronda de corrección de Cursor) |
+| 1.3.3 | Rediseño de la evaluación y grupos unificados (`docs/design/evaluacion.md`) | En producción (#86) |
+| 1.3.4 | Agenda y calendario institucional rediseñados (`docs/design/agenda-y-calendario.md`) | En producción (#87) |
+| 1.3.5 | Respaldo restaurable en cualquier espacio (invitaciones sin el hash de su enlace) | En revisión (PR) |
+| 1.3.6 | Libertad de cátedra por sección (`docs/design/libertad-de-catedra.md`, lotes 4a–4c) | Diseño y ficha listos; pendiente de Cursor |
 
-Siguiente migración libre: **0065** (1.3.4 usa 0063 y 0064). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
+Siguiente migración libre: **0065** (reservadas por la ficha del lote 4: 0065, 0066 y 0067). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
 
 ## 2. Cómo se trabaja (no repetir errores)
 
@@ -40,12 +42,12 @@ con apoyo puntual.
 
 ### Carril A · Producto (plan 1.3 y 1.4, `docs/handoff/2026-10-29-plan-v1.3.md`)
 
-1. **1.3.3 en producción** (reintentar el job de `main`).
-2. **1.3.4 Agenda y calendario** (lote 1d): cerrar la ronda de corrección, revisar, PR, desplegar.
-3. **1.3.5 Libertad de cátedra por sección** (lote 4a, ficha lista): antes, escribir `docs/design/libertad-de-catedra.md`
-   (dónde se marca el núcleo, cómo ve la sección lo propio, la vista de diferencias para coordinación) y ajustar la ficha
-   4a a la numeración actual de migraciones (0065+) y a los grupos unificados de 1.3.3.
-4. **1.3.6 Biblioteca de recursos didácticos** (lote 5): diseño primero; tipos más allá del libro, metadatos y cita,
+1. ~~1.3.3 en producción~~ (hecho).
+2. ~~1.3.4 Agenda y calendario~~ (hecho).
+3. **1.3.6 Libertad de cátedra por sección** (lotes 4a–4c): diseño `docs/design/libertad-de-catedra.md` y ficha
+   `docs/handoff/cursor/lote-4a-libertad-de-catedra.md` listos (incluye unidades propias, revisión opcional, copiar a
+   otra sección y proponer al curso). Siguiente: Cursor implementa; revisar, PR, desplegar.
+4. **1.3.7 Biblioteca de recursos didácticos** (lote 5): diseño primero; tipos más allá del libro, metadatos y cita,
    índice por capítulos, mapeo a resultados, varias fuentes para la IA.
 5. **1.4.0 Asistente pedagógico como harness** (lote 6): diseño primero; revisión con puntaje basado en hechos, mejoras,
    cronograma y horarios con reglas (solver determinista), redacción en toda la plataforma, registro de consumo de IA.
@@ -54,9 +56,10 @@ con apoyo puntual.
 
 ### Carril B · Seguridad y confiabilidad (empieza ya)
 
-1. **Restauración de respaldos** (urgente): el respaldo de producción no se restaura (un contrato apunta a una
-   invitación inexistente). Corregir la integridad del dato, hacer que el respaldo sea restaurable y agregar un simulacro
-   de restauración en CI con una copia anónima.
+1. **Restauración de respaldos** (1.3.5, en PR): las invitaciones se copian sin el hash de su enlace, así que un contrato
+   que llegó con una se restaura en cualquier espacio. Tras desplegar: correr `Release drill` (restaura la copia de
+   producción en la vista previa). Pendiente: simulacro en cada cambio con una copia anónima (requiere tocar `.github/`
+   con autorización).
 2. **Escáneres en CI** (sin tocar `.github/` sin autorización explícita): CodeQL o Semgrep (incluidas reglas propias:
    SQL armado con texto, rutas sin verificación de permisos, `organization_id` ausente en consultas), escaneo de
    dependencias (OSV/Dependabot) y de secretos.
@@ -108,3 +111,6 @@ con apoyo puntual.
 ## 5. Bitácora
 
 - 2026-10-29: hoja de ruta creada. 1.3.3 integrado; 1.3.4 en corrección; carriles B, C y D definidos.
+- 2026-10-29: 1.3.3 (#86) y 1.3.4 (#87) en producción. Correcciones de CI en #87: selector de fecha oculto que
+  desbordaba y sección de prueba sin prefijo E2E. Diseño y ficha del lote 4 listos (4a–4c).
+- 2026-10-29: carril B.1 en PR (1.3.5). La libertad de cátedra pasa a 1.3.6.
