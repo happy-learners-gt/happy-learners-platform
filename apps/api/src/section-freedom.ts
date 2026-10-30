@@ -5,7 +5,9 @@ import { accessTo, forbidden } from "./access";
 import { configurationOf } from "./courses";
 import { content } from "./content";
 import { recordEvent } from "./team";
-import { courseDifferences, effectiveActivityIds, freedomPolicyOf, loadSection, policyLabel, sectionCoverage } from "./freedom-plan";
+import { courseDifferences, effectiveActivityIds, freedomPolicyOf, freedomReviewOf, loadSection, policyLabel, sectionCoverage } from "./freedom-plan";
+import { courseProposals, proposalLines, sectionSharing } from "./section-sharing";
+import type { Notifier } from "./notify";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
 const missing = () => reply({ error: "El elemento no está disponible en tu organización." }, 404);
@@ -25,9 +27,16 @@ function canRead(current: Member, access: CourseAccess, groupId: string) {
 }
 
 /** GET/POST/PUT/DELETE of a section's own plan, and the course core and the differences between sections. */
-export async function sectionFreedom(path: string, method: string, input: unknown, current: Member, db: Database): Promise<Response> {
-  const sectionPath = path.match(/^\/api\/sections\/([a-z0-9-]+)\/(plan|lessons|activities|content-overrides)$/);
-  if (sectionPath) return sectionRoute(sectionPath[1], sectionPath[2], method, input, current, db);
+export async function sectionFreedom(path: string, method: string, input: unknown, current: Member, db: Database, notifier?: Notifier): Promise<Response> {
+  const sectionPath = path.match(/^\/api\/sections\/([a-z0-9-]+)\/(plan|lessons|activities|content-overrides|units|copies|proposals|reviews)$/);
+  if (sectionPath) return sectionRoute(sectionPath[1], sectionPath[2], method, input, current, db, notifier);
+  const proposals = path.match(/^\/api\/courses\/([a-z0-9-]+)\/section-proposals(?:\/([a-z0-9-]+))?$/);
+  if (proposals) {
+    const access = await accessTo(db, current, proposals[1]);
+    if (access === undefined) return missing();
+    if (!access) return forbidden("Este curso no está asignado a tu cuenta.");
+    return courseProposals(proposals[1], proposals[2] || null, method, input, current, db, access, notifier);
+  }
   const coursePath = path.match(/^\/api\/courses\/([a-z0-9-]+)\/(core|sections\/differences)$/);
   if (!coursePath) return missing();
   const courseId = coursePath[1];
@@ -38,18 +47,23 @@ export async function sectionFreedom(path: string, method: string, input: unknow
   return markCore(db, current, courseId, access, input);
 }
 
-async function sectionRoute(groupId: string, area: string, method: string, input: unknown, current: Member, db: Database) {
+async function sectionRoute(groupId: string, area: string, method: string, input: unknown, current: Member, db: Database, notifier?: Notifier) {
   const opened = await openSection(db, current, groupId);
   if (opened instanceof Response) return opened;
   const { section, access } = opened;
   if (!canRead(current, access, groupId)) return forbidden("Esta sección no está asignada a tu cuenta.");
   const policy = await freedomPolicyOf(db, current.organizationId, section.courseId);
   if (policy === "shared") return reply({ error: "Esta sección sigue el contenido del curso." }, 404);
-  if (area !== "plan" && !teachesSection(access, groupId)) return forbidden("Solo quienes imparten la sección adaptan su plan.");
+  const adapting = teachesSection(access, groupId);
+  const overseeing = current.role === "admin" || access.publish || access.review || access.sections === "all";
+  if (area !== "plan" && area !== "reviews" && !adapting && !(overseeing && (area === "copies" || area === "proposals"))) return forbidden("Solo quienes imparten la sección adaptan su plan.");
+  if (area === "reviews" && !overseeing) return forbidden("La persona responsable del curso aprueba lo propio.");
   if (area !== "plan" && section.status !== "active") return reply({ error: "La sección está cerrada. Reactívala para hacer cambios." }, 409);
   if (area === "plan") return planOf(db, current, section, policy, teachesSection(access, groupId));
-  if (area === "lessons") return ownLesson(db, current, section, input);
-  if (area === "activities") return ownActivity(db, current, section, policy, input);
+  const shared = await sectionSharing(area, method, input, current, db, section, access, notifier);
+  if (shared) return shared;
+  if (area === "lessons") return ownLesson(db, current, section, input, notifier);
+  if (area === "activities") return ownActivity(db, current, section, policy, input, notifier);
   return saveOverride(db, current, section, policy, method, input);
 }
 
@@ -58,24 +72,33 @@ async function planOf(db: Database, current: Member, section: SectionRow, policy
   if (!("plan" in loaded)) return reply({ error: "Esta sección sigue el contenido del curso." }, 404);
   const coverage = await sectionCoverage(db, current.organizationId, section.courseId, section.id, loaded.plan);
   const ids = [...loaded.plan.lessons, ...loaded.plan.hiddenLessons].map(lesson => lesson.id);
-  const details = ids.length ? (await db.prepare(`SELECT id,status,revision,json_extract(content,'$.duration') AS duration FROM lessons WHERE id IN (${ids.map(() => "?").join(",")})`).bind(...ids).all<{ id: string; status: string; revision: number; duration: number | null }>()).results : [];
-  return reply({ policy, policyLabel: policyLabel(policy), section: { id: section.id, name: section.name }, canEdit, ...loaded.plan, coverage, details: Object.fromEntries(details.map(row => [row.id, { status: row.status, published: row.revision > 0, duration: row.duration || 0 }])) });
+  const details = ids.length ? (await db.prepare(`SELECT l.id,l.status,l.revision,json_extract(l.content,'$.duration') AS duration,(SELECT r.status FROM lesson_reviews r WHERE r.lesson_id=l.id AND r.status IN ('pending','returned') ORDER BY r.requested_at DESC LIMIT 1) AS review FROM lessons l WHERE l.id IN (${ids.map(() => "?").join(",")})`).bind(...ids).all<{ id: string; status: string; revision: number; duration: number | null; review: string | null }>()).results : [];
+  return reply({ policy, policyLabel: policyLabel(policy), section: { id: section.id, name: section.name }, canEdit, ...loaded.plan, coverage, details: Object.fromEntries(details.map(row => [row.id, { status: row.status, published: row.revision > 0, duration: row.duration || 0, ...(row.review ? { review: row.review } : {}) }])) });
 }
 
-async function ownLesson(db: Database, current: Member, section: SectionRow, input: unknown) {
+async function ownLesson(db: Database, current: Member, section: SectionRow, input: unknown, notifier?: Notifier) {
   const body = input && typeof input === "object" ? input as Record<string, unknown> : null;
   const unitId = typeof body?.courseUnitId === "string" ? body.courseUnitId : "";
-  const unit = await db.prepare("SELECT id FROM learning_units WHERE id=? AND course_id=? AND status='active'").bind(unitId, section.courseId).first();
+  const unit = await db.prepare("SELECT id FROM learning_units WHERE id=? AND course_id=? AND status='active' AND (group_id IS NULL OR group_id=?)").bind(unitId, section.courseId, section.id).first();
   if (!unit) return reply({ error: "Selecciona una unidad activa de este curso." }, 400);
   const created = await content(new URL("https://local/api/lessons"), "POST", input, current, db);
   if (!created.ok) return created;
   const payload = await created.json() as { lesson: { id: string; title: string } };
   await db.prepare("UPDATE lessons SET group_id=?,is_core=0 WHERE id=?").bind(section.id, payload.lesson.id).run();
+  if (await freedomReviewOf(db, current.organizationId, section.courseId)) {
+    const now = new Date().toISOString();
+    await db.prepare("INSERT INTO lesson_reviews(id,lesson_id,course_id,organization_id,status,note,requested_by,requested_at) VALUES (?,?,?,?,'pending','',?,?)")
+      .bind(`review-${crypto.randomUUID()}`, payload.lesson.id, section.courseId, current.organizationId, current.id, now).run();
+    const { reviewersOf } = await import("./notifications");
+    const { notify } = await import("./notify");
+    const course = (await db.prepare("SELECT title FROM courses WHERE id=?").bind(section.courseId).first<{ title: string }>())?.title || "Curso";
+    await notify(db, notifier, current, (await reviewersOf(db, current.organizationId, section.courseId)).map(userId => ({ userId, facts: { type: "review_submitted" as const, course, lesson: payload.lesson.title, actor: current.displayName || current.username }, targetId: payload.lesson.id, path: `/cursos/${section.courseId}/secciones?vista=diferencias` })));
+  }
   await recordEvent(db, current, { action: "created", targetType: "lesson", targetId: payload.lesson.id, courseId: section.courseId, groupId: section.id, summary: `Agregó la lección propia «${payload.lesson.title}» en «${section.name}»` });
   return reply({ lesson: { ...payload.lesson, groupId: section.id, core: false } }, 201);
 }
 
-async function ownActivity(db: Database, current: Member, section: SectionRow, policy: FreedomPolicy, input: unknown) {
+async function ownActivity(db: Database, current: Member, section: SectionRow, policy: FreedomPolicy, input: unknown, notifier?: Notifier) {
   const body = input && typeof input === "object" ? input as Record<string, unknown> : null;
   if (!body) return reply({ error: "Revisa la actividad." }, 400);
   const title = typeof body.title === "string" ? body.title.trim() : "";
@@ -115,6 +138,13 @@ async function ownActivity(db: Database, current: Member, section: SectionRow, p
   await db.prepare(`INSERT INTO assessment_activities(position,title,kind,points,due_on,category_id,grading,extra,retake_of,rubric,panel,group_mode,peer_min,peer_max,updated_at,id,organization_id,course_id,period_id,created_by,created_at,group_id,is_core)
     VALUES (?,?,?,?,?,?,?,?,NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`).bind(position, title, body.kind, points, dueOn, categoryId, grading, extra, rubric, panel, groupMode, peerMin, peerMax, now, id, current.organizationId, section.courseId, period.id, current.id, now, section.id).run();
   if (groupMode === "group" && setId) await db.prepare("INSERT INTO section_activity_sets(group_id,activity_id,kind,set_id) VALUES (?,?,'assessment',?)").bind(section.id, id, setId).run();
+  if (await freedomReviewOf(db, current.organizationId, section.courseId)) {
+    await db.prepare("UPDATE assessment_activities SET review_status='pending' WHERE id=?").bind(id).run();
+    const { reviewersOf } = await import("./notifications");
+    const { notify } = await import("./notify");
+    const course = (await db.prepare("SELECT title FROM courses WHERE id=?").bind(section.courseId).first<{ title: string }>())?.title || "Curso";
+    await notify(db, notifier, current, (await reviewersOf(db, current.organizationId, section.courseId)).map(userId => ({ userId, facts: { type: "review_submitted" as const, course, lesson: title, actor: current.displayName || current.username }, targetId: id, path: `/cursos/${section.courseId}/secciones?vista=diferencias` })));
+  }
   if (replaces) {
     const saved = await saveOverride(db, current, section, policy, "PUT", { itemType: "activity", itemId: id, position: null, hidden: false, replaces });
     if (!saved.ok) {
@@ -128,9 +158,9 @@ async function ownActivity(db: Database, current: Member, section: SectionRow, p
 
 async function saveOverride(db: Database, current: Member, section: SectionRow, policy: FreedomPolicy, method: string, input: unknown) {
   const body = input && typeof input === "object" ? input as Record<string, unknown> : null;
-  const itemType = body?.itemType === "lesson" || body?.itemType === "activity" ? body.itemType : null;
+  const itemType = body?.itemType === "lesson" || body?.itemType === "activity" || body?.itemType === "unit" ? body.itemType : null;
   const itemId = typeof body?.itemId === "string" ? body.itemId : "";
-  if (!itemType || !itemId) return reply({ error: "Elige la lección o la actividad." }, 400);
+  if (!itemType || !itemId) return reply({ error: "Elige la lección, la unidad o la actividad." }, 400);
   if (method === "DELETE") {
     await db.prepare("DELETE FROM section_content_overrides WHERE group_id=? AND item_type=? AND item_id=?").bind(section.id, itemType, itemId).run();
     await recordEvent(db, current, { action: "updated", targetType: "group", targetId: section.id, courseId: section.courseId, groupId: section.id, summary: `Quitó un ajuste del plan de «${section.name}»` });
@@ -147,22 +177,28 @@ async function saveOverride(db: Database, current: Member, section: SectionRow, 
   const rows = await db.batch([
     db.prepare(`SELECT l.id,l.course_unit_id AS unitId,l.position,l.is_core AS core,l.group_id AS groupId,json_extract(l.content,'$.title') AS title,json_extract(l.content,'$.outcomeIds') AS outcomes
       FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id WHERE u.course_id=? AND l.archived=0 AND (l.group_id IS NULL OR l.group_id=?)`).bind(section.courseId, section.id),
-    db.prepare("SELECT id,period_id AS periodId,category_id AS categoryId,points,position,is_core AS core,group_id AS groupId,title FROM assessment_activities WHERE course_id=? AND organization_id=? AND (group_id IS NULL OR group_id=?)").bind(section.courseId, current.organizationId, section.id),
+    db.prepare("SELECT id,period_id AS periodId,category_id AS categoryId,points,position,is_core AS core,group_id AS groupId,title,review_status AS reviewStatus FROM assessment_activities WHERE course_id=? AND organization_id=? AND (group_id IS NULL OR group_id=?)").bind(section.courseId, current.organizationId, section.id),
     db.prepare("SELECT item_type AS itemType,item_id AS itemId,position,hidden,replaces FROM section_content_overrides WHERE group_id=? AND NOT (item_type=? AND item_id=?)").bind(section.id, itemType, itemId),
+    db.prepare("SELECT id,name AS title,position,group_id AS groupId FROM learning_units WHERE course_id=? AND status='active' AND (group_id IS NULL OR group_id=?)").bind(section.courseId, section.id),
   ]) as unknown as [
     { id: string; unitId: string; position: number; core: number; groupId: string | null; title: string | null; outcomes: string | null }[],
-    { id: string; periodId: string; categoryId: string; points: number; position: number; core: number; groupId: string | null; title: string }[],
+    { id: string; periodId: string; categoryId: string; points: number; position: number; core: number; groupId: string | null; title: string; reviewStatus: string | null }[],
     { itemType: FreedomOverride["itemType"]; itemId: string; position: number | null; hidden: number; replaces: string | null }[],
+    { id: string; title: string; position: number; groupId: string | null }[],
   ];
   const lessonOf = (row: (typeof rows)[0][number]) => ({ id: row.id, unitId: row.unitId, position: row.position, core: row.core === 1, groupId: row.groupId, title: row.title || "Lección", outcomeIds: [] as string[] });
-  const activityOf = (row: (typeof rows)[1][number]) => ({ ...row, core: row.core === 1 });
+  const activityOf = (row: (typeof rows)[1][number]) => ({ id: row.id, periodId: row.periodId, categoryId: row.categoryId, points: row.points, position: row.position, core: row.core === 1, groupId: row.groupId, title: row.title, ...(row.reviewStatus === "pending" ? { review: true } : {}) });
+  const courseLessons = rows[0].filter(row => row.groupId === null).map(lessonOf);
+  const coreOf = (unitId: string) => { const own = courseLessons.filter(item => item.unitId === unitId); return own.length > 0 && own.every(item => item.core); };
   const checked = sectionContent({
     policy,
-    lessons: rows[0].filter(row => row.groupId === null).map(lessonOf),
+    lessons: courseLessons,
     sectionLessons: rows[0].filter(row => row.groupId === section.id).map(lessonOf),
     activities: rows[1].filter(row => row.groupId === null).map(activityOf),
     sectionActivities: rows[1].filter(row => row.groupId === section.id).map(activityOf),
     overrides: [...rows[2].map(row => ({ itemType: row.itemType, itemId: row.itemId, position: row.position, hidden: row.hidden === 1, replaces: row.replaces })), next],
+    units: rows[3].filter(row => row.groupId === null).map(row => ({ ...row, groupId: null, core: coreOf(row.id) })),
+    sectionUnits: rows[3].filter(row => row.groupId === section.id).map(row => ({ ...row, core: false })),
   });
   if (!checked.ok) return reply({ error: checked.errors[0], errors: checked.errors }, 409);
   if (hidden && itemType === "lesson" && await db.prepare("SELECT 1 AS ok FROM class_session_lessons p JOIN class_sessions s ON s.id=p.session_id WHERE p.lesson_id=? AND s.group_id=? AND s.status='completed'").bind(itemId, section.id).first())
@@ -228,7 +264,14 @@ async function differences(db: Database, current: Member, courseId: string, acce
   if (current.role !== "admin" && !access.publish && !access.review && access.sections !== "all") return forbidden("Las diferencias las ven la persona responsable del curso, coordinación y administración.");
   const policy = await freedomPolicyOf(db, current.organizationId, courseId);
   if (policy === "shared") return reply({ error: "Con «Igual en todas las secciones» no hay diferencias que mostrar." }, 404);
-  return reply({ policy, policyLabel: policyLabel(policy), sections: await courseDifferences(db, current.organizationId, courseId) });
+  const sections = await courseDifferences(db, current.organizationId, courseId);
+  for (const section of sections) {
+    section.detail.proposals = await proposalLines(db, section.id);
+    const lessons = (await db.prepare("SELECT l.id,json_extract(l.content,'$.title') AS title,r.status FROM lesson_reviews r JOIN lessons l ON l.id=r.lesson_id WHERE l.group_id=? AND r.status IN ('pending','returned')").bind(section.id).all<{ id: string; title: string; status: "pending" | "returned" }>()).results;
+    const activities = (await db.prepare("SELECT id,title,review_status AS status FROM assessment_activities WHERE group_id=? AND review_status IN ('pending','returned')").bind(section.id).all<{ id: string; title: string; status: "pending" | "returned" }>()).results;
+    section.detail.reviews = [...lessons.map(item => ({ ...item, type: "lesson" as const })), ...activities.map(item => ({ ...item, type: "activity" as const }))];
+  }
+  return reply({ policy, policyLabel: policyLabel(policy), sections });
 }
 
 export { effectiveActivityIds };

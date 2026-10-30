@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.6 — 2026-10-29
+
+- Un curso puede dejar que cada sección adapte lo que no es núcleo, u obligar solo los resultados y permitir reemplazar una actividad del núcleo.
+- El responsable marca el núcleo en Contenido y Evaluación. Cada sección tiene su plan para agregar, reordenar u ocultar lo demás, y puede crear una unidad propia.
+- Si el curso lo pide, lo propio queda en revisión hasta que el responsable lo aprueba. Una sección puede copiar lo propio a otra o proponerlo al curso.
+- Coordinación ve las diferencias entre secciones. Con «Igual en todas las secciones» el curso se ve y se comporta como hasta ahora.
+
 ## 1.3.4 — 2026-10-29
 
 - La Agenda es el único lugar del menú para consultar fechas: Día, Semana, Mes y Año, con clases a su hora, días sin clase sombreados, eventos y entregas.

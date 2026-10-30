@@ -31,7 +31,7 @@ export { acceptsAttendance, cancelPlanInput, classActions, classPlanInput, class
 export type { ClassAction, ClassPlan, SessionFilter } from "./classes";
 export { materialInput, record, cleanText, validTermIds, completeOrder } from "./courses";
 export { coreCoverage, freedomPolicies, freedomPolicyLabel, policyChange, sectionContent, sectionDifferences } from "./section-freedom";
-export type { CoreCoverage, EffectiveActivity, EffectiveLesson, FreedomActivity, FreedomLesson, FreedomOverride, FreedomPolicy, SectionContent, SectionDifference, SectionDifferenceSource } from "./section-freedom";
+export type { CoreCoverage, EffectiveActivity, EffectiveLesson, EffectiveUnit, FreedomActivity, FreedomLesson, FreedomOverride, FreedomPolicy, FreedomUnit, SectionContent, SectionDifference, SectionDifferenceSource } from "./section-freedom";
 export { educationTypes, educationLevels, knowledgeAreas, areaLabel, courseFormats, modalities, pacings, moduleLabels, moduleNoun, settingDefinitions, derivedSettings, sourceLabel, effectiveProfile, resolveSettings, settingsInput, settingChoices, settingText, settingValue, profileInput, courseInput, programInput, coursePresets, labelOf } from "./academic";
 export type { ModuleNoun, SettingKey, SettingSource } from "./academic";
 export { sequenceTemplates, sequenceOf, purposes, groupings, blockKinds, blocksOf, phaseOf, studentActivities, resourceIdsOf, richTextFieldsOf, hasText } from "./sequences";

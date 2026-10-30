@@ -1624,12 +1624,15 @@ class SectionFreedomMigrationTests(unittest.TestCase):
     def test_existing_content_stays_core_and_of_the_course(self):
         db = self.migrated()
         self.assertGreater(db.execute("SELECT count(*) FROM lessons").fetchone()[0], 0)
-        self.assertEqual(db.execute("SELECT count(*) FROM lessons WHERE is_core!=1 OR group_id IS NOT NULL").fetchone()[0], 0)
-        self.assertEqual(db.execute("SELECT count(*) FROM assessment_activities WHERE is_core!=1 OR group_id IS NOT NULL").fetchone()[0], 0)
-        lesson = db.execute("SELECT id FROM lessons WHERE is_core=1 LIMIT 1").fetchone()[0]
-        group = db.execute("SELECT id FROM course_groups LIMIT 1").fetchone()[0]
+        earlier = "course_unit_id IS NULL OR course_unit_id!='seed-unit-catedra'"
+        self.assertEqual(db.execute(f"SELECT count(*) FROM lessons WHERE ({earlier}) AND (is_core!=1 OR group_id IS NOT NULL)").fetchone()[0], 0)
+        self.assertEqual(db.execute("SELECT count(*) FROM assessment_activities WHERE course_id!='seed-course-catedra' AND (is_core!=1 OR group_id IS NOT NULL)").fetchone()[0], 0)
+        self.assertEqual(db.execute("SELECT group_id FROM lessons WHERE id='seed-lesson-catedra-propia'").fetchone()[0], "seed-group-catedra-a")
+        self.assertEqual(db.execute("SELECT hidden FROM section_content_overrides WHERE item_id='seed-lesson-catedra-opcional'").fetchone()[0], 1)
+        lesson = db.execute("SELECT id FROM lessons WHERE is_core=1 AND course_unit_id!='seed-unit-catedra' LIMIT 1").fetchone()[0]
+        group = db.execute("SELECT id FROM course_groups WHERE id!='seed-group-catedra-a' LIMIT 1").fetchone()[0]
         user = db.execute("SELECT id FROM users LIMIT 1").fetchone()[0]
         with self.assertRaises(sqlite3.IntegrityError):
             db.execute("INSERT INTO section_content_overrides(group_id,item_type,item_id,hidden,updated_by,updated_at) VALUES (?,?,?,1,?,?)", (group, "lesson", lesson, user, "t"))
-        self.assertEqual(db.execute("SELECT count(*) FROM section_content_overrides").fetchone()[0], 0)
+        self.assertEqual(db.execute("SELECT count(*) FROM section_content_overrides WHERE group_id!='seed-group-catedra-a'").fetchone()[0], 0)
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])

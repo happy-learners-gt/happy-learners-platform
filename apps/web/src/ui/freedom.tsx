@@ -19,13 +19,20 @@ export function FreedomChip({ mark, replaced }: { mark: FreedomMark; replaced?: 
 }
 
 /** Radios for «Libertad de cátedra». The parent confirms the change before the value moves. */
-export function FreedomPolicyField({ value, disabled, lockedBy, name, onChoose }: { value: FreedomPolicy; disabled?: boolean; lockedBy?: string; name: string; onChoose: (next: FreedomPolicy) => void }) {
+export function FreedomPolicyField({ value, disabled, lockedBy, name, onChoose, review, reviewLocked, onReview }: {
+  value: FreedomPolicy; disabled?: boolean; lockedBy?: string; name: string; onChoose: (next: FreedomPolicy) => void;
+  review?: boolean; reviewLocked?: boolean; onReview?: (next: boolean) => void;
+}) {
   return <fieldset className="freedom-policy" disabled={disabled}>
     <legend>Libertad de cátedra</legend>
     {freedomPolicies.map(policy => <label key={policy} className="freedom-choice">
       <input type="radio" name={name} value={policy} checked={value === policy} onChange={() => value !== policy && onChoose(policy)}/>
       <span><strong>{freedomPolicyLabel[policy]}</strong><small>{copy[policy]}</small></span>
     </label>)}
+    {(value === "flexible" || value === "free") && onReview && <label className="freedom-review">
+      <input type="checkbox" checked={!!review} disabled={reviewLocked} onChange={event => onReview(event.target.checked)}/>
+      <span>Las lecciones y actividades propias requieren aprobación del responsable del curso.</span>
+    </label>}
     {lockedBy && <p className="freedom-locked">Fijado por el programa «{lockedBy}»</p>}
   </fieldset>;
 }

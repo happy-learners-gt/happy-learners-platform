@@ -6,8 +6,9 @@ import { completeOnboarding, e2eName, E2E_PREFIX, origin, sessionToken, signIn }
 const dir = ".release-evidence/screenshots/lote-4";
 
 async function dismissToasts(page: Page) {
-  const closes = page.getByRole("button", { name: "Cerrar notificación" });
-  while (await closes.count()) await closes.first().click();
+  await page.locator("button[aria-label='Cerrar notificación']").evaluateAll(buttons => {
+    buttons.forEach(button => (button as HTMLButtonElement).click());
+  });
 }
 
 async function shoot(page: Page, info: TestInfo, name: string, focus?: () => ReturnType<Page["locator"]>) {
@@ -47,7 +48,7 @@ test("the lead adapts one section and coordination sees the differences", async 
   const sectionA = await json<{ id: string }>(await call(adminToken, `/courses/${course.id}/groups`, "POST", { name: sectionAName }), 201);
   const sectionB = await json<{ id: string }>(await call(adminToken, `/courses/${course.id}/groups`, "POST", { name: sectionBName }), 201);
   await json(await call(adminToken, `/courses/${course.id}/groups/${sectionA.id}/educators`, "PUT", { userIds: ["user-educator"] }));
-  await json(await call(adminToken, `/courses/${course.id}/groups/${sectionB.id}/educators`, "PUT", { userIds: ["user-1"] }));
+  await json(await call(adminToken, `/courses/${course.id}/groups/${sectionB.id}/educators`, "PUT", { userIds: ["user-1", "user-educator"] }));
   const learner = await json<{ id: string }>(await call(adminToken, `/courses/${course.id}/groups/${sectionA.id}/learners`, "POST", { displayName: "Ana" }), 201);
   const unit = await json<{ id: string }>(await call(leadToken, `/courses/${course.id}/units`, "POST", { version: await version(), name: "Fracciones", objective: "Entender una fracción.", status: "active" }), 201);
   const lessonBody = (title: string) => ({ title, objective: "Objetivo de la lección.", instructions: "Haz la actividad.", courseUnitId: unit.id, activities: [{ id: "a", type: "text", position: 0, title: "Actividad", instructions: "Sigue", minutes: 10 }] });
@@ -81,6 +82,9 @@ test("the lead adapts one section and coordination sees the differences", async 
   await change.getByRole("button", { name: "Cambiar política" }).click();
   await expect(change).toBeHidden();
   await expect(policy.getByRole("radio", { name: /Libre con núcleo de resultados/ })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Guardar cambios" })).toBeVisible();
+  await expect(policy.getByRole("checkbox", { name: /requieren aprobación del responsable del curso/ })).toBeVisible();
+  await shoot(page, info, "revision-checkbox", () => page.getByRole("checkbox", { name: /requieren aprobación del responsable del curso/ }));
 
   await page.context().clearCookies();
   await signIn(page, "educador-demo", `/cursos/${course.id}/contenido`);
@@ -118,6 +122,35 @@ test("the lead adapts one section and coordination sees the differences", async 
   await expect(page.getByText("Propia de la sección").first()).toBeVisible();
   await expect(page.getByText(ownLesson)).toBeVisible();
   await shoot(page, info, "plan-contenido", () => page.getByText(ownLesson));
+  await page.getByRole("button", { name: "Acciones del plan" }).click();
+  await page.getByRole("menuitem", { name: "Crear unidad propia" }).click();
+  const ownUnitDialog = page.getByRole("dialog", { name: "Crear unidad propia" });
+  const ownUnit = e2eName(info, "Unidad de la sección");
+  await ownUnitDialog.getByLabel("Nombre").fill(ownUnit);
+  await ownUnitDialog.getByRole("button", { name: "Crear unidad" }).click();
+  await expect(page.getByRole("heading", { name: ownUnit })).toBeVisible();
+  await dismissToasts(page);
+  await shoot(page, info, "unidad-propia", () => page.getByRole("heading", { name: ownUnit }));
+  await page.getByRole("button", { name: `Acciones de la lección ${ownLesson}` }).click();
+  await page.getByRole("menuitem", { name: "Copiar a otra sección" }).click();
+  const copy = page.getByRole("dialog", { name: "Copiar a otra sección" });
+  await expect(copy.getByRole("checkbox", { name: sectionBName })).toBeVisible();
+  await shoot(page, info, "copiar-seccion");
+  await page.keyboard.press("Escape");
+  await expect(copy).toBeHidden();
+  await page.getByRole("button", { name: `Acciones de la lección ${ownLesson}` }).click();
+  await page.getByRole("menuitem", { name: "Proponer al curso" }).click();
+  await expect(page.getByText(/quedó propuesta al curso/)).toBeVisible();
+  await dismissToasts(page);
+  const withReview = await json<{ course: Record<string, unknown> & { settings: Record<string, unknown> } }>(await call(adminToken, `/courses/${course.id}`));
+  expect((await call(adminToken, `/courses/${course.id}`, "PUT", { ...withReview.course, settings: { ...withReview.course.settings, sectionFreedomReview: true } })).status).toBe(200);
+  await json(await call(leadToken, `/sections/${sectionA.id}/lessons`, "POST", lessonBody("Lección en revisión")), 201);
+  await page.reload();
+  const pending = page.getByText("En revisión", { exact: true });
+  await expect(pending).toBeVisible();
+  await shoot(page, info, "leccion-en-revision", () => page.getByText("En revisión", { exact: true }));
+  const withoutReview = await json<{ course: Record<string, unknown> & { settings: Record<string, unknown> } }>(await call(adminToken, `/courses/${course.id}`));
+  expect((await call(adminToken, `/courses/${course.id}`, "PUT", { ...withoutReview.course, settings: { ...withoutReview.course.settings, sectionFreedomReview: false } })).status).toBe(200);
   await page.getByRole("button", { name: /Lecciones del núcleo/ }).click();
   const coverage = page.getByRole("dialog", { name: "Cobertura del núcleo" });
   await expect(coverage.getByRole("heading", { name: "Lecciones sin planificar" })).toBeVisible();
@@ -151,10 +184,21 @@ test("the lead adapts one section and coordination sees the differences", async 
   expect(graded).toBeTruthy();
   expect((await call(leadToken, `/sections/${sectionA.id}/grades`, "PUT", { scores: [{ activityId: graded!.id, learnerId: learner.id, points: 8 }] })).status).toBe(200);
 
+  await page.goto(`/cursos/${course.id}/contenido`);
+  await expect(page.getByRole("button", { name: "1 propuesta de las secciones" })).toBeVisible();
+  await page.getByRole("button", { name: "1 propuesta de las secciones" }).click();
+  const proposal = page.getByRole("dialog", { name: ownLesson });
+  await expect(proposal.getByText(sectionAName)).toBeVisible();
+  await shoot(page, info, "propuestas");
+  await proposal.getByRole("button", { name: "Aceptar" }).click();
+  await expect(page.getByText("La propuesta quedó en el curso.")).toBeVisible();
+  await dismissToasts(page);
+
   await page.context().clearCookies();
   await signIn(page, "instructor-demo", `/secciones/${sectionB.id}/plan`);
   await expect(page.getByRole("heading", { level: 1, name: "Plan de la sección" })).toBeVisible();
-  await expect(page.getByText(ownLesson)).toHaveCount(0);
+  await expect(page.getByText(ownLesson)).toBeVisible();
+  await expect(page.getByText("Propia de la sección")).toHaveCount(0);
   await expect(page.getByText(ownActivity)).toHaveCount(0);
   await expect(page.getByText(optionalLesson)).toBeVisible();
   await page.getByRole("tab", { name: "Evaluación" }).click();
@@ -176,7 +220,9 @@ test("the lead adapts one section and coordination sees the differences", async 
   const detail = page.getByRole("dialog", { name: sectionAName });
   await expect(detail.getByRole("link", { name: ownLesson })).toBeVisible();
   await expect(detail.getByText(optionalLesson)).toBeVisible();
+  await expect(detail.getByText("Propuso 1 lección al curso · aceptada")).toBeVisible();
   await shoot(page, info, "diferencias");
+  await shoot(page, info, "diferencias-propuesta");
   await page.keyboard.press("Escape");
   await expect(detail).toBeHidden();
 

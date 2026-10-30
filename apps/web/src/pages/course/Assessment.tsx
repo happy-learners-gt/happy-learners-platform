@@ -12,6 +12,7 @@ import { Menu } from "../../ui/Menu";
 import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section } from "../../ui/primitives";
 import { FreedomChip } from "../../ui/freedom";
 import { Tabs } from "../../ui/Tabs";
+import { SectionProposals } from "./Content";
 import { useCourse } from "./context";
 
 type Person = { userId: string; name: string; chair: boolean };
@@ -109,6 +110,7 @@ export function Assessment() {
           ]}/> : undefined}>{null}</Tabs>
       </div>
       {adapt && <p className="freedom-notice"><Icon name="info" size={18}/><span>Las secciones pueden adaptar lo que no es núcleo. <Link href={`${base}/secciones?vista=diferencias`}>Ver diferencias entre secciones</Link></span></p>}
+      {adapt && data.canEdit && <SectionProposals courseId={course.id} kinds={["activity"]} onChanged={() => void load()}/>}
       <p className="assessment-status" role="status">{statusOf(period).line}{adapt ? ` · ${nucleus(period)}` : ""}</p>
       <div className="assessment-categories">{data.scheme.categories.map(category => {
         const rows = period.activities.filter(item => item.categoryId === category.id);

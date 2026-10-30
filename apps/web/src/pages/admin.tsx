@@ -367,7 +367,7 @@ function ProgramDialog({ item, onClose, onSave }: { item?: StudyProgram; onClose
       </div>
       <fieldset className="config-section"><legend>Ajustes para sus cursos</legend>
         <p className="muted small">Sin valor, cada curso usa lo que corresponde a su tipo. Con valor, es el punto de partida de sus cursos; si lo fijas, ningún curso del programa puede cambiarlo.</p>
-        <ul className="settings-list">{settingDefinitions.filter(definition => definition.key !== "sectionFreedom").map(definition => {
+        <ul className="settings-list">{settingDefinitions.filter(definition => definition.key !== "sectionFreedom" && definition.key !== "sectionFreedomReview").map(definition => {
           const key = definition.key;
           const options = key === "gradingSchemeId" ? schemeOptions(schemes, settings[key]) : settingChoices(key, settings[key]);
           return <li key={key} className="setting-item">
@@ -380,8 +380,10 @@ function ProgramDialog({ item, onClose, onSave }: { item?: StudyProgram; onClose
             </div>
           </li>;
         })}</ul>
-        <FreedomPolicyField name="program-section-freedom" value={settings.sectionFreedom || derived.sectionFreedom} onChoose={setPendingPolicy}/>
+        <FreedomPolicyField name="program-section-freedom" value={settings.sectionFreedom || derived.sectionFreedom} onChoose={setPendingPolicy}
+          review={settings.sectionFreedomReview === true} onReview={checked => setSetting("sectionFreedomReview", checked ? "true" : "false")}/>
         <label className="lock"><input type="checkbox" disabled={settings.sectionFreedom === undefined} checked={locked.includes("sectionFreedom")} onChange={event => setLocked(current => event.target.checked ? [...current, "sectionFreedom"] : current.filter(entry => entry !== "sectionFreedom"))}/><span>Fijar para los cursos del programa</span></label>
+        {(settings.sectionFreedom === "flexible" || settings.sectionFreedom === "free" || (!settings.sectionFreedom && (derived.sectionFreedom === "flexible" || derived.sectionFreedom === "free"))) && <label className="lock"><input type="checkbox" disabled={settings.sectionFreedomReview === undefined} checked={locked.includes("sectionFreedomReview")} onChange={event => setLocked(current => event.target.checked ? [...current, "sectionFreedomReview"] : current.filter(entry => entry !== "sectionFreedomReview"))}/><span>Fijar para los cursos del programa</span></label>}
       </fieldset>
       {pendingPolicy && <FreedomChangeDialog from={settings.sectionFreedom || derived.sectionFreedom} to={pendingPolicy} blocked={null} busy={false} onClose={() => setPendingPolicy(null)} onConfirm={() => { setSetting("sectionFreedom", pendingPolicy); setPendingPolicy(null); }}/>}
       <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><button className="button primary">{busy ? "Guardando…" : "Guardar programa"}</button></div>

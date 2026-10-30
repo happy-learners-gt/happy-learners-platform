@@ -194,6 +194,8 @@ export interface CourseSettings {
   gradingSchemeId?: string | null;
   /** How far a section may adapt the course. Absent means every section follows the course. */
   sectionFreedom?: "shared" | "flexible" | "free";
+  /** When set, a section's own lessons and activities stay in review until the lead approves them. */
+  sectionFreedomReview?: boolean;
 }
 /** A set of courses that share a configuration; it can fix settings for all of them. */
 export interface StudyProgram extends AcademicProfile {
