@@ -108,6 +108,12 @@ export function SectionGradesPage() {
     catch (cause) { toast({ tone: "error", message: message(cause) }); }
     finally { setBusy(""); }
   }
+  async function certificate(learnerId: string) {
+    setBusy("report");
+    try { await download(`/sections/${section.id}/grades/certificate.pdf?${new URLSearchParams({ learner: learnerId })}`, "constancia.pdf"); }
+    catch (cause) { toast({ tone: "error", message: message(cause) }); }
+    finally { setBusy(""); }
+  }
   const ready = !!data?.year && data.learners.length > 0;
   const header = <PageHeader crumbs={crumbs} title="Notas" description="El plan de evaluación de cada periodo, los punteos de cada estudiante, la revisión de cierre y las boletas. Un periodo sin nota no cuenta como cero."
     actions={ready && <>
@@ -157,7 +163,7 @@ export function SectionGradesPage() {
     {peerTarget && <PeerDialog book={data} activityId={peerTarget.activityId} workGroupId={peerTarget.workGroupId} onClose={() => setPeerTarget(null)} onSaved={book => { update(book); setPeerTarget(null); toast({ message: "Coevaluación guardada." }); }}/>}
     {student && <GradeStudentDrawer book={data} learnerId={student} periodId={view === summary ? (periods.find(period => !period.locked) || periods[periods.length - 1]).id : view}
       editable={data.canEdit && view !== summary && ["open", "returned"].includes(stateOf(periods.find(period => period.id === view)!))}
-      onSaved={book => { update(book); toast({ message: "Comentario guardado." }); }} onReport={() => void reports(student)} onClose={() => setStudent("")}/>}
+      onSaved={book => { update(book); toast({ message: "Comentario guardado." }); }} onReport={() => void reports(student)} onCertificate={() => void certificate(student)} onClose={() => setStudent("")}/>}
     {returning && view !== summary && <ReturnDialog sectionId={section.id} period={periods.find(period => period.id === view)!} onClose={() => setReturning(false)} onSaved={book => { update(book); setReturning(false); toast({ message: "El periodo se devolvió a la sección." }); }}/>}
   </>;
 
