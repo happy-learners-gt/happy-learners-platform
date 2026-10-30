@@ -188,6 +188,8 @@ export interface CourseSettings {
   gradeScale?: GradeScale; passingGrade?: number; letterThresholds?: LetterThresholds; gradeAverage?: GradeAverage;
   /** Organization grading scheme; null or absent keeps the compatible points scheme. */
   gradingSchemeId?: string | null;
+  /** How far a section may adapt the course. Absent means every section follows the course. */
+  sectionFreedom?: "shared" | "flexible" | "free";
 }
 /** A set of courses that share a configuration; it can fix settings for all of them. */
 export interface StudyProgram extends AcademicProfile {

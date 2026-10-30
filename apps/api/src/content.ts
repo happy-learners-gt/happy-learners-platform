@@ -84,24 +84,29 @@ export async function content(url: URL, method: string, input: unknown, current:
   const rows = (await db.prepare(lessonQuery + (courseFilter ? " AND c.id=?" : "") + " ORDER BY c.title,COALESCE(cu.position,u.position),l.position,l.id").bind(current.organizationId, ...(courseFilter ? [courseFilter] : [])).all<LessonRow>()).results
     .filter(r => !reachable || (r.course_id !== null && reachable.has(r.course_id)));
   const accessOf = async (courseId: string | null) => courseId ? await accessTo(db, current, courseId) : null;
+  const courseOwned = rows.filter(row => !(row as LessonRow & { group_id?: string | null }).group_id);
   if (id === "order" && method === "PUT") {
     const v = input as { unitId?: string; courseUnitId?: string; ids?: string[] } | null;
     if (!v?.unitId && !v?.courseUnitId) return reply({ error: "Selecciona una unidad." }, 400);
-    const selected = rows.filter(r => v?.courseUnitId ? r.course_unit_id === v.courseUnitId : r.unit_id === v?.unitId);
+    const selected = courseOwned.filter(r => v?.courseUnitId ? r.course_unit_id === v.courseUnitId : r.unit_id === v?.unitId);
     if (!v || !Array.isArray(v.ids) || v.ids.length !== selected.length || new Set(v.ids).size !== selected.length || v.ids.some(x => !selected.some(r => r.id === x))) return reply({ error: "El orden debe incluir todas las lecciones de la unidad una sola vez." }, 400);
     if (selected.length && !(await accessOf(selected[0].course_id))?.publish) return forbidden("Solo la persona responsable del curso ordena sus lecciones.");
     await db.batch(v.ids.map((item, i) => db.prepare("UPDATE lessons SET position=? WHERE id=?").bind(i, item))); return reply({ ok: true });
   }
   const row = rows.find(r => r.id === id);
   if (id && (!row || (method === "GET" && !draft && (!row.published_content || row.archived)))) return reply({ error: "Lección no disponible." }, 404);
-  if (method === "GET") return id ? reply({ lesson: lessonView(row!, draft) }) : reply({ lessons: rows.filter(r => draft || (r.published_content && !r.archived)).map(r => lessonView(r, draft)) });
+  if (method === "GET") return id ? reply({ lesson: lessonView(row!, draft) }) : reply({ lessons: courseOwned.filter(r => draft || (r.published_content && !r.archived)).map(r => lessonView(r, draft)) });
   const access = row ? await accessOf(row.course_id) : null;
   // Publishing and returning a review belong to whoever reviews the course: its lead, or coordination in its scope.
   const deciding = method === "POST" && (path.endsWith("/publish") || path.endsWith("/review/return"));
   if (row && !access?.edit && !(deciding && access?.review)) return forbidden("Solo el equipo docente del curso edita sus lecciones.");
   const lessonTitle = row ? (JSON.parse(row.content) as Lesson).title : "";
   if (path.endsWith("/publish") && row) {
-    if (!access!.review) return forbidden("La persona responsable del curso publica sus lecciones. Envía la lección a revisión.");
+    if (!access!.review) {
+      const owner = (row as LessonRow & { group_id?: string | null }).group_id;
+      const teaches = owner ? await db.prepare("SELECT 1 AS ok FROM section_educators WHERE group_id=? AND user_id=? AND organization_id=?").bind(owner, current.id, current.organizationId).first() : null;
+      if (!teaches) return forbidden("La persona responsable del curso publica sus lecciones. Envía la lección a revisión.");
+    }
     const expected = url.searchParams.get("draftVersion");
     if (expected !== null && Number(expected) !== row.draft_version) return reply({ error: "La lección cambió desde que la abriste. Recarga para revisar la versión actual antes de publicar." }, 409);
     const result = await publication(db, current, row);
@@ -275,13 +280,13 @@ export async function shared(path: string, method: string, request: Request, db:
   const access = token ? await studentAccess(db, tokenHash) : null;
   if (method === "GET") {
     // With the section code, each activity done in groups says which of the section's groups do it (DEC-028).
-    const settings = access && await pathLesson(db, access.courseId, code) ? (await configurationOf(db, access.organizationId, access.courseId))?.settings : null;
+    const settings = access && await pathLesson(db, access.courseId, code, access.groupId) ? (await configurationOf(db, access.organizationId, access.courseId))?.settings : null;
     const ofSection = access && settings?.attendance && settings.workGroups;
     return reply({ lesson: JSON.parse(row.published_content), navigation: await navigationOf(db, row.id, row.course_unit_id), groups: ofSection ? await studentActivityGroups(db, access.groupId, row.id, access.learnerId) : [] });
   }
   const name = `hl_completed_${row.id.replaceAll("-", "_")}`;
   // A tu ritmo (DEC-027): a lesson of the course's path counts for the section and for the student who chose their name.
-  const inPath = access?.pacing === "self-paced" && !!await pathLesson(db, access.courseId, code);
+  const inPath = access?.pacing === "self-paced" && !!await pathLesson(db, access.courseId, code, access.groupId);
   if (inPath && access.learnerId) {
     const at = new Date(now).toISOString();
     await db.prepare("INSERT INTO learner_progress(organization_id,group_id,learner_id,lesson_id,opened_at,completed_at) VALUES (?,?,?,?,?,?) ON CONFLICT DO UPDATE SET completed_at=COALESCE(completed_at,max(opened_at,excluded.completed_at))")

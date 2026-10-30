@@ -218,7 +218,7 @@ async function eventsBetween(db: Database, organizationId: string, programIds: s
 async function duesBetween(db: Database, organizationId: string, sections: SectionRow[], from: string, until: string) {
   const courseIds = [...new Set(sections.map(section => section.courseId))];
   if (!courseIds.length) return [] as DueRow[];
-  const rows = (await db.prepare(`SELECT a.id,a.title,a.due_on AS date,a.course_id AS courseId,c.title AS courseTitle FROM assessment_activities a JOIN courses c ON c.id=a.course_id
-    WHERE a.organization_id=? AND a.due_on>=? AND a.due_on<=? AND a.course_id IN (${courseIds.map(() => "?").join(",")}) ORDER BY a.due_on,a.position`).bind(organizationId, from, until, ...courseIds).all<Omit<DueRow, "sectionId" | "sectionName">>()).results;
-  return rows.flatMap(due => sections.filter(section => section.courseId === due.courseId).map(section => ({ ...due, sectionId: section.id, sectionName: section.name })));
+  const rows = (await db.prepare(`SELECT a.id,a.title,a.due_on AS date,a.course_id AS courseId,c.title AS courseTitle,a.group_id AS groupId FROM assessment_activities a JOIN courses c ON c.id=a.course_id
+    WHERE a.organization_id=? AND a.due_on>=? AND a.due_on<=? AND a.course_id IN (${courseIds.map(() => "?").join(",")}) AND (a.group_id IS NULL OR a.group_id IN (${sections.map(() => "?").join(",")})) ORDER BY a.due_on,a.position`).bind(organizationId, from, until, ...courseIds, ...sections.map(section => section.id)).all<Omit<DueRow, "sectionId" | "sectionName"> & { groupId: string | null }>()).results;
+  return rows.flatMap(due => sections.filter(section => section.courseId === due.courseId && (!due.groupId || due.groupId === section.id)).map(section => ({ id: due.id, title: due.title, date: due.date, courseId: due.courseId, courseTitle: due.courseTitle, sectionId: section.id, sectionName: section.name })));
 }

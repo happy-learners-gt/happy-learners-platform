@@ -10,6 +10,7 @@ import { deliverFile, filesFor } from "./files";
 import { event } from "./team";
 import { digest, newToken } from "./auth";
 import { contractBlock } from "./contracts";
+import { effectiveLessonIds } from "./freedom-plan";
 import { notify, type Notifier } from "./notify";
 
 const reply = (data: unknown, status = 200, headers: Record<string, string> = {}) => Response.json(data, { status, headers });
@@ -72,12 +73,14 @@ async function publishedResources(db: Database, lessonIds: string[]) {
 }
 const unique = <T extends { id: string }>(items: T[]) => items.filter((item, index) => items.findIndex(other => other.id === item.id) === index);
 
-/** A class receives published lessons of its course (ST-027); lessons it already has may stay while they are replaced. */
-async function checkLessons(db: Database, courseId: string, lessonIds: string[], current: string[] = []) {
+/** A class receives published lessons of its course (ST-027); lessons it already has may stay while they are replaced. A section follows its own plan when the course allows it. */
+async function checkLessons(db: Database, organizationId: string, courseId: string, groupId: string, lessonIds: string[], current: string[] = []) {
   const fresh = lessonIds.filter(id => !current.includes(id));
   if (!fresh.length) return null;
-  const found = (await db.prepare(`SELECT l.id FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id WHERE l.id IN (${fresh.map(() => "?").join(",")}) AND u.course_id=? AND l.archived=0 AND l.revision>0`).bind(...fresh, courseId).all()).results;
-  return found.length === fresh.length ? null : "Elige lecciones publicadas de este curso.";
+  const found = (await db.prepare(`SELECT l.id FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id WHERE l.id IN (${fresh.map(() => "?").join(",")}) AND u.course_id=? AND l.archived=0 AND l.revision>0 AND (l.group_id IS NULL OR l.group_id=?)`).bind(...fresh, courseId, groupId).all<{ id: string }>()).results;
+  if (found.length !== fresh.length) return "Elige lecciones publicadas de este curso.";
+  const allowed = await effectiveLessonIds(db, organizationId, courseId, groupId);
+  return !allowed || fresh.every(id => allowed.includes(id)) ? null : "Esa lección no forma parte del plan de esta sección.";
 }
 /**
  * Replaces the lessons of a class in the given order. Lessons it keeps keep the publication they were taught with;
@@ -90,9 +93,11 @@ function planLessons(db: Database, sessionId: string, lessonIds: string[], kept 
       .bind(sessionId, lessonId, position, kept.get(lessonId) ?? null, running ? 1 : 0, lessonId)),
   ];
 }
-/** Published lessons of the course in content order: module position, then lesson position. */
-async function courseLessons(db: Database, courseId: string) {
-  return (await db.prepare("SELECT l.id FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id WHERE u.course_id=? AND u.status='active' AND l.archived=0 AND l.revision>0 ORDER BY u.position,l.position,l.id").bind(courseId).all<{ id: string }>()).results.map(row => row.id);
+/** Published lessons of the course in content order: module position, then lesson position. A section with its own plan uses that order. */
+async function courseLessons(db: Database, organizationId: string, courseId: string, groupId: string) {
+  const effective = await effectiveLessonIds(db, organizationId, courseId, groupId);
+  if (effective) return effective;
+  return (await db.prepare("SELECT l.id FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id WHERE u.course_id=? AND u.status='active' AND l.archived=0 AND l.revision>0 AND l.group_id IS NULL ORDER BY u.position,l.position,l.id").bind(courseId).all<{ id: string }>()).results.map(row => row.id);
 }
 const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((id, index) => id === b[index]);
 
@@ -135,7 +140,7 @@ export async function sessions(parts: string[], method: string, input: unknown, 
     const group = await db.prepare("SELECT id,name,schedule_starts_at AS startsAt,schedule_duration AS durationMinutes FROM course_groups WHERE id=? AND course_id=? AND organization_id=? AND status='active'").bind(groupId, courseId, current.organizationId).first<{ id: string; name: string; startsAt: string | null; durationMinutes: number | null }>();
     if (!group || !seesSection(access, group.id)) return reply({ error: "Elige una sección activa de este curso." }, 400);
     if (!teachesSection(access, group.id)) return notTeaching();
-    const problem = await checkLessons(db, courseId, plan.lessonIds);
+    const problem = await checkLessons(db, current.organizationId, courseId, group.id, plan.lessonIds);
     if (problem) return reply({ error: problem }, 400);
     const id = `class-${crypto.randomUUID()}`;
     await db.batch([
@@ -179,7 +184,7 @@ export async function sessions(parts: string[], method: string, input: unknown, 
     const moved = plan.sessionDate !== session.sessionDate || plan.startsAt !== (session.startsAt ?? null) || plan.durationMinutes !== (session.durationMinutes ?? null);
     if (moved && session.status !== "planned") return reply({ error: "Solo una clase pendiente cambia de fecha u hora." }, 409);
     if (session.status === "completed" && !sameList(plan.lessonIds, currentIds)) return reply({ error: "Una clase impartida conserva las lecciones que trabajó; solo cambian sus comentarios." }, 409);
-    const problem = await checkLessons(db, courseId, plan.lessonIds, currentIds);
+    const problem = await checkLessons(db, current.organizationId, courseId, session.groupId, plan.lessonIds, currentIds);
     if (problem) return reply({ error: problem }, 400);
     const version = Number((input as Record<string, unknown>).version);
     const ok = await db.guardedBatch(
@@ -484,7 +489,7 @@ export async function fillLessons(input: unknown, current: Member, db: Database,
   const perClass = Number((input as Record<string, unknown> | null)?.perClass ?? 1);
   if (![1, 2, 3].includes(perClass)) return reply({ error: "Elige de 1 a 3 lecciones por clase." }, 400);
   const [ordered, classes, planned] = await Promise.all([
-    courseLessons(db, courseId),
+    courseLessons(db, current.organizationId, courseId, group.id),
     db.prepare("SELECT id,session_date AS sessionDate,status FROM class_sessions WHERE group_id=? AND status<>'cancelled' ORDER BY session_date,starts_at").bind(group.id).all<{ id: string; sessionDate: string; status: ClassStatus }>(),
     db.prepare("SELECT p.session_id AS sessionId,p.lesson_id AS lessonId FROM class_session_lessons p JOIN class_sessions s ON s.id=p.session_id WHERE s.group_id=? AND s.status<>'cancelled'").bind(group.id).all<{ sessionId: string; lessonId: string }>(),
   ]);
@@ -543,7 +548,7 @@ export async function student(path: string, method: string, input: unknown, requ
   if (path === "/api/student/progress" && method === "POST") {
     // Opening a lesson of the path; finishing it is recorded when the student completes it in the lesson player.
     if (!selfPaced || !access.learnerId) return reply({ error: "El avance se registra en las secciones a tu ritmo, después de elegir tu nombre." }, 409);
-    const lesson = await pathLesson(db, access.courseId, (input as Record<string, unknown> | null)?.shareCode);
+    const lesson = await pathLesson(db, access.courseId, (input as Record<string, unknown> | null)?.shareCode, access.groupId);
     if (!lesson) return reply({ error: "Esa lección no forma parte del curso de tu sección." }, 404);
     await db.prepare("INSERT INTO learner_progress(organization_id,group_id,learner_id,lesson_id,opened_at) VALUES (?,?,?,?,?) ON CONFLICT DO NOTHING").bind(access.organizationId, access.groupId, access.learnerId, lesson.id, new Date().toISOString()).run();
     return reply({ ok: true });
@@ -552,7 +557,7 @@ export async function student(path: string, method: string, input: unknown, requ
   if (fileMatch) {
     // Only files published in a lesson of one of the section's classes or, at their own pace, of the course's path.
     const linked = selfPaced
-      ? await db.prepare("SELECT 1 AS ok FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id AND u.status='active', json_each(l.published_content,'$.resources') r WHERE u.course_id=? AND l.archived=0 AND l.revision>0 AND json_extract(r.value,'$.id')=? AND json_extract(r.value,'$.status')='published' LIMIT 1").bind(access.courseId, fileMatch[1]).first()
+      ? await db.prepare("SELECT 1 AS ok FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id AND u.status='active', json_each(l.published_content,'$.resources') r WHERE u.course_id=? AND l.archived=0 AND l.revision>0 AND (l.group_id IS NULL OR l.group_id=?) AND json_extract(r.value,'$.id')=? AND json_extract(r.value,'$.status')='published' LIMIT 1").bind(access.courseId, access.groupId, fileMatch[1]).first()
       : await db.prepare("SELECT 1 AS ok FROM class_sessions s JOIN class_session_lessons p ON p.session_id=s.id JOIN lessons l ON l.id=p.lesson_id AND l.archived=0 AND l.revision>0, json_each(l.published_content,'$.resources') r WHERE s.group_id=? AND s.status<>'cancelled' AND json_extract(r.value,'$.id')=? AND json_extract(r.value,'$.status')='published' LIMIT 1").bind(access.groupId, fileMatch[1]).first();
     if (!linked) return reply({ error: "Este archivo no forma parte de las clases de tu sección." }, 404);
     return deliverFile(fileMatch[1], access.organizationId, db, bucket);
@@ -566,12 +571,14 @@ export async function student(path: string, method: string, input: unknown, requ
   const base = { group: { name: access.groupName }, course: { title: access.courseTitle }, organization: access.organizationName, today, pacing: access.pacing, learner: access.learnerId ? { id: access.learnerId, name: access.learnerName! } : null };
   if (selfPaced) {
     const [lessons, done, roster] = await db.batch([
-      db.prepare(`${pathLessons} ORDER BY u.position,l.position,l.id`).bind(access.courseId),
+      db.prepare(`${pathLessons} ORDER BY u.position,l.position,l.id`).bind(access.courseId, access.groupId),
       db.prepare("SELECT lesson_id AS lessonId,completed_at IS NOT NULL AS completed FROM learner_progress WHERE group_id=? AND learner_id=?").bind(access.groupId, access.learnerId || ""),
       db.prepare("SELECT id,display_name AS name FROM group_learners WHERE group_id=? AND status='active' ORDER BY display_name,id").bind(access.groupId),
     ]) as unknown as [{ id: string; title: string | null; shareCode: string; unitId: string; unitName: string }[], { lessonId: string; completed: number }[], { id: string; name: string }[]];
     const path: StudentPathModule[] = [];
-    for (const lesson of lessons) {
+    const allowed = await effectiveLessonIds(db, access.organizationId, access.courseId, access.groupId);
+    const visible = allowed ? lessons.filter(lesson => allowed.includes(lesson.id)).sort((a, b) => allowed.indexOf(a.id) - allowed.indexOf(b.id)) : lessons.filter(lesson => !(lesson as { groupId?: string | null }).groupId);
+    for (const lesson of visible) {
       const mark = done.find(row => row.lessonId === lesson.id);
       let unit = path.find(item => item.id === lesson.unitId);
       if (!unit) path.push(unit = { id: lesson.unitId, name: lesson.unitName, lessons: [] });
@@ -607,8 +614,14 @@ export async function studentAccess(db: Database, tokenHash: string) {
     WHERE a.token_hash=? AND a.expires_at>?`).bind(tokenHash, Date.now()).first<{ groupId: string; organizationId: string; groupName: string; courseId: string; courseTitle: string; organizationName: string; timezone: string | null; pacing: Pacing; learnerId: string | null; learnerName: string | null }>();
 }
 /** The course's path: its published lessons in active modules, in content order. */
-const pathLessons = "SELECT l.id,json_extract(l.published_content,'$.title') AS title,json_extract(l.published_content,'$.shareCode') AS shareCode,u.id AS unitId,u.name AS unitName FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id AND u.status='active' WHERE u.course_id=? AND l.archived=0 AND l.revision>0 AND json_extract(l.published_content,'$.shareCode') IS NOT NULL";
-export async function pathLesson(db: Database, courseId: string, shareCode: unknown) {
+const pathLessons = "SELECT l.id,l.group_id AS groupId,json_extract(l.published_content,'$.title') AS title,json_extract(l.published_content,'$.shareCode') AS shareCode,u.id AS unitId,u.name AS unitName FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id AND u.status='active' WHERE u.course_id=? AND l.archived=0 AND l.revision>0 AND json_extract(l.published_content,'$.shareCode') IS NOT NULL AND (l.group_id IS NULL OR l.group_id=?)";
+export async function pathLesson(db: Database, courseId: string, shareCode: unknown, groupId = "") {
   if (typeof shareCode !== "string" || shareCode.length > 64) return null;
-  return db.prepare(`${pathLessons} AND json_extract(l.published_content,'$.shareCode')=?`).bind(courseId, shareCode).first<{ id: string }>();
+  const row = await db.prepare(`${pathLessons} AND json_extract(l.published_content,'$.shareCode')=?`).bind(courseId, groupId, shareCode).first<{ id: string; groupId: string | null }>();
+  if (!row) return null;
+  const organization = groupId ? await db.prepare("SELECT organization_id AS id FROM courses WHERE id=?").bind(courseId).first<{ id: string }>() : null;
+  const allowed = organization ? await effectiveLessonIds(db, organization.id, courseId, groupId) : null;
+  if (allowed && !allowed.includes(row.id)) return null;
+  if (!allowed && row.groupId) return null;
+  return row;
 }

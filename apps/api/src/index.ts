@@ -18,6 +18,7 @@ import { legal, pendingFor, publicPrivacy } from "./legal";
 import { classroom } from "./attendance";
 import { calendar, myClasses, student, studentToken } from "./classes";
 import { sections } from "./sections";
+import { sectionFreedom } from "./section-freedom";
 import { courseFiles, sharedFile } from "./files";
 import { feed, feedLink, feedPath } from "./calendar-feed";
 import { acceptInvitation, acceptPath, invitations, previewInvitation } from "./invitations";
@@ -130,6 +131,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
     || (method === "POST" && path === "/api/organization/restore" && env.RESTORE_ENABLED === "true")
     || (method === "POST" && (path === "/api/invitations" || acceptPath.test(path)))
     ? await body(request) : undefined;
+  if (/^\/api\/sections\/[a-z0-9-]+\/(lessons|activities|content-overrides)$/.test(path) && ["POST", "PUT", "DELETE"].includes(method) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   // Finishing or cancelling a class may say what was covered or what happens to its plan; without a body, the defaults apply.
   if (method === "POST" && /^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/(complete|cancel)$/.test(path) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   // ST-124: notification preferences and policy.
@@ -199,6 +201,11 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/learners\/[a-z0-9-]+$/.test(path)) methods[path] = ["PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET", "PUT"];
   if (path === "/api/sections" || /^\/api\/sections\/[a-z0-9-]+(\/progress)?$/.test(path)) methods[path] = ["GET"];
+  if (/^\/api\/sections\/[a-z0-9-]+\/plan$/.test(path)) methods[path] = ["GET"];
+  if (/^\/api\/sections\/[a-z0-9-]+\/(lessons|activities)$/.test(path)) methods[path] = ["POST"];
+  if (/^\/api\/sections\/[a-z0-9-]+\/content-overrides$/.test(path)) methods[path] = ["PUT", "DELETE"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/core$/.test(path)) methods[path] = ["PUT"];
+  if (/^\/api\/courses\/[a-z0-9-]+\/sections\/differences$/.test(path)) methods[path] = ["GET"];
   if (/^\/api\/courses\/[a-z0-9-]+\/groups\/[a-z0-9-]+\/code$/.test(path)) methods[path] = ["POST", "DELETE"];
   if (/^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+$/.test(path)) methods[path] = ["GET", "PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/(start|complete|cancel|restore)$/.test(path)) methods[path] = ["POST"];
@@ -390,6 +397,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (bookMapAllowed) return bookMap(path, method, input, current, db, env, () => env.ORGANIZATIONS.getByName(current.organizationId).schedule(current.organizationId));
   if (proposalAllowed) return proposals(path, method, input, current, db, env, () => env.ORGANIZATIONS.getByName(current.organizationId).schedule(current.organizationId));
   if (/^\/api\/courses\/[a-z0-9-]+\/assessment(\/|$)/.test(path)) return courseAssessment(path, method, input, url, current, db);
+  if (/^\/api\/courses\/[a-z0-9-]+\/(core|sections\/differences)$/.test(path) || /^\/api\/sections\/[a-z0-9-]+\/(plan|lessons|activities|content-overrides)$/.test(path)) return sectionFreedom(path, method, input, current, db);
   if (/^\/api\/courses(\/|$)/.test(path)) return courses(path, method, input, current, db, notifier);
   if (/^\/api\/programs(\/|$)/.test(path)) return programs(path, method, input, current, db);
   if (path === "/api/activity") return activity(url, current, db);

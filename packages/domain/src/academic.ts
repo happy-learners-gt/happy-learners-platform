@@ -1,4 +1,5 @@
 import type { AcademicProfile, Course, CourseFormat, CourseSettings, EducationLevel, EducationType, Modality, ModuleLabel, Pacing, SequenceTemplate, StudyProgram } from "@happy-learners/contracts";
+import { freedomPolicies, freedomPolicyLabel, type FreedomPolicy } from "./section-freedom";
 import { cleanText, record } from "./courses";
 import { defaultThresholds, gradeAverages, gradeScales, isGradeAverage, isGradeScale, isLetterThresholds, isPassingGrade, passingChoices, thresholdPresets, thresholdsText } from "./gradebook";
 import { sequenceOf, sequenceTemplates } from "./sequences";
@@ -96,6 +97,7 @@ export const settingDefinitions: { key: SettingKey; label: string; description: 
   { key: "letterThresholds", label: "Umbrales de las letras", description: "La nota mínima de la A, la B, la C y la D; por debajo de la D es F. Solo se usan con la escala de letras." },
   { key: "gradeAverage", label: "Promedio de los periodos", description: "Promedio simple o ponderado por el peso de cada periodo del ciclo lectivo. Un periodo sin nota no cuenta como cero." },
   { key: "gradingSchemeId", label: "Esquema de evaluación", description: "La forma configurable de calcular y mostrar los resultados de evaluación." },
+  { key: "sectionFreedom", label: "Libertad de cátedra", description: "Cuánto puede adaptar cada sección el contenido y la evaluación del curso." },
 ];
 const sequences: SequenceTemplate[] = ["free", "start-develop-close", "five-e", "ppp", "workshop"];
 
@@ -113,6 +115,7 @@ export function derivedSettings(profile: AcademicProfile & { format: CourseForma
     letterThresholds: defaultThresholds,
     gradeAverage: "simple",
     gradingSchemeId: null,
+    sectionFreedom: "shared",
   };
 }
 export type SettingSource = "course" | "program" | "program-locked" | "derived";
@@ -156,6 +159,10 @@ export function settingsInput(value: unknown): CourseSettings | null {
     if (v.gradingSchemeId !== null && (typeof v.gradingSchemeId !== "string" || !/^scheme-[a-f0-9-]{36}$/.test(v.gradingSchemeId))) return null;
     out.gradingSchemeId = v.gradingSchemeId as string | null;
   }
+  if (v.sectionFreedom !== undefined) {
+    if (!freedomPolicies.includes(v.sectionFreedom as FreedomPolicy)) return null;
+    out.sectionFreedom = v.sectionFreedom as FreedomPolicy;
+  }
   return out;
 }
 
@@ -168,6 +175,7 @@ export function settingChoices(key: SettingKey, current?: unknown): [string, str
     : key === "passingGrade" ? passingChoices.map(value => [String(value), String(value)])
     : key === "letterThresholds" ? thresholdPresets.map(value => [String(value), thresholdsText(value)])
     : key === "gradingSchemeId" ? []
+    : key === "sectionFreedom" ? freedomPolicies.map(value => [value, freedomPolicyLabel[value]])
     : [["true", "Sí"], ["false", "No"]];
   if (current !== undefined && !choices.some(([value]) => value === String(current))) choices.push([String(current), settingText(key, current)]);
   return choices;
@@ -181,6 +189,7 @@ export function settingText(key: SettingKey, value: unknown): string {
   if (key === "passingGrade") return String(value);
   if (key === "letterThresholds") return isLetterThresholds(value) ? thresholdsText(value) : String(value);
   if (key === "gradingSchemeId") return value ? String(value) : "Puntos acumulados";
+  if (key === "sectionFreedom") return freedomPolicyLabel[value as FreedomPolicy] || String(value);
   return value ? "Sí" : "No";
 }
 /** A select's text back to the setting's value; undefined for "" (no value of its own). */
@@ -188,6 +197,7 @@ export function settingValue(key: SettingKey, text: string): unknown {
   if (text === "") return undefined;
   if (key === "passingGrade") return Number(text);
   if (key === "letterThresholds") return text.split(",").map(Number);
+  if (key === "sectionFreedom") return text;
   return text === "true" ? true : text === "false" ? false : text;
 }
 const areaCodes = new Set(knowledgeAreas.flatMap(area => [area.code, ...area.fields.map(field => field.code)]));
