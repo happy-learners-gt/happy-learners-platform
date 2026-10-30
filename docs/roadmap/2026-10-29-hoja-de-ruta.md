@@ -15,9 +15,13 @@ Reemplaza la necesidad de recordar el historial. Se actualiza al cerrar cada lot
 | 1.3.4 | Agenda y calendario institucional rediseñados (`docs/design/agenda-y-calendario.md`) | En producción (#87) |
 | 1.3.5 | Respaldo restaurable en cualquier espacio (invitaciones sin el hash de su enlace) | En producción (#88); `Release drill` verde |
 | 1.3.6 | Libertad de cátedra por sección (`docs/design/libertad-de-catedra.md`, lotes 4a–4c) | En producción (#90) |
-| 1.3.7 | Biblioteca de recursos didácticos (`docs/design/recursos-didacticos.md`, lotes 5a–5c) | Revisado; en PR |
+| 1.3.7 | Biblioteca de recursos didácticos (`docs/design/recursos-didacticos.md`, lotes 5a–5c) | En producción (#92) |
+| 1.4.0–1.4.1 | Asistente como harness: registro y uso de IA, revisión con puntaje, mejora asistida, redacción (`docs/design/asistente-ia.md`) | En producción (#93, #94) |
+| 1.4.2–1.4.3 | Cronograma propuesto y horarios con reglas | En PR (#95) |
+| 1.5.0 | Constructor de documentos: boleta y constancia (`docs/design/constructor-de-reportes.md`) | En PR |
+| 1.5.1 | Acta de tribunal firmada por cada integrante, reporte de avance, ayuda de IA en el diseñador | Pendiente |
 
-Siguiente migración libre: **0070** (el lote 5 reserva 0068 y 0069). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
+Siguiente migración libre: **0072** (1.4.0 usa 0070; 1.5.0 usa 0071). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
 
 ## 2. Cómo se trabaja (no repetir errores)
 
@@ -127,3 +131,5 @@ con apoyo puntual.
   Cursor en `feat/HL-15-recursos`. Las semillas nuevas declaran sus nombres para la prueba de contaminación.
 - 2026-10-30: lote 5 (1.3.7) revisado y corregido (cita APA sin autoría, edición numérica, etiqueta «Editar ficha»); en PR.
   Desde hoy el equipo de desarrollo implementa los lotes 6 (IA como harness) y 7 (constructor de reportes) sin Cursor. Sin CodeQL por ahora.
+- 2026-10-30: 1.3.7, 1.4.0 y 1.4.1 en producción; 1.4.2–1.4.3 (#95) y 1.5.0 en PR, implementados por el equipo de desarrollo. Pendiente 1.5.1
+  (actas de tribunal firmadas con el constructor, reporte de avance, IA en el diseñador) y aulas en el modelo para horarios.
