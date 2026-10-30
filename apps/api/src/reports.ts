@@ -63,7 +63,7 @@ export async function reports(path: string, method: string, input: unknown, requ
   }
   if (path === "/api/report-templates") {
     if (method === "GET") {
-      const rows = (await db.prepare(`SELECT ${columns} FROM report_templates t LEFT JOIN study_programs p ON p.id=t.program_id WHERE t.organization_id=? AND t.status='active' ORDER BY t.kind,p.name`).bind(current.organizationId).all<TemplateRow>()).results;
+      const rows = (await db.prepare(`SELECT ${columns} FROM report_templates t LEFT JOIN study_programs p ON p.id=t.program_id WHERE t.organization_id=? AND t.status='active' ORDER BY t.kind,p.name`).bind(current.organizationId).all<TemplateRow>()).results; // nosemgrep: sql-interpolated-text -- columns es una lista constante
       return reply({ templates: rows.map(viewOf), kinds: reportKinds });
     }
     const body = input && typeof input === "object" ? input as Record<string, unknown> : {};
@@ -76,10 +76,10 @@ export async function reports(path: string, method: string, input: unknown, requ
     try {
       await db.prepare("INSERT INTO report_templates(id,organization_id,kind,program_id,name,draft,updated_by,updated_at) VALUES (?,?,?,?,?,?,?,?)").bind(id, current.organizationId, kind, programId, name, JSON.stringify(defaultTemplate(kind)), current.id, now).run();
     } catch { return reply({ error: "Ya hay una plantilla de ese tipo para ese alcance: edítala." }, 409); }
-    return reply({ template: viewOf((await db.prepare(`SELECT ${columns} FROM report_templates t LEFT JOIN study_programs p ON p.id=t.program_id WHERE t.id=?`).bind(id).first<TemplateRow>())!) }, 201);
+    return reply({ template: viewOf((await db.prepare(`SELECT ${columns} FROM report_templates t LEFT JOIN study_programs p ON p.id=t.program_id WHERE t.id=?`).bind(id).first<TemplateRow>())!) }, 201); // nosemgrep: sql-interpolated-text -- columns es una lista constante
   }
   const [, templateId, action] = templatePath.exec(path)!;
-  const row = await db.prepare(`SELECT ${columns} FROM report_templates t LEFT JOIN study_programs p ON p.id=t.program_id WHERE t.id=? AND t.organization_id=? AND t.status='active'`).bind(templateId, current.organizationId).first<TemplateRow>();
+  const row = await db.prepare(`SELECT ${columns} FROM report_templates t LEFT JOIN study_programs p ON p.id=t.program_id WHERE t.id=? AND t.organization_id=? AND t.status='active'`).bind(templateId, current.organizationId).first<TemplateRow>(); // nosemgrep: sql-interpolated-text -- columns es una lista constante
   if (!row) return reply({ error: "La plantilla no existe." }, 404);
   const versions = async () => (await db.prepare("SELECT v.version,v.published_at AS publishedAt,COALESCE(u.display_name,u.username) AS publishedBy FROM report_template_versions v LEFT JOIN users u ON u.id=v.published_by WHERE v.template_id=? ORDER BY v.version DESC").bind(templateId).all()).results;
   const body = input && typeof input === "object" ? input as Record<string, unknown> : {};
