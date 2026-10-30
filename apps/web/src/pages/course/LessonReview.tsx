@@ -22,8 +22,9 @@ export function useReviewBasis(courseId: string, courseOutcomes: number): Review
       api<{ groups: ClassGroup[] }>(`/courses/${courseId}/groups`).catch(() => ({ groups: [] as ClassGroup[] })),
       api<{ resources: CourseResource[] }>(`/courses/${courseId}/resources`).catch(() => ({ resources: [] as CourseResource[] })),
     ]).then(([groups, resources]) => {
-      if (live) setBasis({ classMinutes: classMinutesOf(groups.groups), indexedResources: resources.resources.some(item => item.status !== "archived" && item.indexState === "mapped") });
-    });
+      // An answer without its list counts as empty: the review still works, with what does not apply left out.
+      if (live) setBasis({ classMinutes: classMinutesOf(groups.groups || []), indexedResources: (resources.resources || []).some(item => item.status !== "archived" && item.indexState === "mapped") });
+    }, () => { if (live) setBasis({ classMinutes: null, indexedResources: false }); });
     return () => { live = false; };
   }, [courseId]);
   return basis && { ...basis, courseOutcomes };
