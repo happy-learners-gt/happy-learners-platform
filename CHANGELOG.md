@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.3 — 2026-10-30
+
+- Organización › Horarios: genera el horario semanal de las secciones elegidas sobre la jornada, con reglas (disponibilidad, carga diaria, secciones que comparten estudiantes, días sin clase o preferidos) y un algoritmo que nunca rompe una regla; si no hay solución, explica qué impide ubicar cada sección. Se aplica a las secciones en las fechas elegidas.
+- Las reglas se pueden escribir con palabras: la IA las interpreta y se confirman antes de usarlas.
+
 ## 1.4.2 — 2026-10-30
 
 - Cronograma propuesto: en el Cronograma de una sección, «Según la duración de cada clase» reparte las lecciones pendientes en las clases próximas según sus minutos, muestra la propuesta y la aplica solo al confirmarla; si algo cambió entre tanto, pide proponerla de nuevo.
