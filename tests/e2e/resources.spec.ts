@@ -126,7 +126,10 @@ test("a book gets a record, an index, a plan map and a reading the student can m
   await expect(page.getByText(/tienen al menos un recurso indexado/)).toBeVisible();
   await shoot("plan-cobertura");
   await page.goto("/cursos/seed-course-mate6/contenido");
-  await expect(page.getByRole("heading", { name: "Lecturas" })).toBeVisible();
+  // Each unit shows its readings inside its card (docs/design/recursos-didacticos.md §4).
+  const unitReadings = page.getByRole("region", { name: "Lecturas de Unidad 1: Geometría y medida" });
+  await expect(unitReadings).toBeVisible();
+  await expect(unitReadings).toContainText(title);
   await shoot("lecturas-unidad");
   await page.goto("/cursos/seed-course-mate6/asistente?paso=propuestas");
   await expect(page.getByRole("group", { name: "Fuentes" })).toBeVisible();

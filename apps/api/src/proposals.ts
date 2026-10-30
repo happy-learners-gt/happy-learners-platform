@@ -10,6 +10,7 @@ import { configurationOf } from "./courses";
 import { referencesOf } from "./bibliography";
 import { digest } from "./auth";
 import { openAiGenerator, openAiSettings, TransientError } from "./openai";
+import { tracked } from "./ai-runs";
 import { confirmedMap } from "./book-map";
 
 declare global { interface Env { LESSON_GENERATOR?: string } }
@@ -229,7 +230,12 @@ async function propose(item: Item, db: Database, env: Env) {
   };
   if (!input.sources?.length) delete input.sources;
   let output: ProposalOutput;
-  try { output = await generator.generate(input); }
+  try {
+    output = await tracked(db, {
+      organizationId: item.organizationId, userId: item.requestedBy, courseId: item.courseId, task: "lesson-proposal", promptVersion: proposalPromptVersion,
+      generator: generator.kind, model: generator.kind === "openai" ? settings!.model : "fixture", inputChars: JSON.stringify(input).length,
+    }, observe => generator.generate(input, observe));
+  }
   catch (error) {
     // Rate limits and outages get two more tries on later wakes; anything else is reported, without internals.
     const transient = error instanceof TransientError && item.attempts < 3;

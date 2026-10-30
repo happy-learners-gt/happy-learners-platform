@@ -44,6 +44,7 @@ import { curriculumPackagesApi, packageMethods } from "./curriculum-packages";
 import { bookTextPath, proposalMethods, proposals } from "./proposals";
 import { delivery, deliveryMethods } from "./delivery";
 import { bookMap, bookMapMethods } from "./book-map";
+import { aiUsage, aiUsageMethods } from "./ai-usage";
 import { account, accountBody, accountMethods, clientOf, confirmEmail, emailConfirmPath, failedSignIn, openSession } from "./account";
 import { institutionalCalendarMethods, institutionalCalendars } from "./institutional-calendar";
 import { agenda, agendaMethods } from "./agenda";
@@ -125,6 +126,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   const proposalAllowed = proposalMethods(path);
   const deliveryAllowed = deliveryMethods(path);
   const bookMapAllowed = bookMapMethods(path);
+  const aiUsageAllowed = aiUsageMethods(path);
   const institutionalCalendarAllowed = institutionalCalendarMethods(path);
   const agendaAllowed = agendaMethods(path);
   const gradingSchemeAllowed = gradingSchemeMethods(path);
@@ -270,6 +272,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (proposalAllowed) methods[path] = proposalAllowed;
   if (deliveryAllowed) methods[path] = deliveryAllowed;
   if (bookMapAllowed) methods[path] = bookMapAllowed;
+  if (aiUsageAllowed) methods[path] = aiUsageAllowed;
   if (institutionalCalendarAllowed) methods[path] = institutionalCalendarAllowed;
   if (agendaAllowed) methods[path] = agendaAllowed;
   // ST-158, ST-159: account settings, my data and closing the account.
@@ -424,6 +427,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (staffAllowed) return staff(path, method, request, current, db, env.COURSE_FILES);
   if (path.startsWith("/api/access/")) return accessMatrix(path, method, input, current, db);
   if (path.startsWith("/api/members")) return roles(path, method, input, current, db, username => usernameTaken(env, username), notifier);
+  if (aiUsageAllowed) return aiUsage(path, method, input, url, current, db);
   if (path === "/api/organization/backup" || path === "/api/organization/restore") {
     if (current.role !== "admin") return json({ error: "Solo administración respalda o restaura la organización." }, 403);
     if (path.endsWith("/backup")) {

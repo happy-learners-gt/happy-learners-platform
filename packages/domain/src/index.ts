@@ -172,5 +172,9 @@ export { draftFromOutput, fixtureGenerator, maxExcerpt, maxProposalItems, pagesL
 export type { BookPage, LessonDraftGenerator, ProposalInput, ProposalOutput } from "./lesson-proposals";
 export { pdfFile, pdfString, wrap } from "./pdf";
 export type { PdfBlock, PdfDocument } from "./pdf";
-export { fixtureMapper, mapCandidatePages, mapCandidates, mapPrompt, mapSchema, mapSourceLabels, maxCandidateText, pagesInput, verifiedPages } from "./book-map";
+export { fixtureMapper, mapCandidatePages, mapCandidates, mapPrompt, mapPromptVersion, mapSchema, mapSourceLabels, maxCandidateText, pagesInput, verifiedPages } from "./book-map";
 export type { BookMapper, MapEvidence, MapInput, MapOutput, MapSource } from "./book-map";
+export { classMinutesOf, lessonReview } from "./lesson-review";
+export type { LessonReview, ReviewCheck, ReviewCheckId, ReviewContext, ReviewEvidence, ReviewLesson, ReviewStatus } from "./lesson-review";
+export { aiPriceInput, aiTaskLabels, aiTasks, aiUsageSummary, priceOn, runCost } from "./ai-usage";
+export type { AiPrice, AiRun, AiRunStatus, AiTask, AiTokenUsage, AiTotals, AiUsageSummary } from "./ai-usage";

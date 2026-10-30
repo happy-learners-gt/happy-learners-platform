@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.0 — 2026-10-30
+
+- Revisar en el editor de lecciones: puntaje de 0 a 100 con ocho criterios basados en hechos (objetivo, alineación con el plan, secuencia, tiempo frente a la duración de las clases, evaluación, agrupación, recursos e instrucciones), con su evidencia, qué cambiar y un enlace a la actividad. El mismo puntaje en cada lección de Contenido y la calidad media del curso.
+- Organización › Uso de IA: ejecuciones, tokens, costo estimado con los precios que registra administración, errores y duración, por tarea, curso y persona, y las últimas ejecuciones. No se guarda el texto enviado a la IA ni su respuesta.
+- Toda llamada a la IA pasa por un harness que la registra; evaluaciones de las propuestas de lecciones con el generador local en cada verificación y `npm run ai:eval` contra el modelo real.
+
 ## 1.3.7 — 2026-10-29
 
 - Cada recurso del curso tiene una ficha. La bibliografía es la de los que tienen un rol, en APA 7.

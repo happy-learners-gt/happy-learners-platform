@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { openAiGenerator, openAiSettings, TransientError } from "../apps/api/src/openai";
+import { failureOf, openAiGenerator, openAiSettings, TransientError } from "../apps/api/src/openai";
 import { draftFromOutput, proposalProblem, sequenceOf, validActivities } from "../packages/domain/src/index";
 import type { ProposalInput } from "../packages/domain/src/index";
 
@@ -52,5 +52,16 @@ describe("OpenAI lesson generator (no network)", () => {
     const errors = await Promise.all(final.map(generator => generator.generate(input).then(() => null, (error: Error) => error)));
     expect(errors.map(error => error?.message)).toEqual(["status 401", "incomplete max_output_tokens", "refusal", "empty"]);
     expect(errors.every(error => !(error instanceof TransientError) && !error!.message.includes("sk-"))).toBe(true);
+  });
+
+  it("reports the tokens of an answer, even one that is not usable, and the harness names how a run ended (1.4.0)", async () => {
+    const usage = { input_tokens: 1234, output_tokens: 567 };
+    const seen: unknown[] = [];
+    await openAiGenerator(settings, answer({ ...message(JSON.stringify(lesson)), usage })).generate(input, reported => seen.push(reported));
+    await openAiGenerator(settings, answer({ status: "incomplete", incomplete_details: { reason: "max_output_tokens" }, usage, output: [] })).generate(input, reported => seen.push(reported)).catch(() => null);
+    await openAiGenerator(settings, answer(message(JSON.stringify(lesson)))).generate(input, reported => seen.push(reported));
+    expect(seen).toEqual([{ inputTokens: 1234, outputTokens: 567 }, { inputTokens: 1234, outputTokens: 567 }]);
+    expect([new TransientError("status 429"), new Error("refusal"), new Error("incomplete max_output_tokens"), new Error("status 401"), "x"].map(failureOf))
+      .toEqual(["transient", "refused", "incomplete", "error", "error"]);
   });
 });
