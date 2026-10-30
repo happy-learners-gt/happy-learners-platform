@@ -311,7 +311,21 @@ colaboradores) mientras el curso está activo (403 en otro caso). `POST` recibe 
 (201; 400 si el recurso no es de la biblioteca de este curso; 409 si ya está o está archivado). `PUT
 /api/courses/:id/bibliography/:refId` recibe `{ role, citation, primary }` y `DELETE` la quita sin tocar el recurso.
 Solo hay un libro principal por curso: debe tener el rol `text` (400) y estar publicado (409). Marcar otro lo reemplaza
-en la misma transacción. La actividad lo registra.
+en la misma transacción. La actividad lo registra. `GET /api/courses/:id/bibliography?format=apa7` responde `{ text, html,
+entries }`: la bibliografía en APA 7 agrupada por rol. Una cita escrita a mano se marca.
+
+### Recursos didácticos (0068)
+
+Un recurso es un elemento de la biblioteca con su ficha. `course_bibliography` deja de leerse; su rol vive en
+`course_resources`. `GET` y `POST /api/courses/:id/resources`, `GET`, `PUT` y `DELETE /api/courses/:id/resources/:id`.
+`POST /api/courses/:id/resources/lookup` recibe `{ isbn }` o `{ doi }` y consulta Open Library o Crossref con un límite
+de 3 s, sin datos personales (504 si se agota el tiempo; la ficha queda para llenarla a mano). El índice es `GET`,
+`PUT` y `POST /api/courses/:id/resources/:id/index` (`outline` desde el PDF en el navegador, `detected` desde el texto
+por página, o capítulos escritos a mano). `PUT …/text` guarda el texto por página de cualquier PDF, no solo del libro
+principal. `GET` y `POST /api/courses/:id/book-map?resourceId=` mapean ese recurso; sin `resourceId` sigue siendo el
+libro principal. Las lecturas son `GET` y `POST /api/courses/:id/readings`. `GET /api/sections/:id/readings` incluye las
+propias de la sección y el porcentaje de lecturas obligatorias. Un estudiante ve `GET /api/student/readings` (solo
+recursos compartibles de sus lecturas) y marca la suya con `POST /api/student/readings/:id/mark`.
 
 ## Secciones y clases
 

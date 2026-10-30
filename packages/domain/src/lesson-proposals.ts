@@ -48,6 +48,8 @@ export interface ProposalInput {
   sequence: { label: string; phases: { id: string; label: string; hint: string }[] };
   outcome: { id: string; statement: string; code: string | null; competency: string | null; contents: string[] };
   book: { title: string; fileId: string; pages: number[]; excerpt: string };
+  /** Indexed resources the person kept checked. Absent means the proposal uses only the main book, as before. */
+  sources?: { resourceId: string; fileId: string; title: string; chapter: string | null; pages: number[]; excerpt: string }[];
 }
 /** What a generator answers: plain fields the platform turns into its lesson model. */
 export interface ProposalOutput {
@@ -85,6 +87,7 @@ export function proposalPrompt(input: ProposalInput) {
     input.outcome.contents.length ? `Contenidos del CNB:\n- ${input.outcome.contents.join("\n- ")}` : "",
     `Secuencia didáctica «${input.sequence.label}». Usa exactamente estos momentos, en este orden, con su id en "phase":\n${input.sequence.phases.map(phase => `- ${phase.id}: ${phase.label}. ${phase.hint}`).join("\n")}`,
     `Fragmento del libro «${input.book.title}» (${pagesLabel(input.book.pages)}):\n"""\n${input.book.excerpt}\n"""`,
+    input.sources?.length ? `Otras fuentes indexadas, además del libro. Cita cada una con su capítulo y sus páginas, y no cites una página que no esté en su fragmento:\n${input.sources.map(source => `- «${source.title}»${source.chapter ? `, ${source.chapter}` : ""}, ${pagesLabel(source.pages)}:\n"""\n${source.excerpt}\n"""`).join("\n")}` : "",
     "Propón una lección: título (hasta 120 caracteres), objetivo (una oración) y de 3 a 6 actividades. Los minutos deben sumar la duración de la clase.",
     "Cada actividad dice qué hacen los estudiantes y cita las páginas del libro que usa. Incluye al menos una actividad con propósito \"assess\" con una pregunta de opción múltiple (de 3 a 4 opciones, answer es el índice de la correcta desde 0). En las demás, question es null.",
   ].filter(Boolean).join("\n\n");
@@ -103,6 +106,7 @@ export const fixtureGenerator: LessonDraftGenerator = {
     const content = (input.outcome.contents[0]?.replace(/^[\d.]+\s*/, "") || input.outcome.statement).replace(/\.+$/, "");
     // The excerpt marks where each page starts ([p. 12]); the quoted sentence leaves those marks out.
     const first = input.book.excerpt.replace(/\[p\. \d+\]\s*/g, "").split(/(?<=[.!?])\s+/)[0]?.slice(0, 200).replace(/\.$/, "") || "";
+    const cited = (input.sources || []).map(source => `«${source.title}»${source.chapter ? `, ${source.chapter}` : ""}, ${pagesLabel(source.pages)}.`).join(" ");
     return {
       title: `${input.outcome.code ? `${input.outcome.code} · ` : ""}${input.outcome.statement}`.slice(0, 120),
       objective: `Al terminar, cada estudiante ${input.outcome.statement.charAt(0).toLocaleLowerCase("es")}${input.outcome.statement.slice(1)}`.replace(/\.?$/, "."),
@@ -113,7 +117,7 @@ export const fixtureGenerator: LessonDraftGenerator = {
           phase: phase.id, purpose: last ? "assess" : index === 0 ? "explore" : "practice", grouping: last ? "individual" : index === 0 ? "whole-class" : "pairs",
           minutes: base + (last ? extra : 0),
           instructions: last ? `Responde la pregunta y comenta tu respuesta con tu pareja. Libro, ${cite}.`
-            : index === 0 ? `Lee con el grupo el inicio del tema en el libro (${cite})${first ? `: «${first}»` : ""}. Pregunta qué saben de ${content.toLocaleLowerCase("es")}.`
+            : index === 0 ? `Lee con el grupo el inicio del tema en el libro (${cite})${first ? `: «${first}»` : ""}. Pregunta qué saben de ${content.toLocaleLowerCase("es")}.${cited ? ` También: ${cited}` : ""}`
             : `Trabaja en parejas los ejercicios del libro (${cite}) sobre ${content.toLocaleLowerCase("es")}.`,
           question: last ? { prompt: `¿Qué contenido trabajamos hoy con el libro (${cite})?`, options: [content.slice(0, 180), "Un tema que no está en el libro", "Ninguno de los anteriores"], answer: 0 } : null,
         };
@@ -138,7 +142,11 @@ export function draftFromOutput(output: ProposalOutput, input: ProposalInput): {
       if (options.length >= 2 && Number.isInteger(question.answer) && question.answer >= 0 && question.answer < options.length)
         blocks.push({ id: `p${position}-question`, kind: "question", instructions: clip(question.prompt, 3800), options, answer: question.answer });
     }
-    if (position === 0) blocks.push({ id: `p${position}-book`, kind: "resource", resourceId: input.book.fileId, instructions: `Libro: ${input.book.title}, ${pagesLabel(input.book.pages)}.` });
+    if (position === 0) {
+      blocks.push({ id: `p${position}-book`, kind: "resource", resourceId: input.book.fileId, instructions: `Libro: ${input.book.title}, ${pagesLabel(input.book.pages)}.` });
+      for (const source of (input.sources || []).filter(source => source.fileId !== input.book.fileId))
+        blocks.push({ id: `p${position}-${source.resourceId}`, kind: "resource", resourceId: source.fileId, chapter: source.chapter || undefined, pages: pagesLabel(source.pages), instructions: `«${source.title}»${source.chapter ? `, ${source.chapter}` : ""}, ${pagesLabel(source.pages)}.` });
+    }
     return {
       id: `proposal-${position}`, position, title: clip(activity.title, 160) || `Actividad ${position + 1}`, minutes: Math.min(120, Math.max(1, Math.round(Number(activity.minutes) || 1))),
       phase: phases.has(activity.phase) ? activity.phase : input.sequence.phases[0].id, purpose: activity.purpose, grouping: activity.grouping,
@@ -156,4 +164,15 @@ export function proposalProblem(draft: { title: string; objective: string; activ
   const total = draft.activities.reduce((sum, activity) => sum + activity.minutes, 0);
   if (Math.abs(total - input.minutes) > Math.max(5, input.minutes * 0.2)) return `Las actividades suman ${total} minutos y la clase dura ${input.minutes}.`;
   return null;
+}
+
+const plainCitation = (text: string) => text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+/** A citation is verified only when the quoted sentence is really on that page of that resource. */
+export function sourceCitationVerified(quote: string, pageText: string | undefined): boolean {
+  const clean = quote.trim();
+  return clean.length >= 8 && !!pageText && plainCitation(pageText).includes(plainCitation(clean));
+}
+/** The sentence a source's excerpt actually starts with: what a citation may claim. */
+export function sourceQuote(excerpt: string): string {
+  return excerpt.replace(/\[p\. \d+\]\s*/g, "").split(/(?<=[.!?])\s+/)[0]?.trim().slice(0, 200) || "";
 }

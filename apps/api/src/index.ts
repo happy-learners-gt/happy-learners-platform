@@ -39,6 +39,7 @@ import { bellScheduleMethods, bellSchedulesApi } from "./bell-schedules";
 import { gradebookMethods, grades } from "./gradebook";
 import { groupSetMethods, groupSets } from "./group-sets";
 import { bibliography, bibliographyMethods } from "./bibliography";
+import { resourceMethods, resources } from "./resources";
 import { curriculumPackagesApi, packageMethods } from "./curriculum-packages";
 import { bookTextPath, proposalMethods, proposals } from "./proposals";
 import { delivery, deliveryMethods } from "./delivery";
@@ -117,6 +118,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   const groupSetAllowed = groupSetMethods(path);
   // The course's bibliography; its POST and PUT bodies are read with the other course routes.
   const bibliographyAllowed = bibliographyMethods(path);
+  const resourceAllowed = resourceMethods(path);
   // Curriculum packages; picking indicators reads its body with the other course routes.
   const packageAllowed = packageMethods(path);
   // Lesson proposals (rebanada 5a); their bodies are read with the other course routes.
@@ -215,7 +217,8 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (/^\/api\/courses\/[a-z0-9-]+\/sessions\/[a-z0-9-]+\/outcomes$/.test(path)) methods[path] = ["PUT"];
   if (path === "/api/calendar") methods[path] = ["GET", "POST"];
   if (/^\/api\/calendar\/[a-z0-9-]+$/.test(path)) methods[path] = ["DELETE"];
-  if (path === "/api/classes" || path === "/api/student/space" || /^\/api\/student\/files\/[a-z0-9-]+$/.test(path) || /^\/api\/student\/educators\/[a-z0-9-]+\/photo$/.test(path)) methods[path] = ["GET"];
+  if (path === "/api/classes" || path === "/api/student/space" || path === "/api/student/readings" || /^\/api\/student\/files\/[a-z0-9-]+$/.test(path) || /^\/api\/student\/educators\/[a-z0-9-]+\/photo$/.test(path)) methods[path] = ["GET"];
+  if (/^\/api\/student\/readings\/reading-[a-z0-9-]+\/mark$/.test(path)) methods[path] = ["POST"];
   if (["/api/student/login", "/api/student/logout", "/api/student/identity", "/api/student/progress"].includes(path)) methods[path] = ["POST"];
   if (path === "/api/taxonomy") methods[path] = ["GET"];
   // ST-125: the calendar link (signed in) and the feed calendars fetch without a session; GET only.
@@ -262,6 +265,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (gradingSchemeAllowed) methods[path] = gradingSchemeAllowed;
   if (assessmentAllowed) methods[path] = assessmentAllowed;
   if (bibliographyAllowed) methods[path] = bibliographyAllowed;
+  if (resourceAllowed) methods[path] = resourceAllowed;
   if (packageAllowed) methods[path] = packageAllowed;
   if (proposalAllowed) methods[path] = proposalAllowed;
   if (deliveryAllowed) methods[path] = deliveryAllowed;
@@ -393,10 +397,11 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (/^\/api\/(taxonomy|vocabularies|terms)(\/|$)/.test(path)) return taxonomy(path, method, input, current, db);
   if (/^\/api\/courses\/[a-z0-9-]+\/(groups|sessions)(\/|$)/.test(path)) return classroom(path, method, input, current, db, url.searchParams, notifier);
   if (/^\/api\/courses\/[a-z0-9-]+\/duplicate$/.test(path)) return duplicateCourse(path.split("/")[3], current, db, env.COURSE_FILES);
-  if (bibliographyAllowed) return bibliography(path, method, input, current, db);
+  if (bibliographyAllowed) return bibliography(path, method, input, current, db, url.searchParams.get("format"));
+  if (resourceAllowed) return resources(path, method, input, current, db, env);
   if (packageAllowed) return curriculumPackagesApi(path, method, input, current, db);
   if (deliveryAllowed) return delivery(path, url, current, db);
-  if (bookMapAllowed) return bookMap(path, method, input, current, db, env, () => env.ORGANIZATIONS.getByName(current.organizationId).schedule(current.organizationId));
+  if (bookMapAllowed) return bookMap(path, method, input, current, db, env, () => env.ORGANIZATIONS.getByName(current.organizationId).schedule(current.organizationId), url.searchParams.get("resourceId"));
   if (proposalAllowed) return proposals(path, method, input, current, db, env, () => env.ORGANIZATIONS.getByName(current.organizationId).schedule(current.organizationId));
   if (/^\/api\/courses\/[a-z0-9-]+\/assessment(\/|$)/.test(path)) return courseAssessment(path, method, input, url, current, db);
   if (/^\/api\/courses\/[a-z0-9-]+\/(core|sections\/differences|section-proposals(\/[a-z0-9-]+)?)$/.test(path) || /^\/api\/sections\/[a-z0-9-]+\/(plan|lessons|activities|content-overrides|units|copies|proposals|reviews)$/.test(path)) return sectionFreedom(path, method, input, current, db, notifier);

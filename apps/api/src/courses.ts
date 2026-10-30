@@ -265,6 +265,8 @@ export async function courses(path: string, method: string, input: unknown, curr
     if (old) {
       const updated = await db.guardedBatch(db.prepare("UPDATE materials SET title=?,description=?,content=?,kind=?,status=?,version=version+1,updated_at=? WHERE id=? AND course_id=? AND organization_id=? AND version=? RETURNING id").bind(data.title, data.description, data.content, data.kind, data.status, now, mid, id, current.organizationId, Number.isInteger(v.version) ? Number(v.version) : -1), relationships);
       if (!updated) return conflict();
+      // The material's resource (1.3.7) shows the same title in Recursos.
+      await db.prepare("UPDATE course_resources SET title=?,updated_at=? WHERE material_id=? AND course_id=? AND organization_id=?").bind(data.title, now, mid, id, current.organizationId).run();
     } else {
       await db.batch([db.prepare("INSERT INTO materials(id,course_id,organization_id,title,description,content,kind,status,updated_at) VALUES (?,?,?,?,?,?,?,?,?)").bind(mid, id, current.organizationId, data.title, data.description, data.content, data.kind, data.status, now), ...relationships]);
     }
