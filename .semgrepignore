@@ -1,0 +1,9 @@
+# Generated or third-party code.
+node_modules/
+build/
+dist/
+coverage/
+playwright-report/
+test-results/
+.release-evidence/
+apps/api/worker-configuration.d.ts
