@@ -140,7 +140,8 @@ function joinAuthors(authors: ResourceAuthor[]) {
 }
 const editionOf = (value: string | number | null | undefined) => {
   if (value === undefined || value === null || value === "") return "";
-  if (typeof value === "number") return `(${value}.ª ed.)`;
+  // A form sends the number as text: «2» is the second edition.
+  if (typeof value === "number" || /^\d+$/.test(value.trim())) return `(${String(value).trim()}.ª ed.)`;
   return value.includes("ed") ? `(${value.replace(/^\(|\)$/g, "")})` : `(${value})`;
 };
 const pagesOf = (value: string | number | null | undefined) => String(value || "").replace(/\s/g, "").replace(/-/g, "–");
@@ -190,6 +191,14 @@ export function citation(resource: CitationResource, style: "apa7"): string {
   else body = `${title}.${meta(resource, "description") ? ` ${meta(resource, "description")}.` : ""}`;
   const retrieved = resource.type === "website" && meta(resource, "retrieved") ? retrievedOf(String(meta(resource, "retrieved"))) : "";
   const link = doi || url;
+  // Without authorship the title block (with its edition or bracket) takes the author's place, before the date.
+  if (!authors.length) {
+    // The title block ends at the first period followed by a space (an edition like «2.ª ed.» has inner periods).
+    const end = body.indexOf(". ", title.length);
+    const first = end < 0 ? (body.endsWith(".") ? body : `${body}.`) : body.slice(0, end + 1), rest = end < 0 ? "" : body.slice(end + 1);
+    return [`${first} (${resource.year ?? "s. f."}).`, rest, retrieved && link ? `${retrieved} ${link}` : retrieved || link]
+      .filter(Boolean).join(" ").replace(/\s+/g, " ").replace(/\s+\./g, ".").trim();
+  }
   return [head, body, retrieved && link ? `${retrieved} ${link}` : retrieved || link].filter(Boolean).join(" ").replace(/\s+/g, " ").replace(/\s+\./g, ".").trim();
 }
 function retrievedOf(value: string) {

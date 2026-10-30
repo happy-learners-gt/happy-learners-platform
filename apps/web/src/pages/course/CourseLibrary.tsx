@@ -83,7 +83,7 @@ export function CourseLibrary() {
       </div>
       <div className="resource-row-actions">
         {item.fileId && <button type="button" className="button ghost small" aria-label={`Vista previa de ${item.title}`} onClick={() => setPreview(item)}><Icon name="eye" size={16}/>Vista previa</button>}
-        {writable && <button type="button" className="button ghost small" onClick={() => setEditing(item)}>Editar ficha de {item.title}</button>}
+        {writable && <button type="button" className="button ghost small" aria-label={`Editar ficha de ${item.title}`} onClick={() => setEditing(item)}>Editar ficha</button>}
         <Menu label={`Acciones del recurso ${item.title}`} items={[
           { label: "Abrir", icon: "arrowRight", onSelect: () => navigate(`${base}/biblioteca/${item.id}`) },
           ...(writable && item.status !== "archived" ? ["separator" as const, { label: "Archivar", icon: "archive" as const, danger: true, onSelect: () => void archive(item) }] : []),
