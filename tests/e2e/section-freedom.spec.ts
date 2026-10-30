@@ -50,7 +50,7 @@ test("the lead adapts one section and coordination sees the differences", async 
   await json(await call(adminToken, `/courses/${course.id}/groups/${sectionA.id}/educators`, "PUT", { userIds: ["user-educator"] }));
   await json(await call(adminToken, `/courses/${course.id}/groups/${sectionB.id}/educators`, "PUT", { userIds: ["user-1", "user-educator"] }));
   const learner = await json<{ id: string }>(await call(adminToken, `/courses/${course.id}/groups/${sectionA.id}/learners`, "POST", { displayName: "Ana" }), 201);
-  const unit = await json<{ id: string }>(await call(leadToken, `/courses/${course.id}/units`, "POST", { version: await version(), name: "Fracciones", objective: "Entender una fracción.", status: "active" }), 201);
+  const unit = await json<{ id: string }>(await call(leadToken, `/courses/${course.id}/units`, "POST", { version: await version(), name: e2eName(info, "Fracciones"), objective: "Entender una fracción.", status: "active" }), 201);
   const lessonBody = (title: string) => ({ title, objective: "Objetivo de la lección.", instructions: "Haz la actividad.", courseUnitId: unit.id, activities: [{ id: "a", type: "text", position: 0, title: "Actividad", instructions: "Sigue", minutes: 10 }] });
   const kept = await json<{ lesson: { id: string } }>(await call(leadToken, "/lessons", "POST", lessonBody(coreLesson)), 201);
   const optional = await json<{ lesson: { id: string } }>(await call(leadToken, "/lessons", "POST", lessonBody(optionalLesson)), 201);

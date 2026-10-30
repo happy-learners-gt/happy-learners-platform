@@ -45,3 +45,5 @@ const sql = `${lines.join("\n")}\n`;
 const target = fileURLToPath(new URL("../../database/migrations/0067_demo_section_freedom.sql", import.meta.url));
 if (process.argv[1] === fileURLToPath(import.meta.url)) writeFileSync(target, sql);
 export const sectionFreedomSql = sql;
+/** Names this seed shows, for the E2E check that every other record carries the E2E prefix. */
+export const sectionFreedomNames = ["Didáctica de la lectura", "Unidad 1: El texto breve", "Sección A", "Sección B", "De qué trata el texto", "El párrafo que se puede omitir", "Lectura de la sección A", "Ensayo de la sección B"];
