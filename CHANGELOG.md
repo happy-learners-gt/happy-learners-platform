@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.1 — 2026-10-30
+
+- Actas de tribunal: en Mis tribunales cada integrante firma el acta de un estudiante con su nombre y contraseña, quien preside al final; el acta guarda las marcas, el resultado y su huella, y las calificaciones quedan fijas desde la primera firma. El PDF usa la plantilla «Acta de tribunal» de Documentos.
+- En el diseñador de documentos, «Redactar con IA» en los bloques de texto, conservando los campos.
+
 ## 1.5.0 — 2026-10-30
 
 - Organización › Documentos: plantillas de la boleta y la constancia con membrete y logotipo, títulos y textos con campos, tablas de datos, imágenes, firmas y saltos de página; vista previa con datos reales, versiones e historial. La plantilla de un programa reemplaza la de la organización.

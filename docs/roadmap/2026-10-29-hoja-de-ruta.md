@@ -19,9 +19,10 @@ Reemplaza la necesidad de recordar el historial. Se actualiza al cerrar cada lot
 | 1.4.0–1.4.1 | Asistente como harness: registro y uso de IA, revisión con puntaje, mejora asistida, redacción (`docs/design/asistente-ia.md`) | En producción (#93, #94) |
 | 1.4.2–1.4.3 | Cronograma propuesto y horarios con reglas | En PR (#95) |
 | 1.5.0 | Constructor de documentos: boleta y constancia (`docs/design/constructor-de-reportes.md`) | En PR |
-| 1.5.1 | Acta de tribunal firmada por cada integrante, reporte de avance, ayuda de IA en el diseñador | Pendiente |
+| 1.5.1 | Acta de tribunal firmada por cada integrante; Redactar con IA en el diseñador | En PR |
+| 1.5.2 | Reporte de avance de una sección; «Sugerir campos» con IA en el diseñador; aulas en los horarios | Pendiente |
 
-Siguiente migración libre: **0072** (1.4.0 usa 0070; 1.5.0 usa 0071). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
+Siguiente migración libre: **0073** (1.4.0 usa 0070; 1.5.0 usa 0071; 1.5.1 usa 0072). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
 
 ## 2. Cómo se trabaja (no repetir errores)
 

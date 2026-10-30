@@ -136,6 +136,31 @@ describe("data-driven grading on the built Worker", () => {
     expect(mine.panels.map(item => item.activityId)).toContain(defense);
     expect(mine.panels.find(item => item.activityId === defense)!.learners.find(item => item.id === learner)!.marked).toBe(true);
     expect((await read<{ panels: unknown[] }>(await as(outsider, "/me/panels"))).panels).toEqual([]);
+
+    // 1.5.1: the minutes. Each member signs with name and password; the chair (admin) last; the marks then stay fixed.
+    const sign = (cookie: string | null, fullName: string, secret = password) => as(cookie, "/panel-minutes/sign", "POST", { activityId: defense, sectionId: group, learnerId: learner, signature: { fullName, password: secret } });
+    const first = await read<{ minute: { id: string; status: string; signed: number; total: number; documentSha256: string } }>(await sign(educator, "Educador de la demostración"), 201);
+    expect(first.minute).toMatchObject({ status: "open", signed: 1, total: 3 });
+    expect(await errorOf(await sign(admin, "Administración de la demostración"), 409)).toBe("Quien preside firma al final: faltan 1 integrante.");
+    expect(await errorOf(await sign(educator, "Educador de la demostración"), 409)).toBe("Ya firmaste esta acta.");
+    expect(await errorOf(await sign(outsider, "Lucía Herrera"), 403)).toBe("Solo los integrantes del tribunal firman su acta.");
+    expect(await errorOf(await sign(carlos, "Carlos Mejía", "otra-clave"), 403)).toBe("La contraseña no es correcta. Tu firma no se registró.");
+    expect(await errorOf(await as(admin, `${path}/activities/${defense}/panel`, "PUT", { learnerId: learner, mark: { kind: "pass", value: true } }), 409)).toBe("El acta de este estudiante ya tiene firmas: las calificaciones del tribunal quedan fijas.");
+    expect(await errorOf(await as(educator, `${path}/activities/${defense}/evaluators`, "PUT", { evaluators: evaluatorIds.slice(0, 2).map((userId, index) => ({ userId, chair: index === 0 })) }), 409)).toBe("El tribunal ya firmó actas de esta evaluación: sus integrantes no cambian.");
+    expect((await read<{ minute: { status: string; signed: number } }>(await sign(carlos, "Carlos Mejía"), 201)).minute).toMatchObject({ status: "open", signed: 2 });
+    const closed = await read<{ minute: { status: string; signed: number; documentSha256: string } }>(await sign(admin, "Administración de la demostración"), 201);
+    expect(closed.minute).toMatchObject({ status: "signed", signed: 3, documentSha256: first.minute.documentSha256 });
+    expect(await errorOf(await sign(carlos, "Carlos Mejía"), 409)).toBe("El acta ya está firmada por todo el tribunal.");
+    const panelsAfter = await read<{ panels: { activityId: string; learners: { id: string; minute: { status: string; signed: number; mine: boolean } | null }[] }[] }>(await as(carlos, "/me/panels"));
+    expect(panelsAfter.panels.find(item => item.activityId === defense)!.learners.find(item => item.id === learner)!.minute).toEqual({ id: first.minute.id, status: "signed", signed: 3, mine: true });
+    // The minutes' PDF: the panel and the section's educators read it, nobody else.
+    const minutePdf = await as(educator, `/panel-minutes/${first.minute.id}.pdf`);
+    expect(minutePdf.status).toBe(200);
+    const text = new TextDecoder().decode(await minutePdf.arrayBuffer());
+    expect(text).toContain("(Acta de tribunal) Tj");
+    expect(text).toContain("firmada por todo el tribunal");
+    expect(text).toContain(first.minute.documentSha256.slice(0, 16));
+    expect((await as(outsider, `/panel-minutes/${first.minute.id}.pdf`)).status).toBe(403);
   }, 30_000);
 
   it("prints a level in PDF and CSV and archives an in-use scheme", async () => {

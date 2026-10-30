@@ -1,12 +1,13 @@
 import type { AcademicYear, AssessmentActivity, AssessmentEvaluator, AssessmentKind, AssessmentMark, AssessmentScore, AtomicMark, GradeChange, GradeComment, Gradebook, GradebookPeriod, GradeEntry, GradingActivity, GradingScheme, Mark, Member, MyPanel, PeriodReview, Rubric } from "@happy-learners/contracts";
 import { assessmentKindLabel, csvFile, defaultTemplate, displayOf, gradeResult, isAssessmentKind, learnerResult, markValue, maxAssessmentActivities, maxCommentLength, maxGradeChanges, pdfFile, planTotal, pointsInput, rubricInput, schemeFromSettings, schemeInput, scoreInput } from "@happy-learners/domain";
-import type { GradingPolicy, PdfBlock, ReportRecord, ReportTemplate } from "@happy-learners/domain";
+import type { GradingPolicy, PdfBlock, ReportKind, ReportRecord, ReportTemplate } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
 import { configurationOf } from "./courses";
 import { accessTo } from "./access";
 import { scopedCourses } from "./permissions";
 import { event } from "./team";
 import { activeTemplate, generate, pdfResponse } from "./reports";
+import { minuteRecord, minutesOf } from "./panel-minutes";
 import { gradingSchemesFor } from "./grading-schemes";
 import { groupGrades } from "./group-grading";
 import { effectiveActivityIds, loadSection } from "./freedom-plan";
@@ -607,6 +608,8 @@ async function recomputeOne(db: Database, current: Member, section: SectionRow, 
 }
 
 async function saveEvaluators(db: Database, current: Member, allowed: Access, activityId: string, input: unknown) {
+  // 1.5.1: a panel whose minutes have signatures keeps its members.
+  if (await db.prepare("SELECT 1 FROM panel_minutes WHERE activity_id=? LIMIT 1").bind(activityId).first()) return reply({ error: "El tribunal ya firmó actas de esta evaluación: sus integrantes no cambian." }, 409);
   if (!allowed.write) return writeClosed(allowed.section);
   const activity = await db.prepare(`SELECT a.id,a.panel FROM assessment_activities a JOIN academic_periods p ON p.id=a.period_id JOIN academic_years y ON y.id=p.year_id
     WHERE a.id=? AND a.course_id=? AND a.organization_id=? AND a.grading='panel' AND y.status='current'`)
@@ -650,6 +653,8 @@ async function savePanelMark(db: Database, current: Member, allowed: Access, act
   if (typeof body.learnerId !== "string") return reply({ error: "Elige al estudiante del tribunal." }, 400);
   const learner = await db.prepare("SELECT id FROM group_learners WHERE id=? AND group_id=? AND organization_id=? AND status='active'").bind(body.learnerId, allowed.section.id, current.organizationId).first();
   if (!learner) return reply({ error: "Ese estudiante no está en la lista de la sección." }, 404);
+  // 1.5.1: once a member has signed the student's minutes, the panel's marks stay as they were signed.
+  if (await db.prepare("SELECT 1 FROM panel_minutes WHERE activity_id=? AND learner_id=? LIMIT 1").bind(activityId, body.learnerId).first()) return reply({ error: "El acta de este estudiante ya tiene firmas: las calificaciones del tribunal quedan fijas." }, 409);
   const mark = atomicMarkInput(body.mark, { grading: "panel", ...(activity.rubric ? { rubric: JSON.parse(activity.rubric) } : {}) }, true);
   if (!mark || (mark.kind === "points" && (mark.value < 0 || mark.value > activity.points))) return reply({ error: `Revisa tu marca de «${activity.title}».` }, 400);
   const { scheme } = await policyOf(db, current.organizationId, allowed.section.courseId);
@@ -894,9 +899,16 @@ async function report(db: Database, current: Member, section: SectionRow, url: U
 }
 
 /** The designer's preview (1.5.0): a draft of a template with a real section's data, nothing recorded. */
-export async function documentPreview(db: Database, current: Member, kind: "report-card" | "certificate", template: ReportTemplate, sectionId: string, learnerId: string | null) {
+export async function documentPreview(db: Database, current: Member, kind: ReportKind, template: ReportTemplate, sectionId: string, learnerId: string | null) {
   const allowed = await access(db, current, sectionId);
   if (allowed instanceof Response) return allowed;
+  if (kind === "panel-minutes") {
+    // The section's latest minutes, or an example when its panels have signed none yet.
+    const minute = await db.prepare("SELECT id,content,document_sha256 AS sha,status FROM panel_minutes WHERE group_id=? AND organization_id=? ORDER BY created_at DESC LIMIT 1").bind(sectionId, current.organizationId).first<{ id: string; content: string; sha: string; status: string }>();
+    const record: ReportRecord = minute ? await minuteRecord(db, current, minute) : { fields: { "organizacion.nombre": "Organización", "curso.nombre": allowed.section.courseTitle, "seccion.nombre": allowed.section.name, "estudiante.nombre": "Estudiante de ejemplo", "actividad.nombre": "Evaluación con tribunal", "periodo.nombre": "Periodo", "tribunal.criterio": "Promedio de los integrantes", "resultado.nota": "—", "acta.estado": "ejemplo sin firmas", "acta.huella": "—" },
+      datasets: { integrantes: [{ integrante: "Integrante 1", rol: "Preside", calificacion: "—", firma: "Pendiente", fecha: "" }, { integrante: "Integrante 2", rol: "Integrante", calificacion: "—", firma: "Pendiente", fecha: "" }] } };
+    return pdfResponse(await generate(db, current, "panel-minutes", { id: null, version: null, template }, [record], "Acta de tribunal · vista previa", { type: "section", id: sectionId }, false), "acta-vista-previa.pdf");
+  }
   if (kind === "certificate") return certificate(db, current, allowed.section, learnerId || "", "inscripción", template);
   const url = new URL(`https://preview.local/?${learnerId ? `learner=${encodeURIComponent(learnerId)}` : ""}`);
   return report(db, current, allowed.section, url, template);
@@ -942,7 +954,10 @@ export async function myPanels(db: Database, current: Member) {
     const learners = (await db.prepare("SELECT id,display_name AS name FROM group_learners WHERE group_id=? AND organization_id=? AND status='active' ORDER BY display_name COLLATE NOCASE,id").bind(row.sectionId, current.organizationId).all<{ id: string; name: string }>()).results;
     const marks = (await db.prepare("SELECT learner_id AS learnerId,evaluator_id AS evaluatorId,mark FROM assessment_marks WHERE activity_id=? AND group_id=? AND organization_id=?").bind(row.activityId, row.sectionId, current.organizationId).all<{ learnerId: string; evaluatorId: string | null; mark: string }>()).results;
     const panel = row.panel ? JSON.parse(row.panel) as { combine: MyPanel["combine"] } : { combine: "average" as const };
+    const minutes = await minutesOf(db, current.organizationId, row.activityId, row.sectionId);
+    const chairs = await db.prepare("SELECT chair FROM assessment_evaluators WHERE activity_id=? AND user_id=?").bind(row.activityId, current.id).first<{ chair: number }>();
     panels.push({
+      chair: !!chairs?.chair,
       activityId: row.activityId, title: row.title, points: row.points, courseId: row.courseId, courseTitle: row.courseTitle,
       sectionId: row.sectionId, sectionName: row.sectionName, periodName: row.periodName, rubric: row.rubric ? JSON.parse(row.rubric) as Rubric : null,
       combine: panel.combine, evaluators: row.evaluators,
@@ -951,7 +966,8 @@ export async function myPanels(db: Database, current: Member) {
         const theirs = marks.filter(item => item.learnerId === learner.id && item.evaluatorId);
         const complete = row.evaluators > 0 && theirs.length >= row.evaluators && new Set(theirs.map(item => item.evaluatorId)).size >= row.evaluators;
         const combined = complete ? markValue({ id: row.activityId, periodId: "", categoryId: "general", title: row.title, points: row.points, grading: "panel", panel }, { kind: "panel", marks: theirs.map(item => ({ evaluator: item.evaluatorId!, mark: JSON.parse(item.mark) as AtomicMark })) }) : null;
-        return { id: learner.id, name: learner.name, marked: !!own, mark: own ? JSON.parse(own.mark) as AtomicMark : null, combined };
+        const minute = minutes.get(learner.id);
+        return { id: learner.id, name: learner.name, marked: !!own, mark: own ? JSON.parse(own.mark) as AtomicMark : null, combined, minute: minute ? { id: minute.id, status: minute.status, signed: minute.signed.length, mine: minute.signed.includes(current.id) } : null };
       }),
     });
   }

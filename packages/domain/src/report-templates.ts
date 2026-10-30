@@ -5,7 +5,7 @@ import type { PdfAlign, PdfBlock, PdfDocument, PdfImage, PdfPage } from "./pdf";
  * named fields (`{{estudiante.nombre}}`), never code. Each kind of document declares its fields and its datasets
  * (tables); rendering fills a template with one record per document (a student, a section) into a PDF document.
  */
-export type ReportKind = "report-card" | "certificate";
+export type ReportKind = "report-card" | "certificate" | "panel-minutes";
 export type TemplateBlock =
   | { id: string; type: "title"; text: string; align?: PdfAlign }
   | { id: string; type: "text"; text: string; align?: PdfAlign; size?: number; italic?: boolean }
@@ -33,6 +33,12 @@ export const reportKinds: Record<ReportKind, ReportKindSpec> = {
       { key: "periodos", label: "Periodos", columns: [{ key: "periodo", label: "Periodo" }, { key: "nota", label: "Nota" }, { key: "estado", label: "Estado" }, { key: "comentario", label: "Comentario" }] },
       { key: "actividades", label: "Actividades", columns: [{ key: "periodo", label: "Periodo" }, { key: "actividad", label: "Actividad" }, { key: "tipo", label: "Tipo" }, { key: "puntos", label: "Puntos" }, { key: "de", label: "De" }] },
     ],
+  },
+  "panel-minutes": {
+    label: "Acta de tribunal",
+    fields: [...common, { key: "periodo.nombre", label: "Periodo" }, { key: "actividad.nombre", label: "Evaluación" }, { key: "actividad.puntos", label: "Puntos de la evaluación" },
+      { key: "tribunal.criterio", label: "Cómo combina el tribunal" }, { key: "resultado.nota", label: "Resultado del tribunal" }, { key: "acta.estado", label: "Estado del acta" }, { key: "acta.huella", label: "Huella del acta" }],
+    datasets: [{ key: "integrantes", label: "Integrantes del tribunal", columns: [{ key: "integrante", label: "Integrante" }, { key: "rol", label: "Rol" }, { key: "calificacion", label: "Calificación" }, { key: "firma", label: "Firma" }, { key: "fecha", label: "Fecha de la firma" }] }],
   },
   certificate: {
     label: "Constancia",
@@ -144,6 +150,12 @@ export function renderReport(template: ReportTemplate, records: ReportRecord[], 
 /** The template a kind starts from: the same information the platform printed before templates existed. */
 export function defaultTemplate(kind: ReportKind): ReportTemplate {
   const base = { kind, page: { size: "letter" as const, orientation: "portrait" as const, marginMm: 20 }, logoId: null, footer: "Documento generado por Happy Learners" };
+  if (kind === "panel-minutes") return { ...base, header: ["{{organizacion.nombre}}", "Acta de tribunal · {{curso.nombre}} · {{seccion.nombre}}"], blocks: [
+    { id: "titulo", type: "title", text: "Acta de tribunal", align: "center" },
+    { id: "datos", type: "fields", pairs: [{ label: "Estudiante", field: "estudiante.nombre" }, { label: "Evaluación", field: "actividad.nombre" }, { label: "Periodo", field: "periodo.nombre" }, { label: "Criterio", field: "tribunal.criterio" }, { label: "Resultado", field: "resultado.nota" }] },
+    { id: "integrantes", type: "table", dataset: "integrantes", columns: [{ field: "integrante", label: "Integrante", width: 3 }, { field: "rol", label: "Rol", width: 1.5 }, { field: "calificacion", label: "Calificación", width: 1.5, align: "right" }, { field: "firma", label: "Firma electrónica", width: 3 }, { field: "fecha", label: "Fecha", width: 2 }], borders: true, shade: true },
+    { id: "estado", type: "text", text: "Estado: {{acta.estado}}. Huella del acta (SHA-256): {{acta.huella}}.", size: 8.5, italic: true },
+  ] };
   if (kind === "certificate") return { ...base, header: ["{{organizacion.nombre}}", "Constancia"], blocks: [
     { id: "titulo", type: "title", text: "Constancia de {{constancia.tipo}}", align: "center" },
     { id: "cuerpo", type: "text", text: "Se hace constar que {{estudiante.nombre}} está inscrita o inscrito en {{curso.nombre}}, sección {{seccion.nombre}}, del ciclo {{ciclo.nombre}}, del {{constancia.desde}} al {{constancia.hasta}}." },

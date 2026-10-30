@@ -6,7 +6,7 @@ import type { AiTokenUsage } from "./ai-usage";
  * and the current text; of a student, at most the first name (report comments).
  */
 export const writePromptVersion = "2026-10-30.1";
-export type WriteField = "lesson-objective" | "course-objective" | "unit-objective" | "report-comment" | "resource-description" | "notice";
+export type WriteField = "lesson-objective" | "course-objective" | "unit-objective" | "report-comment" | "resource-description" | "notice" | "document-text";
 export type WriteAction = "draft" | "improve" | "shorten";
 export interface WriteInput { field: WriteField; action: WriteAction; text: string; context: { course?: string; unit?: string; level?: string; lesson?: string; learner?: string } }
 export interface WriteOutput { text: string }
@@ -19,6 +19,7 @@ export const writeFields: Record<WriteField, { label: string; max: number; guide
   "report-comment": { label: "comentario de boleta", max: 600, guide: "Dos a cuatro oraciones a la familia: un logro concreto, un aspecto por mejorar y una sugerencia. Tono respetuoso y cálido; sin diagnósticos ni etiquetas." },
   "resource-description": { label: "descripción de un recurso", max: 500, guide: "Una o dos oraciones: qué es el recurso y para qué se usa en el curso." },
   notice: { label: "aviso", max: 600, guide: "Breve y claro: qué pasa, cuándo y qué debe hacer quien lo lee." },
+  "document-text": { label: "texto de un documento oficial", max: 2000, guide: "Tono formal e institucional. Conserva intactos los campos entre llaves dobles, como {{estudiante.nombre}}: no los cambies ni inventes otros." },
 };
 export const writeActionLabels: Record<WriteAction, string> = { draft: "Redactar", improve: "Mejorar redacción", shorten: "Más breve" };
 
@@ -74,6 +75,7 @@ export const fixtureWriter: AiWriter = {
       "report-comment": `${input.context.learner ? `${input.context.learner} ` : "Su hija o hijo "}participa con interés y avanza en ${input.context.course || "el curso"}. Le recomendamos repasar en casa los ejercicios de la unidad para afianzar lo aprendido.`,
       "resource-description": `Recurso de ${input.context.course || "el curso"} para consultar y practicar ${where.toLowerCase()}.`,
       notice: `Aviso sobre ${where}: revisa los detalles y confirma tu participación.`,
+      "document-text": "Se hace constar que {{estudiante.nombre}} cursa {{curso.nombre}} en la sección {{seccion.nombre}}.",
     };
     return { text: drafts[input.field] };
   },

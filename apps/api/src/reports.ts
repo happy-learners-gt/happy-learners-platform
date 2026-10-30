@@ -34,7 +34,7 @@ export async function imagesOf(db: Database, organizationId: string, template: R
   return out;
 }
 /** A document from a template; it is recorded with its version and fingerprint. */
-export async function generate(db: Database, current: Member, kind: ReportKind, used: { id: string | null; version: number | null; template: ReportTemplate }, records: ReportRecord[], title: string, subject: { type: "section" | "learner"; id: string }, record = true) {
+export async function generate(db: Database, current: Member, kind: ReportKind, used: { id: string | null; version: number | null; template: ReportTemplate }, records: ReportRecord[], title: string, subject: { type: "section" | "learner" | "minute"; id: string }, record = true) {
   const { document } = renderReport(used.template, records, await imagesOf(db, current.organizationId, used.template), title);
   const file = pdfFile(document);
   if (record) await db.prepare("INSERT INTO generated_documents(id,organization_id,kind,template_id,template_version,subject_type,subject_id,sha256,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)")
