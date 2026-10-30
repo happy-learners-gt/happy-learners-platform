@@ -88,9 +88,10 @@ ponderada sobre lo aplicable, de 0 a 100, y es **reproducible**: la misma lecci�
   cada clase» (el modo por omisión) reparte las lecciones del contenido efectivo de
   la sección en sus clases futuras, según su duración, el orden del curso y los días sin clase (función determinista
   `proposeTimetable`). Se muestra como borrador sobre el cronograma, con «Aplicar» y «Descartar».
-- **Horarios con reglas:** en Organización › Horarios, «Generar horario» toma secciones, docentes, aulas y bloques de la
-  jornada y reglas (disponibilidad docente, carga máxima diaria y semanal, sin choques de docente, aula ni grupo, días
-  preferidos). Un **solver determinista** (búsqueda con retroceso y heurísticas, en el dominio) devuelve una solución o
+- **Horarios con reglas (1.4.3):** en Organización › Horarios (`/organizacion/horarios`), «Generar horario» toma secciones, docentes, aulas y bloques de la
+  jornada y reglas (disponibilidad docente, carga máxima diaria, sin choques de docente ni de secciones que comparten
+  estudiantes, días sin clase y días preferidos). Las aulas no están en el modelo de datos: quedan para una entrega
+  posterior. Un **solver determinista** (búsqueda con retroceso y heurísticas, en el dominio) devuelve una solución o
   las reglas que no se pueden cumplir. La IA solo traduce reglas escritas en lenguaje natural («la profesora Herrera no
   da clases los viernes») a restricciones, que la persona confirma antes de usarlas (tarea `rules-to-constraints`).
 

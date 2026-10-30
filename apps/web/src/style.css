@@ -2133,3 +2133,15 @@ section.panel[id^="profile-"] { scroll-margin-top: calc(var(--topbar-h) + var(--
 .timetable-proposal li { display: grid; gap: 2px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-left: 4px solid var(--color-success); border-radius: var(--radius-md); }
 .timetable-proposal li.is-overflow { border-left-color: var(--color-warning); }
 .timetable-proposal small { color: var(--color-ink-soft); }
+/* Organización › Horarios (1.4.3). */
+.timetable-sections input[type=number] { width: 5rem; }
+.timetable-rules { list-style: none; margin: 0 0 var(--space-3); padding: 0; display: grid; gap: var(--space-1); }
+.timetable-rules li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.timetable-rule-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
+.timetable-rule-form, .timetable-written { display: grid; gap: var(--space-2); }
+.timetable-proposed ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.timetable-grid td, .timetable-grid th { vertical-align: top; }
+.timetable-grid tr.is-break td, .timetable-grid tr.is-break th { background: var(--color-surface-muted); }
+.timetable-cell { display: block; margin-bottom: 2px; padding: 2px 6px; border-radius: var(--radius-sm); background: var(--color-surface-muted); font-size: var(--text-xs); }
+.timetable-applied { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: var(--space-1); }
+@media (max-width: 720px) { .timetable-rule-tools { grid-template-columns: 1fr; } }
