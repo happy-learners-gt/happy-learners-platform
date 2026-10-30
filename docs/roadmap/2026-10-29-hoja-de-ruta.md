@@ -14,9 +14,10 @@ Reemplaza la necesidad de recordar el historial. Se actualiza al cerrar cada lot
 | 1.3.3 | Rediseño de la evaluación y grupos unificados (`docs/design/evaluacion.md`) | En producción (#86) |
 | 1.3.4 | Agenda y calendario institucional rediseñados (`docs/design/agenda-y-calendario.md`) | En producción (#87) |
 | 1.3.5 | Respaldo restaurable en cualquier espacio (invitaciones sin el hash de su enlace) | En producción (#88); `Release drill` verde |
-| 1.3.6 | Libertad de cátedra por sección (`docs/design/libertad-de-catedra.md`, lotes 4a–4c) | Revisado; en PR |
+| 1.3.6 | Libertad de cátedra por sección (`docs/design/libertad-de-catedra.md`, lotes 4a–4c) | En producción (#90) |
+| 1.3.7 | Biblioteca de recursos didácticos (`docs/design/recursos-didacticos.md`, lotes 5a–5c) | Diseño y ficha en `feat/HL-15-recursos`; pendiente de Cursor |
 
-Siguiente migración libre: **0068** (el lote 4 usa 0065, 0066 y 0067). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
+Siguiente migración libre: **0070** (el lote 5 reserva 0068 y 0069). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
 
 ## 2. Cómo se trabaja (no repetir errores)
 
@@ -30,6 +31,9 @@ Siguiente migración libre: **0068** (el lote 4 usa 0065, 0066 y 0067). Producci
 - **Verificación local.** Antes de `./scripts/verify`, cerrar servidores sobrantes de corridas E2E (`wrangler dev` y
   `workerd`); los fallos en paralelo por carga se confirman corriendo esos archivos en serie. La suite E2E completa la
   corre CI.
+- **Minutos de Actions.** Integrar `main` en la rama antes del último push del PR: así `main` reutiliza la verificación
+  del PR (52 s en lugar de unos 16 min, #91). Ensayar localmente lo que pueda fallar (Semgrep, E2E afectadas) antes de
+  empujar; un push por PR cuando sea posible.
 - **Despliegue.** Fusionar a `main` despliega producción: requiere autorización explícita del usuario; tras fusionar,
   vigilar `verify`, `deploy` y `critical-flows` en `main`; un fallo intermitente se reintenta con `gh run rerun --failed`.
 - **Pruebas sin fechas frágiles.** Nada de «todos los días desde hoy tienen clase»: la semilla tiene asuetos.
@@ -44,10 +48,10 @@ con apoyo puntual.
 
 1. ~~1.3.3 en producción~~ (hecho).
 2. ~~1.3.4 Agenda y calendario~~ (hecho).
-3. **1.3.6 Libertad de cátedra por sección** (lotes 4a–4c): diseño `docs/design/libertad-de-catedra.md` y ficha
+3. ~~1.3.6 Libertad de cátedra por sección~~ (hecho, #90) (lotes 4a–4c): diseño `docs/design/libertad-de-catedra.md` y ficha
    `docs/handoff/cursor/lote-4a-libertad-de-catedra.md` listos (incluye unidades propias, revisión opcional, copiar a
    otra sección y proponer al curso). Siguiente: Cursor implementa; revisar, PR, desplegar.
-4. **1.3.7 Biblioteca de recursos didácticos** (lote 5): diseño primero; tipos más allá del libro, metadatos y cita,
+4. **1.3.7 Biblioteca de recursos didácticos** (lote 5): diseño `docs/design/recursos-didacticos.md` y ficha listos; tipos más allá del libro, metadatos y cita,
    índice por capítulos, mapeo a resultados, varias fuentes para la IA.
 5. **1.4.0 Asistente pedagógico como harness** (lote 6): diseño primero; revisión con puntaje basado en hechos, mejoras,
    cronograma y horarios con reglas (solver determinista), redacción en toda la plataforma, registro de consumo de IA.
@@ -116,3 +120,5 @@ con apoyo puntual.
 - 2026-10-29: carril B.1 en PR (1.3.5). La libertad de cátedra pasa a 1.3.6.
 - 2026-10-30: 1.3.5 (#88) en producción y `Release drill` verde; escáneres (#89) integrados; se amplió el presupuesto
   de GitHub Actions (el de octubre se agotó). Lote 4 (1.3.6) revisado: pruebas, capturas y permisos; en PR.
+- 2026-10-30: 1.3.6 (#90) en producción. #91: `main` reutiliza la verificación del PR (52 s). Lote 5 diseñado y entregado a
+  Cursor en `feat/HL-15-recursos`. Las semillas nuevas declaran sus nombres para la prueba de contaminación.
