@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.2 — 2026-10-30
+
+- Cronograma propuesto: en el Cronograma de una sección, «Según la duración de cada clase» reparte las lecciones pendientes en las clases próximas según sus minutos, muestra la propuesta y la aplica solo al confirmarla; si algo cambió entre tanto, pide proponerla de nuevo.
+
 ## 1.4.1 — 2026-10-30
 
 - Proponer mejoras en la revisión de una lección: la IA propone cambios para lo que falla, cada uno con lo que había, lo que propone y su razón; se aceptan o descartan uno por uno y lo aceptado entra en el borrador.

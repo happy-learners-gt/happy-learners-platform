@@ -757,3 +757,11 @@ Devuelve `{ text }`; 400 con un campo o una acción desconocidos; 422 si la prop
 `courseId` es de un curso ajeno. Del contexto, de un estudiante solo pasa el nombre de pila y solo en `report-comment`.
 Ambas rutas dejan su ejecución en `ai_runs` (`lesson-improve`, `write`).
 
+### Cronograma propuesto (1.4.2)
+
+`POST /api/courses/:id/groups/:gid/lessons` `{ mode: "fit" }` (quien imparte la sección) devuelve `{ proposal }` sin cambiar
+nada: las lecciones pendientes del contenido efectivo de la sección, en orden, repartidas en sus clases futuras
+planificadas y sin lecciones, tantas como quepan en los minutos de cada clase (`proposeTimetable` del dominio; una
+lección más larga que su clase va sola con `overflow`; sin duración, 45 min). `{ mode: "fit", expected: [{ sessionId,
+lessonIds }] }` la aplica solo si sigue siendo la misma; si algo cambió, 409. El modo anterior `{ perClass }` sigue igual.
+

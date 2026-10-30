@@ -2128,3 +2128,8 @@ section.panel[id^="profile-"] { scroll-margin-top: calc(var(--topbar-h) + var(--
 .ai-write-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }
 .ai-write-proposal { padding: var(--space-2) var(--space-3); border: 1px dashed var(--color-primary); border-radius: var(--radius-md); background: var(--color-surface); }
 .ai-write-proposal p { margin: 0 0 var(--space-2); white-space: pre-wrap; }
+/* Proposed timetable (1.4.2). */
+.timetable-proposal ol { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); max-height: 22rem; overflow: auto; }
+.timetable-proposal li { display: grid; gap: 2px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-left: 4px solid var(--color-success); border-radius: var(--radius-md); }
+.timetable-proposal li.is-overflow { border-left-color: var(--color-warning); }
+.timetable-proposal small { color: var(--color-ink-soft); }
