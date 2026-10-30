@@ -46,7 +46,7 @@ async function sectionRoute(groupId: string, area: string, method: string, input
   const policy = await freedomPolicyOf(db, current.organizationId, section.courseId);
   if (policy === "shared") return reply({ error: "Esta sección sigue el contenido del curso." }, 404);
   if (area !== "plan" && !teachesSection(access, groupId)) return forbidden("Solo quienes imparten la sección adaptan su plan.");
-  if (section.status !== "active") return reply({ error: "La sección está cerrada. Reactívala para hacer cambios." }, 409);
+  if (area !== "plan" && section.status !== "active") return reply({ error: "La sección está cerrada. Reactívala para hacer cambios." }, 409);
   if (area === "plan") return planOf(db, current, section, policy, teachesSection(access, groupId));
   if (area === "lessons") return ownLesson(db, current, section, input);
   if (area === "activities") return ownActivity(db, current, section, policy, input);
@@ -57,7 +57,9 @@ async function planOf(db: Database, current: Member, section: SectionRow, policy
   const loaded = await loadSection(db, current.organizationId, section.courseId, section.id);
   if (!("plan" in loaded)) return reply({ error: "Esta sección sigue el contenido del curso." }, 404);
   const coverage = await sectionCoverage(db, current.organizationId, section.courseId, section.id, loaded.plan);
-  return reply({ policy, policyLabel: policyLabel(policy), section: { id: section.id, name: section.name }, canEdit, ...loaded.plan, coverage });
+  const ids = [...loaded.plan.lessons, ...loaded.plan.hiddenLessons].map(lesson => lesson.id);
+  const details = ids.length ? (await db.prepare(`SELECT id,status,revision,json_extract(content,'$.duration') AS duration FROM lessons WHERE id IN (${ids.map(() => "?").join(",")})`).bind(...ids).all<{ id: string; status: string; revision: number; duration: number | null }>()).results : [];
+  return reply({ policy, policyLabel: policyLabel(policy), section: { id: section.id, name: section.name }, canEdit, ...loaded.plan, coverage, details: Object.fromEntries(details.map(row => [row.id, { status: row.status, published: row.revision > 0, duration: row.duration || 0 }])) });
 }
 
 async function ownLesson(db: Database, current: Member, section: SectionRow, input: unknown) {
@@ -95,17 +97,24 @@ async function ownActivity(db: Database, current: Member, section: SectionRow, p
   if (!period) return reply({ error: "Ese periodo no está en el ciclo del curso." }, 400);
   const groupMode = body.groupMode === "group" ? "group" : "individual";
   const setId = typeof body.workGroupSetId === "string" ? body.workGroupSetId : "";
-  if (groupMode === "group") {
-    const set = setId ? await db.prepare("SELECT id FROM work_group_sets WHERE id=? AND group_id=? AND organization_id=? AND archived=0").bind(setId, section.id, current.organizationId).first() : null;
+  if (groupMode === "group" && setId) {
+    const set = await db.prepare("SELECT id FROM work_group_sets WHERE id=? AND group_id=? AND organization_id=? AND archived=0").bind(setId, section.id, current.organizationId).first();
     if (!set) return reply({ error: "Elige un conjunto de grupos activo de esta sección." }, 400);
   }
+  const grading = body.grading === "rubric" || body.grading === "pass-fail" || body.grading === "level" || body.grading === "panel" ? body.grading : "points";
+  const dueOn = typeof body.dueOn === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.dueOn) ? body.dueOn : null;
+  const extra = body.extra === true ? 1 : 0;
+  const rubric = body.rubric && typeof body.rubric === "object" ? JSON.stringify(body.rubric) : null;
+  const panel = body.panel && typeof body.panel === "object" ? JSON.stringify(body.panel) : null;
+  const peerMin = typeof body.peerMin === "number" ? body.peerMin : 0.5;
+  const peerMax = typeof body.peerMax === "number" ? body.peerMax : 1.5;
   const replaces = typeof body.replaces === "string" ? body.replaces : null;
   const id = `assessment-${crypto.randomUUID()}`;
   const position = ((await db.prepare("SELECT COALESCE(MAX(position),-1) AS position FROM assessment_activities WHERE course_id=? AND period_id=? AND (group_id IS NULL OR group_id=?)").bind(section.courseId, period.id, section.id).first<{ position: number }>())?.position ?? -1) + 1;
   const now = new Date().toISOString();
   await db.prepare(`INSERT INTO assessment_activities(position,title,kind,points,due_on,category_id,grading,extra,retake_of,rubric,panel,group_mode,peer_min,peer_max,updated_at,id,organization_id,course_id,period_id,created_by,created_at,group_id,is_core)
-    VALUES (?,?,?,?,?,?,'points',0,NULL,NULL,NULL,?,?,?,?,?,?,?,?,?,?,?,0)`).bind(position, title, body.kind, points, null, categoryId, groupMode, 0.5, 1.5, now, id, current.organizationId, section.courseId, period.id, current.id, now, section.id).run();
-  if (groupMode === "group") await db.prepare("INSERT INTO section_activity_sets(group_id,activity_id,kind,set_id) VALUES (?,?,'assessment',?)").bind(section.id, id, setId).run();
+    VALUES (?,?,?,?,?,?,?,?,NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`).bind(position, title, body.kind, points, dueOn, categoryId, grading, extra, rubric, panel, groupMode, peerMin, peerMax, now, id, current.organizationId, section.courseId, period.id, current.id, now, section.id).run();
+  if (groupMode === "group" && setId) await db.prepare("INSERT INTO section_activity_sets(group_id,activity_id,kind,set_id) VALUES (?,?,'assessment',?)").bind(section.id, id, setId).run();
   if (replaces) {
     const saved = await saveOverride(db, current, section, policy, "PUT", { itemType: "activity", itemId: id, position: null, hidden: false, replaces });
     if (!saved.ok) {

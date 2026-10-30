@@ -15,12 +15,13 @@ import { useCourse } from "../course/context";
 import { sectionCrumbs, useSection } from "./context";
 import { GradeStudentDrawer } from "./GradeStudent";
 import { factorText, liveFactors, originLabel, resultText } from "./group-grade";
+import { FreedomChip } from "../../ui/freedom";
 
 const number = (value: number) => new Intl.NumberFormat(currentRegional().locale, { maximumFractionDigits: 1 }).format(value);
 const summary = "resumen";
 /** How an activity is graded, as the grid's column header says it. */
 const gradingLabels: Record<string, string> = { points: "Puntos", rubric: "Rúbrica", "pass-fail": "Aprobado o no", level: "Nivel", panel: "Tribunal" };
-type Column = { id: string; kind: "grade" | "score" | "mark" | "panel" | "group"; grading?: string; title: string; detail: string; max: number; rubric?: Rubric | null; setId?: string | null; peerMin?: number; peerMax?: number };
+type Column = { id: string; kind: "grade" | "score" | "mark" | "panel" | "group"; grading?: string; title: string; detail: string; max: number; rubric?: Rubric | null; setId?: string | null; peerMin?: number; peerMax?: number; freedom?: "core" | "own" | "replaces"; replacedTitle?: string | null };
 type PeriodState = "open" | "submitted" | "returned" | "closed";
 const stateLabels: Record<PeriodState, string> = { open: "Abierto", submitted: "En revisión", returned: "Devuelto", closed: "Cerrado" };
 const stateTones = { open: "neutral", submitted: "info", returned: "warning", closed: "success" } as const;
@@ -73,7 +74,7 @@ function gradebookCsv(book: Gradebook) {
  */
 export function SectionGradesPage() {
   const { section } = useSection();
-  const { course } = useCourse();
+  const { course, settings } = useCourse();
   const { url, navigate } = useNavigation();
   const { toast, confirm } = useFeedback();
   const [data, setData] = useState<Gradebook | null>(null), [error, setError] = useState(""), [year, setYear] = useState("");
@@ -142,7 +143,7 @@ export function SectionGradesPage() {
       <select value={data.year.id} onChange={event => { if (!dirty) { setYear(event.target.value); } }} disabled={dirty}>{data.years.map(item => <option key={item.id} value={item.id}>{item.name}{item.status === "closed" ? " (cerrado)" : ""}</option>)}</select></label>}>
       <p className="muted small grade-policy">
         {schemeExplanation(data.scheme || schemeFromSettings({ gradeScale: policy.scale, passingGrade: policy.passingGrade, letterThresholds: policy.letterThresholds, gradeAverage: policy.average })).join(" · ")}{" "}
-        <Link href={`/cursos/${course.id}/evaluacion`}>Ver la evaluación del curso</Link>
+        <Link href={settings.sectionFreedom === "shared" ? `/cursos/${course.id}/evaluacion` : `/secciones/${section.id}/plan?vista=evaluacion`}>{settings.sectionFreedom === "shared" ? "Ver la evaluación del curso" : "Ver la evaluación de la sección"}</Link>
       </p>
       {data.year.status === "closed" && <p className="notice"><Icon name="info" size={18}/>El ciclo está cerrado: sus notas se consultan, pero ya no cambian.</p>}
       {!periods.length ? <p className="muted">El ciclo no tiene periodos.</p>
@@ -171,7 +172,7 @@ export function SectionGradesPage() {
       ? plan.map(item => {
         const grading = item.grading || "points";
         const grouped = item.groupMode === "group";
-        return { id: item.id, kind: grouped ? "group" as const : grading === "points" ? "score" as const : grading === "panel" ? "panel" as const : "mark" as const, grading, title: item.title, detail: `${assessmentKindLabel(item.kind)} · ${grouped ? "En grupos · " : ""}${grading === "points" ? `${number(item.points)} pts` : gradingLabels[grading] || grading}`, max: item.points, rubric: item.rubric, setId: item.workGroupSetId, peerMin: item.peerMin, peerMax: item.peerMax };
+        return { id: item.id, kind: grouped ? "group" as const : grading === "points" ? "score" as const : grading === "panel" ? "panel" as const : "mark" as const, grading, title: item.title, detail: `${assessmentKindLabel(item.kind)} · ${grouped ? "En grupos · " : ""}${grading === "points" ? `${number(item.points)} pts` : gradingLabels[grading] || grading}`, max: item.points, rubric: item.rubric, setId: item.workGroupSetId, peerMin: item.peerMin, peerMax: item.peerMax, freedom: item.freedom, replacedTitle: item.replacedTitle };
       })
       : [{ id: period.id, kind: "grade" as const, title: "Nota del periodo", detail: "De 0 a 100", max: 100 }];
     const key = (learnerId: string, column: Column) => `${column.kind}:${learnerId}:${column.id}`;
@@ -305,7 +306,7 @@ export function SectionGradesPage() {
         <Icon name="list" size={18}/>
         {planned
           ? <span><strong>Plan de evaluación:</strong> {plural(plan.length, "actividad", "actividades")}{(data!.scheme?.method || "points") === "points" && <> · {number(total)} de 100 puntos{total !== 100 && <span className="muted"> (incompleto)</span>}</>}</span>
-          : <span className="muted">Este periodo aún no tiene actividades. {data!.canDesign === false ? "Pide el cambio a la persona responsable del curso o a administración." : <Link href={`/cursos/${course.id}/evaluacion`}>Ver la evaluación del curso</Link>}</span>}
+          : <span className="muted">Este periodo aún no tiene actividades. {data!.canDesign === false ? "Pide el cambio a la persona responsable del curso o a administración." : <Link href={settings.sectionFreedom === "shared" ? `/cursos/${course.id}/evaluacion` : `/secciones/${section.id}/plan?vista=evaluacion`}>{settings.sectionFreedom === "shared" ? "Ver la evaluación del curso" : "Ver la evaluación de la sección"}</Link>}</span>}
         {plan.some(item => item.groupMode === "group" && !item.workGroupSetId) && <Link href={`/secciones/${section.id}/grupos`}>Elige los grupos</Link>}
       </div>
       <PeriodStats stats={stats} names={new Map(learners.map(learner => [learner.id, learner.name]))} passing={policy.passingGrade}/>
@@ -316,7 +317,7 @@ export function SectionGradesPage() {
           <table ref={grid} className="coverage-table grades-table">
             <thead><tr>
               <th scope="col">Estudiante</th>
-              {columns.map(column => <th scope="col" key={column.id} className="grade-column"><span className="grade-column-title">{column.title}</span><span className="muted grade-column-detail">{column.detail}</span></th>)}
+              {columns.map(column => <th scope="col" key={column.id} className="grade-column"><span className="grade-column-title">{column.title}{column.freedom && <> <FreedomChip mark={column.freedom} replaced={column.replacedTitle}/></>}</span><span className="muted grade-column-detail">{column.detail}</span></th>)}
               <th scope="col">{planned ? "Nota del periodo" : "Resultado"}</th>
               {planned && <th scope="col">Resultado</th>}
               <th scope="col"><span className="sr-only">Detalle</span></th>

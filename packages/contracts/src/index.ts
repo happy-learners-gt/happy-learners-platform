@@ -118,6 +118,10 @@ export interface Lesson {
   outcomes?: { id: string; code: string; statement: string }[];
   /** The latest open review: pending, or returned to its author. */
   review?: LessonReview | null;
+  /** Present only when the course lets sections adapt: whether this lesson is part of the core. */
+  isCore?: boolean;
+  /** Set when the lesson belongs to one section. */
+  groupId?: string;
 }
 export type ResourceSkill = "lectura" | "escritura" | "escucha" | "conversación";
 export interface Resource { id: string; title: string; description: string; level: string; skill: ResourceSkill; topic: string; tags: string[]; content: string; status: "draft" | "published" | "archived"; kind?: "text" | "link"; updatedAt?: string; }
@@ -382,6 +386,8 @@ export interface AssessmentActivity {
   categoryId?: string; grading?: GradingActivity["grading"]; extra?: boolean; retakeOf?: string | null;
   rubric?: Rubric; panel?: GradingActivity["panel"];
   groupMode?: "individual" | "group"; workGroupSetId?: string | null; peerMin?: number; peerMax?: number;
+  /** Present only when the section adapts the course: what this activity is in that section. */
+  freedom?: "core" | "own" | "replaces"; replacedTitle?: string | null;
 }
 export interface AssessmentScore { activityId: string; learnerId: string; points: number; source?: "individual" | "group" }
 export interface AssessmentMark { activityId: string; learnerId: string; evaluatorId: string | null; mark: AtomicMark; updatedAt: string; updatedBy: string; source?: "individual" | "group" }
@@ -472,7 +478,7 @@ export interface ClassResource { id: string; courseId?: string; title: string; d
 /** A group of students formed inside a section to work together (DEC-028). The whole section is the default group. */
 export interface WorkGroup { id: string; name: string; learnerIds: string[] }
 /** An activity of a published lesson done in pairs or teams, and the section's groups that do it; none means the whole section. */
-export interface GroupActivity { lessonId: string; lessonTitle: string; unitName: string; activityId: string; title: string; grouping: "pairs" | "teams"; workGroupIds: string[] }
+export interface GroupActivity { lessonId: string; lessonTitle: string; unitName: string; activityId: string; title: string; grouping: "pairs" | "teams"; workGroupIds: string[]; own?: boolean }
 export interface SectionWorkGroups { workGroups: WorkGroup[]; activities: GroupActivity[] }
 /** Who does an activity, as the students of a section see it in the lesson: group names, and the members of their own group. */
 export interface StudentActivityGroups { activityId: string; groups: { name: string; mine: boolean; members?: string[] }[] }
@@ -480,7 +486,7 @@ export interface StudentActivityGroups { activityId: string; groups: { name: str
 export interface StudentSpace {
   group: { name: string }; course: { title: string }; organization: string; today: string;
   next: StudentClass | null; upcoming: StudentClass[]; recent: StudentClass[];
-  lessons: { title: string; shareCode: string }[];
+  lessons: { title: string; shareCode: string; own?: boolean; core?: boolean }[];
   pacing: Pacing;
   /** A tu ritmo: the student who chose their name from the section's list, the list to choose from, and the whole published course in order. */
   learner: { id: string; name: string } | null;
@@ -490,7 +496,7 @@ export interface StudentSpace {
   educators: PublicProfile[];
 }
 export interface StudentPathModule { id: string; name: string; lessons: StudentPathLesson[] }
-export interface StudentPathLesson { title: string; shareCode: string; opened: boolean; completed: boolean }
+export interface StudentPathLesson { title: string; shareCode: string; opened: boolean; completed: boolean; own?: boolean; core?: boolean }
 /** How far each student of a self-paced section got in the course's published lessons, in content order. */
 export interface SectionProgress {
   lessons: { id: string; title: string; unitName: string }[];
@@ -499,7 +505,7 @@ export interface SectionProgress {
 export interface StudentClass {
   id: string; sessionDate: string; startsAt?: string | null; durationMinutes?: number | null; status: ClassStatus;
   /** The published lessons of the class, in order; resources are those of these lessons. */
-  lessons: { title: string; shareCode: string }[]; resources: ClassResource[];
+  lessons: { title: string; shareCode: string; own?: boolean; core?: boolean }[]; resources: ClassResource[];
 }
 
 /** What a course develops over time; groups learning outcomes. */

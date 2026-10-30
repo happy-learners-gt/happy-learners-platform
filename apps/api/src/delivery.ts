@@ -56,7 +56,7 @@ export async function delivery(path: string, url: URL, current: Member, db: Data
   if (current.role !== "admin" && !section[0].teaches && !(await scopedCourses(db, current, ["classes.view", "sections.assign"])).includes(courseId)) return reply({ error: "Esta sección no está asignada a tu cuenta." }, 403);
 
   const [lessons, educators, organization, year, outcomes] = await db.batch([
-    db.prepare("SELECT id,published_content AS content FROM lessons WHERE course_unit_id=? AND archived=0 AND revision>0 AND published_content IS NOT NULL AND group_id IS NULL ORDER BY position,id").bind(unitId),
+    db.prepare("SELECT id,group_id AS groupId,is_core AS core,published_content AS content FROM lessons WHERE course_unit_id=? AND archived=0 AND revision>0 AND published_content IS NOT NULL AND group_id IS NULL ORDER BY position,id").bind(unitId),
     db.prepare("SELECT COALESCE(u.display_name,u.username) AS name FROM section_educators e JOIN users u ON u.id=e.user_id WHERE e.group_id=? ORDER BY name").bind(sectionId),
     db.prepare("SELECT name,timezone FROM organizations WHERE id=?").bind(current.organizationId),
     db.prepare(`SELECT y.id,y.name FROM academic_years y JOIN courses c ON c.id=? AND c.organization_id=y.organization_id
@@ -80,10 +80,16 @@ export async function delivery(path: string, url: URL, current: Member, db: Data
   const named = new Map(outcomes.map(row => [row.id, row.statement]));
   const effective = await effectiveLessonIds(db, current.organizationId, courseId, sectionId);
   const courseLessons = lessons as unknown as { id: string; content: string }[];
-  const own = effective ? (await db.prepare("SELECT id,published_content AS content FROM lessons WHERE course_unit_id=? AND archived=0 AND revision>0 AND published_content IS NOT NULL AND group_id=?").bind(unitId, sectionId).all<{ id: string; content: string }>()).results : [];
+  const own = effective ? (await db.prepare("SELECT id,group_id AS groupId,is_core AS core,published_content AS content FROM lessons WHERE course_unit_id=? AND archived=0 AND revision>0 AND published_content IS NOT NULL AND group_id=?").bind(unitId, sectionId).all<{ id: string; groupId: string | null; core: number; content: string }>()).results : [];
   const byId = new Map([...courseLessons, ...own].map(row => [row.id, row]));
   const ordered = effective ? effective.filter(id => byId.has(id)).map(id => byId.get(id)!) : courseLessons;
-  const published = ordered.map(row => JSON.parse(row.content) as Lesson);
+  const published = ordered.map(row => {
+    const lesson = JSON.parse(row.content) as Lesson;
+    if (!effective) return lesson;
+    const tagged = row as { groupId?: string | null; core?: number };
+    const label = tagged.groupId ? " · Propia de la sección" : tagged.core ? " · Núcleo" : "";
+    return { ...lesson, title: `${lesson.title}${label}` };
+  });
   const file = pdfFile({
     title: `${course[0].title} · ${unit[0].name}`, header, footer: deliveryFooter,
     blocks: [{ text: unit[0].name, bold: true, size: 16 }, { text: `${published.length === 1 ? "1 lección publicada" : `${published.length} lecciones publicadas`}`, size: 9.5, space: 2 }, ...published.flatMap((lesson, index) => lessonBlocks(lesson, index, named))],

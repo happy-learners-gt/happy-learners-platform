@@ -11,6 +11,7 @@ import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryActi
 import { useCourse } from "../course/context";
 import { sectionCrumbs, useSection } from "./context";
 import { GroupSets, type GroupActivityRow } from "./GroupSets";
+import { FreedomChip } from "../../ui/freedom";
 
 type Data = SectionWorkGroups & { learners: GroupLearner[] };
 
@@ -56,13 +57,13 @@ export function SectionWorkGroupsPage() {
             <thead><tr><th scope="col">Actividad</th><th scope="col">Dónde</th><th scope="col">La trabajan</th>{writable && <th scope="col"><span className="sr-only">Acciones</span></th>}</tr></thead>
             <tbody>
               {data.activities.map(activity => <tr key={`${activity.lessonId}:${activity.activityId}`}>
-                <th scope="row">{activity.title}<span className="muted small">{activity.lessonTitle} · {activity.unitName}</span></th>
+                <th scope="row">{activity.title}{activity.own && <> <FreedomChip mark="own"/></>}<span className="muted small">{activity.lessonTitle} · {activity.unitName}</span></th>
                 <td data-label="Dónde">{groupings.find(item => item.value === activity.grouping)?.label}</td>
                 <td data-label="La trabajan">{activity.workGroupIds.length ? data.workGroups.filter(group => activity.workGroupIds.includes(group.id)).map(group => group.name).join(", ") : <span className="muted">{wholeSection}</span>}</td>
                 {writable && <td><Button icon="team" className="small" onClick={() => setAssigning(activity)} aria-label={`Asignar grupos a ${activity.title}`}>Asignar</Button></td>}
               </tr>)}
               {shared.filter(item => item.kind === "assessment").map(activity => <tr key={activity.activityId}>
-                <th scope="row">{activity.title}<span className="muted small">{activity.detail}</span></th>
+                <th scope="row">{activity.title}{activity.own && <> <FreedomChip mark="own"/></>}<span className="muted small">{activity.detail}</span></th>
                 <td data-label="Dónde">Evaluación</td>
                 <td data-label="La trabajan">{activity.setId ? sets.find(item => item.id === activity.setId)?.name || "Conjunto elegido" : <Link href={`/secciones/${section.id}/grupos`}>Elige los grupos</Link>}</td>
                 {writable && <td><label className="sr-only" htmlFor={`set-${activity.activityId}`}>Conjunto de {activity.title}</label>

@@ -3,6 +3,7 @@ import { assessmentPeriodStatus, assessmentTemplates, isAssessmentKind, maxAsses
 import type { Database } from "./storage";
 import { accessTo, forbidden, outsider } from "./access";
 import { configurationOf, gradingSchemeError } from "./courses";
+import { freedomPolicyOf } from "./freedom-plan";
 import { event } from "./team";
 
 /**
@@ -105,11 +106,13 @@ async function view(db: Database, current: Member, course: CourseRow, editable: 
   const years = await yearsOf(db, current.organizationId, course.id);
   const year = years.find(item => item.id === yearId) || years.find(item => item.status === "current") || years[0] || null;
   const periods = year ? (await db.prepare("SELECT id,name,position,weight FROM academic_periods WHERE year_id=? AND organization_id=? ORDER BY starts_on,position").bind(year.id, current.organizationId).all<PeriodRow>()).results : [];
+  const adapt = (await freedomPolicyOf(db, current.organizationId, course.id)) !== "shared";
   const activities = periods.length ? (await db.prepare(`SELECT a.id,a.period_id AS periodId,a.position,a.title,a.kind,a.points,a.due_on AS dueOn,a.category_id AS categoryId,a.grading,a.extra,a.retake_of AS retakeOf,a.rubric,a.panel,a.group_mode AS groupMode,a.peer_min AS peerMin,a.peer_max AS peerMax,
     (SELECT MAX(points) FROM assessment_scores WHERE activity_id=a.id) AS maxScore,
-    (EXISTS(SELECT 1 FROM assessment_scores WHERE activity_id=a.id) OR EXISTS(SELECT 1 FROM assessment_marks WHERE activity_id=a.id) OR EXISTS(SELECT 1 FROM assessment_group_marks WHERE activity_id=a.id)) AS graded
+    (EXISTS(SELECT 1 FROM assessment_scores WHERE activity_id=a.id) OR EXISTS(SELECT 1 FROM assessment_marks WHERE activity_id=a.id) OR EXISTS(SELECT 1 FROM assessment_group_marks WHERE activity_id=a.id)) AS graded,
+    a.is_core AS isCore
     FROM assessment_activities a WHERE a.course_id=? AND a.organization_id=? AND a.group_id IS NULL AND a.period_id IN (${periods.map(() => "?").join(",")}) ORDER BY a.position,a.id`)
-    .bind(course.id, current.organizationId, ...periods.map(period => period.id)).all<Stored & { maxScore: number | null; graded: number }>()).results : [];
+    .bind(course.id, current.organizationId, ...periods.map(period => period.id)).all<Stored & { maxScore: number | null; graded: number; isCore: number }>()).results : [];
   const evaluators = activities.length ? (await db.prepare(`SELECT e.activity_id AS activityId,e.user_id AS userId,COALESCE(u.display_name,u.username) AS name,e.chair
     FROM assessment_evaluators e JOIN users u ON u.id=e.user_id WHERE e.activity_id IN (${activities.map(() => "?").join(",")}) ORDER BY e.chair DESC,name`).bind(...activities.map(item => item.id)).all<{ activityId: string; userId: string; name: string; chair: number }>()).results : [];
   const team = (await db.prepare("SELECT u.id,COALESCE(u.display_name,u.username) AS name FROM course_members m JOIN users u ON u.id=m.user_id WHERE m.course_id=? AND m.organization_id=? ORDER BY name").bind(course.id, current.organizationId).all<{ id: string; name: string }>()).results;
@@ -126,7 +129,7 @@ async function view(db: Database, current: Member, course: CourseRow, editable: 
           ...(item.rubric ? { rubric: JSON.parse(item.rubric) as Rubric } : {}),
           ...(item.panel ? { panel: JSON.parse(item.panel) as GradingActivity["panel"] } : {}),
           groupMode: item.groupMode, peerMin: item.peerMin, peerMax: item.peerMax,
-          graded: !!item.graded, maxScore: item.maxScore,
+          graded: !!item.graded, maxScore: item.maxScore, ...(adapt ? { isCore: item.isCore !== 0 } : {}),
           evaluators: evaluators.filter(person => person.activityId === item.id).map(person => ({ userId: person.userId, name: person.name, chair: !!person.chair })),
         })),
       };

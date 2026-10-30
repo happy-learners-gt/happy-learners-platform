@@ -8,7 +8,7 @@ import { scopedCourses } from "./permissions";
 import { event } from "./team";
 import { gradingSchemesFor } from "./grading-schemes";
 import { groupGrades } from "./group-grading";
-import { effectiveActivityIds } from "./freedom-plan";
+import { effectiveActivityIds, loadSection } from "./freedom-plan";
 
 /**
  * The section's gradebook (libreta) and the course's assessment plan:
@@ -173,12 +173,21 @@ async function contents(db: Database, current: Member, section: { id: string; co
   const setOf = new Map(assignedSets.map(row => [row.activityId, row.setId]));
   const visible = await effectiveActivityIds(db, organizationId, section.courseId, section.id);
   const kept = activityRows.filter(row => visible ? visible.has(row.id) : row.groupId === null);
+  const origins = new Map<string, { freedom: "core" | "own" | "replaces"; replacedTitle: string | null }>();
+  if (visible) {
+    const loaded = await loadSection(db, organizationId, section.courseId, section.id);
+    if ("plan" in loaded) for (const activity of loaded.plan.activities) {
+      const freedom = activity.replaces ? "replaces" as const : activity.origin === "section" ? "own" as const : activity.core ? "core" as const : null;
+      if (freedom) origins.set(activity.id, { freedom, replacedTitle: activity.replacedTitle });
+    }
+  }
   const activities: AssessmentActivity[] = kept.map(row => ({
     id: row.id, periodId: row.periodId, position: row.position, title: row.title, kind: row.kind, points: row.points, dueOn: row.dueOn,
     categoryId: row.categoryId, grading: row.grading, extra: !!row.extra, retakeOf: row.retakeOf || null,
     ...(row.rubric ? { rubric: JSON.parse(row.rubric) } : {}),
     ...(row.panel ? { panel: JSON.parse(row.panel) } : {}),
     ...(row.groupMode === "group" ? { groupMode: "group" as const, workGroupSetId: setOf.get(row.id) ?? null, peerMin: row.peerMin, peerMax: row.peerMax } : {}),
+    ...(origins.get(row.id) || {}),
   }));
   const grouped = new Set(activities.filter(activity => activity.groupMode === "group").map(activity => activity.id));
   const evaluators: AssessmentEvaluator[] = evaluatorRows.map(row => ({ ...row, chair: !!row.chair }));

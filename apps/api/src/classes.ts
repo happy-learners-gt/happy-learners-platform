@@ -574,15 +574,15 @@ export async function student(path: string, method: string, input: unknown, requ
       db.prepare(`${pathLessons} ORDER BY u.position,l.position,l.id`).bind(access.courseId, access.groupId),
       db.prepare("SELECT lesson_id AS lessonId,completed_at IS NOT NULL AS completed FROM learner_progress WHERE group_id=? AND learner_id=?").bind(access.groupId, access.learnerId || ""),
       db.prepare("SELECT id,display_name AS name FROM group_learners WHERE group_id=? AND status='active' ORDER BY display_name,id").bind(access.groupId),
-    ]) as unknown as [{ id: string; title: string | null; shareCode: string; unitId: string; unitName: string }[], { lessonId: string; completed: number }[], { id: string; name: string }[]];
+    ]) as unknown as [{ id: string; title: string | null; shareCode: string; unitId: string; unitName: string; groupId: string | null; core: number }[], { lessonId: string; completed: number }[], { id: string; name: string }[]];
     const path: StudentPathModule[] = [];
     const allowed = await effectiveLessonIds(db, access.organizationId, access.courseId, access.groupId);
-    const visible = allowed ? lessons.filter(lesson => allowed.includes(lesson.id)).sort((a, b) => allowed.indexOf(a.id) - allowed.indexOf(b.id)) : lessons.filter(lesson => !(lesson as { groupId?: string | null }).groupId);
+    const visible = allowed ? lessons.filter(lesson => allowed.includes(lesson.id)).sort((a, b) => allowed.indexOf(a.id) - allowed.indexOf(b.id)) : lessons.filter(lesson => !lesson.groupId);
     for (const lesson of visible) {
       const mark = done.find(row => row.lessonId === lesson.id);
       let unit = path.find(item => item.id === lesson.unitId);
       if (!unit) path.push(unit = { id: lesson.unitId, name: lesson.unitName, lessons: [] });
-      unit.lessons.push({ title: lesson.title || "Lección", shareCode: lesson.shareCode, opened: !!mark, completed: !!mark?.completed });
+      unit.lessons.push({ title: lesson.title || "Lección", shareCode: lesson.shareCode, opened: !!mark, completed: !!mark?.completed, ...(allowed ? { ...(lesson.groupId ? { own: true } : {}), ...(lesson.core && !lesson.groupId ? { core: true } : {}) } : {}) });
     }
     const space: StudentSpace = { ...base, next: null, upcoming: [], recent: [], lessons: [], roster: access.learnerId ? [] : roster, path, educators };
     return reply(space);
@@ -590,17 +590,19 @@ export async function student(path: string, method: string, input: unknown, requ
   const rows = (await db.prepare("SELECT s.id,s.session_date AS sessionDate,s.starts_at AS startsAt,s.duration_minutes AS durationMinutes,s.status FROM class_sessions s WHERE s.group_id=? AND s.status<>'cancelled' ORDER BY s.session_date,s.starts_at").bind(access.groupId).all<{ id: string; sessionDate: string; startsAt: string | null; durationMinutes: number | null; status: ClassStatus }>()).results;
   // Students see a lesson only once it is published, under its published title.
   // A finished class lists only the lessons it worked on: one it did not reach waits for the class that takes it.
-  const published = (await db.prepare("SELECT p.session_id AS sessionId,l.id AS lessonId,json_extract(l.published_content,'$.title') AS title,json_extract(l.published_content,'$.shareCode') AS shareCode FROM class_session_lessons p JOIN class_sessions s ON s.id=p.session_id JOIN lessons l ON l.id=p.lesson_id AND l.archived=0 AND l.revision>0 WHERE s.group_id=? AND s.status<>'cancelled' AND p.outcome IS NOT 'not_reached' ORDER BY s.session_date,s.starts_at,p.position").bind(access.groupId).all<{ sessionId: string; lessonId: string; title: string | null; shareCode: string | null }>()).results.filter(row => row.shareCode);
+  const published = (await db.prepare("SELECT p.session_id AS sessionId,l.id AS lessonId,l.group_id AS groupId,l.is_core AS core,json_extract(l.published_content,'$.title') AS title,json_extract(l.published_content,'$.shareCode') AS shareCode FROM class_session_lessons p JOIN class_sessions s ON s.id=p.session_id JOIN lessons l ON l.id=p.lesson_id AND l.archived=0 AND l.revision>0 WHERE s.group_id=? AND s.status<>'cancelled' AND p.outcome IS NOT 'not_reached' ORDER BY s.session_date,s.starts_at,p.position").bind(access.groupId).all<{ sessionId: string; lessonId: string; groupId: string | null; core: number; title: string | null; shareCode: string | null }>()).results.filter(row => row.shareCode);
+  const adapt = (await effectiveLessonIds(db, access.organizationId, access.courseId, access.groupId)) !== null;
+  const chip = (row: { groupId: string | null; core: number }) => adapt ? { ...(row.groupId ? { own: true } : {}), ...(row.core && !row.groupId ? { core: true } : {}) } : {};
   const upcoming = upcomingClasses(rows, today).slice(0, 6);
   const recent = rows.filter(row => row.status === "completed").slice(-5).reverse();
   const shown = new Set([...upcoming, ...recent].map(row => row.id));
   const resourceMap = await publishedResources(db, published.filter(row => shown.has(row.sessionId)).map(row => row.lessonId));
   const view = (row: typeof rows[number]): StudentClass => {
     const lessons = published.filter(item => item.sessionId === row.id);
-    return { id: row.id, sessionDate: row.sessionDate, startsAt: row.startsAt, durationMinutes: row.durationMinutes, status: row.status, lessons: lessons.map(item => ({ title: item.title || "Lección", shareCode: item.shareCode! })), resources: unique(lessons.flatMap(item => resourceMap.get(item.lessonId) || [])) };
+    return { id: row.id, sessionDate: row.sessionDate, startsAt: row.startsAt, durationMinutes: row.durationMinutes, status: row.status, lessons: lessons.map(item => ({ title: item.title || "Lección", shareCode: item.shareCode!, ...chip(item) })), resources: unique(lessons.flatMap(item => resourceMap.get(item.lessonId) || [])) };
   };
   // The lessons of the section's classes, once each, in the order the classes give them.
-  const lessons = published.filter((row, index, list) => list.findIndex(other => other.shareCode === row.shareCode) === index).map(row => ({ title: row.title || "Lección", shareCode: row.shareCode! }));
+  const lessons = published.filter((row, index, list) => list.findIndex(other => other.shareCode === row.shareCode) === index).map(row => ({ title: row.title || "Lección", shareCode: row.shareCode!, ...chip(row) }));
   const space: StudentSpace = { ...base, next: upcoming[0] ? view(upcoming[0]) : null, upcoming: upcoming.slice(1).map(view), recent: recent.map(view), lessons, roster: [], path: [], educators };
   return reply(space);
 }
@@ -614,7 +616,7 @@ export async function studentAccess(db: Database, tokenHash: string) {
     WHERE a.token_hash=? AND a.expires_at>?`).bind(tokenHash, Date.now()).first<{ groupId: string; organizationId: string; groupName: string; courseId: string; courseTitle: string; organizationName: string; timezone: string | null; pacing: Pacing; learnerId: string | null; learnerName: string | null }>();
 }
 /** The course's path: its published lessons in active modules, in content order. */
-const pathLessons = "SELECT l.id,l.group_id AS groupId,json_extract(l.published_content,'$.title') AS title,json_extract(l.published_content,'$.shareCode') AS shareCode,u.id AS unitId,u.name AS unitName FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id AND u.status='active' WHERE u.course_id=? AND l.archived=0 AND l.revision>0 AND json_extract(l.published_content,'$.shareCode') IS NOT NULL AND (l.group_id IS NULL OR l.group_id=?)";
+const pathLessons = "SELECT l.id,l.group_id AS groupId,l.is_core AS core,json_extract(l.published_content,'$.title') AS title,json_extract(l.published_content,'$.shareCode') AS shareCode,u.id AS unitId,u.name AS unitName FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id AND u.status='active' WHERE u.course_id=? AND l.archived=0 AND l.revision>0 AND json_extract(l.published_content,'$.shareCode') IS NOT NULL AND (l.group_id IS NULL OR l.group_id=?)";
 export async function pathLesson(db: Database, courseId: string, shareCode: unknown, groupId = "") {
   if (typeof shareCode !== "string" || shareCode.length > 64) return null;
   const row = await db.prepare(`${pathLessons} AND json_extract(l.published_content,'$.shareCode')=?`).bind(courseId, groupId, shareCode).first<{ id: string; groupId: string | null }>();
