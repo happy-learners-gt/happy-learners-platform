@@ -403,7 +403,11 @@ export interface MyPanel {
   activityId: string; title: string; points: number; courseId: string; courseTitle: string;
   sectionId: string; sectionName: string; periodName: string; rubric: Rubric | null;
   combine: "average" | "median" | "majority" | "chair"; evaluators: number;
-  learners: { id: string; name: string; marked: boolean; mark: AtomicMark | null; combined: number | null }[];
+  learners: { id: string; name: string; marked: boolean; mark: AtomicMark | null; combined: number | null;
+    /** 1.5.1: the student's minutes, once a member has signed them; `mine` says whether this person has. */
+    minute?: { id: string; status: "open" | "signed"; signed: number; mine: boolean } | null }[];
+  /** Whether this person chairs the panel (the chair signs the minutes last). */
+  chair?: boolean;
 }
 export interface GradeComment { learnerId: string; periodId: string; body: string; updatedAt: string; updatedBy: string }
 export interface PeriodReview { periodId: string; status: "submitted" | "returned" | "approved"; note: string | null; submittedBy: string; submittedAt: string; reviewedBy: string | null; reviewedAt: string | null }

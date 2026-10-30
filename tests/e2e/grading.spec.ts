@@ -83,5 +83,26 @@ test("a university scheme, a rubric in the grid and a panel finished from Mis tr
   await theirs.getByRole("button", { name: "Guardar" }).click();
   await expect(theirs.getByText("Tribunal: 27")).toBeVisible();
   await shot(other, "tribunales");
+
+  // 1.5.1: the minutes. The chair (the educator) waits for the others; Carlos signs first with name and password.
+  await page.reload();
+  const chair = page.getByRole("listitem").filter({ hasText: e2eName(info, "Evaluación") });
+  await expect(chair.getByText("Presides el tribunal: firmas al final, cuando firmen los demás.")).toBeVisible();
+  await theirs.getByRole("button", { name: /^Firmar acta/ }).click();
+  const signing = other.getByRole("dialog", { name: "Firmar el acta de Ada Lovelace" });
+  await expect(signing).toContainText("Resultado del tribunal: 27");
+  await signing.getByLabel("Tu contraseña").fill("Aprender-2026!");
+  await signing.getByRole("button", { name: "Firmar" }).click();
+  await expect(signing).toBeHidden();
+  await expect(theirs.getByText("Acta: 1 de 2 firmas")).toBeVisible();
+  await expect(theirs.getByLabel("Tu marca para Ada Lovelace")).toBeVisible();
+  await expect(theirs.getByRole("button", { name: "Guardar" })).toHaveCount(0);
+  await page.reload();
+  await chair.getByRole("button", { name: /^Firmar acta/ }).click();
+  const last = page.getByRole("dialog", { name: "Firmar el acta de Ada Lovelace" });
+  await last.getByLabel("Tu contraseña").fill("Aprender-2026!");
+  await last.getByRole("button", { name: "Firmar" }).click();
+  await expect(chair.getByText("Acta firmada")).toBeVisible();
+  await expect(chair.getByRole("link", { name: /^Descargar acta/ })).toHaveAttribute("href", /\/api\/panel-minutes\/minute-[a-f0-9-]+\.pdf$/);
   await carlos.close();
 });

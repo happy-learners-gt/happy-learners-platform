@@ -2167,3 +2167,5 @@ section.panel[id^="profile-"] { scroll-margin-top: calc(var(--topbar-h) + var(--
 .document-versions li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
 .document-palette .button { justify-content: flex-start; }
 @media (max-width: 1100px) { .document-designer { grid-template-columns: minmax(0, 1fr); } .document-pair { grid-template-columns: 1fr; } .document-palette { display: flex; flex-wrap: wrap; } .document-palette h2 { flex-basis: 100%; } }
+/* Panel minutes (1.5.1). */
+.minute-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
