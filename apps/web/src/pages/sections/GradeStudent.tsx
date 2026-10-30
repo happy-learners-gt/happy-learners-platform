@@ -49,8 +49,8 @@ const when = (value: string) => new Intl.DateTimeFormat(currentRegional().locale
  * A student's detail in the gradebook: the comment for the period (saved on its own), the score changes with who made
  * them, and the student's report card.
  */
-export function GradeStudentDrawer({ book, learnerId, periodId, editable, onSaved, onReport, onClose }: {
-  book: Gradebook; learnerId: string; periodId: string; editable: boolean; onSaved: (book: Gradebook) => void; onReport: () => void; onClose: () => void;
+export function GradeStudentDrawer({ book, learnerId, periodId, editable, onSaved, onReport, onCertificate, onClose }: {
+  book: Gradebook; learnerId: string; periodId: string; editable: boolean; onSaved: (book: Gradebook) => void; onReport: () => void; onCertificate?: () => void; onClose: () => void;
 }) {
   const learner = book.learners.find(item => item.id === learnerId)!;
   const period = book.periods.find(item => item.id === periodId);
@@ -88,7 +88,7 @@ export function GradeStudentDrawer({ book, learnerId, periodId, editable, onSave
           : <p>{stored?.body || <span className="muted">Sin comentario.</span>}</p>}
         {stored && <p className="muted small">Lo escribió {stored.updatedBy}, {when(stored.updatedAt)}</p>}
       </form>}
-      <div className="button-row"><button type="button" className="button secondary" onClick={onReport}><Icon name="download" size={16}/>Descargar su boleta</button></div>
+      <div className="button-row"><button type="button" className="button secondary" onClick={onReport}><Icon name="download" size={16}/>Descargar su boleta</button>{onCertificate && <button type="button" className="button secondary" onClick={onCertificate}><Icon name="file" size={16}/>Descargar constancia</button>}</div>
       <h3>Historial de cambios</h3>
       {historyError ? <p className="form-alert" role="alert">{historyError}</p>
         : !changes ? <Loading label="Cargando el historial…" lines={3}/>
