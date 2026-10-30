@@ -445,6 +445,8 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: dialog-in
 .resource-chip { display: inline-flex; padding: 2px 8px; border-radius: 999px; background: var(--tone-soft); color: var(--tone-ink); font-size: var(--text-sm); text-decoration: none; }
 .resource-readings { display: grid; gap: var(--space-2); padding: var(--space-3) 0; border-top: 1px solid var(--color-border); }
 .resource-readings header { display: flex; justify-content: space-between; gap: var(--space-2); align-items: center; }
+.resource-readings h3 { margin: 0; font-size: var(--text-sm); font-weight: var(--weight-bold); color: var(--color-ink-soft); }
+.outline-lessons .resource-readings { margin: var(--space-2) var(--space-3) 0; }
 .resource-readings ul { margin: 0; padding-left: 1.2rem; }
 .resource-cite-fields { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
 .resource-reading-progress ul { margin: var(--space-2) 0 0; padding-left: 1.2rem; }
