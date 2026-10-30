@@ -7,7 +7,7 @@ import { filesFor } from "./files";
 import { accessTo, forbidden, reachableCourses } from "./access";
 import { scopedCourses } from "./permissions";
 import { digest } from "./auth";
-import { freedomPolicyOf } from "./freedom-plan";
+import { freedomPolicyOf, freedomReviewOf } from "./freedom-plan";
 import { pathLesson, studentAccess, studentToken } from "./classes";
 import { studentActivityGroups } from "./workgroups";
 import { notify, type Notice, type Notifier } from "./notify";
@@ -119,6 +119,7 @@ export async function content(url: URL, method: string, input: unknown, current:
   if (path.endsWith("/publish") && row) {
     if (!access!.review) {
       const owner = (row as LessonRow & { group_id?: string | null }).group_id;
+      if (owner && row.course_id && await freedomReviewOf(db, current.organizationId, row.course_id)) return forbidden("Esta lección propia está en revisión. La publica la persona responsable del curso.");
       const teaches = owner ? await db.prepare("SELECT 1 AS ok FROM section_educators WHERE group_id=? AND user_id=? AND organization_id=?").bind(owner, current.id, current.organizationId).first() : null;
       if (!teaches) return forbidden("La persona responsable del curso publica sus lecciones. Envía la lección a revisión.");
     }

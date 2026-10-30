@@ -1,4 +1,4 @@
-/** How far a section may adapt the course (1.3.5). `shared` is today's behaviour. */
+/** How far a section may adapt the course (1.3.6). `shared` is today's behaviour. */
 export type FreedomPolicy = "shared" | "flexible" | "free";
 export const freedomPolicies: FreedomPolicy[] = ["shared", "flexible", "free"];
 export const freedomPolicyLabel: Record<FreedomPolicy, string> = {
@@ -12,13 +12,17 @@ export type FreedomLesson = {
 };
 export type FreedomActivity = {
   id: string; periodId: string; categoryId: string; points: number; position: number; core: boolean; groupId: string | null; title: string;
+  /** In review: it does not count in the grade, and a replacement does not apply. */
+  review?: boolean;
 };
+export type FreedomUnit = { id: string; position: number; groupId: string | null; title: string; core: boolean };
 /** A section's adjustment. `replaces` is the course activity this section activity stands in for, and only in `free`. */
 export type FreedomOverride = {
   itemType: "lesson" | "activity" | "unit"; itemId: string; position: number | null; hidden: boolean; replaces: string | null;
 };
 export type EffectiveLesson = FreedomLesson & { origin: "course" | "section"; hidden: boolean };
 export type EffectiveActivity = FreedomActivity & { origin: "course" | "section"; hidden: boolean; replaces: string | null; replacedTitle: string | null };
+export type EffectiveUnit = FreedomUnit & { origin: "course" | "section"; hidden: boolean };
 
 export type SectionContentInput = {
   policy: FreedomPolicy;
@@ -27,6 +31,9 @@ export type SectionContentInput = {
   activities: FreedomActivity[];
   sectionActivities: FreedomActivity[];
   overrides: FreedomOverride[];
+  /** Course units and the section's own units. Omitted, the plan stays a list of lessons, as before. */
+  units?: FreedomUnit[];
+  sectionUnits?: FreedomUnit[];
 };
 
 export type SectionContent = {
@@ -35,6 +42,8 @@ export type SectionContent = {
   hiddenLessons: EffectiveLesson[];
   activities: EffectiveActivity[];
   hiddenActivities: EffectiveActivity[];
+  units: EffectiveUnit[];
+  hiddenUnits: EffectiveUnit[];
   reordered: boolean;
 };
 export type SectionContentError = { ok: false; errors: string[] };
@@ -53,6 +62,8 @@ export function sectionContent(input: SectionContentInput): SectionContent | Sec
       hiddenLessons: [],
       activities: [...input.activities].sort(byPosition).map(item => ({ ...item, origin: "course", hidden: false, replaces: null, replacedTitle: null })),
       hiddenActivities: [],
+      units: [],
+      hiddenUnits: [],
       reordered: false,
     };
   }
@@ -69,6 +80,12 @@ export function sectionContent(input: SectionContentInput): SectionContent | Sec
     const courseActivity = override.itemType === "activity" ? activities.get(override.itemId) : undefined;
     if (override.hidden && courseLesson?.core) errors.push(`No se oculta la lección del núcleo «${courseLesson.title}» con «${policyName}». El núcleo se puede reordenar, no omitir.`);
     if (override.hidden && courseActivity?.core) errors.push(`No se oculta la actividad del núcleo «${courseActivity.title}» con «${policyName}».`);
+    if (override.itemType === "unit" && override.hidden) {
+      const unit = [...(input.units || []), ...(input.sectionUnits || [])].find(item => item.id === override.itemId);
+      const coreInside = input.lessons.some(item => item.unitId === override.itemId && item.core);
+      if (!unit || unit.groupId !== null) errors.push("Solo se oculta una unidad del curso.");
+      else if (unit.core || coreInside) errors.push(`No se oculta la unidad «${unit.title}»: contiene lecciones del núcleo.`);
+    }
     if (override.replaces && input.policy === "free") {
       const own = sectionActivities.get(override.itemId);
       const target = activities.get(override.replaces);
@@ -83,8 +100,8 @@ export function sectionContent(input: SectionContentInput): SectionContent | Sec
   const reorderedUnits = new Set(input.lessons.filter(item => overrideOf("lesson", item.id)?.position !== null && overrideOf("lesson", item.id)?.position !== undefined).map(item => item.unitId));
   const hiddenLessons: EffectiveLesson[] = [];
   const visible: EffectiveLesson[] = [];
-  const units = [...new Set([...input.lessons, ...input.sectionLessons].map(item => item.unitId))];
-  for (const unitId of units) {
+  const unitIds = [...new Set([...input.lessons, ...input.sectionLessons].map(item => item.unitId))];
+  for (const unitId of unitIds) {
     const course = input.lessons.filter(item => item.unitId === unitId).sort(byPosition);
     const own = input.sectionLessons.filter(item => item.unitId === unitId);
     const reordered = reorderedUnits.has(unitId);
@@ -108,7 +125,8 @@ export function sectionContent(input: SectionContentInput): SectionContent | Sec
     hiddenLessons.push(...placed.filter(item => item.hidden && item.origin === "section"));
   }
 
-  const replacedIds = new Set(input.overrides.filter(item => item.itemType === "activity" && item.replaces).map(item => item.replaces!));
+  const reviewing = new Set(input.sectionActivities.filter(item => item.review).map(item => item.id));
+  const replacedIds = new Set(input.overrides.filter(item => item.itemType === "activity" && item.replaces && !reviewing.has(item.itemId)).map(item => item.replaces!));
   const hiddenActivities: EffectiveActivity[] = [];
   const effectiveActivities: EffectiveActivity[] = [];
   for (const item of [...input.activities].sort(byPosition)) {
@@ -121,12 +139,21 @@ export function sectionContent(input: SectionContentInput): SectionContent | Sec
   for (const item of [...input.sectionActivities].sort(byPosition)) {
     const override = overrideOf("activity", item.id);
     const target = override?.replaces ? activities.get(override.replaces) : undefined;
-    const effective: EffectiveActivity = { ...item, origin: "section", hidden: !!override?.hidden, replaces: override?.replaces || null, replacedTitle: target?.title || null, position: override?.position ?? (target?.position ?? item.position) };
+    const applies = !!override?.replaces && !item.review;
+    const effective: EffectiveActivity = { ...item, origin: "section", hidden: !!override?.hidden, replaces: applies ? override!.replaces : null, replacedTitle: applies ? target?.title || null : null, position: override?.position ?? (applies && target ? target.position : item.position), ...(item.review ? { review: true } : {}) };
     if (effective.hidden) hiddenActivities.push(effective);
     else effectiveActivities.push(effective);
   }
   effectiveActivities.sort(byPosition);
-  return { ok: true, lessons: visible, hiddenLessons, activities: effectiveActivities, hiddenActivities, reordered: reorderedUnits.size > 0 };
+  const hiddenUnitIds = new Set(input.overrides.filter(item => item.itemType === "unit" && item.hidden).map(item => item.itemId));
+  const shownLessons = visible.filter(item => !(hiddenUnitIds.has(item.unitId) && !item.core));
+  hiddenLessons.push(...visible.filter(item => hiddenUnitIds.has(item.unitId) && !item.core).map(item => ({ ...item, hidden: true })));
+  const unitOverride = (id: string) => input.overrides.find(item => item.itemType === "unit" && item.itemId === id);
+  const units: EffectiveUnit[] = [...(input.units || []), ...(input.sectionUnits || [])].map(item => {
+    const override = unitOverride(item.id);
+    return { ...item, origin: item.groupId ? "section" as const : "course" as const, hidden: !!override?.hidden, position: override?.position ?? item.position };
+  }).sort(byPosition);
+  return { ok: true, lessons: shownLessons, hiddenLessons, activities: effectiveActivities, hiddenActivities, units: units.filter(item => !item.hidden), hiddenUnits: units.filter(item => item.hidden), reordered: reorderedUnits.size > 0 || units.some(item => unitOverride(item.id)?.position !== null && unitOverride(item.id)?.position !== undefined) };
 }
 
 export type CoverageClass = { date: string; lessonIds: string[]; cancelled?: boolean };
@@ -164,6 +191,8 @@ export type SectionDifferenceSource = {
   hiddenActivities: EffectiveActivity[];
   reordered: boolean;
   coverage: CoreCoverage;
+  units?: EffectiveUnit[];
+  hiddenUnits?: EffectiveUnit[];
   proposals?: { id: string; title: string; type: DifferenceItem["type"]; status: "pending" | "accepted" | "rejected" }[];
 };
 export type SectionDifference = {
@@ -175,6 +204,7 @@ export type SectionDifference = {
     hidden: DifferenceItem[];
     replacements: { id: string; title: string; replaces: string; replacedTitle: string }[];
     proposals: { id: string; title: string; type: DifferenceItem["type"]; status: "pending" | "accepted" | "rejected" }[];
+    reviews: { id: string; title: string; type: "lesson" | "activity"; status: "pending" | "returned" }[];
     coverage: CoreCoverage;
   };
 };
@@ -185,10 +215,12 @@ const countText = (done: number, total: number) => `${done} de ${total}`;
 export function sectionDifferences(sections: SectionDifferenceSource[]): SectionDifference[] {
   return sections.map(section => {
     const added: DifferenceItem[] = [
+      ...(section.units || []).filter(item => item.origin === "section").map(item => ({ id: item.id, title: item.title, type: "unit" as const })),
       ...section.lessons.filter(item => item.origin === "section").map(item => ({ id: item.id, title: item.title, type: "lesson" as const })),
       ...section.activities.filter(item => item.origin === "section").map(item => ({ id: item.id, title: item.title, type: "activity" as const })),
     ];
     const hidden: DifferenceItem[] = [
+      ...(section.hiddenUnits || []).map(item => ({ id: item.id, title: item.title, type: "unit" as const })),
       ...section.hiddenLessons.map(item => ({ id: item.id, title: item.title, type: "lesson" as const })),
       ...section.hiddenActivities.map(item => ({ id: item.id, title: item.title, type: "activity" as const })),
     ];
@@ -199,7 +231,7 @@ export function sectionDifferences(sections: SectionDifferenceSource[]): Section
       coreTaught: countText(section.coverage.lessons.taught, section.coverage.lessons.total),
       outcomes: countText(section.coverage.outcomes.covered, section.coverage.outcomes.total),
       behind: section.coverage.behind,
-      detail: { added, hidden, replacements, proposals: section.proposals || [], coverage: section.coverage },
+      detail: { added, hidden, replacements, proposals: section.proposals || [], reviews: [], coverage: section.coverage },
     };
   });
 }

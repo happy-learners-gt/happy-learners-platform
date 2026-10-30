@@ -15,8 +15,19 @@ export async function freedomPolicyOf(db: Database, organizationId: string, cour
   return resolveSettings(course as never, program as never).values.sectionFreedom ?? "shared";
 }
 
+/** Whether a section's own lessons and activities stay in review until the lead approves them. */
+export async function freedomReviewOf(db: Database, organizationId: string, courseId: string): Promise<boolean> {
+  const row = await db.prepare(`SELECT c.education_type AS educationType,c.level,c.modality,c.pacing,c.format,c.settings,p.settings AS programSettings,p.locked
+    FROM courses c LEFT JOIN study_programs p ON p.id=c.program_id WHERE c.id=? AND c.organization_id=?`).bind(courseId, organizationId).first<CourseBits>();
+  if (!row) return false;
+  const program = row.programSettings !== null ? { settings: JSON.parse(row.programSettings), locked: JSON.parse(row.locked || "[]"), educationType: row.educationType, level: row.level, modality: row.modality, pacing: row.pacing, format: row.format } : null;
+  const course = { educationType: row.educationType, level: row.level, modality: row.modality, pacing: row.pacing, format: row.format, settings: JSON.parse(row.settings) };
+  return resolveSettings(course as never, program as never).values.sectionFreedomReview === true;
+}
+
 type LessonRow = { id: string; unitId: string; position: number; core: number; groupId: string | null; title: string | null; outcomes: string | null; revision: number };
-type ActivityRow = { id: string; periodId: string; categoryId: string; points: number; position: number; core: number; groupId: string | null; title: string };
+type ActivityRow = { id: string; periodId: string; categoryId: string; points: number; position: number; core: number; groupId: string | null; title: string; reviewStatus: string | null };
+type UnitRow = { id: string; title: string; position: number; groupId: string | null };
 
 function lessonOf(row: LessonRow): FreedomLesson {
   const outcomes = row.outcomes ? JSON.parse(row.outcomes) as unknown : [];
@@ -27,20 +38,25 @@ function lessonOf(row: LessonRow): FreedomLesson {
 export async function loadSection(db: Database, organizationId: string, courseId: string, groupId: string): Promise<{ policy: FreedomPolicy; plan: SectionContent } | { policy: "shared" }> {
   const policy = await freedomPolicyOf(db, organizationId, courseId);
   if (policy === "shared") return { policy };
-  const [lessonRows, activityRows, overrideRows] = await db.batch([
+  const [lessonRows, activityRows, overrideRows, unitRows] = await db.batch([
     db.prepare(`SELECT l.id,l.course_unit_id AS unitId,l.position,l.is_core AS core,l.group_id AS groupId,json_extract(l.content,'$.title') AS title,json_extract(l.content,'$.outcomeIds') AS outcomes,l.revision
       FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id WHERE u.course_id=? AND l.archived=0 AND (l.group_id IS NULL OR l.group_id=?)`).bind(courseId, groupId),
-    db.prepare(`SELECT id,period_id AS periodId,category_id AS categoryId,points,position,is_core AS core,group_id AS groupId,title
+    db.prepare(`SELECT id,period_id AS periodId,category_id AS categoryId,points,position,is_core AS core,group_id AS groupId,title,review_status AS reviewStatus
       FROM assessment_activities WHERE course_id=? AND organization_id=? AND (group_id IS NULL OR group_id=?)`).bind(courseId, organizationId, groupId),
     db.prepare("SELECT item_type AS itemType,item_id AS itemId,position,hidden,replaces FROM section_content_overrides WHERE group_id=?").bind(groupId),
-  ]) as unknown as [LessonRow[], ActivityRow[], { itemType: FreedomOverride["itemType"]; itemId: string; position: number | null; hidden: number; replaces: string | null }[]];
+    db.prepare("SELECT id,name AS title,position,group_id AS groupId FROM learning_units WHERE course_id=? AND status='active' AND (group_id IS NULL OR group_id=?)").bind(courseId, groupId),
+  ]) as unknown as [LessonRow[], ActivityRow[], { itemType: FreedomOverride["itemType"]; itemId: string; position: number | null; hidden: number; replaces: string | null }[], UnitRow[]];
   const lessons = lessonRows.filter(row => row.groupId === null).map(lessonOf);
   const sectionLessons = lessonRows.filter(row => row.groupId === groupId).map(lessonOf);
-  const activities: FreedomActivity[] = activityRows.filter(row => row.groupId === null).map(row => ({ ...row, core: row.core === 1, groupId: null }));
-  const sectionActivities: FreedomActivity[] = activityRows.filter(row => row.groupId === groupId).map(row => ({ ...row, core: row.core === 1 }));
+  const activityOf = (row: ActivityRow): FreedomActivity => ({ id: row.id, periodId: row.periodId, categoryId: row.categoryId, points: row.points, position: row.position, core: row.core === 1, groupId: row.groupId, title: row.title, ...(row.reviewStatus === "pending" ? { review: true } : {}) });
+  const activities = activityRows.filter(row => row.groupId === null).map(activityOf);
+  const sectionActivities = activityRows.filter(row => row.groupId === groupId).map(activityOf);
   const overrides: FreedomOverride[] = overrideRows.map(row => ({ itemType: row.itemType, itemId: row.itemId, position: row.position, hidden: row.hidden === 1, replaces: row.replaces }));
-  const plan = sectionContent({ policy, lessons, sectionLessons, activities, sectionActivities, overrides });
-  if (!plan.ok) return { policy, plan: { ok: true, lessons: lessons.map(item => ({ ...item, origin: "course" as const, hidden: false })), hiddenLessons: [], activities: activities.map(item => ({ ...item, origin: "course" as const, hidden: false, replaces: null, replacedTitle: null })), hiddenActivities: [], reordered: false } };
+  const coreOf = (unitId: string) => { const own = lessons.filter(item => item.unitId === unitId); return own.length > 0 && own.every(item => item.core); };
+  const units = unitRows.filter(row => row.groupId === null).map(row => ({ id: row.id, position: row.position, groupId: null, title: row.title, core: coreOf(row.id) }));
+  const sectionUnits = unitRows.filter(row => row.groupId === groupId).map(row => ({ id: row.id, position: row.position, groupId: row.groupId, title: row.title, core: false }));
+  const plan = sectionContent({ policy, lessons, sectionLessons, activities, sectionActivities, overrides, units, sectionUnits });
+  if (!plan.ok) return { policy, plan: { ok: true, lessons: lessons.map(item => ({ ...item, origin: "course" as const, hidden: false })), hiddenLessons: [], activities: activities.map(item => ({ ...item, origin: "course" as const, hidden: false, replaces: null, replacedTitle: null })), hiddenActivities: [], units: [], hiddenUnits: [], reordered: false } };
   return { policy, plan };
 }
 
@@ -56,7 +72,7 @@ export async function effectiveLessonIds(db: Database, organizationId: string, c
 export async function effectiveActivityIds(db: Database, organizationId: string, courseId: string, groupId: string): Promise<Set<string> | null> {
   const loaded = await loadSection(db, organizationId, courseId, groupId);
   if (loaded.policy === "shared" || !("plan" in loaded)) return null;
-  return new Set(loaded.plan.activities.map(activity => activity.id));
+  return new Set(loaded.plan.activities.filter(activity => !activity.review).map(activity => activity.id));
 }
 
 /** Changing the policy is refused, with the sections and activities, when notes would be left behind. */
@@ -111,7 +127,7 @@ export async function courseDifferences(db: Database, organizationId: string, co
     if (loaded.policy === "shared" || !("plan" in loaded)) continue;
     const coverage = await sectionCoverage(db, organizationId, courseId, section.id, loaded.plan);
     const { plan } = loaded;
-    differences.push(sectionDifferences([{ id: section.id, name: section.name, educator: (names.get(section.id) || []).join(", "), lessons: plan.lessons, hiddenLessons: plan.hiddenLessons, activities: plan.activities, hiddenActivities: plan.hiddenActivities, reordered: plan.reordered, coverage }])[0]);
+    differences.push(sectionDifferences([{ id: section.id, name: section.name, educator: (names.get(section.id) || []).join(", "), lessons: plan.lessons, hiddenLessons: plan.hiddenLessons, activities: plan.activities, hiddenActivities: plan.hiddenActivities, units: plan.units, hiddenUnits: plan.hiddenUnits, reordered: plan.reordered, coverage }])[0]);
   }
   return differences;
 }

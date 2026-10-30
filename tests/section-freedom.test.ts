@@ -95,4 +95,38 @@ describe("section freedom", () => {
     expect(policyChange("flexible", "shared", graded).ok).toBe(false);
     expect(policyChange("free", "shared", []).message).toContain("deja de mostrarse");
   });
+
+  it("hides a course unit that has no core lesson, rejects one that does, and drops a replacement still in review", () => {
+    const blocked = sectionContent({
+      policy: "flexible", lessons: courseLessons, sectionLessons: [], activities: [], sectionActivities: [],
+      overrides: [hide("u", "unit")], units: [{ id: "u", position: 0, groupId: null, title: "Fracciones", core: false }],
+    });
+    expect(blocked.ok).toBe(false);
+    if (blocked.ok) return;
+    expect(blocked.errors.some(error => error.includes("contiene lecciones del núcleo"))).toBe(true);
+    const ownUnit = { id: "own-unit", position: 1, groupId: "g", title: "De la sección", core: false };
+    const plain = sectionContent({
+      policy: "flexible",
+      lessons: [{ ...lesson("b", 0, false), unitId: "plain" }],
+      sectionLessons: [{ ...lesson("own", 0, false, "g"), unitId: "own-unit" }],
+      activities: [], sectionActivities: [],
+      overrides: [hide("plain", "unit")],
+      units: [{ id: "plain", position: 0, groupId: null, title: "Opcional", core: false }],
+      sectionUnits: [ownUnit],
+    });
+    expect(plain.ok).toBe(true);
+    if (!plain.ok) return;
+    expect(plain.lessons.map(item => item.id)).toEqual(["own"]);
+    expect(plain.hiddenLessons.map(item => item.id)).toEqual(["b"]);
+    expect(plain.units.map(item => item.id)).toEqual(["own-unit"]);
+    expect(plain.hiddenUnits.map(item => item.id)).toEqual(["plain"]);
+    const review = sectionContent({
+      policy: "free", lessons: [], sectionLessons: [], activities: [{ ...activity("exam", "exams", 40, true), position: 0 }],
+      sectionActivities: [{ ...activity("mine", "exams", 40, false, "g"), position: 1, review: true }],
+      overrides: [{ itemType: "activity", itemId: "mine", position: null, hidden: false, replaces: "exam" }],
+    });
+    expect(review.ok).toBe(true);
+    if (!review.ok) return;
+    expect(review.activities.map(item => [item.id, item.replaces, !!item.review])).toEqual([["exam", null, false], ["mine", null, true]]);
+  });
 });

@@ -66,7 +66,7 @@ export function LessonOutline({ courseId, units, lessons, writable, organize, sh
   /** Course lead marks the core. Absent when the course is the same for every section. */
   core?: { isCore: (lesson: Lesson) => boolean; markLesson?: (lesson: Lesson, core: boolean) => void; markUnit?: (unit: LearningUnit, core: boolean) => void };
   /** A section's own plan: chips, hide and show, without the course's archive actions. */
-  sectionPlan?: { chip: (lesson: Lesson) => ReactNode; lessonItems: (lesson: Lesson) => MenuItem[]; hidden: (unitId: string) => Lesson[]; show: (lesson: Lesson) => void };
+  sectionPlan?: { chip: (lesson: Lesson) => ReactNode; lessonItems: (lesson: Lesson) => MenuItem[]; hidden: (unitId: string) => Lesson[]; show: (lesson: Lesson) => void; unitChip?: (unit: LearningUnit) => ReactNode; unitItems?: (unit: LearningUnit) => MenuItem[] };
 }) {
   const [renaming, setRenaming] = useState<string | null>(null), [creating, setCreating] = useState<string | null>(null);
   const visibleUnits = units.filter(unit => showArchived || unit.status === "active");
@@ -88,6 +88,7 @@ export function LessonOutline({ courseId, units, lessons, writable, organize, sh
           {unit.objective && open && <p>{unit.objective}</p>}
         </div>
         <span className="outline-count">{visible.length ? `${published} de ${plural(visible.length, "lección publicada", "lecciones publicadas")}` : "Sin lecciones"}</span>
+        {sectionPlan?.unitChip?.(unit)}
         {archived && <StatusBadge>Archivada</StatusBadge>}
         {(core?.markUnit || (organize && !sectionPlan)) && <Menu label={`Acciones ${noun.ofThe} ${unit.name}`} items={[
           ...(organize && !archived && !sectionPlan ? [{ label: "Renombrar", icon: "edit" as const, onSelect: () => setRenaming(unit.id) }, { label: "Editar nombre y objetivo", icon: "text" as const, onSelect: () => actions.editUnit(unit) }, { label: "Nueva lección", icon: "plus" as const, onSelect: () => { setExpanded(new Set([...expanded, unit.id])); setCreating(unit.id); } }] : []),
@@ -99,6 +100,7 @@ export function LessonOutline({ courseId, units, lessons, writable, organize, sh
           ...(!archived && actions.proposeForUnit && !sectionPlan ? ["separator" as const, { label: "Proponer lecciones con IA", icon: "sparkles" as const, onSelect: () => actions.proposeForUnit!(unit) }] : []),
           ...(organize && !sectionPlan ? ["separator" as const, { label: archived ? `Restaurar ${noun.one}` : `Archivar ${noun.one}`, icon: "archive" as const, onSelect: () => actions.archiveUnit(unit), danger: !archived }] : []),
         ]}/>}
+        {sectionPlan?.unitItems && sectionPlan.unitItems(unit).length > 0 && <Menu label={`Acciones ${noun.ofThe} ${unit.name}`} items={sectionPlan.unitItems(unit)}/>}
       </div>
       {open && <div id={`lecciones-${unit.id}`} className="outline-lessons">
         {visible.length ? <ol>{visible.map(lesson => {
@@ -129,7 +131,7 @@ export function LessonOutline({ courseId, units, lessons, writable, organize, sh
             ]}/>
           </li>;
         })}</ol> : <p className="outline-empty">{noun.This} aún no tiene lecciones.</p>}
-        {writable && !archived && (creating === unit.id
+        {writable && !archived && !sectionPlan && (creating === unit.id
           ? <NewLessonForm unit={unit} onCancel={() => setCreating(null)} onCreate={async (title, objective) => { const done = await actions.createLesson(unit, title, objective); if (done) setCreating(null); return done; }}/>
           : <button type="button" className="button ghost add-lesson" onClick={() => setCreating(unit.id)}><Icon name="plus" size={18}/><span>Nueva lección<span className="sr-only"> en {unit.name}</span></span></button>)}
         {sectionPlan && sectionPlan.hidden(unit.id).length > 0 && <details className="freedom-hidden">

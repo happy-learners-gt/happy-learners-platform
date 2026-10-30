@@ -49,7 +49,7 @@ function legacyProfile(format: CourseFormat, level: EducationLevel) {
   return level === "unspecified" ? "free" : "school";
 }
 export async function unitsFor(db: Database, courseId: string) {
-  return (await db.prepare("SELECT id,course_id AS courseId,name,objective,position,status,updated_at AS updatedAt FROM learning_units WHERE course_id=? ORDER BY position,id").bind(courseId).all<LearningUnit>()).results;
+  return (await db.prepare("SELECT id,course_id AS courseId,name,objective,position,status,updated_at AS updatedAt FROM learning_units WHERE course_id=? AND group_id IS NULL ORDER BY position,id").bind(courseId).all<LearningUnit>()).results;
 }
 export async function curriculumFor(db: Database, courseId: string): Promise<Curriculum> {
   const [competencies, outcomes, unitOutcomes] = await db.batch([

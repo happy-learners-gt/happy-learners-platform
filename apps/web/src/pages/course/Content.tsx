@@ -121,6 +121,7 @@ export function Content() {
     {writable && !publisher && <p className="notice"><Icon name="info" size={18}/>Prepara y edita lecciones; cuando una esté lista, envíala a revisión. La persona responsable del curso la publica y organiza {noun.theMany}.</p>}
     {(archivedCount > 0 || showArchived) && <label className="switch"><input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)}/><span>Mostrar archivados ({archivedCount})</span></label>}
     {adapt && <p className="freedom-notice"><Icon name="info" size={18}/><span>Las secciones pueden adaptar lo que no es núcleo. <Link href={`${base}/secciones?vista=diferencias`}>Ver diferencias entre secciones</Link></span></p>}
+    {adapt && publisher && <SectionProposals courseId={course.id} kinds={["lesson", "unit"]} onChanged={() => void reload()}/>}
     {units.length ? <LessonOutline courseId={course.id} units={units} lessons={lessons} writable={writable && !busy} organize={publisher && !busy} noun={noun} showArchived={showArchived} actions={actions} expanded={expanded} setExpanded={setExpanded} focusUnit={focusUnit}
       core={adapt ? { isCore: lesson => lesson.isCore !== false, ...(publisher ? { markLesson: (lesson: Lesson, next: boolean) => void markCore({ lessons: [{ id: lesson.id, core: next }] }, next ? "Quedó en el núcleo." : "Salió del núcleo."), markUnit: (unit: LearningUnit, next: boolean) => void markCore({ units: [{ id: unit.id, core: next }] }, next ? "La unidad quedó en el núcleo." : "La unidad salió del núcleo.") } : {}) } : undefined}/>
       : !creating && <EmptyState icon="content" title={`Este curso aún no tiene ${noun.many}`} action={publisher && <PrimaryAction icon="plus" onClick={() => setCreating(true)}>{`Crear ${noun.one}`}</PrimaryAction>}>{`${noun.A} agrupa lecciones sobre un mismo tema. Por ejemplo: “Greetings” o “Colores”.`}</EmptyState>}
@@ -141,6 +142,50 @@ export function Content() {
         <Field label="Objetivo" optional><textarea name="objective" maxLength={1000} rows={3} defaultValue={editing.objective}/></Field>
         <div className="modal-actions"><button type="button" className="button ghost" onClick={() => setEditing(null)}>Cancelar</button><button className="button primary" disabled={busy}>{`Guardar ${noun.one}`}</button></div>
       </form>
+    </Modal>}
+  </>;
+}
+
+type Proposal = { id: string; section: string; itemType: "unit" | "lesson" | "activity"; itemId: string; title: string; status: string };
+/** Pending copies the sections offered to the course. The lead accepts them here. */
+export function SectionProposals({ courseId, kinds, onChanged }: { courseId: string; kinds: Proposal["itemType"][]; onChanged: () => void }) {
+  const { toast } = useFeedback();
+  const [rows, setRows] = useState<Proposal[] | null>(null);
+  const [open, setOpen] = useState(false);
+  const [core, setCore] = useState(false);
+  const [keepOwn, setKeepOwn] = useState(true);
+  const [comment, setComment] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function load() {
+    const result = await api<{ proposals?: Proposal[] }>(`/courses/${courseId}/section-proposals`);
+    setRows((result.proposals || []).filter(item => item.status === "pending" && kinds.includes(item.itemType)));
+  }
+  useEffect(() => { void load().catch(() => setRows([])); }, [courseId]);
+  if (!rows?.length) return null;
+  const current = rows[0];
+  async function decide(decision: "accept" | "reject") {
+    if (decision === "reject" && !comment.trim()) { toast({ tone: "error", message: "Escribe por qué la rechazas." }); return; }
+    setBusy(true);
+    try {
+      await api(`/courses/${courseId}/section-proposals/${current.id}`, "POST", { decision, comment: comment.trim(), core, keepOwn });
+      setOpen(false); setComment(""); setCore(false); setKeepOwn(true);
+      await load(); onChanged();
+      toast({ message: decision === "accept" ? "La propuesta quedó en el curso." : "La propuesta se rechazó." });
+    } catch (cause) { toast({ tone: "error", message: message(cause) }); }
+    finally { setBusy(false); }
+  }
+  const count = rows.length;
+  return <>
+    <p className="freedom-notice"><Icon name="info" size={18}/><button type="button" className="button ghost" onClick={() => setOpen(true)}>{count === 1 ? "1 propuesta de las secciones" : `${count} propuestas de las secciones`}</button></p>
+    {open && <Modal title={current.title || "Propuesta"} onClose={() => setOpen(false)}>
+      <p>Viene de {current.section}. Una copia entra al curso; la sección de origen puede conservar la suya.</p>
+      <label className="freedom-review"><input type="checkbox" checked={core} onChange={event => setCore(event.target.checked)}/>Marcar como núcleo</label>
+      <label className="freedom-review"><input type="checkbox" checked={keepOwn} onChange={event => setKeepOwn(event.target.checked)}/>La sección de origen conserva su versión</label>
+      <Field label="Comentario" optional hint="Obligatorio si la rechazas."><textarea value={comment} maxLength={600} rows={3} onChange={event => setComment(event.target.value)}/></Field>
+      <div className="modal-actions">
+        <button type="button" className="button ghost" disabled={busy} onClick={() => void decide("reject")}>Rechazar</button>
+        <button type="button" className="button primary" disabled={busy} onClick={() => void decide("accept")}>{busy ? "Guardando…" : "Aceptar"}</button>
+      </div>
     </Modal>}
   </>;
 }

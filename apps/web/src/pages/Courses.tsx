@@ -219,7 +219,7 @@ export function CourseForm({ course, onSaved, cancelHref, readOnly = false }: { 
       <section className="config-section" aria-labelledby="behaviour-title">
         <h2 id="behaviour-title">Comportamiento del curso</h2>
         <p className="muted small">Cada ajuste toma su valor del tipo de curso o del programa. Cámbialo solo si este curso necesita algo distinto.</p>
-        <ul className="settings-list">{settingDefinitions.filter(definition => definition.key !== "sectionFreedom").map(definition => {
+        <ul className="settings-list">{settingDefinitions.filter(definition => definition.key !== "sectionFreedom" && definition.key !== "sectionFreedomReview").map(definition => {
           const key = definition.key, source = resolved.source[key], locked = source === "program-locked";
           const inherited = program?.settings[key] !== undefined ? program.settings[key] : derivedSettings({ ...profile, format: dims.format })[key];
           const options = key === "gradingSchemeId" ? schemeOptions(schemes, settings[key]) : settingChoices(key, settings[key]);
@@ -235,7 +235,8 @@ export function CourseForm({ course, onSaved, cancelHref, readOnly = false }: { 
             </div>
           </li>;
         })}</ul>
-        <FreedomPolicyField name="section-freedom" value={freedom} disabled={readOnly || freedomLocked} lockedBy={freedomLocked ? program?.name : undefined} onChoose={next => { setPolicyBlock(null); setPendingPolicy(next); }}/>
+        <FreedomPolicyField name="section-freedom" value={freedom} disabled={readOnly || freedomLocked} lockedBy={freedomLocked ? program?.name : undefined} onChoose={next => { setPolicyBlock(null); setPendingPolicy(next); }}
+          review={settings.sectionFreedomReview === true} reviewLocked={readOnly || resolved.source.sectionFreedomReview === "program-locked"} onReview={checked => { setSettings(current => ({ ...current, sectionFreedomReview: checked })); setDirty(true); }}/>
       </section>
       {!readOnly && <div className="form-actions"><button className="button primary">{busy ? "Guardando…" : course ? "Guardar cambios" : "Crear curso"}</button><Link href={cancelHref} className="button ghost">Cancelar</Link></div>}
     </fieldset>

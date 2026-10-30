@@ -98,6 +98,7 @@ export const settingDefinitions: { key: SettingKey; label: string; description: 
   { key: "gradeAverage", label: "Promedio de los periodos", description: "Promedio simple o ponderado por el peso de cada periodo del ciclo lectivo. Un periodo sin nota no cuenta como cero." },
   { key: "gradingSchemeId", label: "Esquema de evaluación", description: "La forma configurable de calcular y mostrar los resultados de evaluación." },
   { key: "sectionFreedom", label: "Libertad de cátedra", description: "Cuánto puede adaptar cada sección el contenido y la evaluación del curso." },
+  { key: "sectionFreedomReview", label: "Revisión de lo propio", description: "Las lecciones y actividades propias requieren aprobación del responsable del curso." },
 ];
 const sequences: SequenceTemplate[] = ["free", "start-develop-close", "five-e", "ppp", "workshop"];
 
@@ -116,6 +117,7 @@ export function derivedSettings(profile: AcademicProfile & { format: CourseForma
     gradeAverage: "simple",
     gradingSchemeId: null,
     sectionFreedom: "shared",
+    sectionFreedomReview: false,
   };
 }
 export type SettingSource = "course" | "program" | "program-locked" | "derived";
@@ -148,7 +150,7 @@ export function settingsInput(value: unknown): CourseSettings | null {
   const out: CourseSettings = {};
   if (v.moduleLabel !== undefined) { if (!moduleLabels.some(item => item.value === v.moduleLabel)) return null; out.moduleLabel = v.moduleLabel as ModuleLabel; }
   if (v.defaultSequence !== undefined) { if (!sequences.includes(v.defaultSequence as SequenceTemplate)) return null; out.defaultSequence = v.defaultSequence as SequenceTemplate; }
-  for (const key of ["attendance", "workGroups", "outcomesRequired", "assessmentRequired"] as const) {
+  for (const key of ["attendance", "workGroups", "outcomesRequired", "assessmentRequired", "sectionFreedomReview"] as const) {
     if (v[key] !== undefined) { if (typeof v[key] !== "boolean") return null; out[key] = v[key]; }
   }
   if (v.gradeScale !== undefined) { if (!isGradeScale(v.gradeScale)) return null; out.gradeScale = v.gradeScale; }
