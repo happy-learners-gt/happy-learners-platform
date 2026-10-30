@@ -41,7 +41,8 @@ export function Readings({ courseId, units, sectionId, canEdit }: { courseId: st
     {active.map(unit => {
       const mine = rows.filter(item => item.unitId === unit.id);
       return <article key={unit.id} className="resource-readings">
-        <header><h3>{unit.name}</h3>{canEdit && <button type="button" className="button secondary small" onClick={() => setAdding(unit.id)}><Icon name="plus" size={16}/>Agregar lectura</button>}</header>
+        {/* The unit's name is not a heading: Contenido already has one per unit. */}
+        <header><strong className="resource-readings-unit">{unit.name}</strong>{canEdit && <button type="button" className="button secondary small" onClick={() => setAdding(unit.id)}><Icon name="plus" size={16}/>Agregar lectura</button>}</header>
         {mine.length ? <ul>{mine.map(item => <li key={item.id}>{item.groupId && <FreedomChip mark="own"/>}<strong>{item.title}</strong>{item.chapter ? ` · ${item.chapter}` : ""}{item.pages ? ` · ${item.pages}` : ""} · {item.required ? "Obligatoria" : "Recomendada"}{item.note ? ` · ${item.note}` : ""}</li>)}</ul>
           : <p className="muted small">Sin lecturas.</p>}
       </article>;

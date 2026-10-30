@@ -449,7 +449,7 @@ dialog.modal[open] { display: flex; flex-direction: column; animation: dialog-in
 .resource-cite-fields { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
 .resource-reading-progress ul { margin: var(--space-2) 0 0; padding-left: 1.2rem; }
 .resource-coverage { margin: 0 0 var(--space-3); }
-@media (max-width: 720px) { .resource-row, .resource-cite-fields { grid-template-columns: 1fr; } .resource-row-actions { justify-content: flex-start; } }
+@media (max-width: 720px) { .resource-row, .resource-cite-fields { grid-template-columns: 1fr; } .resource-row-actions { justify-content: flex-start; } .resource-row-actions > .menu { margin-left: auto; } }
 .resource-side { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-1); }
 .link-list, .result-list, .unit-summary, .session-list, .activity-feed, .quick-actions { list-style: none; margin: 0; padding: 0; display: grid; }
 .link-list li, .result-list li { display: flex; align-items: center; gap: var(--space-2) var(--space-3); flex-wrap: wrap; padding: 10px 0; border-top: 1px solid var(--color-border); }
