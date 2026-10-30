@@ -3,6 +3,7 @@ import { assessmentPeriodStatus, assessmentTemplates, isAssessmentKind, maxAsses
 import type { Database } from "./storage";
 import { accessTo, forbidden, outsider } from "./access";
 import { configurationOf, gradingSchemeError } from "./courses";
+import { freedomPolicyOf } from "./freedom-plan";
 import { event } from "./team";
 
 /**
@@ -105,11 +106,13 @@ async function view(db: Database, current: Member, course: CourseRow, editable: 
   const years = await yearsOf(db, current.organizationId, course.id);
   const year = years.find(item => item.id === yearId) || years.find(item => item.status === "current") || years[0] || null;
   const periods = year ? (await db.prepare("SELECT id,name,position,weight FROM academic_periods WHERE year_id=? AND organization_id=? ORDER BY starts_on,position").bind(year.id, current.organizationId).all<PeriodRow>()).results : [];
+  const adapt = (await freedomPolicyOf(db, current.organizationId, course.id)) !== "shared";
   const activities = periods.length ? (await db.prepare(`SELECT a.id,a.period_id AS periodId,a.position,a.title,a.kind,a.points,a.due_on AS dueOn,a.category_id AS categoryId,a.grading,a.extra,a.retake_of AS retakeOf,a.rubric,a.panel,a.group_mode AS groupMode,a.peer_min AS peerMin,a.peer_max AS peerMax,
     (SELECT MAX(points) FROM assessment_scores WHERE activity_id=a.id) AS maxScore,
-    (EXISTS(SELECT 1 FROM assessment_scores WHERE activity_id=a.id) OR EXISTS(SELECT 1 FROM assessment_marks WHERE activity_id=a.id) OR EXISTS(SELECT 1 FROM assessment_group_marks WHERE activity_id=a.id)) AS graded
-    FROM assessment_activities a WHERE a.course_id=? AND a.organization_id=? AND a.period_id IN (${periods.map(() => "?").join(",")}) ORDER BY a.position,a.id`)
-    .bind(course.id, current.organizationId, ...periods.map(period => period.id)).all<Stored & { maxScore: number | null; graded: number }>()).results : [];
+    (EXISTS(SELECT 1 FROM assessment_scores WHERE activity_id=a.id) OR EXISTS(SELECT 1 FROM assessment_marks WHERE activity_id=a.id) OR EXISTS(SELECT 1 FROM assessment_group_marks WHERE activity_id=a.id)) AS graded,
+    a.is_core AS isCore
+    FROM assessment_activities a WHERE a.course_id=? AND a.organization_id=? AND a.group_id IS NULL AND a.period_id IN (${periods.map(() => "?").join(",")}) ORDER BY a.position,a.id`)
+    .bind(course.id, current.organizationId, ...periods.map(period => period.id)).all<Stored & { maxScore: number | null; graded: number; isCore: number }>()).results : [];
   const evaluators = activities.length ? (await db.prepare(`SELECT e.activity_id AS activityId,e.user_id AS userId,COALESCE(u.display_name,u.username) AS name,e.chair
     FROM assessment_evaluators e JOIN users u ON u.id=e.user_id WHERE e.activity_id IN (${activities.map(() => "?").join(",")}) ORDER BY e.chair DESC,name`).bind(...activities.map(item => item.id)).all<{ activityId: string; userId: string; name: string; chair: number }>()).results : [];
   const team = (await db.prepare("SELECT u.id,COALESCE(u.display_name,u.username) AS name FROM course_members m JOIN users u ON u.id=m.user_id WHERE m.course_id=? AND m.organization_id=? ORDER BY name").bind(course.id, current.organizationId).all<{ id: string; name: string }>()).results;
@@ -126,7 +129,7 @@ async function view(db: Database, current: Member, course: CourseRow, editable: 
           ...(item.rubric ? { rubric: JSON.parse(item.rubric) as Rubric } : {}),
           ...(item.panel ? { panel: JSON.parse(item.panel) as GradingActivity["panel"] } : {}),
           groupMode: item.groupMode, peerMin: item.peerMin, peerMax: item.peerMax,
-          graded: !!item.graded, maxScore: item.maxScore,
+          graded: !!item.graded, maxScore: item.maxScore, ...(adapt ? { isCore: item.isCore !== 0 } : {}),
           evaluators: evaluators.filter(person => person.activityId === item.id).map(person => ({ userId: person.userId, name: person.name, chair: !!person.chair })),
         })),
       };
@@ -233,7 +236,7 @@ async function saveActivity(db: Database, current: Member, course: CourseRow, ac
   if (typeof draft === "string") return reply({ error: draft }, 400);
   const scheme = await schemeOf(db, current.organizationId, course.id);
   if (!scheme.categories.some(category => category.id === draft.categoryId)) return reply({ error: "Una actividad usa una categoría que no existe en el esquema efectivo." }, 400);
-  const stored = activityId ? await db.prepare("SELECT id,period_id AS periodId,position,title,kind,points,due_on AS dueOn,category_id AS categoryId,grading,extra,retake_of AS retakeOf,rubric,panel,group_mode AS groupMode,peer_min AS peerMin,peer_max AS peerMax FROM assessment_activities WHERE id=? AND course_id=? AND organization_id=?").bind(activityId, course.id, current.organizationId).first<Stored>() : null;
+  const stored = activityId ? await db.prepare("SELECT id,period_id AS periodId,position,title,kind,points,due_on AS dueOn,category_id AS categoryId,grading,extra,retake_of AS retakeOf,rubric,panel,group_mode AS groupMode,peer_min AS peerMin,peer_max AS peerMax FROM assessment_activities WHERE id=? AND course_id=? AND organization_id=? AND group_id IS NULL").bind(activityId, course.id, current.organizationId).first<Stored>() : null;
   if (activityId && !stored) return reply({ error: "La actividad ya no está en este curso." }, 404);
   const period = await blockedPeriod(db, current, course.id, stored?.periodId || periodId);
   if ("error" in period && period.error) return period.error;
@@ -248,7 +251,7 @@ async function saveActivity(db: Database, current: Member, course: CourseRow, ac
     if (structural || draft.evaluators) return reply({ error: gradedNote(stored.title) }, 409);
     if (facts.maxScore !== null && draft.points < facts.maxScore) return reply({ error: `«${stored.title}» ya tiene un punteo de ${facts.maxScore}: sus puntos no pueden ser menos.` }, 409);
   }
-  const siblings = (await db.prepare("SELECT id,title,points,extra,retake_of AS retakeOf,category_id AS categoryId FROM assessment_activities WHERE course_id=? AND period_id=? AND organization_id=? AND id IS NOT ?").bind(course.id, period.period.id, current.organizationId, activityId || "").all<{ id: string; title: string; points: number; extra: number; retakeOf: string | null; categoryId: string }>()).results;
+  const siblings = (await db.prepare("SELECT id,title,points,extra,retake_of AS retakeOf,category_id AS categoryId FROM assessment_activities WHERE course_id=? AND period_id=? AND organization_id=? AND group_id IS NULL AND id IS NOT ?").bind(course.id, period.period.id, current.organizationId, activityId || "").all<{ id: string; title: string; points: number; extra: number; retakeOf: string | null; categoryId: string }>()).results;
   if (!stored && !siblings.length) {
     const manual = await db.prepare("SELECT 1 AS found FROM section_grades s JOIN course_groups g ON g.id=s.group_id WHERE g.course_id=? AND s.period_id=? AND s.organization_id=? LIMIT 1").bind(course.id, period.period.id, current.organizationId).first();
     if (manual) return reply({ error: `«${period.period.name}» ya tiene notas registradas sin plan en alguna sección del curso. Bórralas para calcular el periodo con un plan de evaluación.` }, 409);
@@ -265,7 +268,7 @@ async function saveActivity(db: Database, current: Member, course: CourseRow, ac
   }
   const now = new Date().toISOString();
   const id = stored?.id || `assessment-${crypto.randomUUID()}`;
-  const position = stored?.position ?? ((await db.prepare("SELECT COALESCE(MAX(position),-1) AS position FROM assessment_activities WHERE course_id=? AND period_id=?").bind(course.id, period.period.id).first<{ position: number }>())?.position ?? -1) + 1;
+  const position = stored?.position ?? ((await db.prepare("SELECT COALESCE(MAX(position),-1) AS position FROM assessment_activities WHERE course_id=? AND period_id=? AND group_id IS NULL").bind(course.id, period.period.id).first<{ position: number }>())?.position ?? -1) + 1;
   const panel = draft.panel ? { ...draft.panel, ...(draft.evaluators?.find(person => person.chair) ? { chair: draft.evaluators.find(person => person.chair)!.userId } : {}) } : null;
   const values = [position, draft.title, draft.kind, draft.points, draft.dueOn, draft.categoryId, draft.grading, draft.extra ? 1 : 0, draft.retakeOf, draft.rubric ? JSON.stringify(draft.rubric) : null, panel ? JSON.stringify(panel) : null, draft.groupMode, draft.peerMin, draft.peerMax, now];
   await db.batch([
@@ -282,7 +285,7 @@ async function saveActivity(db: Database, current: Member, course: CourseRow, ac
 }
 
 async function removeActivity(db: Database, current: Member, course: CourseRow, activityId: string) {
-  const stored = await db.prepare("SELECT id,title,period_id AS periodId FROM assessment_activities WHERE id=? AND course_id=? AND organization_id=?").bind(activityId, course.id, current.organizationId).first<{ id: string; title: string; periodId: string }>();
+  const stored = await db.prepare("SELECT id,title,period_id AS periodId FROM assessment_activities WHERE id=? AND course_id=? AND organization_id=? AND group_id IS NULL").bind(activityId, course.id, current.organizationId).first<{ id: string; title: string; periodId: string }>();
   if (!stored) return reply({ error: "La actividad ya no está en este curso." }, 404);
   const period = await blockedPeriod(db, current, course.id, stored.periodId);
   if ("error" in period && period.error) return period.error;

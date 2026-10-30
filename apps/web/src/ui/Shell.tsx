@@ -156,18 +156,21 @@ function Sidebar() {
   };
   const sectionNode = (section: SectionSummary) => {
     const base = `/secciones/${section.id}`, key = `section:${section.id}`, here = section.id === current?.id, area = here ? third || "" : undefined;
+    const settings = settingsOf(courses?.find(item => item.id === section.courseId));
+    const plan: Page[] = settings?.sectionFreedom && settings.sectionFreedom !== "shared" ? [{ href: `${base}/plan`, label: "Plan de la sección", icon: "content", hue: "sky", active: area === "plan" }] : [];
     const pages: Page[] = section.pacing === "self-paced" ? [
       { href: base, label: "Resumen", icon: "overview", hue: "violet", active: area === "" },
+      ...plan,
       { href: `${base}/avance`, label: "Avance", icon: "check", hue: "green", active: area === "avance" },
       { href: `${base}/estudiantes`, label: "Estudiantes", icon: "users", hue: "pink", active: area === "estudiantes" },
     ] : [
       { href: base, label: "Resumen", icon: "overview", hue: "violet", active: area === "" },
       { href: `${base}/clases`, label: "Cronograma", icon: "calendar", hue: "coral", active: area === "clases" },
+      ...plan,
       { href: `${base}/horario`, label: "Horario", icon: "clock", hue: "violet", active: area === "horario" },
       { href: `${base}/estudiantes`, label: "Estudiantes", icon: "users", hue: "pink", active: area === "estudiantes" },
     ];
     pages.push({ href: `${base}/notas`, label: "Notas", icon: "table", hue: "amber", active: area === "notas" });
-    const settings = settingsOf(courses?.find(item => item.id === section.courseId));
     if (section.workGroups ?? (settings?.attendance && settings.workGroups)) pages.push({ href: `${base}/grupos`, label: "Grupos", icon: "team", hue: "teal", active: area === "grupos" });
     return <Node key={section.id} id={key} href={base} label={section.name} detail={section.status === "archived" ? "Cerrada" : undefined} open={open.has(key)} current={here} region={here ? "Navegación de la sección" : undefined}
       toggleLabel={`Mostrar las páginas de ${section.name}`} onToggle={() => toggle(key)} onSelect={select(key, base)}>

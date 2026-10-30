@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { AcademicProfile, Course, CourseFormat, CourseSettings, EducationLevel, EducationType, LearningUnit, Lesson, Modality, Pacing, StudyProgram, Taxonomy } from "@happy-learners/contracts";
+import type { FreedomPolicy } from "@happy-learners/domain";
 import { areaLabel, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, pacings, resolveSettings, settingChoices, settingDefinitions, settingText, settingValue, sourceLabel } from "@happy-learners/domain";
 import type { SettingKey } from "@happy-learners/domain";
-import { api, message } from "../api";
+import { api, ApiError, message } from "../api";
 import { Link, useNavigation, useUnsavedChanges } from "../navigation";
 import { useSession } from "../session";
 import { courseBody, courseStats, matches, newest, plural } from "../model";
+import { FreedomChangeDialog, FreedomPolicyField } from "../ui/freedom";
 import type { CourseStats } from "../model";
 import { CourseCard } from "../ui/cards";
 import { useFeedback } from "../ui/feedback";
@@ -122,6 +124,7 @@ export function CourseForm({ course, onSaved, cancelHref, readOnly = false }: { 
     : { ...coursePresets[0].values, area: "", programId: "" });
   const [settings, setSettings] = useState<CourseSettings>(course?.settings || {});
   const [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [pendingPolicy, setPendingPolicy] = useState<FreedomPolicy | null>(null), [policyBlock, setPolicyBlock] = useState<{ message: string; affected: { section: string; activity: string }[] } | null>(null);
   const { guard } = useNavigation();
   useUnsavedChanges(dirty);
   useEffect(() => { api<{ programs: StudyProgram[] }>("/programs").then(result => setPrograms(result.programs)).catch(() => undefined); }, []);
@@ -155,7 +158,27 @@ export function CourseForm({ course, onSaved, cancelHref, readOnly = false }: { 
     finally { setBusy(false); }
   }
   const valueText = settingText;
-  return <form className="form-card course-form" onSubmit={save} onChange={() => setDirty(true)}>
+  const freedom = resolved.values.sectionFreedom;
+  const freedomLocked = resolved.source.sectionFreedom === "program-locked";
+  async function confirmPolicy() {
+    if (!pendingPolicy) return;
+    const next = { ...settings, sectionFreedom: pendingPolicy };
+    if (!course) { setSetting("sectionFreedom", pendingPolicy); setPendingPolicy(null); setPolicyBlock(null); return; }
+    const form = document.getElementById("course-form") as HTMLFormElement | null;
+    const data = form ? Object.fromEntries(new FormData(form)) as Record<string, string> : {};
+    setBusy(true); setError("");
+    try {
+      await api(`/courses/${course.id}`, "PUT", { title: data.title || course.title, objective: data.objective ?? course.objective, status: course.status, programId: dims.programId || null, ...profile, format: dims.format, area: dims.area || null, settings: next, version: course.version });
+      setSettings(next); setDirty(false); guard(false); setPendingPolicy(null); setPolicyBlock(null);
+      await onSaved(course.id);
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.status === 409) {
+        const affected = Array.isArray(cause.detail.affected) ? cause.detail.affected as { section: string; activity: string }[] : [];
+        setPolicyBlock({ message: cause.message, affected });
+      } else setError(message(cause));
+    } finally { setBusy(false); }
+  }
+  return <><form id="course-form" className="form-card course-form" onSubmit={save} onChange={() => setDirty(true)}>
     {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
     {readOnly && <p className="notice"><Icon name="info" size={18}/>Administración configura el curso. Si necesitas un cambio, pídeselo.</p>}
     <fieldset disabled={busy || readOnly} className="stack">
@@ -196,7 +219,7 @@ export function CourseForm({ course, onSaved, cancelHref, readOnly = false }: { 
       <section className="config-section" aria-labelledby="behaviour-title">
         <h2 id="behaviour-title">Comportamiento del curso</h2>
         <p className="muted small">Cada ajuste toma su valor del tipo de curso o del programa. Cámbialo solo si este curso necesita algo distinto.</p>
-        <ul className="settings-list">{settingDefinitions.map(definition => {
+        <ul className="settings-list">{settingDefinitions.filter(definition => definition.key !== "sectionFreedom" && definition.key !== "sectionFreedomReview").map(definition => {
           const key = definition.key, source = resolved.source[key], locked = source === "program-locked";
           const inherited = program?.settings[key] !== undefined ? program.settings[key] : derivedSettings({ ...profile, format: dims.format })[key];
           const options = key === "gradingSchemeId" ? schemeOptions(schemes, settings[key]) : settingChoices(key, settings[key]);
@@ -212,10 +235,14 @@ export function CourseForm({ course, onSaved, cancelHref, readOnly = false }: { 
             </div>
           </li>;
         })}</ul>
+        <FreedomPolicyField name="section-freedom" value={freedom} disabled={readOnly || freedomLocked} lockedBy={freedomLocked ? program?.name : undefined} onChoose={next => { setPolicyBlock(null); setPendingPolicy(next); }}
+          review={settings.sectionFreedomReview === true} reviewLocked={readOnly || resolved.source.sectionFreedomReview === "program-locked"} onReview={checked => { setSettings(current => ({ ...current, sectionFreedomReview: checked })); setDirty(true); }}/>
       </section>
       {!readOnly && <div className="form-actions"><button className="button primary">{busy ? "Guardando…" : course ? "Guardar cambios" : "Crear curso"}</button><Link href={cancelHref} className="button ghost">Cancelar</Link></div>}
     </fieldset>
-  </form>;
+  </form>
+  {pendingPolicy && <FreedomChangeDialog from={freedom} to={pendingPolicy} blocked={policyBlock} busy={busy} onClose={() => { setPendingPolicy(null); setPolicyBlock(null); }} onConfirm={() => void confirmPolicy()}/>}
+  </>;
 }
 
 export function CreateCourse() {

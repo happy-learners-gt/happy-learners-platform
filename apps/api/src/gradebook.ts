@@ -8,6 +8,7 @@ import { scopedCourses } from "./permissions";
 import { event } from "./team";
 import { gradingSchemesFor } from "./grading-schemes";
 import { groupGrades } from "./group-grading";
+import { effectiveActivityIds, loadSection } from "./freedom-plan";
 
 /**
  * The section's gradebook (libreta) and the course's assessment plan:
@@ -133,8 +134,8 @@ async function contents(db: Database, current: Member, section: { id: string; co
       FROM academic_periods p LEFT JOIN section_period_locks l ON l.period_id=p.id AND l.group_id=? LEFT JOIN users u ON u.id=l.locked_by WHERE p.year_id=? AND p.organization_id=? ORDER BY p.starts_on`).bind(section.id, year.id, organizationId),
     db.prepare("SELECT id,display_name AS name FROM group_learners WHERE group_id=? AND organization_id=? AND status='active' ORDER BY display_name COLLATE NOCASE,created_at,id").bind(section.id, organizationId),
     db.prepare("SELECT g.learner_id AS learnerId,g.period_id AS periodId,g.score FROM section_grades g JOIN academic_periods p ON p.id=g.period_id WHERE g.group_id=? AND g.organization_id=? AND p.year_id=?").bind(section.id, organizationId, year.id),
-    db.prepare(`SELECT a.id,a.period_id AS periodId,a.position,a.title,a.kind,a.points,a.due_on AS dueOn,a.category_id AS categoryId,a.grading,a.extra,a.retake_of AS retakeOf,a.rubric,a.panel,a.group_mode AS groupMode,a.work_group_set_id AS workGroupSetId,a.peer_min AS peerMin,a.peer_max AS peerMax FROM assessment_activities a JOIN academic_periods p ON p.id=a.period_id
-      WHERE a.course_id=? AND a.organization_id=? AND p.year_id=? ORDER BY p.starts_on,a.position,a.id`).bind(section.courseId, organizationId, year.id),
+    db.prepare(`SELECT a.id,a.period_id AS periodId,a.position,a.title,a.kind,a.points,a.due_on AS dueOn,a.category_id AS categoryId,a.grading,a.extra,a.retake_of AS retakeOf,a.rubric,a.panel,a.group_mode AS groupMode,a.work_group_set_id AS workGroupSetId,a.peer_min AS peerMin,a.peer_max AS peerMax,a.group_id AS groupId FROM assessment_activities a JOIN academic_periods p ON p.id=a.period_id
+      WHERE a.course_id=? AND a.organization_id=? AND p.year_id=? AND (a.group_id IS NULL OR a.group_id=?) ORDER BY p.starts_on,a.position,a.id`).bind(section.courseId, organizationId, year.id, section.id),
     db.prepare(`SELECT s.activity_id AS activityId,s.learner_id AS learnerId,s.points,s.source FROM assessment_scores s JOIN assessment_activities a ON a.id=s.activity_id JOIN academic_periods p ON p.id=a.period_id
       WHERE s.group_id=? AND s.organization_id=? AND p.year_id=?`).bind(section.id, organizationId, year.id),
     db.prepare(`SELECT m.activity_id AS activityId,m.learner_id AS learnerId,m.evaluator_id AS evaluatorId,m.mark,m.updated_at AS updatedAt,COALESCE(u.display_name,u.username) AS updatedBy,m.source
@@ -160,7 +161,7 @@ async function contents(db: Database, current: Member, section: { id: string; co
       WHERE a.course_id=? AND a.organization_id=? AND p.year_id=?`).bind(section.courseId, organizationId, year.id),
   ]) as unknown as [
     Omit<GradebookPeriod, "locked">[], { id: string; name: string }[], GradeEntry[],
-    (Omit<AssessmentActivity, "rubric" | "panel" | "extra" | "groupMode" | "workGroupSetId" | "peerMin" | "peerMax"> & { rubric: string | null; panel: string | null; extra: number; groupMode: string | null; workGroupSetId: string | null; peerMin: number; peerMax: number })[],
+    (Omit<AssessmentActivity, "rubric" | "panel" | "extra" | "groupMode" | "workGroupSetId" | "peerMin" | "peerMax"> & { rubric: string | null; panel: string | null; extra: number; groupMode: string | null; workGroupSetId: string | null; peerMin: number; peerMax: number; groupId: string | null })[],
     (AssessmentScore & { source: "individual" | "group" })[], (Omit<AssessmentMark, "mark" | "source"> & { mark: string; source: "individual" | "group" })[], (Omit<AssessmentEvaluator, "chair"> & { chair: number })[],
     GradeComment[], PeriodReview[],
     { id: string; setId: string; setName: string; name: string; learnerIds: string | null }[],
@@ -170,12 +171,23 @@ async function contents(db: Database, current: Member, section: { id: string; co
   ];
   const assignedSets = (await db.prepare("SELECT activity_id AS activityId, set_id AS setId FROM section_activity_sets WHERE group_id=? AND kind='assessment'").bind(section.id).all<{ activityId: string; setId: string }>()).results;
   const setOf = new Map(assignedSets.map(row => [row.activityId, row.setId]));
-  const activities: AssessmentActivity[] = activityRows.map(row => ({
+  const visible = await effectiveActivityIds(db, organizationId, section.courseId, section.id);
+  const kept = activityRows.filter(row => visible ? visible.has(row.id) : row.groupId === null);
+  const origins = new Map<string, { freedom: "core" | "own" | "replaces"; replacedTitle: string | null }>();
+  if (visible) {
+    const loaded = await loadSection(db, organizationId, section.courseId, section.id);
+    if ("plan" in loaded) for (const activity of loaded.plan.activities) {
+      const freedom = activity.replaces ? "replaces" as const : activity.origin === "section" ? "own" as const : activity.core ? "core" as const : null;
+      if (freedom) origins.set(activity.id, { freedom, replacedTitle: activity.replacedTitle });
+    }
+  }
+  const activities: AssessmentActivity[] = kept.map(row => ({
     id: row.id, periodId: row.periodId, position: row.position, title: row.title, kind: row.kind, points: row.points, dueOn: row.dueOn,
     categoryId: row.categoryId, grading: row.grading, extra: !!row.extra, retakeOf: row.retakeOf || null,
     ...(row.rubric ? { rubric: JSON.parse(row.rubric) } : {}),
     ...(row.panel ? { panel: JSON.parse(row.panel) } : {}),
     ...(row.groupMode === "group" ? { groupMode: "group" as const, workGroupSetId: setOf.get(row.id) ?? null, peerMin: row.peerMin, peerMax: row.peerMax } : {}),
+    ...(origins.get(row.id) || {}),
   }));
   const grouped = new Set(activities.filter(activity => activity.groupMode === "group").map(activity => activity.id));
   const evaluators: AssessmentEvaluator[] = evaluatorRows.map(row => ({ ...row, chair: !!row.chair }));
@@ -442,7 +454,7 @@ export async function grades(path: string, method: string, input: unknown, url: 
   if (typeof changes === "string") return reply({ error: changes }, 400);
   const [learnerRows, activityRows, gradeRows, scoreRows, storedMarkRows, evaluatorIds] = await db.batch([
     db.prepare("SELECT id FROM group_learners WHERE group_id=? AND organization_id=? AND status='active'").bind(groupId, current.organizationId),
-    db.prepare("SELECT a.id,a.period_id AS periodId,a.title,a.points,a.category_id AS categoryId,a.grading,a.extra,a.retake_of AS retakeOf,a.rubric,a.panel FROM assessment_activities a JOIN academic_periods p ON p.id=a.period_id WHERE a.course_id=? AND a.organization_id=? AND p.year_id=?").bind(section.courseId, current.organizationId, year.id),
+    db.prepare("SELECT a.id,a.period_id AS periodId,a.title,a.points,a.category_id AS categoryId,a.grading,a.extra,a.retake_of AS retakeOf,a.rubric,a.panel,a.group_id AS groupId FROM assessment_activities a JOIN academic_periods p ON p.id=a.period_id WHERE a.course_id=? AND a.organization_id=? AND p.year_id=? AND (a.group_id IS NULL OR a.group_id=?)").bind(section.courseId, current.organizationId, year.id, groupId),
     db.prepare("SELECT g.learner_id AS learnerId,g.period_id AS periodId,g.score FROM section_grades g JOIN academic_periods p ON p.id=g.period_id WHERE g.group_id=? AND g.organization_id=? AND p.year_id=?").bind(groupId, current.organizationId, year.id),
     db.prepare("SELECT s.activity_id AS activityId,s.learner_id AS learnerId,s.points FROM assessment_scores s WHERE s.group_id=? AND s.organization_id=?").bind(groupId, current.organizationId),
     db.prepare("SELECT activity_id AS activityId,learner_id AS learnerId,evaluator_id AS evaluatorId,mark FROM assessment_marks WHERE group_id=? AND organization_id=?").bind(groupId, current.organizationId),
@@ -451,8 +463,10 @@ export async function grades(path: string, method: string, input: unknown, url: 
     { id: string }[], StoredActivity[], GradeEntry[], AssessmentScore[], StoredMark[], { activityId: string; userId: string }[],
   ];
   const learners = new Set(learnerRows.map(row => row.id));
-  const activities = new Map(activityRows.map(row => [row.id, row]));
-  const planned = new Set(activityRows.map(row => row.periodId));
+  const visibleIds = await effectiveActivityIds(db, current.organizationId, section.courseId, groupId);
+  const plannedRows = (activityRows as (StoredActivity & { groupId: string | null })[]).filter(row => visibleIds ? visibleIds.has(row.id) : row.groupId === null);
+  const activities = new Map(plannedRows.map(row => [row.id, row]));
+  const planned = new Set(plannedRows.map(row => row.periodId));
   const { scheme } = await policyOf(db, current.organizationId, section.courseId);
   const all = [...changes.grades, ...changes.scores, ...changes.marks, ...changes.comments];
   if (all.some(change => !learners.has(change.learnerId))) return reply({ error: "Revisa las notas: un estudiante no está en la lista de la sección." }, 400);
@@ -569,8 +583,8 @@ async function recomputeOne(db: Database, current: Member, section: SectionRow, 
   const [periodRows, activityRows, scoreRows, markRows, evaluatorRows] = await db.batch([
     db.prepare(`SELECT p.id,p.position,p.weight FROM academic_periods p JOIN academic_years y ON y.id=p.year_id
       WHERE y.status='current' AND p.organization_id=? AND p.year_id=(SELECT year_id FROM academic_periods WHERE id=?) ORDER BY p.position`).bind(current.organizationId, periodId),
-    db.prepare(`SELECT a.id,a.period_id AS periodId,a.title,a.points,a.category_id AS categoryId,a.grading,a.extra,a.retake_of AS retakeOf,a.rubric,a.panel
-      FROM assessment_activities a JOIN academic_periods p ON p.id=a.period_id WHERE a.course_id=? AND p.year_id=(SELECT year_id FROM academic_periods WHERE id=?)`).bind(section.courseId, periodId),
+    db.prepare(`SELECT a.id,a.period_id AS periodId,a.title,a.points,a.category_id AS categoryId,a.grading,a.extra,a.retake_of AS retakeOf,a.rubric,a.panel,a.group_id AS groupId
+      FROM assessment_activities a JOIN academic_periods p ON p.id=a.period_id WHERE a.course_id=? AND p.year_id=(SELECT year_id FROM academic_periods WHERE id=?) AND (a.group_id IS NULL OR a.group_id=?)`).bind(section.courseId, periodId, section.id),
     db.prepare("SELECT activity_id AS activityId,learner_id AS learnerId,points FROM assessment_scores WHERE group_id=? AND learner_id=? AND organization_id=?").bind(section.id, learnerId, current.organizationId),
     db.prepare("SELECT activity_id AS activityId,learner_id AS learnerId,evaluator_id AS evaluatorId,mark FROM assessment_marks WHERE group_id=? AND learner_id=? AND organization_id=?").bind(section.id, learnerId, current.organizationId),
     db.prepare("SELECT e.activity_id AS activityId,e.user_id AS userId FROM assessment_evaluators e JOIN assessment_activities a ON a.id=e.activity_id WHERE a.course_id=?").bind(section.courseId),
@@ -578,8 +592,10 @@ async function recomputeOne(db: Database, current: Member, section: SectionRow, 
     { id: string; position: number; weight: number }[], StoredActivity[], AssessmentScore[], StoredMark[], { activityId: string; userId: string }[],
   ];
   const { scheme } = await policyOf(db, current.organizationId, section.courseId);
+  const visibleIds = await effectiveActivityIds(db, current.organizationId, section.courseId, section.id);
+  const plannedRows = (activityRows as (StoredActivity & { groupId: string | null })[]).filter(row => visibleIds ? visibleIds.has(row.id) : row.groupId === null);
   const scoreMap = new Map(scoreRows.map(row => [`${row.learnerId}:${row.activityId}`, row.points]));
-  const calculated = learnerResult(scheme, activityRows.map(storedActivity), marksFor(learnerId, activityRows, scoreMap, markRows, evaluatorRows), periodRows);
+  const calculated = learnerResult(scheme, plannedRows.map(storedActivity), marksFor(learnerId, plannedRows, scoreMap, markRows, evaluatorRows), periodRows);
   const raw = calculated.periods.find(item => item.periodId === periodId)?.score ?? null;
   const score = raw === null ? null : Math.min(100, Math.round((raw + Number.EPSILON) * 10) / 10);
   if (score === null) await db.prepare("DELETE FROM section_grades WHERE learner_id=? AND period_id=? AND group_id=? AND organization_id=?").bind(learnerId, periodId, section.id, current.organizationId).run();
@@ -667,7 +683,9 @@ async function submit(db: Database, current: Member, allowed: Access, period: Op
   const { section } = allowed;
   if (period.lockedAt) return reply({ error: `Las notas de «${period.name}» ya están cerradas.` }, 409);
   if (period.review === "submitted") return reply({ error: `«${period.name}» ya está entregado a revisión.` }, 409);
-  const plan = (await db.prepare("SELECT points FROM assessment_activities WHERE course_id=? AND period_id=? AND extra=0 AND retake_of IS NULL").bind(section.courseId, period.id).all<{ points: number }>()).results;
+  const planRows = (await db.prepare("SELECT id,points,group_id AS groupId FROM assessment_activities WHERE course_id=? AND period_id=? AND extra=0 AND retake_of IS NULL AND (group_id IS NULL OR group_id=?)").bind(section.courseId, period.id, section.id).all<{ id: string; points: number; groupId: string | null }>()).results;
+  const visibleIds = await effectiveActivityIds(db, current.organizationId, section.courseId, section.id);
+  const plan = planRows.filter(row => visibleIds ? visibleIds.has(row.id) : row.groupId === null);
   const { scheme } = await policyOf(db, current.organizationId, section.courseId);
   if (scheme.method === "points" && plan.length && planTotal(plan) !== 100) return reply({ error: `El plan de evaluación de «${period.name}» suma ${planTotal(plan)} puntos: complétalo a 100 antes de entregarlo.` }, 409);
   const ok = await db.guardedBatch(db.prepare("SELECT 1 FROM academic_periods WHERE id=? AND NOT EXISTS (SELECT 1 FROM section_period_locks WHERE group_id=? AND period_id=?) AND NOT EXISTS (SELECT 1 FROM section_period_reviews WHERE group_id=? AND period_id=? AND status='submitted')").bind(period.id, section.id, period.id, section.id, period.id), [
@@ -702,7 +720,7 @@ async function savePlan(db: Database, current: Member, section: SectionRow, peri
   if (items.some(item => !scheme.categories.some(category => category.id === item.categoryId))) return reply({ error: "Una actividad usa una categoría que no existe en el esquema efectivo." }, 400);
   if (scheme.method === "points" && planTotal(items.filter(item => !item.extra && !item.retakeOf)) > 100) return reply({ error: `El plan suma ${planTotal(items.filter(item => !item.extra && !item.retakeOf))} puntos: no puede pasar de 100.` }, 400);
   const [existing, blocked, manual, highest, marked] = await db.batch([
-    db.prepare("SELECT id,title,points FROM assessment_activities WHERE course_id=? AND period_id=? AND organization_id=?").bind(section.courseId, period.id, current.organizationId),
+    db.prepare("SELECT id,title,points FROM assessment_activities WHERE course_id=? AND period_id=? AND organization_id=? AND group_id IS NULL").bind(section.courseId, period.id, current.organizationId),
     db.prepare(`SELECT g.name FROM course_groups g WHERE g.course_id=? AND g.organization_id=? AND (EXISTS (SELECT 1 FROM section_period_locks l WHERE l.group_id=g.id AND l.period_id=?)
       OR EXISTS (SELECT 1 FROM section_period_reviews r WHERE r.group_id=g.id AND r.period_id=? AND r.status='submitted')) ORDER BY g.name LIMIT 1`).bind(section.courseId, current.organizationId, period.id, period.id),
     db.prepare("SELECT 1 AS found FROM section_grades s JOIN course_groups g ON g.id=s.group_id WHERE g.course_id=? AND s.period_id=? AND s.organization_id=? LIMIT 1").bind(section.courseId, period.id, current.organizationId),
@@ -745,7 +763,7 @@ async function savePlan(db: Database, current: Member, section: SectionRow, peri
     }),
     event(db, current, { action: "updated", targetType: "course", targetId: section.courseId, courseId: section.courseId, summary: `Actualizó el plan de evaluación de «${period.name}» (${items.length === 1 ? "1 actividad" : `${items.length} actividades`}, ${planTotal(items)} puntos)` }),
   ]);
-  const storedSets = (await db.prepare("SELECT id, group_mode AS groupMode, work_group_set_id AS setId FROM assessment_activities WHERE course_id=? AND period_id=? AND organization_id=?").bind(section.courseId, period.id, current.organizationId).all<{ id: string; groupMode: string; setId: string | null }>()).results;
+  const storedSets = (await db.prepare("SELECT id, group_mode AS groupMode, work_group_set_id AS setId FROM assessment_activities WHERE course_id=? AND period_id=? AND organization_id=? AND group_id IS NULL").bind(section.courseId, period.id, current.organizationId).all<{ id: string; groupMode: string; setId: string | null }>()).results;
   const setWrites = [
     ...storedSets.filter(row => row.groupMode !== "group").map(row => db.prepare("DELETE FROM section_activity_sets WHERE activity_id=? AND kind='assessment'").bind(row.id)),
     ...storedSets.filter(row => row.groupMode === "group" && row.setId).map(row => db.prepare("INSERT INTO section_activity_sets(group_id, activity_id, kind, set_id) VALUES (?,?,'assessment',?) ON CONFLICT(group_id, activity_id, kind) DO UPDATE SET set_id=excluded.set_id").bind(section.id, row.id, row.setId)),

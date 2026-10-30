@@ -6,6 +6,7 @@ import { sessionDay } from "../model";
 import { Icon } from "../ui/icons";
 import { EmptyState, ErrorState, Loading, Progress, StatusBadge } from "../ui/primitives";
 import { LearnerEducators } from "./professional";
+import { FreedomChip } from "../ui/freedom";
 
 /** The group's space for learners: next class, its lesson and resources, and earlier classes. Read-only, no account. */
 export function StudentSpace() {
@@ -96,7 +97,7 @@ function SelfPaced({ space, reload, leave }: { space: Space; reload: () => Promi
         <h2 id={`unit-${unit.id}`}>{unit.name}</h2>
         <ol className="student-path">{unit.lessons.map(lesson => <li key={lesson.shareCode} className={lesson.completed ? "is-done" : lesson.opened ? "is-open" : undefined}>
           <span className="path-mark" aria-hidden="true">{lesson.completed ? <Icon name="check" size={14}/> : lesson.opened ? <Icon name="clock" size={14}/> : null}</span>
-          <button type="button" className="link-button" onClick={() => void open(lesson)}>{lesson.title}</button>
+          <button type="button" className="link-button" onClick={() => void open(lesson)}>{lesson.title}</button>{lesson.own && <FreedomChip mark="own"/>}{lesson.core && <FreedomChip mark="core"/>}{lesson.core && <FreedomChip mark="core"/>}{lesson.own && <FreedomChip mark="own"/>}
           {space.learner && <span className="muted small">{lesson.completed ? "Terminada" : lesson.opened ? "En curso" : "Pendiente"}</span>}
         </li>)}</ol>
       </section>)}
@@ -110,7 +111,7 @@ function ClassCard({ item, today, headingId, big }: { item: StudentClass; today:
   const Heading = big ? "h2" : "h3";
   return <>
     <Heading id={headingId}>{item.sessionDate === today ? "Hoy" : sessionDay(item.sessionDate)}{item.startsAt ? `, ${item.startsAt}` : ""}{item.status === "in_progress" && <> <StatusBadge tone="warning">En curso</StatusBadge></>}</Heading>
-    {item.lessons.length ? <p className="button-row">{item.lessons.map((lesson, index) => <Link key={lesson.shareCode} className={big && !index ? "button primary" : "button secondary small"} href={`/aprender/${lesson.shareCode}`}><Icon name="play" size={16}/>Abrir lección: {lesson.title}</Link>)}</p> : big && <p className="muted">Las lecciones de esta clase aún no están disponibles.</p>}
+    {item.lessons.length ? <p className="button-row">{item.lessons.map((lesson, index) => <Link key={lesson.shareCode} className={big && !index ? "button primary" : "button secondary small"} href={`/aprender/${lesson.shareCode}`}><Icon name="play" size={16}/>Abrir lección: {lesson.title}{lesson.core && <FreedomChip mark="core"/>}{lesson.own && <FreedomChip mark="own"/>}</Link>)}</p> : big && <p className="muted">Las lecciones de esta clase aún no están disponibles.</p>}
     {big && item.resources.length > 0 && <ul className="student-resources" aria-label="Recursos de la clase">{item.resources.map(resource => <li key={resource.id}><ResourceLink resource={resource}/></li>)}</ul>}
   </>;
 }

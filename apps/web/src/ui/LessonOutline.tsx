@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import type { ModuleNoun } from "@happy-learners/domain";
 import type { FormEvent } from "react";
 import type { LearningUnit, Lesson } from "@happy-learners/contracts";
@@ -7,6 +8,8 @@ import { hueAt, lessonState, lessonStateLabel, plural } from "../model";
 import type { LessonState } from "../model";
 import { Icon } from "./icons";
 import { Menu } from "./Menu";
+import type { MenuItem } from "./Menu";
+import { FreedomChip } from "./freedom";
 import { SortHandle } from "./Sortable";
 import { StatusBadge } from "./primitives";
 import type { Tone } from "./primitives";
@@ -57,9 +60,13 @@ export type OutlineActions = {
 };
 
 /** writable: the team creates, renames and duplicates lessons. organize: the lead also orders and archives modules and lessons. */
-export function LessonOutline({ courseId, units, lessons, writable, organize, showArchived, actions, expanded, setExpanded, focusUnit, noun }: {
+export function LessonOutline({ courseId, units, lessons, writable, organize, showArchived, actions, expanded, setExpanded, focusUnit, noun, core, sectionPlan }: {
   courseId: string; noun: ModuleNoun; units: LearningUnit[]; lessons: Lesson[]; writable: boolean; organize: boolean; showArchived: boolean; actions: OutlineActions;
   expanded: Set<string>; setExpanded: (ids: Set<string>) => void; focusUnit?: string;
+  /** Course lead marks the core. Absent when the course is the same for every section. */
+  core?: { isCore: (lesson: Lesson) => boolean; markLesson?: (lesson: Lesson, core: boolean) => void; markUnit?: (unit: LearningUnit, core: boolean) => void };
+  /** A section's own plan: chips, hide and show, without the course's archive actions. */
+  sectionPlan?: { chip: (lesson: Lesson) => ReactNode; lessonItems: (lesson: Lesson) => MenuItem[]; hidden: (unitId: string) => Lesson[]; show: (lesson: Lesson) => void; unitChip?: (unit: LearningUnit) => ReactNode; unitItems?: (unit: LearningUnit) => MenuItem[] };
 }) {
   const [renaming, setRenaming] = useState<string | null>(null), [creating, setCreating] = useState<string | null>(null);
   const visibleUnits = units.filter(unit => showArchived || unit.status === "active");
@@ -81,15 +88,19 @@ export function LessonOutline({ courseId, units, lessons, writable, organize, sh
           {unit.objective && open && <p>{unit.objective}</p>}
         </div>
         <span className="outline-count">{visible.length ? `${published} de ${plural(visible.length, "lección publicada", "lecciones publicadas")}` : "Sin lecciones"}</span>
+        {sectionPlan?.unitChip?.(unit)}
         {archived && <StatusBadge>Archivada</StatusBadge>}
-        {organize && <Menu label={`Acciones ${noun.ofThe} ${unit.name}`} items={[
-          ...(!archived ? [{ label: "Renombrar", icon: "edit" as const, onSelect: () => setRenaming(unit.id) }, { label: "Editar nombre y objetivo", icon: "text" as const, onSelect: () => actions.editUnit(unit) }, { label: "Nueva lección", icon: "plus" as const, onSelect: () => { setExpanded(new Set([...expanded, unit.id])); setCreating(unit.id); } }] : []),
-          { label: "Mover arriba", icon: "chevronUp", onSelect: () => actions.moveUnit(unit, position - 1), disabled: position === 0 },
-          { label: "Mover abajo", icon: "chevronDown", onSelect: () => actions.moveUnit(unit, position + 1), disabled: position === units.length - 1 },
-          ...(!archived && actions.proposeForUnit ? ["separator" as const, { label: "Proponer lecciones con IA", icon: "sparkles" as const, onSelect: () => actions.proposeForUnit!(unit) }] : []),
-          "separator",
-          { label: archived ? `Restaurar ${noun.one}` : `Archivar ${noun.one}`, icon: "archive", onSelect: () => actions.archiveUnit(unit), danger: !archived },
+        {(core?.markUnit || (organize && !sectionPlan)) && <Menu label={`Acciones ${noun.ofThe} ${unit.name}`} items={[
+          ...(organize && !archived && !sectionPlan ? [{ label: "Renombrar", icon: "edit" as const, onSelect: () => setRenaming(unit.id) }, { label: "Editar nombre y objetivo", icon: "text" as const, onSelect: () => actions.editUnit(unit) }, { label: "Nueva lección", icon: "plus" as const, onSelect: () => { setExpanded(new Set([...expanded, unit.id])); setCreating(unit.id); } }] : []),
+          ...(organize && !sectionPlan ? [
+            { label: "Mover arriba", icon: "chevronUp" as const, onSelect: () => actions.moveUnit(unit, position - 1), disabled: position === 0 },
+            { label: "Mover abajo", icon: "chevronDown" as const, onSelect: () => actions.moveUnit(unit, position + 1), disabled: position === units.length - 1 },
+          ] : []),
+          ...(core?.markUnit && !archived ? [{ label: "Marcar toda la unidad como núcleo", onSelect: () => core.markUnit!(unit, true) }, { label: "Quitar la unidad del núcleo", onSelect: () => core.markUnit!(unit, false) }] : []),
+          ...(!archived && actions.proposeForUnit && !sectionPlan ? ["separator" as const, { label: "Proponer lecciones con IA", icon: "sparkles" as const, onSelect: () => actions.proposeForUnit!(unit) }] : []),
+          ...(organize && !sectionPlan ? ["separator" as const, { label: archived ? `Restaurar ${noun.one}` : `Archivar ${noun.one}`, icon: "archive" as const, onSelect: () => actions.archiveUnit(unit), danger: !archived }] : []),
         ]}/>}
+        {sectionPlan?.unitItems && sectionPlan.unitItems(unit).length > 0 && <Menu label={`Acciones ${noun.ofThe} ${unit.name}`} items={sectionPlan.unitItems(unit)}/>}
       </div>
       {open && <div id={`lecciones-${unit.id}`} className="outline-lessons">
         {visible.length ? <ol>{visible.map(lesson => {
@@ -103,23 +114,30 @@ export function LessonOutline({ courseId, units, lessons, writable, organize, sh
                 : <Link href={href} onDoubleClick={event => { if (writable && !lessonArchived) { event.preventDefault(); setRenaming(lesson.id); } }}>{lesson.title}</Link>}
               <small>{plural(lesson.activities.length, "actividad", "actividades")} · {lesson.duration} min</small>
             </div>
+            {sectionPlan ? sectionPlan.chip(lesson) : core?.isCore(lesson) && <FreedomChip mark="core"/>}
             <LessonBadge lesson={lesson}/>
             <Menu label={`Acciones de la lección ${lesson.title}`} items={[
               { label: writable ? "Editar" : "Abrir", icon: "edit", onSelect: () => actions.openLesson(lesson) },
-              { label: "Vista previa", icon: "eye", onSelect: () => actions.previewLesson(lesson) },
-              ...(writable && !lessonArchived ? [{ label: "Renombrar", icon: "text" as const, onSelect: () => setRenaming(lesson.id) }, { label: "Duplicar", icon: "copy" as const, onSelect: () => actions.duplicateLesson(lesson) }] : []),
-              ...(organize ? [
+              ...(!sectionPlan ? [{ label: "Vista previa", icon: "eye" as const, onSelect: () => actions.previewLesson(lesson) }] : []),
+              ...(writable && !lessonArchived && !sectionPlan ? [{ label: "Renombrar", icon: "text" as const, onSelect: () => setRenaming(lesson.id) }, { label: "Duplicar", icon: "copy" as const, onSelect: () => actions.duplicateLesson(lesson) }] : []),
+              ...(organize && !sectionPlan ? [
                 { label: "Mover arriba", icon: "chevronUp" as const, onSelect: () => actions.moveLesson(lesson, order - 1), disabled: order === 0 },
                 { label: "Mover abajo", icon: "chevronDown" as const, onSelect: () => actions.moveLesson(lesson, order + 1), disabled: order === all.length - 1 },
                 "separator" as const,
                 { label: lessonArchived ? "Restaurar lección" : "Archivar lección", icon: "archive" as const, onSelect: () => actions.archiveLesson(lesson), danger: !lessonArchived },
               ] : []),
+              ...(core?.markLesson ? [{ label: core.isCore(lesson) ? "Quitar del núcleo" : "Marcar como núcleo", onSelect: () => core.markLesson!(lesson, !core.isCore(lesson)) }] : []),
+              ...(sectionPlan ? sectionPlan.lessonItems(lesson) : []),
             ]}/>
           </li>;
         })}</ol> : <p className="outline-empty">{noun.This} aún no tiene lecciones.</p>}
-        {writable && !archived && (creating === unit.id
+        {writable && !archived && !sectionPlan && (creating === unit.id
           ? <NewLessonForm unit={unit} onCancel={() => setCreating(null)} onCreate={async (title, objective) => { const done = await actions.createLesson(unit, title, objective); if (done) setCreating(null); return done; }}/>
           : <button type="button" className="button ghost add-lesson" onClick={() => setCreating(unit.id)}><Icon name="plus" size={18}/><span>Nueva lección<span className="sr-only"> en {unit.name}</span></span></button>)}
+        {sectionPlan && sectionPlan.hidden(unit.id).length > 0 && <details className="freedom-hidden">
+          <summary>Ocultas en esta sección ({sectionPlan.hidden(unit.id).length})</summary>
+          <ul className="freedom-list">{sectionPlan.hidden(unit.id).map(lesson => <li key={lesson.id} className="freedom-row"><span className="freedom-title">{lesson.title}</span><FreedomChip mark="hidden"/>{writable && <button type="button" className="button ghost small" onClick={() => sectionPlan.show(lesson)}>Mostrar</button>}</li>)}</ul>
+        </details>}
       </div>}
     </li>;
   })}</ol>;

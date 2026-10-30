@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import "./theme.css";
 import "./style.css";
+import "./ui/freedom.css";
 import { installLight } from "./fluent/light";
 import { restoreAppearance } from "./appearance";
 
