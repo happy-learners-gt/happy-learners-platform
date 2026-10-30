@@ -10,17 +10,20 @@ import { Drawer, Modal, useFeedback } from "../../ui/feedback";
 import { Icon } from "../../ui/icons";
 import { Menu } from "../../ui/Menu";
 import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section } from "../../ui/primitives";
+import { FreedomChip } from "../../ui/freedom";
 import { Tabs } from "../../ui/Tabs";
+import { SectionProposals } from "./Content";
 import { useCourse } from "./context";
 
 type Person = { userId: string; name: string; chair: boolean };
-type Activity = {
+export type Activity = {
   id: string; periodId: string; title: string; kind: AssessmentKind; points: number; dueOn: string | null;
   categoryId: string; grading: "points" | "rubric" | "pass-fail" | "level" | "panel"; extra: boolean; retakeOf: string | null;
   rubric?: Rubric; panel?: { combine: "average" | "median" | "majority" | "chair"; chair?: string };
   groupMode: "individual" | "group"; peerMin: number; peerMax: number; graded: boolean; maxScore: number | null; evaluators: Person[];
+  isCore?: boolean;
 };
-type Period = {
+export type Period = {
   id: string; name: string; position: number; weight: number;
   status: { state: "complete" | "missing" | "weights"; label: string; points: number; maximum: number | null };
   activities: Activity[];
@@ -48,7 +51,7 @@ const slug = (value: string, fallback: string) => value.normalize("NFD").replace
 
 /** Course › Evaluación: how every section of this course is assessed. Sections organize groups and record grades. */
 export function Assessment() {
-  const { course } = useCourse();
+  const { course, settings, publisher } = useCourse();
   const { member } = useSession();
   const { toast, confirm } = useFeedback();
   const [data, setData] = useState<Payload | null>(null), [error, setError] = useState(""), [year, setYear] = useState("");
@@ -70,7 +73,20 @@ export function Assessment() {
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
   if (!data) return <>{header}<Loading label="Abriendo la evaluación…" lines={6}/></>;
   const period = data.periods.find(item => item.id === periodId) || data.periods[0];
+  const adapt = settings.sectionFreedom !== "shared";
   const statusOf = (item: Period) => assessmentPeriodStatus(data.scheme, item.activities);
+  const nucleus = (item: Period) => {
+    const corePoints = item.activities.filter(activity => activity.isCore !== false && !activity.extra).reduce((sum, activity) => sum + activity.points, 0);
+    const total = item.activities.filter(activity => !activity.extra).reduce((sum, activity) => sum + activity.points, 0) || 100;
+    return `Núcleo: ${corePoints} de ${total} puntos`;
+  };
+  async function markCore(activity: Activity, core: boolean) {
+    try {
+      const result = await api<{ message: string }>(`/courses/${course.id}/core`, "PUT", { activities: [{ id: activity.id, core }] });
+      await load();
+      toast({ message: result.message || (core ? "Quedó en el núcleo." : "Salió del núcleo.") });
+    } catch (cause) { toast({ tone: "error", message: message(cause) }); }
+  }
   // The tab says the period's name and a short status; the full status reads above the categories. No sr-only text
   // here: absolutely positioned helpers inside the scrolling tab list made the page jump on mobile.
   const badge = (item: Period) => { const status = statusOf(item); return <span className={`tab-badge${status.state === "complete" ? " is-done" : ""}`} aria-label={status.state === "complete" ? "completo" : undefined}>{status.state === "complete" ? "✓" : status.tab && status.tab.length <= 16 ? status.tab : "Pendiente"}</span>; };
@@ -93,7 +109,9 @@ export function Assessment() {
             { label: "Copiar de otro periodo", icon: "copy", onSelect: () => setCopyOpen(true) },
           ]}/> : undefined}>{null}</Tabs>
       </div>
-      <p className="assessment-status" role="status">{statusOf(period).line}</p>
+      {adapt && <p className="freedom-notice"><Icon name="info" size={18}/><span>Las secciones pueden adaptar lo que no es núcleo. <Link href={`${base}/secciones?vista=diferencias`}>Ver diferencias entre secciones</Link></span></p>}
+      {adapt && data.canEdit && <SectionProposals courseId={course.id} kinds={["activity"]} onChanged={() => void load()}/>}
+      <p className="assessment-status" role="status">{statusOf(period).line}{adapt ? ` · ${nucleus(period)}` : ""}</p>
       <div className="assessment-categories">{data.scheme.categories.map(category => {
         const rows = period.activities.filter(item => item.categoryId === category.id);
         return <article key={category.id} className="assessment-category" aria-labelledby={`category-${category.id}`}>
@@ -103,12 +121,13 @@ export function Assessment() {
           </header>
           {rows.length ? <ul className="assessment-activities">{rows.map(activity => <li key={activity.id}>
             <Icon name={activity.groupMode === "group" ? "team" : "list"} size={18}/>
-            <span className="assessment-activity-title">{activity.title}{activity.graded && <span className="assessment-lock" title="Tiene notas">🔒<span className="sr-only"> Tiene notas</span></span>}</span>
+            <span className="assessment-activity-title">{activity.title}{adapt && activity.isCore !== false && <> <FreedomChip mark="core"/></>}{activity.graded && <span className="assessment-lock" title="Tiene notas">🔒<span className="sr-only"> Tiene notas</span></span>}</span>
             <span className="muted">{activity.points} pts</span>
             <span className="muted">{activity.dueOn ? sessionDay(activity.dueOn, "short") : "Sin fecha"}</span>
             <span>{howGraded(activity)}</span>
             {data.canEdit && <Menu label={`Acciones de ${activity.title}`} items={[
               { label: "Editar", icon: "edit", onSelect: () => { setCategoryId(activity.categoryId); setEditing(activity); } },
+              ...(publisher && adapt ? [{ label: activity.isCore === false ? "Marcar como núcleo" : "Quitar del núcleo", onSelect: () => void markCore(activity, activity.isCore === false) }] : []),
               ...(activity.graded ? [{ label: gradedNote(activity.title), disabled: true, onSelect: () => undefined } as const] : []),
               "separator" as const,
               { label: "Quitar", icon: "archive", danger: true, disabled: activity.graded, onSelect: () => void remove(activity) },
@@ -141,9 +160,13 @@ function shortName(name: string) {
 }
 const gradedNote = (title: string) => `«${title}» ya tiene notas: puedes cambiar su nombre y su fecha, no su forma de calificar ni sus puntos por debajo de una nota dada.`;
 
-function ActivityPanel({ courseId, period, categoryId, activity, scheme, team, onClose, onSaved }: {
+export function ActivityPanel({ courseId, period, categoryId, activity, scheme, team, onClose, onSaved, persist, fixed, note }: {
   courseId: string; period: Period; categoryId: string; activity: Activity | null; scheme: GradingScheme; team: { id: string; name: string }[];
   onClose: () => void; onSaved: (title: string) => Promise<void>;
+  /** Saves a section's own activity instead of one of the course. */
+  persist?: (body: Record<string, unknown>) => Promise<void>;
+  fixed?: { category?: boolean; points?: boolean };
+  note?: string;
 }) {
   const category = scheme.categories.find(item => item.id === (activity?.categoryId || categoryId)) || scheme.categories[0];
   const [draft, setDraft] = useState<Draft>(() => activity ? {
@@ -194,19 +217,22 @@ function ActivityPanel({ courseId, period, categoryId, activity, scheme, team, o
     const rubric = draft.grading === "rubric" || (draft.grading === "panel" && draft.rubric.criteria.some(criterion => criterion.levels.some(level => level.description))) ? {
       criteria: draft.rubric.criteria.map(criterion => ({ ...criterion, levels: criterion.levels.map(level => ({ ...level, ...(level.description ? { description: level.description } : {}) })) })),
     } : undefined;
+    const body = {
+      periodId: period.id, title: draft.title.trim(), kind: draft.kind, categoryId: draft.categoryId, points: Number(draft.points.replace(",", ".")), dueOn: draft.dueOn || null,
+      grading: draft.grading, ...(rubric ? { rubric } : {}), ...(draft.grading === "panel" ? { panel: { combine: draft.combine }, evaluators: draft.evaluators } : {}),
+      groupMode: draft.groupMode, ...(draft.groupMode === "group" && draft.peer ? { peerMin: Number(draft.peerMin.replace(",", ".")), peerMax: Number(draft.peerMax.replace(",", ".")) } : {}),
+      extra: draft.extra, retakeOf: draft.retakeOf || null,
+    };
     try {
-      await api(`/courses/${courseId}/assessment/activities${activity ? `/${activity.id}` : ""}`, activity ? "PUT" : "POST", {
-        periodId: period.id, title: draft.title.trim(), kind: draft.kind, categoryId: draft.categoryId, points: Number(draft.points.replace(",", ".")), dueOn: draft.dueOn || null,
-        grading: draft.grading, ...(rubric ? { rubric } : {}), ...(draft.grading === "panel" ? { panel: { combine: draft.combine }, evaluators: draft.evaluators } : {}),
-        groupMode: draft.groupMode, ...(draft.groupMode === "group" && draft.peer ? { peerMin: Number(draft.peerMin.replace(",", ".")), peerMax: Number(draft.peerMax.replace(",", ".")) } : {}),
-        extra: draft.extra, retakeOf: draft.retakeOf || null,
-      });
+      if (persist) await persist(body);
+      else await api(`/courses/${courseId}/assessment/activities${activity ? `/${activity.id}` : ""}`, activity ? "PUT" : "POST", body);
       await onSaved(draft.title.trim());
     } catch (cause) { setError(message(cause)); setBusy(false); }
   }
   return <Drawer wide title={activity ? `Editar ${activity.title}` : `Nueva actividad en ${category?.label || "el periodo"}`} onClose={onClose}>
     <form className="assessment-panel" onSubmit={submit}>
       <div className="assessment-panel-body">
+      {note && <p className="freedom-note" role="status">{note}</p>}
       {locked && <p className="notice" role="status"><Icon name="info" size={18}/>{gradedNote(activity!.title)}</p>}
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
       <section className="assessment-step" aria-labelledby="activity-step-what">
@@ -215,10 +241,10 @@ function ActivityPanel({ courseId, period, categoryId, activity, scheme, team, o
           <Field label="Nombre"><input required aria-label="Nombre" value={draft.title} onChange={event => set("title", event.target.value)} data-autofocus/></Field>
           <div className="assessment-what-row">
             <Field label="Tipo"><select aria-label="Tipo" disabled={locked} value={draft.kind} onChange={event => set("kind", event.target.value as AssessmentKind)}>{assessmentKinds.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
-            <Field label="Categoría"><select aria-label="Categoría" disabled={locked} value={draft.categoryId} onChange={event => set("categoryId", event.target.value)}>{scheme.categories.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field>
+            <Field label="Categoría"><select aria-label="Categoría" disabled={locked || fixed?.category} value={draft.categoryId} onChange={event => set("categoryId", event.target.value)}>{scheme.categories.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field>
           </div>
           <div className="assessment-what-row">
-            <Field label="Puntos"><input inputMode="decimal" aria-label="Puntos" disabled={locked} value={draft.points} onChange={event => set("points", event.target.value)}/></Field>
+            <Field label="Puntos"><input inputMode="decimal" aria-label="Puntos" disabled={locked || fixed?.points} value={draft.points} onChange={event => set("points", event.target.value)}/></Field>
             <Field label="Fecha" optional><input type="date" aria-label="Fecha" value={draft.dueOn} onChange={event => set("dueOn", event.target.value)}/></Field>
           </div>
         </div>

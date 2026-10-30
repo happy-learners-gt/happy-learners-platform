@@ -12,7 +12,7 @@ import { Button, EmptyState, Field, Section } from "../../ui/primitives";
 type Formed = { name: string; learnerIds: string[] };
 type StoredGroup = Formed & { id: string };
 type UsedIn = { kind: "lesson" | "assessment"; activityId: string; title: string };
-export type GroupActivityRow = UsedIn & { lessonId?: string; detail: string; setId: string | null; workGroupIds: string[]; grouping?: string };
+export type GroupActivityRow = UsedIn & { lessonId?: string; detail: string; setId: string | null; workGroupIds: string[]; grouping?: string; own?: boolean };
 type GroupSet = {
   id: string; name: string; sessionId: string | null; graded?: boolean; rules: GroupRules;
   groups: StoredGroup[]; unmet?: UnmetConstraint[]; usedIn?: UsedIn[];

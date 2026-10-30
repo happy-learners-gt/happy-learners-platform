@@ -4,6 +4,7 @@ import type { Database } from "./storage";
 import { scopedCourses } from "./permissions";
 import { event } from "./team";
 import { sectionSetName, sectionWorkGroups } from "./workgroups";
+import { effectiveActivityIds } from "./freedom-plan";
 
 /**
  * Group sets of a section (lote 3a):
@@ -138,15 +139,17 @@ async function list(db: Database, current: Member, section: Section) {
   const lessons = await sectionWorkGroups(db, section.courseId, section.id);
   const links = (await db.prepare("SELECT activity_id AS activityId, kind, set_id AS setId FROM section_activity_sets WHERE group_id=?").bind(section.id).all<{ activityId: string; kind: string; setId: string }>()).results;
   const groupSet = new Map((await db.prepare("SELECT id, set_id AS setId FROM work_groups WHERE group_id=?").bind(section.id).all<{ id: string; setId: string | null }>()).results.map(row => [row.id, row.setId]));
-  const assessments = (await db.prepare(`SELECT a.id, a.title, p.name AS periodName FROM assessment_activities a JOIN academic_periods p ON p.id=a.period_id JOIN academic_years y ON y.id=p.year_id
-    WHERE a.course_id=? AND a.organization_id=? AND a.group_mode='group' AND y.status IN ('current','closed') ORDER BY p.starts_on, a.position`).bind(section.courseId, current.organizationId).all<{ id: string; title: string; periodName: string }>()).results;
+  const assessments = (await db.prepare(`SELECT a.id, a.title, a.group_id AS groupId, p.name AS periodName FROM assessment_activities a JOIN academic_periods p ON p.id=a.period_id JOIN academic_years y ON y.id=p.year_id
+    WHERE a.course_id=? AND a.organization_id=? AND a.group_mode='group' AND (a.group_id IS NULL OR a.group_id=?) AND y.status IN ('current','closed') ORDER BY p.starts_on, a.position`).bind(section.courseId, current.organizationId, section.id).all<{ id: string; title: string; periodName: string; groupId: string | null }>()).results;
+  const visible = await effectiveActivityIds(db, current.organizationId, section.courseId, section.id);
+  const shownAssessments = assessments.filter(item => visible ? visible.has(item.id) : !item.groupId);
   const activities = [
     ...lessons.activities.map(item => ({
-      kind: "lesson" as const, activityId: item.activityId, lessonId: item.lessonId, title: item.title, detail: `${item.lessonTitle} · ${item.unitName}`, grouping: item.grouping, workGroupIds: item.workGroupIds,
+      kind: "lesson" as const, activityId: item.activityId, lessonId: item.lessonId, title: item.title, detail: `${item.lessonTitle} · ${item.unitName}`, grouping: item.grouping, workGroupIds: item.workGroupIds, ...(item.own ? { own: true } : {}),
       setId: links.find(link => link.kind === "lesson" && link.activityId === item.activityId)?.setId || item.workGroupIds.map(id => groupSet.get(id)).find(Boolean) || null,
     })),
-    ...assessments.map(item => ({
-      kind: "assessment" as const, activityId: item.id, title: item.title, detail: item.periodName, workGroupIds: [] as string[],
+    ...shownAssessments.map(item => ({
+      kind: "assessment" as const, activityId: item.id, title: item.title, detail: item.periodName, workGroupIds: [] as string[], ...(item.groupId ? { own: true } : {}),
       setId: links.find(link => link.kind === "assessment" && link.activityId === item.id)?.setId || null,
     })),
   ];

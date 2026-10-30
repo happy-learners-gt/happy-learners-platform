@@ -21,6 +21,7 @@ import { useSession } from "../../session";
 import { useWorkspace } from "../../workspace";
 import { formatClock } from "../../regional";
 import { ContractRequiredDialog } from "../my-contracts";
+import { FreedomChip } from "../../ui/freedom";
 
 type Mark = "unmarked" | "present" | "late" | "absent" | "excused";
 type Row = { learnerId: string; displayName: string; status: Mark };
@@ -241,23 +242,35 @@ function FillDialog({ groups, sessions, today, initialGroup, onClose, onDone }: 
 
 /** Picks the lessons of a class, in the order they are worked on: none, one, or several in a long class. */
 function LessonPicker({ value, onChange, current, locked, available }: { value: string[]; onChange: (ids: string[]) => void; current: ClassLesson[]; locked?: boolean; available: number | null }) {
-  const { lessons, units } = useCourse();
+  const { lessons, units, settings } = useCourse();
+  const { section } = useSection();
   const minutesOf = useLessonMinutes();
-  const title = (id: string) => lessons.find(item => item.id === id)?.title || current.find(item => item.id === id)?.title || "Lección";
+  const adapt = settings.sectionFreedom !== "shared";
+  const [planLessons, setPlanLessons] = useState<{ id: string; title: string; unitId: string; mark: "core" | "own" | null }[] | null>(null);
+  useEffect(() => {
+    if (!adapt) { setPlanLessons(null); return; }
+    api<{ lessons: { id: string; title: string; unitId: string; core: boolean; origin: "course" | "section" }[]; details: Record<string, { published: boolean }> }>(`/sections/${section.id}/plan`)
+      .then(plan => setPlanLessons(plan.lessons.filter(item => plan.details[item.id]?.published).map(item => ({ id: item.id, title: item.title, unitId: item.unitId, mark: item.origin === "section" ? "own" as const : item.core ? "core" as const : null }))))
+      .catch(() => setPlanLessons(null));
+  }, [adapt, section.id]);
+  const title = (id: string) => planLessons?.find(item => item.id === id)?.title || lessons.find(item => item.id === id)?.title || current.find(item => item.id === id)?.title || "Lección";
+  const markOf = (id: string) => planLessons?.find(item => item.id === id)?.mark;
   const groups = units.filter(unit => unit.status === "active").sort((a, b) => a.position - b.position)
-    .map(unit => ({ unit, items: lessons.filter(lesson => lesson.courseUnitId === unit.id && lesson.status !== "archived" && !!lesson.revision && !value.includes(lesson.id)).sort((a, b) => (a.position || 0) - (b.position || 0)) }))
+    .map(unit => ({ unit, items: (planLessons
+      ? planLessons.filter(lesson => lesson.unitId === unit.id && !value.includes(lesson.id)).map(lesson => ({ id: lesson.id, title: lesson.title }))
+      : lessons.filter(lesson => lesson.courseUnitId === unit.id && lesson.status !== "archived" && !!lesson.revision && !value.includes(lesson.id)).sort((a, b) => (a.position || 0) - (b.position || 0))) }))
     .filter(group => group.items.length);
   return <fieldset className="lesson-picker">
     <legend>Lecciones <span className="optional">(opcional)</span></legend>
     {value.length ? <ol className="lesson-picker-list sortable-list">{value.map((id, index) => <li key={id}>
       {!locked && value.length > 1 && <SortHandle id={`class-lesson-${id}`} label={`Reordenar «${title(id)}», lección ${index + 1} de ${value.length}`} index={index} count={value.length} onMove={to => onChange(moveItem(value, index, to))}/>}
-      <span className="roster-number" aria-hidden="true">{index + 1}</span><span className="lesson-picker-title">{title(id)}</span>{minutesOf(id) > 0 && <span className="muted small nowrap">{formatMinutes(minutesOf(id))}</span>}
+      <span className="roster-number" aria-hidden="true">{index + 1}</span><span className="lesson-picker-title">{title(id)}{markOf(id) && <> <FreedomChip mark={markOf(id)!}/></>}</span>{minutesOf(id) > 0 && <span className="muted small nowrap">{formatMinutes(minutesOf(id))}</span>}
       {!locked && <button type="button" className="icon-button" onClick={() => onChange(value.filter(item => item !== id))} aria-label={`Quitar «${title(id)}»`}><Icon name="close" size={16}/></button>}
     </li>)}</ol> : <p className="muted small">Sin lecciones: la clase queda en el cronograma y puedes planificarla después.</p>}
     {locked ? <p className="muted small">Una clase impartida conserva las lecciones que trabajó.</p>
       : value.length < maxClassLessons && <label className="select-inline"><span>Agregar lección</span><select value="" onChange={event => event.target.value && onChange([...value, event.target.value])}>
         <option value="">Elige una lección publicada</option>
-        {groups.map(({ unit, items }) => <optgroup key={unit.id} label={unit.name}>{items.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title} · {formatMinutes(lessonMinutes(lesson))}</option>)}</optgroup>)}
+        {groups.map(({ unit, items }) => <optgroup key={unit.id} label={unit.name}>{items.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title}{markOf(lesson.id) === "core" ? " · Núcleo" : markOf(lesson.id) === "own" ? " · Propia de la sección" : ""} · {formatMinutes(minutesOf(lesson.id))}</option>)}</optgroup>)}
       </select></label>}
     <TimeFit load={classLoad(available, value.map(minutesOf))}/>
   </fieldset>;
