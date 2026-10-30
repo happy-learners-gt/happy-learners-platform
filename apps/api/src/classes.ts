@@ -3,6 +3,7 @@ import { acceptsAttendance, breakInput, cancelPlanInput, carryOver, classActions
 import { tokenPattern, tokenPrefix } from "@happy-learners/domain";
 import type { ClassAction } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
+import { studentReadings } from "./resources";
 import { learnerEducatorPhoto, learnerEducators } from "./professional";
 import { materialsFor } from "./courses";
 import { resources } from "./content";
@@ -537,6 +538,10 @@ export async function student(path: string, method: string, input: unknown, requ
   const tokenHash = token ? await digest(token) : "";
   const access = token ? await studentAccess(db, tokenHash) : null;
   if (!access) return reply({ error: "Escribe el código de tu sección para continuar." }, 401, token ? { "Set-Cookie": studentCookie("", request, true) } : {});
+  if (path === "/api/student/readings" || /^\/api\/student\/readings\/reading-[a-z0-9-]+\/mark$/.test(path)) {
+    const answered = await studentReadings(path, method, db, access);
+    if (answered) return answered;
+  }
   const selfPaced = access.pacing === "self-paced";
   if (path === "/api/student/identity" && method === "POST") {
     // A tu ritmo: the student picks their name from the section's list so the section can follow their progress.
