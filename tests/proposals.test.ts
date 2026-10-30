@@ -344,3 +344,30 @@ describe("AI harness on the built Worker (1.4.0)", () => {
     expect(both.prices.map(price => [price.effectiveFrom, price.inputPerMillion])).toEqual([["2026-11-01", 1], ["2026-10-01", 2]]);
   }, 60_000);
 });
+
+// 1.4.1 (docs/design/asistente-ia.md §6c, §6e): improvement and writing go through the harness with the fixture.
+describe("assisted improvement and writing on the built Worker (1.4.1)", () => {
+  it("proposes checked changes to the team's draft, writes texts for a field, and records both", async () => {
+    const admin = await signIn("admin-demo"), educator = await signIn("educador-demo"), other = await signIn("carlos.mejia");
+    const improve = "/lessons/greetings-and-introductions/improve";
+    const weak = { objective: "Saludos", sequence: "start-develop-close", outcomeIds: [], materials: [], activities: [{ id: "a1", title: "Hello", phase: "start", purpose: "explore", grouping: "whole-class", minutes: 10, instructions: "", type: "text" }] };
+    const result = await read<{ review: { score: number }; changes: { id: string; kind: string; field: string | null; activityId: string | null; before: string; after: string; reason: string }[] }>(await as(educator, improve, "POST", weak));
+    expect(result.review.score).toBeLessThan(60);
+    expect(result.changes.find(change => change.kind === "objective")).toMatchObject({ before: "Saludos", reason: "Objetivo: dice qué podrá hacer cada estudiante." });
+    expect(result.changes.find(change => change.field === "instructions")).toMatchObject({ activityId: "a1", before: "", after: "Los estudiantes exploran el tema con una pregunta o un material concreto." });
+    expect(result.changes.every(change => /^change-\d+$/.test(change.id) && change.reason.length > 0)).toBe(true);
+    // Nothing is saved: the lesson keeps its own objective until the editor applies what the person accepts.
+    expect((await read<{ lesson: { objective: string } }>(await as(educator, "/lessons/greetings-and-introductions"))).lesson.objective).not.toBe("Saludos");
+    expect(await errorOf(await as(other, improve, "POST", weak), 403)).toBe("Solo el equipo del curso mejora sus lecciones.");
+    expect(await errorOf(await as(educator, improve, "POST", { objective: 1 }), 400)).toBe("Envía el borrador de la lección: objetivo y actividades.");
+    expect((await as(educator, "/lessons/lesson-que-no-existe/improve", "POST", weak)).status).toBe(404);
+
+    expect(await read(await as(educator, "/ai/write", "POST", { field: "lesson-objective", action: "shorten", text: "Saludar en inglés. Presentarse con su nombre.", courseId: "course-exploradores" }))).toEqual({ text: "Saludar en inglés." });
+    expect(await errorOf(await as(educator, "/ai/write", "POST", { field: "contraseña", action: "draft", text: "" }), 400)).toBe("Ese campo no admite redacción con IA.");
+    expect(await errorOf(await as(other, "/ai/write", "POST", { field: "lesson-objective", action: "draft", text: "", courseId: "course-exploradores" }), 403)).toBe("Este curso no está asignado a tu cuenta.");
+
+    const usage = await read<AiUsageView>(await as(admin, "/organization/ai-usage"));
+    expect(usage.summary.byTask.map(item => item.task)).toEqual(expect.arrayContaining(["lesson-improve", "write"]));
+    expect(usage.recent.find(run => run.task === "lesson-improve")).toMatchObject({ generator: "fixture", status: "ok", courseId: "course-exploradores" });
+  }, 60_000);
+});

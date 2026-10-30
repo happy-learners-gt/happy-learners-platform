@@ -1,5 +1,5 @@
-import { mapPrompt, mapSchema, proposalPrompt, proposalSchema } from "@happy-learners/domain";
-import type { AiRunStatus, AiTokenUsage, BookMapper, LessonDraftGenerator, MapOutput, ProposalOutput } from "@happy-learners/domain";
+import { improvePrompt, improveSchema, mapPrompt, mapSchema, proposalPrompt, proposalSchema, writePrompt, writeSchema } from "@happy-learners/domain";
+import type { AiRunStatus, AiTokenUsage, AiWriter, BookMapper, ImproveOutput, LessonDraftGenerator, LessonImprover, MapOutput, ProposalOutput, WriteOutput } from "@happy-learners/domain";
 
 declare global { interface Env { OPENAI_API_KEY?: string; OPENAI_MODEL?: string; LESSON_MAX_OUTPUT_TOKENS?: string; LESSON_REQUEST_TIMEOUT_MS?: string } }
 
@@ -52,4 +52,12 @@ export function openAiGenerator(settings: Settings, request: typeof fetch = fetc
 /** The book map's check from a language model: which candidate pages work on an indicator, each with a quote. */
 export function openAiMapper(settings: Settings, request: typeof fetch = fetch): BookMapper {
   return { kind: "openai", map: (input, observe) => structured<MapOutput>(settings, request, "book_map", mapSchema, mapPrompt(input), observe) };
+}
+/** Assisted improvement (1.4.1): changes to a lesson, as a checked draft. */
+export function openAiImprover(settings: Settings, request: typeof fetch = fetch): LessonImprover {
+  return { kind: "openai", improve: (input, observe) => structured<ImproveOutput>({ ...settings, maxOutputTokens: Math.min(settings.maxOutputTokens || 8000, 8000), timeoutMs: Math.min(settings.timeoutMs || 60_000, 60_000) }, request, "lesson_improve", improveSchema, improvePrompt(input), observe) };
+}
+/** «Redactar con IA» (1.4.1): a short text, so a short answer and a short wait. */
+export function openAiWriter(settings: Settings, request: typeof fetch = fetch): AiWriter {
+  return { kind: "openai", write: (input, observe) => structured<WriteOutput>({ ...settings, maxOutputTokens: 2000, timeoutMs: Math.min(settings.timeoutMs || 30_000, 30_000) }, request, "write", writeSchema, writePrompt(input), observe) };
 }

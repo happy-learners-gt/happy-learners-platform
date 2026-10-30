@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import type { ClassGroup, Lesson, SequenceTemplate } from "@happy-learners/contracts";
 import { classMinutesOf, lessonReview } from "@happy-learners/domain";
-import type { LessonReview as Review, ReviewContext, ReviewStatus } from "@happy-learners/domain";
-import { api } from "../../api";
-import { Drawer } from "../../ui/feedback";
+import type { ImproveChange, LessonReview as Review, ReviewContext, ReviewStatus } from "@happy-learners/domain";
+import { api, message } from "../../api";
+import { Drawer, useFeedback } from "../../ui/feedback";
 import { Icon } from "../../ui/icons";
 import type { CourseResource } from "./course-resource";
 
@@ -44,14 +44,57 @@ export function QualityChip({ review }: { review: Review }) {
 const statusText: Record<ReviewStatus, string> = { pass: "Cumple", partial: "Cumple en parte", fail: "No cumple", "n/a": "No aplica" };
 const statusIcon: Record<ReviewStatus, "check" | "alert" | "info"> = { pass: "check", partial: "alert", fail: "alert", "n/a": "info" };
 
-export function ReviewPanel({ review, onClose, onGoTo }: { review: Review; onClose: () => void; onGoTo: (activityId: string) => void }) {
+const fieldLabels: Record<NonNullable<ImproveChange["field"]>, string> = { objective: "Objetivo", title: "Título", instructions: "Instrucciones", minutes: "Minutos", purpose: "Propósito", grouping: "Agrupación", phase: "Momento" };
+const valueLabels: Record<string, string> = { explain: "Explicar", explore: "Explorar", practice: "Practicar", assess: "Evaluar", reflect: "Reflexionar", individual: "Individual", pairs: "En parejas", teams: "En equipos", "whole-class": "Toda la clase" };
+const shown = (value: string) => valueLabels[value] || value;
+function changeTitle(change: ImproveChange) {
+  if (change.kind === "objective") return "Objetivo de la lección";
+  if (change.kind === "new-activity") return "Nueva actividad";
+  return `${change.activityTitle || "Actividad"} · ${fieldLabels[change.field!]}`;
+}
+
+/** The improvement as a draft: each change with what it replaces, accepted or discarded one by one (1.4.1). */
+function ImproveDraft({ load, apply }: { load: () => Promise<ImproveChange[]>; apply: (changes: ImproveChange[]) => void }) {
+  const { toast } = useFeedback();
+  const [changes, setChanges] = useState<ImproveChange[] | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  async function ask() {
+    setBusy(true); setError("");
+    try { const proposed = await load(); setChanges(proposed); if (!proposed.length) toast({ message: "La IA no encontró cambios que proponer." }); }
+    catch (cause) { setError(message(cause)); }
+    finally { setBusy(false); }
+  }
+  const accept = (picked: ImproveChange[]) => { apply(picked); setChanges(current => current && current.filter(change => !picked.includes(change))); toast({ message: picked.length === 1 ? "Cambio aplicado al borrador." : `${picked.length} cambios aplicados al borrador.` }); };
+  return <section className="improve-draft" aria-label="Mejora con IA">
+    <header>
+      <div><strong>Mejorar con IA</strong><p className="muted small">Propone cambios para lo que falla. Nada cambia hasta que aceptas; lo aceptado entra en el borrador.</p></div>
+      {!changes?.length && <button type="button" className="button secondary" disabled={busy} onClick={() => void ask()}><Icon name="sparkles" size={16}/>{busy ? "Pensando…" : changes ? "Proponer de nuevo" : "Proponer mejoras"}</button>}
+    </header>
+    {error && <p className="field-error" role="alert">{error}</p>}
+    {changes && changes.length > 0 && <>
+      <ol className="improve-changes">{changes.map(change => <li key={change.id}>
+        <strong>{changeTitle(change)}</strong>
+        {change.kind !== "new-activity" && <p className="improve-before"><span className="sr-only">Antes: </span>{change.before ? shown(change.before) : <em>vacío</em>}</p>}
+        <p className="improve-after"><span className="sr-only">Después: </span>{change.activity ? <>{change.activity.title} · {change.activity.minutes} min · {shown(change.activity.purpose)} · {shown(change.activity.grouping)}<br/>{change.activity.instructions}</> : shown(change.after)}</p>
+        {change.reason && <p className="muted small">{change.reason}</p>}
+        <div className="improve-actions">
+          <button type="button" className="button primary small" onClick={() => accept([change])}>Aceptar<span className="sr-only"> {changeTitle(change)}</span></button>
+          <button type="button" className="button ghost small" onClick={() => setChanges(current => current && current.filter(item => item !== change))}>Descartar<span className="sr-only"> {changeTitle(change)}</span></button>
+        </div>
+      </li>)}</ol>
+      <div className="improve-all"><button type="button" className="button secondary" onClick={() => accept(changes)}>Aceptar todo ({changes.length})</button></div>
+    </>}
+  </section>;
+}
+
+export function ReviewPanel({ review, onClose, onGoTo, improve }: { review: Review; onClose: () => void; onGoTo: (activityId: string) => void; improve?: { load: () => Promise<ImproveChange[]>; apply: (changes: ImproveChange[]) => void } }) {
   const failing = review.checks.filter(item => item.status === "fail" || item.status === "partial");
-  return <Drawer title="Revisión de la lección" onClose={onClose}>
+  return <Drawer title="Revisión de la lección" onClose={onClose} wide={!!improve}>
     <div className={`review-score is-${review.level}`}>
       <strong>{review.score}</strong><span>de 100 · calidad {levelLabel[review.level].toLowerCase()}</span>
     </div>
     <p className="muted">{failing.length ? `${failing.length} ${failing.length === 1 ? "criterio por mejorar" : "criterios por mejorar"}. ` : "Cumple todos los criterios que aplican. "}
       El puntaje sale de reglas fijas: la misma lección siempre obtiene el mismo resultado.</p>
+    {improve && failing.length > 0 && <ImproveDraft load={improve.load} apply={improve.apply}/>}
     <ol className="review-checks">{review.checks.map(item => <li key={item.id} className={`is-${item.status === "n/a" ? "na" : item.status}`}>
       <header>
         <Icon name={statusIcon[item.status]} size={18}/>
