@@ -160,7 +160,7 @@ export function MapStep({ map, path, setMap, canEdit, next, resourceId }: { map:
       { label: "Sin cobertura en el libro", value: summary.uncovered, icon: "alert", hue: "coral" },
     ]}/>
     <p className="muted small">La búsqueda propone páginas por las palabras del indicador y de sus contenidos del CNB. La IA solo acepta una página si cita una frase que de verdad está en ella. Tú confirmas o corriges: escribe páginas como «12, 15-17», o deja vacío si el libro no trata el indicador.</p>
-    {searched && <div className="coverage-scroll" role="region" aria-label="Mapa del libro" tabIndex={0}><table className="coverage-table book-map">
+    {(searched || !canSearch) && <div className="coverage-scroll" role="region" aria-label="Mapa del libro" tabIndex={0}><table className="coverage-table book-map">
       <thead><tr><th scope="col">Indicador</th><th scope="col">Páginas y evidencia</th><th scope="col">Estado</th>{canEdit && <th scope="col">Revisión</th>}</tr></thead>
       <tbody>{map.outcomes.map(row => {
         const draft = drafts[row.outcomeId] ?? row.pages.join(", "), rowBusy = row.aiStatus === "queued" || row.aiStatus === "running";
@@ -198,11 +198,17 @@ function ProposeStep({ data, setData, gaps, covered, canPropose, next, reload }:
   const [picked, setPicked] = useState<Set<string>>(() => new Set(requested.length ? requested : gaps.slice(0, maxProposalItems)));
   const [unitId, setUnitId] = useState(() => data.units.find(unit => unit.id === url.searchParams.get("modulo"))?.id || "plan");
   const [minutes, setMinutes] = useState("45"), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [sources, setSources] = useState<{ id: string; title: string; role: string | null }[]>([]);
+  const [kept, setKept] = useState<Set<string>>(new Set());
+  useEffect(() => { api<{ resources: { id: string; title: string; role: string | null; indexState: string }[] }>(`/courses/${course.id}/resources`).then(result => {
+    const indexed = result.resources.filter(item => item.indexState === "mapped").sort((a, b) => Number(b.role === "primary") - Number(a.role === "primary"));
+    setSources(indexed); setKept(new Set(indexed.map(item => item.id)));
+  }).catch(() => setSources([])); }, [course.id]);
   const ready = data.bookText === "ready" && !data.blockers.length;
   async function propose(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
     try {
-      const result = await api<CourseProposals & { skipped: number }>(`/courses/${course.id}/proposals`, "POST", { unitId, outcomeIds: [...picked], minutes: Number(minutes) });
+      const result = await api<CourseProposals & { skipped: number }>(`/courses/${course.id}/proposals`, "POST", { unitId, outcomeIds: [...picked], minutes: Number(minutes), ...(sources.length ? { resourceIds: [...kept] } : {}) });
       setData(result); setPicked(new Set());
       const asked = picked.size - result.skipped;
       toast({ message: `Se pidieron ${plural(asked, "propuesta", "propuestas")}${result.skipped ? ` (${result.skipped} ya existían)` : ""}. Verás su avance aquí.` });
@@ -229,6 +235,10 @@ function ProposeStep({ data, setData, gaps, covered, canPropose, next, reload }:
             <Field label="Módulo que recibe las lecciones" hint={unitId === "plan" ? "Cada lección va al módulo donde el plan curricular trabaja su indicador." : undefined}><select value={unitId} onChange={event => setUnitId(event.target.value)}><option value="plan">Según el plan curricular</option>{data.units.map(unit => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select></Field>
             <Field label="Duración de cada clase (minutos)"><input type="number" min={10} max={300} value={minutes} onChange={event => setMinutes(event.target.value)} required/></Field>
           </div>
+          {!!sources.length && <fieldset className="stack proposal-outcomes"><legend>Fuentes</legend>
+            <p className="muted small">Los recursos indexados del curso. Vienen marcados; puedes quitar los que esta propuesta no debe usar. El texto principal va primero.</p>
+            {sources.map(source => <label key={source.id} className="package-indicator"><input type="checkbox" checked={kept.has(source.id)} onChange={() => setKept(current => { const copy = new Set(current); if (copy.has(source.id)) copy.delete(source.id); else copy.add(source.id); return copy; })}/><span>{source.title}{source.role === "primary" ? " ★" : ""}</span></label>)}
+          </fieldset>}
           <fieldset className="stack proposal-outcomes"><legend>Una lección por indicador (hasta {maxProposalItems})</legend>
             <div className="button-row"><span className="muted small">{gaps.length ? `${plural(gaps.length, "indicador aún no tiene", "indicadores aún no tienen")} ninguna lección; ya están elegidos.` : "Todos los indicadores tienen alguna lección."}</span>
               {gaps.length > 0 && <button type="button" className="button ghost small" onClick={() => setPicked(new Set(gaps.slice(0, maxProposalItems)))}><Icon name="check" size={16}/>Elegir los que faltan</button>}</div>
@@ -295,6 +305,7 @@ function ReviewStep({ drafts, data, reload, publisher, next }: { drafts: Lesson[
           <StatusBadge tone="info">Propuesta de IA</StatusBadge>
         </div>
         <p className="small">{lesson.objective}</p>
+        {!!lesson.generated?.resources?.length && <ul className="resource-readings">{lesson.generated.resources.map(source => <li key={source.resourceId}>«{source.title}»{source.chapter ? `, ${source.chapter}` : ""}{source.pages.length ? `, pp. ${source.pages.join(", ")}` : ""}{source.verified ? " · Cita verificada" : ""}</li>)}</ul>}
         <ol className="ai-review-activities">{lesson.activities.map((activity, index) => {
           const text = (activity.blocks || []).filter(block => block.kind === "text").map(block => block.richContent ? richPlainText(block.richContent) : block.instructions || "").join(" ");
           const question = (activity.blocks || []).find(block => block.kind === "question");

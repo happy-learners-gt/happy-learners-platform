@@ -50,10 +50,11 @@ export function officePackage(extension: "docx" | "pptx" | "xlsx"): Buffer {
 }
 
 /** A valid two-page PDF with real cross-reference offsets, so strict readers accept it. */
-export function pdfDocument(pages = ["Primera pagina de demostracion", "Segunda pagina de demostracion"]): Buffer {
+export function pdfDocument(pages = ["Primera pagina de demostracion", "Segunda pagina de demostracion"], outline: string[] = []): Buffer {
   const objects: string[] = [];
   const pageIds = pages.map((_, index) => 4 + index * 2);
-  objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
+  const outlineId = outline.length ? 4 + pages.length * 2 : 0;
+  objects[1] = `<< /Type /Catalog /Pages 2 0 R${outlineId ? ` /Outlines ${outlineId} 0 R` : ""} >>`;
   objects[2] = `<< /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(" ")}] /Count ${pages.length} >>`;
   objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
   pages.forEach((text, index) => {
@@ -61,6 +62,14 @@ export function pdfDocument(pages = ["Primera pagina de demostracion", "Segunda 
     objects[pageIds[index]] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${pageIds[index] + 1} 0 R >>`;
     objects[pageIds[index] + 1] = `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
   });
+  if (outlineId) {
+    const itemIds = outline.map((_, index) => outlineId + 1 + index);
+    objects[outlineId] = `<< /Type /Outlines /First ${itemIds[0]} 0 R /Last ${itemIds[itemIds.length - 1]} 0 R /Count ${outline.length} >>`;
+    outline.forEach((title, index) => {
+      const links = `${index ? ` /Prev ${itemIds[index - 1]} 0 R` : ""}${index < itemIds.length - 1 ? ` /Next ${itemIds[index + 1]} 0 R` : ""}`;
+      objects[itemIds[index]] = `<< /Title (${title}) /Parent ${outlineId} 0 R /Dest [${pageIds[Math.min(index, pageIds.length - 1)]} 0 R /Fit]${links} >>`;
+    });
+  }
   let body = "%PDF-1.4\n";
   const offsets: number[] = [];
   for (let id = 1; id < objects.length; id++) { offsets[id] = body.length; body += `${id} 0 obj\n${objects[id]}\nendobj\n`; }

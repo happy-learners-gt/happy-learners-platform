@@ -348,10 +348,10 @@ it("shows the course's resources with its main book and assigns a bibliography r
     { id: "course-file-1", fileId: "course-file-1", courseId: "course-1", title: "Libro de lectura 5", description: "PDF · 2.0 MB", kind: "file", content: "", status: "published", version: 1, updatedAt: "2026-10-01T00:00:00Z", termIds: [], fileName: "Libro de lectura 5.pdf", mediaType: "application/pdf" },
     { id: "material-2", courseId: "course-1", title: "Diccionario en línea", description: "Consulta", kind: "link", content: "https://dle.rae.es", status: "published", version: 1, updatedAt: "2026-10-02T00:00:00Z", termIds: [] },
   ];
-  const record = (patch: Record<string, unknown>) => ({ courseId: "course-1", authors: [{ kind: "institution", name: "Editorial escolar" }], year: 2026, metadata: {}, language: "es", license: "reserved", shareable: false, level: "", area: "", citationOverride: null, manual: false, status: "published", updatedAt: "t", indexState: "none", ...patch });
+  const record = (id: string, patch: Record<string, unknown>) => ({ id, courseId: "course-1", authors: [{ kind: "institution", name: "Editorial escolar" }], year: 2026, metadata: {}, language: "es", license: "reserved", shareable: false, level: "", area: "", citationOverride: null, manual: false, status: "published", updatedAt: "t", indexState: "none", ...patch });
   let resources = [
-    record({ id: "resource-book", materialId: null, fileId: "course-file-1", kind: "file", type: "book", title: "Libro de lectura 5", role: "primary", citation: "Editorial escolar, 2026", fileName: "Libro de lectura 5.pdf", mediaType: "application/pdf" }),
-    record({ id: "resource-dict", materialId: "material-2", fileId: null, kind: "link", type: "website", title: "Diccionario en línea", authors: [{ kind: "institution", name: "Real Academia Española" }], year: null, role: null, citation: "Real Academia Española. (s. f.). Diccionario en línea." }),
+    record("resource-book", { materialId: null, fileId: "course-file-1", kind: "file", type: "book", title: "Libro de lectura 5", role: "primary", citation: "Editorial escolar, 2026", fileName: "Libro de lectura 5.pdf", mediaType: "application/pdf" }),
+    record("resource-dict", { materialId: "material-2", fileId: null, kind: "link", type: "website", title: "Diccionario en línea", authors: [{ kind: "institution", name: "Real Academia Española" }], year: null, role: null, citation: "Real Academia Española. (s. f.). Diccionario en línea." }),
   ];
   const posted: { url: string; body: { role?: string } }[] = [];
   vi.stubGlobal("fetch", vi.fn(async (input: string, init?: RequestInit) => {

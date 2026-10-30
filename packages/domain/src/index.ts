@@ -168,7 +168,7 @@ export type { Activity as GradingActivity, AtomicMark, GradingPeriod, GradingSch
 export { bibliographyRoleLabel, bibliographyRoles, isBibliographyRole, maxCitation, maxReferences, primaryBlocker, referenceInput } from "./bibliography";
 export { competencyDescription, competencyName, curriculumPackages, indicatorEvidence, linkPlan, maxPickedIndicators, packageOf, packageProblems, packageSummary } from "./curriculum-packages";
 export type { CurriculumPackage, PackageCompetency, PackageIndicator } from "./curriculum-packages";
-export { draftFromOutput, fixtureGenerator, maxExcerpt, maxProposalItems, pagesLabel, pagesPerProposal, proposalBatch, proposalProblem, proposalPrompt, proposalPromptVersion, proposalSchema, proposalStatusLabels, relevantPages, terms } from "./lesson-proposals";
+export { draftFromOutput, fixtureGenerator, maxExcerpt, maxProposalItems, pagesLabel, pagesPerProposal, proposalBatch, proposalProblem, proposalPrompt, proposalPromptVersion, proposalSchema, proposalStatusLabels, relevantPages, sourceCitationVerified, sourceQuote, terms } from "./lesson-proposals";
 export type { BookPage, LessonDraftGenerator, ProposalInput, ProposalOutput } from "./lesson-proposals";
 export { pdfFile, pdfString, wrap } from "./pdf";
 export type { PdfBlock, PdfDocument } from "./pdf";

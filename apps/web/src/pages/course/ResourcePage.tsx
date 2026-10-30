@@ -68,7 +68,13 @@ function IndexPanel({ courseId, resource, writable, onChanged }: { courseId: str
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const video = resource.type === "video";
-  useEffect(() => { api<IndexView>(`/courses/${courseId}/resources/${resource.id}/index`).then(result => setEntries(result.entries)).catch(cause => setError(message(cause))); }, [courseId, resource.id]);
+  useEffect(() => {
+    let live = true;
+    api<IndexView>(`/courses/${courseId}/resources/${resource.id}/index`).then(result => {
+      if (live) setEntries(current => current?.length && !result.entries.length ? current : result.entries);
+    }).catch(cause => { if (live) setError(message(cause)); });
+    return () => { live = false; };
+  }, [courseId, resource.id]);
   async function run(label: string, work: () => Promise<IndexView>, done: string) {
     setBusy(label); setError("");
     try { setEntries((await work()).entries); toast({ message: done }); await onChanged(); }

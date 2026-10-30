@@ -20,6 +20,8 @@ import { calendarSql } from "../scripts/seed/calendar.mjs";
 import { calendarEventsSql } from "../scripts/seed/calendar-events.mjs";
 // @ts-expect-error — plain ESM scripts without type declarations
 import { sectionFreedomSql } from "../scripts/seed/section-freedom.mjs";
+// @ts-expect-error — plain ESM scripts without type declarations
+import { resourceSeedNames, resourcesSql } from "../scripts/seed/resources.mjs";
 
 type Seed = { id: string; title: string; program: string | null; lead: string; coTeachers: string[]; educationType: string; level: string; modality: string; pacing: string; format: string; settings: object; archived?: boolean;
   competencies: { outcomes: { id: string }[] }[]; resources: { id: string }[]; groups: { id: string; by: string }[];
@@ -181,6 +183,23 @@ describe("institutional calendar events seed (0063, 1.3.4)", () => {
     expect(lines.some(line => line.includes("Feria de ciencias"))).toBe(true);
     expect(lines.some(line => line.includes("Acto de clausura") && line.includes("2026-11-27"))).toBe(true);
     expect(lines.filter(line => line.startsWith("INSERT INTO calendar_rules"))).toHaveLength(13);
+  });
+});
+
+describe("resource seed (0069, 1.3.7)", () => {
+  it("is generated from scripts/seed/resources.mjs and stays inside org-demo", () => {
+    expect(readFileSync(new URL("../database/migrations/0069_demo_resources.sql", import.meta.url), "utf8")).toBe(resourcesSql);
+    const lines = (resourcesSql as string).split("\n").filter(line => line && !line.startsWith("--"));
+    expect(lines[0]).toContain("ALTER TABLE proposal_jobs ADD COLUMN sources");
+    expect(lines.slice(1).every(line => line.includes("EXISTS(SELECT 1 FROM organizations WHERE id='org-demo')"))).toBe(true);
+    expect(lines.some(line => line.includes("resource-seed-file-m6-libro") && line.includes("Santillana"))).toBe(true);
+    expect(lines.some(line => line.includes("Guía docente: polígonos") && line.includes("'guide'"))).toBe(true);
+    expect(lines.some(line => line.includes("Norma: medición escolar") && line.includes("'standard'"))).toBe(true);
+    expect(lines.some(line => line.includes("Video: el perímetro en el patio"))).toBe(true);
+    expect(lines.some(line => line.includes("Medir el patio") && line.includes("start_seconds"))).toBe(true);
+    expect(lines.some(line => line.includes("reading-seed-m6-geometria") && line.includes("reading-seed-m6-fracciones")) || lines.filter(line => line.includes("INSERT INTO readings")).length).toBe(2);
+    expect(lines.some(line => line.includes("Partitura: Estrellita") && line.includes("seed-course-musica-1"))).toBe(true);
+    expect(resourceSeedNames).toContain("Partitura: Estrellita");
   });
 });
 
