@@ -26,20 +26,51 @@ jobs:
   verify:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          # The parents of a merge commit, to compare it with the pull request it merged.
+          fetch-depth: 2
       - uses: actions/setup-node@v4
         with:
           node-version: '24.19.0'
           cache: npm
       - run: npm ci
-      - run: ./scripts/verify
-      - run: npx --no-install playwright install --with-deps chromium
+      # A push to main that merges a pull request already up to date with main has the same tree as the pull
+      # request's head. If that head passed this whole workflow (verify, E2E and preview), the checks are not run
+      # again: the package is only rebuilt, because it carries the SHA of main. Any other push runs everything.
+      - name: Reuse the pull request's verification
+        id: reuse
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          reused=false
+          if [ "$(git rev-list --parents -n 1 HEAD | wc -w)" = 3 ] && [ "$(git rev-parse 'HEAD^{tree}')" = "$(git rev-parse 'HEAD^2^{tree}')" ]; then
+            head="$(git rev-parse 'HEAD^2')"
+            passed="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$head&event=pull_request&status=success&per_page=20" \
+              --jq '[.workflow_runs[] | select(.path == ".github/workflows/repository.yml")] | length')"
+            if [ "$passed" -gt 0 ]; then
+              reused=true
+              echo "Verificación reutilizada del PR (commit $head, mismo árbol que $GITHUB_SHA)." >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+          echo "reused=$reused" >> "$GITHUB_OUTPUT"
+      - name: Build the package for this SHA
+        if: steps.reuse.outputs.reused == 'true'
+        run: npm run build && npx --no-install wrangler deploy --dry-run --config build/wrangler.json
+      - if: steps.reuse.outputs.reused != 'true'
+        run: ./scripts/verify
+      - if: steps.reuse.outputs.reused != 'true'
+        run: npx --no-install playwright install --with-deps chromium
       # Desktop and mobile run at once, each against its own local server and new database, so the job takes about
       # half as long and each server stays well inside the 30-sign-ins limit.
       - name: E2E (desktop and mobile in parallel)
+        if: steps.reuse.outputs.reused != 'true'
         run: |
           HL_E2E_PORT=8789 HL_E2E_RESULTS=.release-evidence/e2e-desktop.json npx --no-install playwright test --project=desktop > e2e-desktop.log 2>&1 & desktop=$!
           HL_E2E_PORT=8790 HL_E2E_RESULTS=.release-evidence/e2e-mobile.json npx --no-install playwright test --project=mobile > e2e-mobile.log 2>&1 & mobile=$!
