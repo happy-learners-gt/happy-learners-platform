@@ -1,11 +1,12 @@
 import type { AcademicYear, AssessmentActivity, AssessmentEvaluator, AssessmentKind, AssessmentMark, AssessmentScore, AtomicMark, GradeChange, GradeComment, Gradebook, GradebookPeriod, GradeEntry, GradingActivity, GradingScheme, Mark, Member, MyPanel, PeriodReview, Rubric } from "@happy-learners/contracts";
-import { assessmentKindLabel, csvFile, displayOf, gradeResult, isAssessmentKind, learnerResult, markValue, maxAssessmentActivities, maxCommentLength, maxGradeChanges, pdfFile, planTotal, pointsInput, rubricInput, schemeFromSettings, schemeInput, scoreInput } from "@happy-learners/domain";
-import type { GradingPolicy, PdfBlock } from "@happy-learners/domain";
+import { assessmentKindLabel, csvFile, defaultTemplate, displayOf, gradeResult, isAssessmentKind, learnerResult, markValue, maxAssessmentActivities, maxCommentLength, maxGradeChanges, pdfFile, planTotal, pointsInput, rubricInput, schemeFromSettings, schemeInput, scoreInput } from "@happy-learners/domain";
+import type { GradingPolicy, PdfBlock, ReportRecord, ReportTemplate } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
 import { configurationOf } from "./courses";
 import { accessTo } from "./access";
 import { scopedCourses } from "./permissions";
 import { event } from "./team";
+import { activeTemplate, generate, pdfResponse } from "./reports";
 import { gradingSchemesFor } from "./grading-schemes";
 import { groupGrades } from "./group-grading";
 import { effectiveActivityIds, loadSection } from "./freedom-plan";
@@ -27,6 +28,7 @@ const reply = (value: unknown, status = 200) => Response.json(value, { status })
 const gradesPath = /^\/api\/sections\/([a-z0-9-]+)\/grades$/;
 const historyPath = /^\/api\/sections\/([a-z0-9-]+)\/grades\/history$/;
 const reportPath = /^\/api\/sections\/([a-z0-9-]+)\/grades\/report\.pdf$/;
+const certificatePath = /^\/api\/sections\/([a-z0-9-]+)\/grades\/certificate\.pdf$/;
 const csvPath = /^\/api\/sections\/([a-z0-9-]+)\/grades\/report\.csv$/;
 const periodPath = /^\/api\/sections\/([a-z0-9-]+)\/grades\/periods\/(period-[a-f0-9-]{36})\/(lock|submit|return|plan)$/;
 const panelPath = /^\/api\/sections\/([a-z0-9-]+)\/grades\/activities\/(assessment-[a-f0-9-]{36})\/(panel|evaluators)$/;
@@ -34,7 +36,7 @@ const groupGradePath = /^\/api\/sections\/([a-z0-9-]+)\/grades\/activities\/(ass
 
 export function gradebookMethods(path: string): string[] | null {
   if (gradesPath.test(path)) return ["GET", "PUT"];
-  if (historyPath.test(path) || reportPath.test(path) || csvPath.test(path)) return ["GET"];
+  if (historyPath.test(path) || reportPath.test(path) || csvPath.test(path) || certificatePath.test(path)) return ["GET"];
   const period = periodPath.exec(path);
   if (period) return period[3] === "lock" ? ["POST", "DELETE"] : period[3] === "plan" ? ["PUT"] : ["POST"];
   if (panelPath.test(path)) return ["PUT"];
@@ -393,7 +395,7 @@ type OpenPeriod = { id: string; name: string; position: number; weight: number; 
 
 export async function grades(path: string, method: string, input: unknown, url: URL, current: Member, db: Database): Promise<Response> {
   const period = periodPath.exec(path), panelAction = panelPath.exec(path), groupGrade = groupGradePath.exec(path);
-  const groupId = (period || panelAction || groupGrade || gradesPath.exec(path) || historyPath.exec(path) || reportPath.exec(path) || csvPath.exec(path))![1];
+  const groupId = (period || panelAction || groupGrade || gradesPath.exec(path) || historyPath.exec(path) || reportPath.exec(path) || csvPath.exec(path) || certificatePath.exec(path))![1];
   const allowed = await access(db, current, groupId);
   if (allowed instanceof Response) return allowed;
   const { section } = allowed;
@@ -407,6 +409,7 @@ export async function grades(path: string, method: string, input: unknown, url: 
   }
   if (historyPath.test(path)) return changesOf(db, current, section, url.searchParams.get("learner") || "");
   if (reportPath.test(path)) return report(db, current, section, url);
+  if (certificatePath.test(path)) return certificate(db, current, section, url.searchParams.get("learner") || "", url.searchParams.get("tipo") === "finalizacion" ? "finalización" : "inscripción");
   if (csvPath.test(path)) return reportCsv(db, current, section, url);
   if (method === "GET") return reply({ gradebook: await gradebook(db, current, allowed, url.searchParams.get("year")) });
   const year = await db.prepare(`SELECT y.id,y.name FROM academic_years y JOIN courses c ON c.id=? AND c.organization_id=y.organization_id
@@ -808,8 +811,12 @@ async function reportCsv(db: Database, current: Member, section: SectionRow, url
   const name = `notas-${`${section.courseTitle}-${section.name}`.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80)}.csv`;
   return new Response(csvFile(rows), { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="${name}"`, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
 }
-/** The report card (boleta) of the section's students, or of one, for a school year: a page per student. */
-async function report(db: Database, current: Member, section: SectionRow, url: URL) {
+/**
+ * The report card (boleta) of the section's students, or of one, for a school year: a page per student. With a
+ * published template (1.5.0), the program's or the organization's, it is drawn from it; without one, in the format it
+ * always had. `override` draws a draft instead (the designer's preview), without recording the document.
+ */
+async function report(db: Database, current: Member, section: SectionRow, url: URL, override?: ReportTemplate) {
   const years = await yearsOf(db, current.organizationId, section.courseId);
   const year = years.find(item => item.id === url.searchParams.get("year")) || years.find(item => item.status === "current") || years[0];
   if (!year) return reply({ error: "Aún no hay un ciclo lectivo con notas." }, 409);
@@ -825,6 +832,29 @@ async function report(db: Database, current: Member, section: SectionRow, url: U
   const zone = organization[0]?.timezone || "America/Guatemala", now = new Date();
   const generated = new Intl.DateTimeFormat("es-GT", { timeZone: zone, dateStyle: "long", timeStyle: "short" }).format(now);
   const scoreText = (score: number | null) => score === null ? "—" : displayOf(scheme, score) || decimal(score);
+  const stateOf = (period: (typeof book.periods)[number]) => { const review = book.reviews.find(item => item.periodId === period.id); return period.locked ? "Cerrado" : review?.status === "submitted" ? "En revisión" : "Abierto"; };
+  const program = await db.prepare("SELECT program_id AS programId FROM courses WHERE id=?").bind(section.courseId).first<{ programId: string | null }>();
+  const published = override ? null : await activeTemplate(db, current.organizationId, "report-card", program?.programId || null);
+  if (override || published) {
+    const records: ReportRecord[] = learners.map(learner => {
+      const result = book.results.find(item => item.learnerId === learner.id)!;
+      return {
+        fields: {
+          "organizacion.nombre": organization[0]?.name || "Organización", "fecha.hoy": generated, "ciclo.nombre": year.name, "seccion.nombre": section.name, "curso.nombre": section.courseTitle,
+          "seccion.docentes": educators.map(row => row.name).join(", ") || "Sin asignar", "estudiante.nombre": learner.name, "resultado.nota": result.display || scoreText(result.average),
+          "resultado.estado": result.passed === null ? "Sin notas" : `${result.passed ? "Aprueba" : "No aprueba"}${result.complete ? "" : " (parcial)"}`, "esquema.nombre": scheme.name,
+        },
+        datasets: {
+          periodos: book.periods.map(period => ({ periodo: period.name, nota: scoreText(book.grades.find(grade => grade.learnerId === learner.id && grade.periodId === period.id)?.score ?? null), estado: stateOf(period), comentario: book.comments.find(item => item.learnerId === learner.id && item.periodId === period.id)?.body || "" })),
+          actividades: book.activities.map(activity => { const earned = book.scores.find(item => item.activityId === activity.id && item.learnerId === learner.id)?.points; return { periodo: book.periods.find(period => period.id === activity.periodId)?.name || "", actividad: activity.title, tipo: assessmentKindLabel(activity.kind), puntos: earned === undefined ? "—" : decimal(earned), de: decimal(activity.points) }; }),
+        },
+      };
+    });
+    const used = override ? { id: null, version: null, template: override } : published!;
+    const file = await generate(db, current, "report-card", used, records, `Boleta · ${section.courseTitle} · ${section.name}`, only ? { type: "learner", id: only } : { type: "section", id: section.id }, !override);
+    if (!override) await event(db, current, { action: "recorded", targetType: "group", targetId: section.id, courseId: section.courseId, summary: `Generó ${only ? "la boleta de un estudiante" : "las boletas"} de «${section.name}» (${year.name})` }).run();
+    return pdfResponse(file, `boleta-${override ? "vista-previa" : section.name.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60)}.pdf`);
+  }
   const blocks: PdfBlock[] = learners.flatMap((learner, index) => {
     const result = book.results.find(item => item.learnerId === learner.id)!;
     const rows: PdfBlock[] = [
@@ -861,6 +891,39 @@ async function report(db: Database, current: Member, section: SectionRow, url: U
   await event(db, current, { action: "recorded", targetType: "group", targetId: section.id, courseId: section.courseId, summary: `Generó ${only ? "la boleta de un estudiante" : "las boletas"} de «${section.name}» (${year.name})` }).run();
   const name = `boleta-${`${section.courseTitle}-${section.name}${only ? `-${learners[0].name}` : ""}`.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80)}.pdf`;
   return new Response(new TextEncoder().encode(file), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${name}"`, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
+}
+
+/** The designer's preview (1.5.0): a draft of a template with a real section's data, nothing recorded. */
+export async function documentPreview(db: Database, current: Member, kind: "report-card" | "certificate", template: ReportTemplate, sectionId: string, learnerId: string | null) {
+  const allowed = await access(db, current, sectionId);
+  if (allowed instanceof Response) return allowed;
+  if (kind === "certificate") return certificate(db, current, allowed.section, learnerId || "", "inscripción", template);
+  const url = new URL(`https://preview.local/?${learnerId ? `learner=${encodeURIComponent(learnerId)}` : ""}`);
+  return report(db, current, allowed.section, url, template);
+}
+
+/** A certificate (constancia, 1.5.0) of enrollment or completion for a student of the section, from its template. */
+async function certificate(db: Database, current: Member, section: SectionRow, learnerId: string, type: "inscripción" | "finalización", override?: ReportTemplate) {
+  const learner = await db.prepare("SELECT id,display_name AS name FROM group_learners WHERE id=? AND group_id=? AND status='active'").bind(learnerId, section.id).first<{ id: string; name: string }>()
+    || (override ? await db.prepare("SELECT id,display_name AS name FROM group_learners WHERE group_id=? AND status='active' ORDER BY display_name LIMIT 1").bind(section.id).first<{ id: string; name: string }>() : null);
+  if (!learner) return reply({ error: "Ese estudiante no está en la lista de la sección." }, 404);
+  const [organization, group, educators, years] = await db.batch([
+    db.prepare("SELECT name,timezone FROM organizations WHERE id=?").bind(current.organizationId),
+    db.prepare("SELECT g.schedule_from AS \"from\",g.schedule_until AS until,c.program_id AS programId FROM course_groups g JOIN courses c ON c.id=g.course_id WHERE g.id=?").bind(section.id),
+    db.prepare("SELECT COALESCE(u.display_name,u.username) AS name FROM section_educators e JOIN users u ON u.id=e.user_id WHERE e.group_id=? ORDER BY name").bind(section.id),
+    db.prepare("SELECT name,starts_on AS \"from\",ends_on AS until FROM academic_years WHERE organization_id=? AND status='current' ORDER BY program_id IS NULL LIMIT 1").bind(current.organizationId),
+  ]) as unknown as [{ name: string | null; timezone: string }[], { from: string | null; until: string | null; programId: string | null }[], { name: string }[], { name: string; from: string; until: string }[]];
+  const zone = organization[0]?.timezone || "America/Guatemala";
+  const day = (value: string | null | undefined) => value ? new Intl.DateTimeFormat("es-GT", { timeZone: "UTC", dateStyle: "long" }).format(new Date(`${value}T00:00:00Z`)) : "";
+  const record: ReportRecord = { fields: {
+    "organizacion.nombre": organization[0]?.name || "Organización", "fecha.hoy": new Intl.DateTimeFormat("es-GT", { timeZone: zone, dateStyle: "long" }).format(new Date()),
+    "ciclo.nombre": years[0]?.name || "", "seccion.nombre": section.name, "curso.nombre": section.courseTitle, "seccion.docentes": educators.map(row => row.name).join(", "),
+    "estudiante.nombre": learner.name, "constancia.tipo": type, "constancia.desde": day(group[0]?.from || years[0]?.from), "constancia.hasta": day(group[0]?.until || years[0]?.until),
+  }, datasets: {} };
+  const published = override ? null : await activeTemplate(db, current.organizationId, "certificate", group[0]?.programId || null);
+  const used = override ? { id: null, version: null, template: override } : published || { id: null, version: null, template: defaultTemplate("certificate") };
+  const file = await generate(db, current, "certificate", used, [record], `Constancia · ${learner.name}`, { type: "learner", id: learner.id }, !override);
+  return pdfResponse(file, `constancia-${learner.name.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60)}.pdf`);
 }
 
 /** Tribunal work assigned to the signed-in person. Other evaluators' marks stay hidden until every one has marked. */
