@@ -121,5 +121,17 @@ describe("security audit: route matrix on the built Worker", () => {
     expect((await login("tomas.aguilar", "Aprender-2026!")).status).toBe(429);
     expect((await login("lucia.herrera", "Aprender-2026!")).status).toBe(200);
   }, 60_000);
+
+  it("each API request leaves one structured line with its route template and the rows it read", async () => {
+    const response = await fetch(`${origin}/api/login`, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin }, body: JSON.stringify({ username: "admin-demo", password: "Aprender-2026!" }) });
+    expect(response.status).toBe(200);
+    await delay(300);
+    const lines = logs.split("\n").filter(line => line.includes('"event":"api"') && line.includes('"route":"/api/login"')).map(line => JSON.parse(line.slice(line.indexOf("{"))));
+    const last = lines.at(-1);
+    expect(last).toMatchObject({ method: "POST", status: 200, organization: "org-demo" });
+    expect(last.rowsRead).toBeGreaterThan(0);
+    expect(last.rowsWritten).toBeGreaterThan(0);
+    expect(JSON.stringify(lines)).not.toContain("Aprender-2026!");
+  }, 60_000);
 });
 
