@@ -1,19 +1,21 @@
 import type { Member } from "@happy-learners/contracts";
-import { defaultTemplate, jpegImage, pdfFile, renderReport, reportKinds, templateInput } from "@happy-learners/domain";
-import type { PdfImage, ReportKind, ReportRecord, ReportTemplate } from "@happy-learners/domain";
+import { checkedSuggestions, defaultTemplate, exampleSuggestions, fixtureSuggester, jpegImage, pdfFile, renderReport, reportKinds, suggestInput, suggestPromptVersion, templateInput } from "@happy-learners/domain";
+import type { PdfImage, ReportKind, ReportRecord, ReportTemplate, SuggestOutput } from "@happy-learners/domain";
 import type { Database } from "./storage";
+import { tracked } from "./ai-runs";
+import { openAiSettings, openAiSuggester } from "./openai";
 
 /**
  * The report builder (1.5.0, docs/design/constructor-de-reportes.md), administration only: templates with a draft and
  * published versions (`/api/report-templates`; restore with `…/restore?version=n`), their images (`/api/report-images`)
- * and a preview with real data.
+ * and a preview with real data. POST …/suggest-fields { text, sectionId? } proposes fields for a block's text (1.5.2).
  * Documents use the published version of the program's template, or else the organization's; without one, each
  * document keeps the format it had before templates existed.
  */
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
-const templatePath = /^\/api\/report-templates\/([a-z0-9-]+)(?:\/(publish|restore|preview))?$/;
+const templatePath = /^\/api\/report-templates\/([a-z0-9-]+)(?:\/(publish|restore|preview|suggest-fields))?$/;
 export const reportMethods = (path: string) => path === "/api/report-templates" ? ["GET", "POST"] : path === "/api/report-images" ? ["GET", "POST"]
-  : templatePath.test(path) ? (path.endsWith("/publish") || path.endsWith("/restore") || path.endsWith("/preview") ? ["POST"] : ["GET", "PUT", "DELETE"]) : null;
+  : templatePath.test(path) ? (/\/(publish|restore|preview|suggest-fields)$/.test(path) ? ["POST"] : ["GET", "PUT", "DELETE"]) : null;
 
 const sha256 = async (bytes: Uint8Array | string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", typeof bytes === "string" ? new TextEncoder().encode(bytes) : bytes))].map(byte => byte.toString(16).padStart(2, "0")).join("");
 export const pdfResponse = (file: string, name: string) => new Response(new TextEncoder().encode(file), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${name}"`, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
@@ -42,11 +44,28 @@ export async function generate(db: Database, current: Member, kind: ReportKind, 
   return file;
 }
 
+/** Real values of the fields every document has, from one section, so «Sugerir campos» recognizes them in a text. */
+async function examplesOf(db: Database, organizationId: string, sectionId: string): Promise<{ values: Record<string, string>; learners: string[] }> {
+  const [organization, section, educators, years, learners] = await db.batch([
+    db.prepare("SELECT name,timezone FROM organizations WHERE id=?").bind(organizationId),
+    db.prepare("SELECT g.name,c.title FROM course_groups g JOIN courses c ON c.id=g.course_id WHERE g.id=? AND g.organization_id=?").bind(sectionId, organizationId),
+    db.prepare("SELECT COALESCE(u.display_name,u.username) AS name FROM section_educators e JOIN users u ON u.id=e.user_id WHERE e.group_id=? ORDER BY name").bind(sectionId),
+    db.prepare("SELECT name FROM academic_years WHERE organization_id=? AND status='current' ORDER BY program_id IS NULL LIMIT 1").bind(organizationId),
+    db.prepare("SELECT display_name AS name FROM group_learners WHERE group_id=? AND organization_id=? AND status='active' ORDER BY display_name COLLATE NOCASE,id").bind(sectionId, organizationId),
+  ]) as unknown as [{ name: string | null; timezone: string }[], { name: string; title: string }[], { name: string }[], { name: string }[], { name: string }[]];
+  if (!section[0]) return { values: {}, learners: [] };
+  const zone = organization[0]?.timezone || "America/Guatemala";
+  return { values: {
+    "organizacion.nombre": organization[0]?.name || "", "fecha.hoy": new Intl.DateTimeFormat("es-GT", { timeZone: zone, dateStyle: "long" }).format(new Date()),
+    "ciclo.nombre": years[0]?.name || "", "seccion.nombre": section[0].name, "curso.nombre": section[0].title, "seccion.docentes": educators.map(row => row.name).join(", "),
+  }, learners: learners.map(row => row.name) };
+}
+
 type TemplateRow = { id: string; kind: ReportKind; programId: string | null; programName: string | null; name: string; draft: string; publishedVersion: number | null; updatedAt: string };
 const columns = "t.id,t.kind,t.program_id AS programId,p.name AS programName,t.name,t.draft,t.published_version AS publishedVersion,t.updated_at AS updatedAt";
 const viewOf = (row: TemplateRow) => ({ ...row, draft: JSON.parse(row.draft) as ReportTemplate });
 
-export async function reports(path: string, method: string, input: unknown, request: Request, current: Member, db: Database, previewOf: (kind: ReportKind, template: ReportTemplate, sectionId: string, learnerId: string | null) => Promise<Response>): Promise<Response> {
+export async function reports(path: string, method: string, input: unknown, request: Request, current: Member, db: Database, previewOf: (kind: ReportKind, template: ReportTemplate, sectionId: string, learnerId: string | null) => Promise<Response>, env?: Env): Promise<Response> {
   if (current.role !== "admin") return reply({ error: "Solo administración diseña los documentos de la organización." }, 403);
   const now = new Date().toISOString();
   const imageIds = async () => (await db.prepare("SELECT id FROM report_images WHERE organization_id=?").bind(current.organizationId).all<{ id: string }>()).results.map(row => row.id);
@@ -108,6 +127,26 @@ export async function reports(path: string, method: string, input: unknown, requ
     if (!version) return reply({ error: "Esa versión no existe." }, 404);
     await db.prepare("UPDATE report_templates SET draft=?,updated_by=?,updated_at=? WHERE id=?").bind(version.content, current.id, now, templateId).run();
     return reply({ template: viewOf({ ...row, draft: version.content }) });
+  }
+  if (action === "suggest-fields") {
+    const examples = typeof body.sectionId === "string" ? await examplesOf(db, current.organizationId, body.sectionId) : { values: {}, learners: [] };
+    const spec = reportKinds[row.kind];
+    const asked = suggestInput(spec.label, body.text, spec.fields.map(item => ({ key: item.key, label: item.label, example: examples.values[item.key] })));
+    if ("error" in asked) return reply(asked, 400);
+    // The text may be written for any student of the section: their names are matched here and never sent as examples.
+    const named = spec.fields.some(item => item.key === "estudiante.nombre") ? examples.learners : [];
+    const found = [exampleSuggestions(asked), ...named.map(name => exampleSuggestions({ ...asked, fields: [{ key: "estudiante.nombre", label: "", example: name }] }))];
+    const settings = env ? openAiSettings(env) : null;
+    const suggester = settings ? openAiSuggester(settings) : env?.LESSON_GENERATOR === "fixture" ? fixtureSuggester : null;
+    let proposed: SuggestOutput = { suggestions: [] };
+    if (suggester) {
+      try {
+        proposed = await tracked(db, { organizationId: current.organizationId, userId: current.id, courseId: null, task: "suggest-fields", promptVersion: suggestPromptVersion, generator: suggester.kind, model: settings ? settings.model : "fixture", inputChars: asked.text.length },
+          observe => suggester.suggest(asked, observe));
+      // What was found without the model is still worth showing.
+      } catch { return reply({ suggestions: checkedSuggestions(found, asked), ai: false, notice: "La IA no respondió: se muestran solo los datos reconocidos en el texto." }); }
+    }
+    return reply({ suggestions: checkedSuggestions([...found, proposed], asked), ai: !!suggester });
   }
   // Preview: the draft sent (or the stored one) with a real section's data, without recording a document.
   const checked = templateInput({ ...((body.draft as object) || JSON.parse(row.draft)), kind: row.kind }, await imageIds());

@@ -1,5 +1,5 @@
-import { improvePrompt, improveSchema, mapPrompt, mapSchema, proposalPrompt, proposalSchema, rulesPrompt, rulesSchema, writePrompt, writeSchema } from "@happy-learners/domain";
-import type { AiRunStatus, AiTokenUsage, AiWriter, BookMapper, ImproveOutput, LessonDraftGenerator, LessonImprover, MapOutput, ProposalOutput, RulesOutput, RulesTranslator, WriteOutput } from "@happy-learners/domain";
+import { improvePrompt, improveSchema, mapPrompt, mapSchema, proposalPrompt, proposalSchema, rulesPrompt, rulesSchema, suggestPrompt, suggestSchema, writePrompt, writeSchema } from "@happy-learners/domain";
+import type { AiRunStatus, AiTokenUsage, AiWriter, BookMapper, FieldSuggester, ImproveOutput, LessonDraftGenerator, LessonImprover, MapOutput, ProposalOutput, RulesOutput, RulesTranslator, SuggestOutput, WriteOutput } from "@happy-learners/domain";
 
 declare global { interface Env { OPENAI_API_KEY?: string; OPENAI_MODEL?: string; LESSON_MAX_OUTPUT_TOKENS?: string; LESSON_REQUEST_TIMEOUT_MS?: string } }
 
@@ -60,6 +60,10 @@ export function openAiImprover(settings: Settings, request: typeof fetch = fetch
 /** «Redactar con IA» (1.4.1): a short text, so a short answer and a short wait. */
 export function openAiWriter(settings: Settings, request: typeof fetch = fetch): AiWriter {
   return { kind: "openai", write: (input, observe) => structured<WriteOutput>({ ...settings, maxOutputTokens: 2000, timeoutMs: Math.min(settings.timeoutMs || 30_000, 30_000) }, request, "write", writeSchema, writePrompt(input), observe) };
+}
+/** Fields for a document's text (1.5.2): parts of the text and the field that replaces each, shown one by one. */
+export function openAiSuggester(settings: Settings, request: typeof fetch = fetch): FieldSuggester {
+  return { kind: "openai", suggest: (input, observe) => structured<SuggestOutput>({ ...settings, maxOutputTokens: 2000, timeoutMs: Math.min(settings.timeoutMs || 30_000, 30_000) }, request, "suggest_fields", suggestSchema, suggestPrompt(input), observe) };
 }
 /** Timetable rules in words (1.4.3): structured rules a person confirms. */
 export function openAiRulesTranslator(settings: Settings, request: typeof fetch = fetch): RulesTranslator {

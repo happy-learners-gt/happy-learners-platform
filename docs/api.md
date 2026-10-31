@@ -806,3 +806,18 @@ actividad. `GET /api/panel-minutes/:id.pdf` (tribunal, docentes de la sección y
 plantilla publicada «Acta de tribunal» o la de por omisión. `GET /api/me/panels` agrega `chair` y, por estudiante,
 `minute: { id, status, signed, mine }`. `POST /api/ai/write` admite `document-text` (conserva los campos `{{…}}`).
 
+### Reporte de avance y «Sugerir campos» (1.5.2)
+
+Migración `0073_progress_report.sql`: reconstruye las tablas de plantillas para el tipo `progress-report` y `ai_runs`
+para la tarea `suggest-fields`, conservando sus filas. `GET /api/sections/:id/grades/progress.pdf` (quien ve la sección)
+es el reporte de avance: clases dadas de las programadas, cobertura del plan por unidad (lecciones dadas en clases
+completadas sobre las del plan de la sección), asistencia (presentes y tardanzas sobre las marcas no justificadas) y
+lecturas obligatorias leídas, por estudiante. Usa la plantilla publicada «Reporte de avance» del programa o de la
+organización, o la de por omisión; queda registrado en `generated_documents` y en la actividad.
+`POST /api/report-templates/:id/suggest-fields` `{ text, sectionId? }` (administración) propone campos para el texto de
+un bloque: `{ suggestions: [{ original, field, label }], ai }`. Las partes iguales a un dato real de la sección (curso,
+sección, docentes, ciclo, fecha y, si el documento lo tiene, el nombre de un estudiante) se encuentran sin IA; con la IA
+configurada, el modelo agrega las demás (si no responde, `notice` lo dice y quedan las encontradas). Cada propuesta se comprueba (la parte está en el texto, el campo existe para el
+documento, sin solaparse) y se acepta una por una en el diseñador. Los nombres de estudiantes no se envían al modelo
+como ejemplos.
+
