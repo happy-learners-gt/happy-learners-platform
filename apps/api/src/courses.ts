@@ -3,7 +3,8 @@ import { cleanText, competencyInput, competencyLimit, completeOrder, courseInput
 import { rejectPolicyChange } from "./freedom-plan";
 import type { Database } from "./storage";
 import { filesFor } from "./files";
-import { event, recordEvent, teamsFor, updateTeam } from "./team";
+import { event, recordEvent } from "./activity";
+import { teamsFor, updateTeam } from "./team";
 import type { Notifier } from "./notify";
 import { courseRequirements, leaveProgram, programPrerequisites } from "./prerequisites";
 import { accessTo, forbidden, outsider, reachableCourses } from "./access";

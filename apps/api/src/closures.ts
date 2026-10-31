@@ -2,7 +2,7 @@ import type { ClosureRequest, Member, MyClosure } from "@happy-learners/contract
 import type { ClosureStatus } from "@happy-learners/domain";
 import { closureReasonInput, closureTransition, maxClosureReason } from "@happy-learners/domain";
 import type { Database } from "./storage";
-import { event } from "./team";
+import { event } from "./activity";
 import { sendNotice, type AccountContext } from "./account-notices";
 
 /**

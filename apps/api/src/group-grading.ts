@@ -3,7 +3,7 @@ import { groupToIndividual, pointsInput, rubricInput, schemeFromSettings } from 
 import type { Database, Prepared } from "./storage";
 import { configurationOf } from "./courses";
 import { gradingSchemesFor } from "./grading-schemes";
-import { event } from "./team";
+import { event } from "./activity";
 
 /**
  * Group marks for one activity. The group mark is copied onto each member, with that student's

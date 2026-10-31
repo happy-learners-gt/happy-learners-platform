@@ -4,7 +4,7 @@ import { countryCode, deviceLabel, emailChangeInput, emailChangeLifetimeMs, emai
 import type { Database } from "./storage";
 import { digest, newToken, verifyPassword } from "./auth";
 import { sendNotice, type AccountContext } from "./account-notices";
-import { event } from "./team";
+import { event } from "./activity";
 import { closureMethods, closures } from "./closures";
 import { exportMyData } from "./personal-data";
 

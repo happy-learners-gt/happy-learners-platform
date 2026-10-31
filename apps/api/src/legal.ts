@@ -2,7 +2,7 @@ import type { LegalAcceptance, LegalDocument, LegalKind, LegalSignature, Member,
 import { documentCanonical, isLegalKind, localDay, legalDraftInput, legalLabels, organizationIds, pendingAgreement, pendingDocuments, record, signatureCanonical, signedKinds, signedNameInput } from "@happy-learners/domain";
 import { digest, verifyPassword } from "./auth";
 import type { Database } from "./storage";
-import { event } from "./team";
+import { event } from "./activity";
 import { notify, type Notifier } from "./notify";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });

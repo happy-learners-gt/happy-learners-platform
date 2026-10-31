@@ -5,7 +5,7 @@ import type {
 import { breakInput, generateYear, grantedIn, guatemalaTemplate, isCalendarDay, ruleInput } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
 import { reapplyCalendar } from "./classes";
-import { event as activityEvent } from "./team";
+import { event as activityEvent } from "./activity";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
 const calendarPath = /^\/api\/calendars\/(calendar-[a-z0-9-]+)\/(rules|events)(?:\/((?:rule|event)-[a-z0-9-]+))?$/;

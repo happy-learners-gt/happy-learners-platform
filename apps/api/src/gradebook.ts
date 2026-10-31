@@ -5,7 +5,7 @@ import type { Database, Prepared } from "./storage";
 import { configurationOf } from "./courses";
 import { accessTo } from "./access";
 import { scopedCourses } from "./permissions";
-import { event } from "./team";
+import { event } from "./activity";
 import { activeTemplate, generate, pdfResponse } from "./reports";
 import { minuteRecord, minutesOf } from "./panel-minutes";
 import { gradingSchemesFor } from "./grading-schemes";

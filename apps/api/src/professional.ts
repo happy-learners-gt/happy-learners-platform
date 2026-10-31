@@ -8,7 +8,7 @@ import {
 } from "@happy-learners/domain";
 import type { ProfileAction, ProfileActor } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
-import { event } from "./team";
+import { event } from "./activity";
 import { todayFor } from "./classes";
 import { photoResponse } from "./profiles";
 

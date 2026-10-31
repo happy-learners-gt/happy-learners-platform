@@ -2,7 +2,7 @@ import type { ExpiringDocuments, Member, StaffDocument, StaffFile, StaffProfile 
 import { areasFromSpecialties, documentStatus, expiringWindowDays, staffProfileInput, staffDocumentInput, staffDocumentLabel, storedProfile } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { readBounded } from "./files";
-import { event } from "./team";
+import { event } from "./activity";
 import { todayFor } from "./classes";
 
 /**

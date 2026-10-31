@@ -2,7 +2,7 @@ import type { CourseRole, Member, OnboardingPerson, OnboardingState, PendingDocu
 import { declareStep, missingSteps, nextStep, onboardingStatus, onboardingStepStates, pendingAgreement, pendingDocuments, profileGaps } from "@happy-learners/domain";
 import type { OnboardingFacts, ProfileFacts } from "@happy-learners/domain";
 import type { Database } from "./storage";
-import { event } from "./team";
+import { event } from "./activity";
 
 /**
  * Guided onboarding (ST-122).

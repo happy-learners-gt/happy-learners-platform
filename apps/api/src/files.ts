@@ -1,6 +1,6 @@
 import type { Material, Member } from "@happy-learners/contracts";
 import type { Database } from "./storage";
-import { recordEvent } from "./team";
+import { recordEvent } from "./activity";
 import { accessTo } from "./access";
 
 const MAX_BYTES = 15 * 1024 * 1024;

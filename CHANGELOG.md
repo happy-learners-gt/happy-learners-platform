@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.5.9 — 2026-10-31
+
+- Biblioteca de componentes por niveles (átomos, moléculas, patrones) en `docs/design/fluent.md`, con una prueba que exige catalogar cada componente de `ui/`; la Guía de estilo muestra pestañas, pasos y el ajuste de tiempo.
+- Decisión con datos sobre Drizzle (`docs/architecture/orm-drizzle.md`): no se adopta por ahora.
+- Material para marca, empresa y soporte (`docs/empresa/marca-y-soporte.md`): posicionamiento, criterios y candidatos de nombre, brief creativo y base de conocimientos por rol.
+
+## 1.5.8 — 2026-10-31
+
+- Arquitectura: contextos delimitados (`docs/architecture/contextos.md`) y catálogo de patrones y antipatrones (`docs/architecture/patrones.md`), con el mapa de importaciones medido. La bitácora de actividad y el progreso de Inicio salen de `team.ts` (`activity.ts`, `home.ts`): se cortan tres importaciones circulares, sin cambios visibles.
+
+## 1.5.7 — 2026-10-31
+
+- Menos lecturas de la base: Inicio y Secciones leen entre un 37 % y un 68 % menos filas (cada clase guarda sus conteos de asistencia; consultas por índice). Protege la cuota diaria del plan gratuito; las respuestas no cambian.
+
+## 1.5.6 — 2026-10-31
+
+- Observabilidad: cada petición a la API deja una línea estructurada (ruta sin identificadores, estado, duración y filas leídas y escritas en la base de la organización). SLO de disponibilidad, latencia y cuota de lecturas en `docs/operations/slo.md`, con las lecturas medidas de las pantallas principales.
+
+## 1.5.5 — 2026-10-31
+
+- Seguridad (auditoría manual de noviembre, `docs/security/auditoria-2026-11.md`): la restauración solo acepta las columnas que tiene la organización; tras 10 intentos fallidos, una cuenta espera 15 minutos aunque los intentos lleguen desde varias direcciones; los códigos de sección eligen cada carácter con la misma probabilidad.
+- Prueba nueva: todas las rutas que declara la API exigen sesión, salvo las públicas listadas con su razón.
+
 ## 1.5.4 — 2026-10-31
 
 - Mantenimiento: wrangler 4.156.0 (simulador local con `sharp` y `undici` corregidos); el escáner de dependencias queda sin excepciones.

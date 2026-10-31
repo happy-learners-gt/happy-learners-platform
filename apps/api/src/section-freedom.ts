@@ -4,7 +4,7 @@ import type { Database } from "./storage";
 import { accessTo, forbidden } from "./access";
 import { configurationOf } from "./courses";
 import { content } from "./content";
-import { recordEvent } from "./team";
+import { recordEvent } from "./activity";
 import { courseDifferences, effectiveActivityIds, freedomPolicyOf, freedomReviewOf, loadSection, policyLabel, sectionCoverage } from "./freedom-plan";
 import { courseProposals, proposalLines, sectionSharing } from "./section-sharing";
 import type { Notifier } from "./notify";

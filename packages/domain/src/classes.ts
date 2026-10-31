@@ -49,8 +49,9 @@ export function classPlanInput(input: unknown): ClassPlan | { error: string } {
 export const groupCodePattern = new RegExp(`^[${organizations.map(item => item.letter.toUpperCase()).join("")}]G-[A-Z0-9]{4}-?[A-Z0-9]{2,8}$`);
 const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 export function newGroupCode(organizationId: string, random: (size: number) => Uint8Array) {
-  const bytes = random(8);
-  const body = Array.from(bytes, byte => alphabet[byte % alphabet.length]).join("");
+  // Bytes from 248 up are dropped so every character is equally likely (security audit 2026-11, H3).
+  let body = "";
+  while (body.length < 8) for (const byte of random(16)) if (byte < 248 && body.length < 8) body += alphabet[byte % alphabet.length];
   return `${sectionPrefix(organizationId)}-${body.slice(0, 4)}-${body.slice(4)}`;
 }
 export const normalizeGroupCode = (value: unknown) => typeof value === "string" ? value.trim().toUpperCase().replace(/\s+/g, "") : "";
