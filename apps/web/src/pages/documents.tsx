@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { ReportKind, ReportKindSpec, ReportTemplate, TemplateBlock } from "@happy-learners/domain";
+import { applySuggestion } from "@happy-learners/domain";
+import type { FieldSuggestion, ReportKind, ReportKindSpec, ReportTemplate, TemplateBlock } from "@happy-learners/domain";
 import { api, message, sendFile } from "../api";
 import { Link, useNavigation } from "../navigation";
 import { formatInstant } from "../regional";
@@ -67,12 +68,45 @@ function FieldPicker({ spec, onPick }: { spec: ReportKindSpec; onPick: (key: str
   </select>;
 }
 
-function BlockProperties({ block, spec, images, onChange }: { block: TemplateBlock; spec: ReportKindSpec; images: ImageView[]; onChange: (block: TemplateBlock) => void }) {
+/** «Sugerir campos» (1.5.2): parts of the text that are data, each proposed with its field and accepted one by one. */
+function SuggestFields({ templateId, sectionId, text, onApply }: { templateId: string; sectionId: string; text: string; onApply: (text: string) => void }) {
+  const [suggestions, setSuggestions] = useState<FieldSuggestion[] | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState("");
+  async function ask() {
+    setBusy(true); setError(""); setNotice(""); setSuggestions(null);
+    try {
+      const answer = await api<{ suggestions: FieldSuggestion[]; notice?: string }>(`/report-templates/${templateId}/suggest-fields`, "POST", { text, ...(sectionId ? { sectionId } : {}) });
+      setSuggestions(answer.suggestions); setNotice(answer.notice || "");
+    }
+    catch (cause) { setError(message(cause)); }
+    finally { setBusy(false); }
+  }
+  const drop = (item: FieldSuggestion) => setSuggestions(current => current && current.filter(other => other !== item));
+  return <div className="ai-write">
+    <div className="ai-write-actions"><Icon name="sparkles" size={16}/>
+      <button type="button" className="button ghost small" disabled={busy || !text.trim()} onClick={() => void ask()}>{busy ? "Buscando datos…" : "Sugerir campos"}</button>
+      <span className="hint">Reconoce los datos de la sección de la vista previa.</span>
+    </div>
+    {error && <p className="field-error" role="alert">{error}</p>}
+    {suggestions && <div className="ai-write-proposal" role="region" aria-label="Campos sugeridos">
+      {notice && <p className="muted">{notice}</p>}
+      {!suggestions.length ? <p>No hay datos del texto para convertir en campos.</p> : <ul className="suggested-fields">{suggestions.map(item => <li key={`${item.original}-${item.field}`}>
+        <span>«{item.original}» → <strong>{item.label}</strong> <code>{`{{${item.field}}}`}</code></span>
+        <span className="ai-write-actions">
+          <button type="button" className="button primary small" aria-label={`Usar ${item.label} en lugar de «${item.original}»`} onClick={() => { onApply(applySuggestion(text, item)); drop(item); }}>Usar</button>
+          <button type="button" className="button ghost small" aria-label={`Descartar ${item.label}`} onClick={() => drop(item)}>Descartar</button>
+        </span>
+      </li>)}</ul>}
+    </div>}
+  </div>;
+}
+
+function BlockProperties({ block, spec, images, templateId, sectionId, onChange }: { block: TemplateBlock; spec: ReportKindSpec; images: ImageView[]; templateId: string; sectionId: string; onChange: (block: TemplateBlock) => void }) {
   const alignField = (value: string | undefined, set: (align: "left" | "center" | "right") => void) => <Field label="Alineación"><select value={value || "left"} onChange={event => set(event.target.value as "left")}><option value="left">Izquierda</option><option value="center">Centro</option><option value="right">Derecha</option></select></Field>;
   switch (block.type) {
     case "title": case "text": return <div className="stack">
       <Field label="Texto" hint="Los campos se insertan desde la lista y se llenan con los datos de cada documento."><textarea data-ai-write={`document-${block.id}`} rows={block.type === "title" ? 2 : 6} value={block.text} onChange={event => onChange({ ...block, text: event.target.value })}/></Field>
       {block.type === "text" && <AiWrite field="document-text" target={`document-${block.id}`} label="Texto"/>}
+      <SuggestFields key={block.id} templateId={templateId} sectionId={sectionId} text={block.text} onApply={text => onChange({ ...block, text })}/>
       <FieldPicker spec={spec} onPick={key => onChange({ ...block, text: `${block.text}{{${key}}}` })}/>
       {alignField(block.align, align => onChange({ ...block, align }))}
       {block.type === "text" && <label className="check"><input type="checkbox" checked={!!block.italic} onChange={event => onChange({ ...block, italic: event.target.checked })}/><span>Cursiva</span></label>}
@@ -192,7 +226,7 @@ export function DocumentDesigner({ id }: { id: string }) {
       </section>
       <section className="document-properties" aria-label="Propiedades">
         <h2>{block ? blockLabels[block.type] : "Encabezado y página"}</h2>
-        {block ? <BlockProperties block={block} spec={spec} images={images} onChange={next => change({ ...draft, blocks: draft.blocks.map(item => item.id === next.id ? next : item) })}/> : <div className="stack">
+        {block ? <BlockProperties block={block} spec={spec} images={images} templateId={id} sectionId={previewSection} onChange={next => change({ ...draft, blocks: draft.blocks.map(item => item.id === next.id ? next : item) })}/> : <div className="stack">
           <Field label="Tamaño"><select value={draft.page.size} onChange={event => change({ ...draft, page: { ...draft.page, size: event.target.value as "letter" } })}><option value="letter">Carta</option><option value="legal">Oficio</option><option value="a4">A4</option></select></Field>
           <Field label="Orientación"><select value={draft.page.orientation} onChange={event => change({ ...draft, page: { ...draft.page, orientation: event.target.value as "portrait" } })}><option value="portrait">Vertical</option><option value="landscape">Horizontal</option></select></Field>
           <Field label="Logotipo"><select value={draft.logoId || ""} onChange={event => change({ ...draft, logoId: event.target.value || null })}><option value="">Sin logotipo</option>{images.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
@@ -201,7 +235,7 @@ export function DocumentDesigner({ id }: { id: string }) {
         </div>}
       </section>
     </div>
-    <Section title="Vista previa" action={<div className="document-preview-tools">
+    <Section title="Vista previa" className="document-preview-panel" action={<div className="document-preview-tools">
       <select aria-label="Sección de la vista previa" value={previewSection} onChange={event => setPreviewSection(event.target.value)}>{sections.map(item => <option key={item.id} value={item.id}>{item.course.title} · {item.name}</option>)}</select>
       <Button icon="eye" busy={busy === "preview"} disabled={!previewSection || !!busy} onClick={() => void showPreview()}>Ver con datos reales</Button>
     </div>}>

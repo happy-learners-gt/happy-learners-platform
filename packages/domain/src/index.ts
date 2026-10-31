@@ -193,3 +193,7 @@ export type { ReportKind, ReportKindSpec, ReportRecord, ReportTemplate, Template
 export { jpegImage } from "./pdf";
 export { combineLabels, minuteCanonical, minuteClosed, minuteSignatureCanonical, signingProblem } from "./panel-minutes";
 export type { MinuteContent, MinuteEvaluator, MinuteSignature } from "./panel-minutes";
+export { progressRecord, progressSummary } from "./progress-report";
+export type { LearnerProgress, ProgressInput, ProgressSummary } from "./progress-report";
+export { applySuggestion, checkedSuggestions, exampleSuggestions, fixtureSuggester, suggestInput, suggestPrompt, suggestPromptVersion, suggestSchema } from "./field-suggestions";
+export type { FieldSuggester, FieldSuggestion, SuggestField, SuggestInput, SuggestOutput } from "./field-suggestions";

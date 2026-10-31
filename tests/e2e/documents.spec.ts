@@ -2,8 +2,8 @@ import { test, expect } from "./local-test";
 import { sessionToken, signIn, toast } from "./helpers";
 
 // 1.5.0 (docs/design/constructor-de-reportes.md): administration designs a document, previews it with real data,
-// publishes it, and the documents generated from then on use it. The certificate is used here so the report card
-// other specs check keeps its format.
+// publishes it, and the documents generated from then on use it; 1.5.2 adds «Sugerir campos». The certificate is used
+// here so the report card other specs check keeps its format.
 test("administration designs, previews and publishes the certificate, and new certificates use it", async ({ page, playwright, baseURL }) => {
   const admin = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("admin-demo")}` } });
   const educator = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("lucia.herrera")}` } });
@@ -29,6 +29,13 @@ test("administration designs, previews and publishes the certificate, and new ce
     await expect(properties.getByLabel("Texto")).toHaveValue("Constancia oficial de {{constancia.tipo}}");
     await page.getByRole("region", { name: "Bloques" }).getByRole("button", { name: "Texto" }).click();
     await expect(page.getByRole("region", { name: "Hoja" }).locator("li")).toHaveCount(5);
+    // «Sugerir campos» (1.5.2) proposes the written date as a field; accepting it replaces it in the text.
+    await properties.getByLabel("Texto").fill("Emitida el 2 de marzo de 2027.");
+    await properties.getByRole("button", { name: "Sugerir campos" }).click();
+    const suggested = properties.getByRole("region", { name: "Campos sugeridos" });
+    await expect(suggested).toContainText("«2 de marzo de 2027» → Fecha de hoy");
+    await suggested.getByRole("button", { name: "Usar Fecha de hoy en lugar de «2 de marzo de 2027»" }).click();
+    await expect(properties.getByLabel("Texto")).toHaveValue("Emitida el {{fecha.hoy}}.");
     await page.getByRole("button", { name: "Guardar" }).click();
     await expect(toast(page)).toContainText("Plantilla guardada.");
 
@@ -48,5 +55,11 @@ test("administration designs, previews and publishes the certificate, and new ce
     expect(certificate.status()).toBe(200);
     expect(certificate.headers()["content-type"]).toBe("application/pdf");
     expect((await certificate.body()).toString("latin1")).toContain("Constancia oficial de finalizaci\\363n");
+
+    // The section's progress report (1.5.2) downloads from Notas with the default template.
+    await page.goto("/secciones/seed-group-mat-6a/notas");
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Reporte de avance" }).click();
+    expect((await download).suggestedFilename()).toMatch(/\.pdf$/);
   } finally { await admin.dispose(); await educator.dispose(); }
 });

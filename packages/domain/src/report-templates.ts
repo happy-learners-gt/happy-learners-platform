@@ -5,7 +5,7 @@ import type { PdfAlign, PdfBlock, PdfDocument, PdfImage, PdfPage } from "./pdf";
  * named fields (`{{estudiante.nombre}}`), never code. Each kind of document declares its fields and its datasets
  * (tables); rendering fills a template with one record per document (a student, a section) into a PDF document.
  */
-export type ReportKind = "report-card" | "certificate" | "panel-minutes";
+export type ReportKind = "report-card" | "certificate" | "panel-minutes" | "progress-report";
 export type TemplateBlock =
   | { id: string; type: "title"; text: string; align?: PdfAlign }
   | { id: string; type: "text"; text: string; align?: PdfAlign; size?: number; italic?: boolean }
@@ -39,6 +39,15 @@ export const reportKinds: Record<ReportKind, ReportKindSpec> = {
     fields: [...common, { key: "periodo.nombre", label: "Periodo" }, { key: "actividad.nombre", label: "Evaluación" }, { key: "actividad.puntos", label: "Puntos de la evaluación" },
       { key: "tribunal.criterio", label: "Cómo combina el tribunal" }, { key: "resultado.nota", label: "Resultado del tribunal" }, { key: "acta.estado", label: "Estado del acta" }, { key: "acta.huella", label: "Huella del acta" }],
     datasets: [{ key: "integrantes", label: "Integrantes del tribunal", columns: [{ key: "integrante", label: "Integrante" }, { key: "rol", label: "Rol" }, { key: "calificacion", label: "Calificación" }, { key: "firma", label: "Firma" }, { key: "fecha", label: "Fecha de la firma" }] }],
+  },
+  "progress-report": {
+    label: "Reporte de avance",
+    fields: [...common.filter(item => item.key !== "estudiante.nombre"), { key: "avance.clases", label: "Clases dadas de las programadas" }, { key: "avance.cobertura", label: "Cobertura del plan" },
+      { key: "avance.asistencia", label: "Asistencia de la sección" }, { key: "avance.lecturas", label: "Lecturas obligatorias leídas" }, { key: "avance.estudiantes", label: "Número de estudiantes" }],
+    datasets: [
+      { key: "unidades", label: "Unidades del plan", columns: [{ key: "unidad", label: "Unidad" }, { key: "lecciones", label: "Lecciones" }, { key: "dadas", label: "Dadas" }, { key: "cobertura", label: "Cobertura" }, { key: "lecturas", label: "Lecturas" }] },
+      { key: "estudiantes", label: "Estudiantes", columns: [{ key: "estudiante", label: "Estudiante" }, { key: "asistencia", label: "Asistencia" }, { key: "presentes", label: "Presente" }, { key: "ausencias", label: "Ausencias" }, { key: "justificadas", label: "Justificadas" }, { key: "lecturas", label: "Lecturas" }] },
+    ],
   },
   certificate: {
     label: "Constancia",
@@ -155,6 +164,15 @@ export function defaultTemplate(kind: ReportKind): ReportTemplate {
     { id: "datos", type: "fields", pairs: [{ label: "Estudiante", field: "estudiante.nombre" }, { label: "Evaluación", field: "actividad.nombre" }, { label: "Periodo", field: "periodo.nombre" }, { label: "Criterio", field: "tribunal.criterio" }, { label: "Resultado", field: "resultado.nota" }] },
     { id: "integrantes", type: "table", dataset: "integrantes", columns: [{ field: "integrante", label: "Integrante", width: 3 }, { field: "rol", label: "Rol", width: 1.5 }, { field: "calificacion", label: "Calificación", width: 1.5, align: "right" }, { field: "firma", label: "Firma electrónica", width: 3 }, { field: "fecha", label: "Fecha", width: 2 }], borders: true, shade: true },
     { id: "estado", type: "text", text: "Estado: {{acta.estado}}. Huella del acta (SHA-256): {{acta.huella}}.", size: 8.5, italic: true },
+  ] };
+  if (kind === "progress-report") return { ...base, header: ["{{organizacion.nombre}}", "Reporte de avance · {{curso.nombre}} · {{seccion.nombre}}"], blocks: [
+    { id: "titulo", type: "title", text: "Reporte de avance", align: "center" },
+    { id: "datos", type: "fields", pairs: [{ label: "Curso", field: "curso.nombre" }, { label: "Sección", field: "seccion.nombre" }, { label: "Docentes", field: "seccion.docentes" }, { label: "Ciclo", field: "ciclo.nombre" }, { label: "Fecha de corte", field: "fecha.hoy" }] },
+    { id: "resumen", type: "fields", pairs: [{ label: "Clases", field: "avance.clases" }, { label: "Cobertura del plan", field: "avance.cobertura" }, { label: "Asistencia", field: "avance.asistencia" }, { label: "Lecturas", field: "avance.lecturas" }] },
+    { id: "unidades", type: "table", dataset: "unidades", columns: [{ field: "unidad", label: "Unidad", width: 4 }, { field: "lecciones", label: "Lecciones", width: 1.2, align: "right" }, { field: "dadas", label: "Dadas", width: 1, align: "right" }, { field: "cobertura", label: "Cobertura", width: 1.4, align: "right" }, { field: "lecturas", label: "Lecturas", width: 1.2, align: "right" }], borders: true, shade: true },
+    { id: "estudiantes", type: "table", dataset: "estudiantes", columns: [{ field: "estudiante", label: "Estudiante", width: 3.2 }, { field: "asistencia", label: "Asistencia", width: 1.5, align: "right" }, { field: "presentes", label: "Presente", width: 1.4, align: "right" }, { field: "ausencias", label: "Ausencias", width: 1.6, align: "right" }, { field: "justificadas", label: "Justificadas", width: 1.9, align: "right" }, { field: "lecturas", label: "Lecturas", width: 1.4, align: "right" }], borders: true, shade: true },
+    { id: "nota", type: "text", text: "La asistencia cuenta presentes y tardanzas sobre las clases con asistencia tomada; las ausencias justificadas no cuentan. La cobertura cuenta las lecciones dadas en clases completadas.", size: 8.5, italic: true },
+    { id: "firmas", type: "signatures", lines: [{ name: "Docente", role: "{{seccion.docentes}}" }, { name: "Coordinación académica", role: "{{organizacion.nombre}}" }] },
   ] };
   if (kind === "certificate") return { ...base, header: ["{{organizacion.nombre}}", "Constancia"], blocks: [
     { id: "titulo", type: "title", text: "Constancia de {{constancia.tipo}}", align: "center" },

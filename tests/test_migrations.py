@@ -1730,3 +1730,32 @@ class PanelMinutesMigrationTests(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             db.execute("INSERT INTO report_templates(id,organization_id,kind,program_id,name,draft,updated_by,updated_at) VALUES ('t3','org-demo','report-card',NULL,'Otra','{}',?,'t')", (user,))
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class ProgressReportMigrationTests(unittest.TestCase):
+    def test_documents_keep_their_rows_and_accept_progress_reports(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            if path.name == "0073_progress_report.sql":
+                user = db.execute("SELECT id FROM users LIMIT 1").fetchone()[0]
+                db.execute("INSERT INTO report_templates(id,organization_id,kind,program_id,name,draft,published_version,updated_by,updated_at) VALUES ('t1','org-demo','panel-minutes',NULL,'Acta','{}',1,?,'t')", (user,))
+                db.execute("INSERT INTO report_template_versions(template_id,version,content,published_by,published_at) VALUES ('t1',1,'{}',?,'t')", (user,))
+                db.execute("INSERT INTO generated_documents(id,organization_id,kind,template_id,template_version,subject_type,subject_id,sha256,created_by,created_at) VALUES ('d1','org-demo','panel-minutes','t1',1,'minute','m',?,?,'t')", ("a" * 64, user))
+                db.execute("INSERT INTO ai_runs(id,organization_id,user_id,course_id,task,prompt_version,generator,model,input_chars,duration_ms,status,created_at) VALUES ('r0','org-demo',?,NULL,'write','v1','fixture','fixture',10,5,'ok','t')", (user,))
+                db.commit()
+            db.executescript(path.read_text())
+        self.assertEqual(db.execute("SELECT id,kind,published_version FROM report_templates").fetchall(), [("t1", "panel-minutes", 1)])
+        self.assertEqual(db.execute("SELECT template_id,version FROM report_template_versions").fetchall(), [("t1", 1)])
+        self.assertEqual(db.execute("SELECT id,task FROM ai_runs").fetchall(), [("r0", "write")])
+        self.assertEqual(db.execute("SELECT id,template_id FROM generated_documents").fetchall(), [("d1", "t1")])
+        user = db.execute("SELECT id FROM users LIMIT 1").fetchone()[0]
+        db.execute("INSERT INTO report_templates(id,organization_id,kind,program_id,name,draft,updated_by,updated_at) VALUES ('t2','org-demo','progress-report',NULL,'Avance','{}',?,'t')", (user,))
+        db.execute("INSERT INTO generated_documents(id,organization_id,kind,template_id,template_version,subject_type,subject_id,sha256,created_by,created_at) VALUES ('d2','org-demo','progress-report',NULL,NULL,'section','g',?,?,'t')", ("b" * 64, user))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO report_templates(id,organization_id,kind,program_id,name,draft,updated_by,updated_at) VALUES ('t3','org-demo','informe',NULL,'X','{}',?,'t')", (user,))
+        run = "INSERT INTO ai_runs(id,organization_id,user_id,course_id,task,prompt_version,generator,model,input_chars,duration_ms,status,created_at) VALUES (?,'org-demo',?,NULL,?,'v1','fixture','fixture',10,5,'ok','t')"
+        db.execute(run, ("r1", user, "suggest-fields"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(run, ("r2", user, "otra-tarea"))
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
