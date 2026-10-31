@@ -2,7 +2,7 @@
  * AI usage (1.4.0, docs/design/asistente-ia.md §6a): what each run cost, from the price administration set for its
  * model and date, and the month's totals by task, course and person. Prices are never fixed in code: they change.
  */
-export type AiTask = "lesson-proposal" | "book-map" | "lesson-review-explain" | "lesson-improve" | "write" | "rules-to-constraints";
+export type AiTask = "lesson-proposal" | "book-map" | "lesson-review-explain" | "lesson-improve" | "write" | "rules-to-constraints" | "suggest-fields";
 /** Tokens a model reports for one answer. */
 export interface AiTokenUsage { inputTokens: number; outputTokens: number }
 export type AiRunStatus = "ok" | "error" | "transient" | "refused" | "incomplete";
@@ -15,10 +15,10 @@ export interface AiPrice { model: string; effectiveFrom: string; inputPerMillion
 export interface AiTotals { runs: number; errors: number; inputTokens: number; outputTokens: number; cost: number | null; averageMs: number }
 export interface AiUsageSummary { total: AiTotals; byTask: (AiTotals & { task: AiTask; label: string })[]; byCourse: (AiTotals & { courseId: string | null; label: string })[]; byPerson: (AiTotals & { userId: string | null; label: string })[] }
 
-export const aiTasks: AiTask[] = ["lesson-proposal", "book-map", "lesson-review-explain", "lesson-improve", "write", "rules-to-constraints"];
+export const aiTasks: AiTask[] = ["lesson-proposal", "book-map", "lesson-review-explain", "lesson-improve", "write", "rules-to-constraints", "suggest-fields"];
 export const aiTaskLabels: Record<AiTask, string> = {
   "lesson-proposal": "Propuestas de lecciones", "book-map": "Mapa al plan", "lesson-review-explain": "Explicación de la revisión",
-  "lesson-improve": "Mejora de lecciones", write: "Redacción", "rules-to-constraints": "Reglas de horario",
+  "lesson-improve": "Mejora de lecciones", write: "Redacción", "rules-to-constraints": "Reglas de horario", "suggest-fields": "Campos de documentos",
 };
 
 /** The price in force for a model on a day: the latest one that started on or before it. */

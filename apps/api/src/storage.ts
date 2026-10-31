@@ -71,6 +71,7 @@ import demoResourcesMigration from "../../../database/migrations/0069_demo_resou
 import aiRunsMigration from "../../../database/migrations/0070_ai_runs.sql";
 import reportTemplatesMigration from "../../../database/migrations/0071_report_templates.sql";
 import panelMinutesMigration from "../../../database/migrations/0072_panel_minutes.sql";
+import progressReportMigration from "../../../database/migrations/0073_progress_report.sql";
 import { organizationIds } from "@happy-learners/domain";
 import { exportStore, importStore, RestoreError, type Backup } from "./backup";
 import { processProposals } from "./proposals";
@@ -223,6 +224,7 @@ export class OrganizationStore extends DurableObject<Env> {
       if (!applied.length || applied[0].version < 70) { this.ctx.storage.sql.exec(aiRunsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (70,?)", scope); }
       if (!applied.length || applied[0].version < 71) { this.ctx.storage.sql.exec(reportTemplatesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (71,?)", scope); }
       if (!applied.length || applied[0].version < 72) { runScript(this.ctx.storage.sql, panelMinutesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (72,?)", scope); }
+      if (!applied.length || applied[0].version < 73) { runScript(this.ctx.storage.sql, progressReportMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (73,?)", scope); }
       // Compare-and-write plus dependent writes belong to one SQLite transaction.
       if (guard && !this.ctx.storage.sql.exec(guard.sql, ...guard.values).toArray().length) return [];
       return statements.map(statement => this.ctx.storage.sql.exec(statement.sql, ...statement.values).toArray());

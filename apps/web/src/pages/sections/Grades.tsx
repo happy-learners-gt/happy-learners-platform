@@ -114,11 +114,18 @@ export function SectionGradesPage() {
     catch (cause) { toast({ tone: "error", message: message(cause) }); }
     finally { setBusy(""); }
   }
+  async function progress() {
+    setBusy("progress");
+    try { await download(`/sections/${section.id}/grades/progress.pdf`, "reporte-de-avance.pdf"); }
+    catch (cause) { toast({ tone: "error", message: message(cause) }); }
+    finally { setBusy(""); }
+  }
   const ready = !!data?.year && data.learners.length > 0;
   const header = <PageHeader crumbs={crumbs} title="Notas" description="El plan de evaluación de cada periodo, los punteos de cada estudiante, la revisión de cierre y las boletas. Un periodo sin nota no cuenta como cero."
     actions={ready && <>
       <Button icon="download" onClick={() => void exportCsv()}>Exportar CSV</Button>
       <Button icon="file" busy={busy === "report"} disabled={!!busy} onClick={() => void reports()}>{busy === "report" ? "Generando…" : "Boletas en PDF"}</Button>
+      <Button icon="file" busy={busy === "progress"} disabled={!!busy || !data?.learners.length} onClick={() => void progress()}>{busy === "progress" ? "Generando…" : "Reporte de avance"}</Button>
     </>}/>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
   if (!data) return <>{header}<Loading label="Cargando notas…" lines={6}/></>;

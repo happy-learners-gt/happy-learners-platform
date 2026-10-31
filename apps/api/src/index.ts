@@ -443,7 +443,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (aiAssistAllowed) return aiAssist(path, method, input, current, db, env);
   if (timetableAllowed) return timetables(path, method, input, current, db, env);
   if (minuteAllowed) return panelMinutes(path, method, input, current, db);
-  if (reportAllowed) return reports(path, method, input, request, current, db, (kind, template, sectionId, learnerId) => documentPreview(db, current, kind, template, sectionId, learnerId));
+  if (reportAllowed) return reports(path, method, input, request, current, db, (kind, template, sectionId, learnerId) => documentPreview(db, current, kind, template, sectionId, learnerId), env);
   if (path === "/api/organization/backup" || path === "/api/organization/restore") {
     if (current.role !== "admin") return json({ error: "Solo administración respalda o restaura la organización." }, 403);
     if (path.endsWith("/backup")) {

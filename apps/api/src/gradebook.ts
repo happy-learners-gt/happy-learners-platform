@@ -1,6 +1,6 @@
 import type { AcademicYear, AssessmentActivity, AssessmentEvaluator, AssessmentKind, AssessmentMark, AssessmentScore, AtomicMark, GradeChange, GradeComment, Gradebook, GradebookPeriod, GradeEntry, GradingActivity, GradingScheme, Mark, Member, MyPanel, PeriodReview, Rubric } from "@happy-learners/contracts";
-import { assessmentKindLabel, csvFile, defaultTemplate, displayOf, gradeResult, isAssessmentKind, learnerResult, markValue, maxAssessmentActivities, maxCommentLength, maxGradeChanges, pdfFile, planTotal, pointsInput, rubricInput, schemeFromSettings, schemeInput, scoreInput } from "@happy-learners/domain";
-import type { GradingPolicy, PdfBlock, ReportKind, ReportRecord, ReportTemplate } from "@happy-learners/domain";
+import { assessmentKindLabel, csvFile, defaultTemplate, progressRecord, progressSummary, displayOf, gradeResult, isAssessmentKind, learnerResult, markValue, maxAssessmentActivities, maxCommentLength, maxGradeChanges, pdfFile, planTotal, pointsInput, rubricInput, schemeFromSettings, schemeInput, scoreInput } from "@happy-learners/domain";
+import type { GradingPolicy, PdfBlock, ProgressInput, ReportKind, ReportRecord, ReportTemplate } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
 import { configurationOf } from "./courses";
 import { accessTo } from "./access";
@@ -10,7 +10,7 @@ import { activeTemplate, generate, pdfResponse } from "./reports";
 import { minuteRecord, minutesOf } from "./panel-minutes";
 import { gradingSchemesFor } from "./grading-schemes";
 import { groupGrades } from "./group-grading";
-import { effectiveActivityIds, loadSection } from "./freedom-plan";
+import { effectiveActivityIds, effectiveLessonIds, loadSection } from "./freedom-plan";
 
 /**
  * The section's gradebook (libreta) and the course's assessment plan:
@@ -21,7 +21,8 @@ import { effectiveActivityIds, loadSection } from "./freedom-plan";
  * - POST …/periods/:periodId/submit hands the period in; POST …/return { note } returns it; POST …/lock approves and
  *   closes it; DELETE …/lock reopens it.
  * - GET /api/sections/:id/grades/history?learner= lists a student's score changes; GET …/grades/report.pdf[?year=&learner=]
- *   is the report card (boleta) of the section or of one student.
+ *   is the report card (boleta) of the section or of one student; GET …/grades/certificate.pdf?learner= a certificate;
+ *   GET …/grades/progress.pdf the section's progress report (1.5.2).
  * Whoever sees the section reads it. Administration and the section's educators write the open periods of the current
  * year and hand them in; administration and coordination approve (close) or return them; only administration reopens.
  */
@@ -30,6 +31,7 @@ const gradesPath = /^\/api\/sections\/([a-z0-9-]+)\/grades$/;
 const historyPath = /^\/api\/sections\/([a-z0-9-]+)\/grades\/history$/;
 const reportPath = /^\/api\/sections\/([a-z0-9-]+)\/grades\/report\.pdf$/;
 const certificatePath = /^\/api\/sections\/([a-z0-9-]+)\/grades\/certificate\.pdf$/;
+const progressPath = /^\/api\/sections\/([a-z0-9-]+)\/grades\/progress\.pdf$/;
 const csvPath = /^\/api\/sections\/([a-z0-9-]+)\/grades\/report\.csv$/;
 const periodPath = /^\/api\/sections\/([a-z0-9-]+)\/grades\/periods\/(period-[a-f0-9-]{36})\/(lock|submit|return|plan)$/;
 const panelPath = /^\/api\/sections\/([a-z0-9-]+)\/grades\/activities\/(assessment-[a-f0-9-]{36})\/(panel|evaluators)$/;
@@ -37,7 +39,7 @@ const groupGradePath = /^\/api\/sections\/([a-z0-9-]+)\/grades\/activities\/(ass
 
 export function gradebookMethods(path: string): string[] | null {
   if (gradesPath.test(path)) return ["GET", "PUT"];
-  if (historyPath.test(path) || reportPath.test(path) || csvPath.test(path) || certificatePath.test(path)) return ["GET"];
+  if (historyPath.test(path) || reportPath.test(path) || csvPath.test(path) || certificatePath.test(path) || progressPath.test(path)) return ["GET"];
   const period = periodPath.exec(path);
   if (period) return period[3] === "lock" ? ["POST", "DELETE"] : period[3] === "plan" ? ["PUT"] : ["POST"];
   if (panelPath.test(path)) return ["PUT"];
@@ -396,7 +398,7 @@ type OpenPeriod = { id: string; name: string; position: number; weight: number; 
 
 export async function grades(path: string, method: string, input: unknown, url: URL, current: Member, db: Database): Promise<Response> {
   const period = periodPath.exec(path), panelAction = panelPath.exec(path), groupGrade = groupGradePath.exec(path);
-  const groupId = (period || panelAction || groupGrade || gradesPath.exec(path) || historyPath.exec(path) || reportPath.exec(path) || csvPath.exec(path) || certificatePath.exec(path))![1];
+  const groupId = (period || panelAction || groupGrade || gradesPath.exec(path) || historyPath.exec(path) || reportPath.exec(path) || csvPath.exec(path) || certificatePath.exec(path) || progressPath.exec(path))![1];
   const allowed = await access(db, current, groupId);
   if (allowed instanceof Response) return allowed;
   const { section } = allowed;
@@ -410,6 +412,7 @@ export async function grades(path: string, method: string, input: unknown, url: 
   }
   if (historyPath.test(path)) return changesOf(db, current, section, url.searchParams.get("learner") || "");
   if (reportPath.test(path)) return report(db, current, section, url);
+  if (progressPath.test(path)) return progressReport(db, current, section);
   if (certificatePath.test(path)) return certificate(db, current, section, url.searchParams.get("learner") || "", url.searchParams.get("tipo") === "finalizacion" ? "finalización" : "inscripción");
   if (csvPath.test(path)) return reportCsv(db, current, section, url);
   if (method === "GET") return reply({ gradebook: await gradebook(db, current, allowed, url.searchParams.get("year")) });
@@ -910,6 +913,7 @@ export async function documentPreview(db: Database, current: Member, kind: Repor
     return pdfResponse(await generate(db, current, "panel-minutes", { id: null, version: null, template }, [record], "Acta de tribunal · vista previa", { type: "section", id: sectionId }, false), "acta-vista-previa.pdf");
   }
   if (kind === "certificate") return certificate(db, current, allowed.section, learnerId || "", "inscripción", template);
+  if (kind === "progress-report") return progressReport(db, current, allowed.section, template);
   const url = new URL(`https://preview.local/?${learnerId ? `learner=${encodeURIComponent(learnerId)}` : ""}`);
   return report(db, current, allowed.section, url, template);
 }
@@ -936,6 +940,45 @@ async function certificate(db: Database, current: Member, section: SectionRow, l
   const used = override ? { id: null, version: null, template: override } : published || { id: null, version: null, template: defaultTemplate("certificate") };
   const file = await generate(db, current, "certificate", used, [record], `Constancia · ${learner.name}`, { type: "learner", id: learner.id }, !override);
   return pdfResponse(file, `constancia-${learner.name.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60)}.pdf`);
+}
+
+/** The section's progress report (1.5.2): classes given, plan coverage by unit, attendance and readings by student. */
+async function progressReport(db: Database, current: Member, section: SectionRow, override?: ReportTemplate) {
+  const [organization, group, educators, years, learners, classes, attendance, units, lessons, taught, readings, marks] = await db.batch([
+    db.prepare("SELECT name,timezone FROM organizations WHERE id=?").bind(current.organizationId),
+    db.prepare("SELECT c.program_id AS programId FROM course_groups g JOIN courses c ON c.id=g.course_id WHERE g.id=?").bind(section.id),
+    db.prepare("SELECT COALESCE(u.display_name,u.username) AS name FROM section_educators e JOIN users u ON u.id=e.user_id WHERE e.group_id=? ORDER BY name").bind(section.id),
+    db.prepare("SELECT name FROM academic_years WHERE organization_id=? AND status='current' ORDER BY program_id IS NULL LIMIT 1").bind(current.organizationId),
+    db.prepare("SELECT id,display_name AS name FROM group_learners WHERE group_id=? AND organization_id=? AND status='active' ORDER BY display_name COLLATE NOCASE,id").bind(section.id, current.organizationId),
+    db.prepare("SELECT id,status FROM class_sessions WHERE group_id=? AND organization_id=?").bind(section.id, current.organizationId),
+    db.prepare("SELECT m.session_id AS sessionId,m.learner_id AS learnerId,m.status FROM attendance_marks m JOIN class_sessions s ON s.id=m.session_id WHERE s.group_id=? AND s.organization_id=?").bind(section.id, current.organizationId),
+    db.prepare("SELECT id,name FROM learning_units WHERE course_id=? AND status='active' AND (group_id IS NULL OR group_id=?) ORDER BY position,id").bind(section.courseId, section.id),
+    db.prepare("SELECT l.id,l.course_unit_id AS unitId FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id WHERE u.course_id=? AND l.archived=0 AND l.revision>0 AND l.group_id IS NULL ORDER BY l.position,l.id").bind(section.courseId),
+    db.prepare("SELECT DISTINCT sl.lesson_id AS id FROM class_session_lessons sl JOIN class_sessions s ON s.id=sl.session_id WHERE s.group_id=? AND s.organization_id=? AND s.status='completed'").bind(section.id, current.organizationId),
+    db.prepare("SELECT id,unit_id AS unitId FROM readings WHERE course_id=? AND organization_id=? AND required=1 AND (group_id IS NULL OR group_id=?)").bind(section.courseId, current.organizationId, section.id),
+    db.prepare("SELECT reading_id AS readingId,learner_id AS learnerId FROM reading_marks WHERE group_id=?").bind(section.id),
+  ]) as unknown as [{ name: string | null; timezone: string }[], { programId: string | null }[], { name: string }[], { name: string }[], ProgressInput["learners"], ProgressInput["classes"], ProgressInput["attendance"], { id: string; name: string }[], { id: string; unitId: string }[], { id: string }[], ProgressInput["readings"], ProgressInput["readingMarks"]];
+  // A section that adapts its plan (section freedom) follows its own lessons; otherwise the course's published ones.
+  const own = await effectiveLessonIds(db, current.organizationId, section.courseId, section.id);
+  const unitOf = own ? new Map((await db.prepare("SELECT l.id,l.course_unit_id AS unitId FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id WHERE u.course_id=? AND (l.group_id IS NULL OR l.group_id=?)").bind(section.courseId, section.id).all<{ id: string; unitId: string }>()).results.map(row => [row.id, row.unitId]))
+    : new Map(lessons.map(row => [row.id, row.unitId]));
+  const planned = own || lessons.map(row => row.id);
+  const summary = progressSummary({
+    learners, classes, attendance, taught: taught.map(row => row.id), readings, readingMarks: marks,
+    units: units.map(unit => ({ id: unit.id, name: unit.name, lessons: planned.filter(id => unitOf.get(id) === unit.id) })),
+  });
+  const zone = organization[0]?.timezone || "America/Guatemala";
+  const progress = progressRecord(summary);
+  const record: ReportRecord = { fields: {
+    "organizacion.nombre": organization[0]?.name || "Organización", "fecha.hoy": new Intl.DateTimeFormat("es-GT", { timeZone: zone, dateStyle: "long" }).format(new Date()),
+    "ciclo.nombre": years[0]?.name || "", "seccion.nombre": section.name, "curso.nombre": section.courseTitle, "seccion.docentes": educators.map(row => row.name).join(", ") || "Sin asignar",
+    ...progress.fields,
+  }, datasets: progress.datasets };
+  const published = override ? null : await activeTemplate(db, current.organizationId, "progress-report", group[0]?.programId || null);
+  const used = override ? { id: null, version: null, template: override } : published || { id: null, version: null, template: defaultTemplate("progress-report") };
+  const file = await generate(db, current, "progress-report", used, [record], `Reporte de avance · ${section.courseTitle} · ${section.name}`, { type: "section", id: section.id }, !override);
+  if (!override) await event(db, current, { action: "recorded", targetType: "group", targetId: section.id, courseId: section.courseId, summary: `Generó el reporte de avance de «${section.name}»` }).run();
+  return pdfResponse(file, `avance-${override ? "vista-previa" : `${section.courseTitle}-${section.name}`.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60)}.pdf`);
 }
 
 /** Tribunal work assigned to the signed-in person. Other evaluators' marks stay hidden until every one has marked. */
