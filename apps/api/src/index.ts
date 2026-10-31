@@ -307,16 +307,26 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
     const limit = await db.prepare("INSERT INTO login_limits (bucket, attempts, expires_at) VALUES (?,1,?) ON CONFLICT(bucket) DO UPDATE SET attempts=CASE WHEN expires_at<? THEN 1 ELSE attempts+1 END, expires_at=CASE WHEN expires_at<? THEN excluded.expires_at ELSE expires_at END RETURNING attempts")
       .bind(bucket, now + 900000, now, now).first<{ attempts: number }>();
     if (!limit || limit.attempts > 30) return json({ error: "Demasiados intentos. Espera 15 minutos y vuelve a intentar." }, 429, { "Retry-After": "900" });
+    // Security audit 2026-11 (H2): failed attempts also count per account, so guesses spread over many addresses stop
+    // too; signing in clears them. The bucket is a hash of the name, never the name itself.
+    const account = await digest(`account:${value.username.trim().toLowerCase()}`);
+    const failures = await db.prepare("SELECT attempts FROM login_limits WHERE bucket=? AND expires_at>=?").bind(account, now).first<{ attempts: number }>();
+    if (failures && failures.attempts >= 10) return json({ error: "Demasiados intentos. Espera 15 minutos y vuelve a intentar." }, 429, { "Retry-After": "900" });
     const user = await db.prepare("SELECT u.id, u.password_salt, u.password_hash FROM users u JOIN memberships m ON m.user_id=u.id WHERE u.username=? AND m.active=1").bind(value.username.trim().toLowerCase()).first<{ id: string; password_salt: string; password_hash: string }>();
     const valid = await verifyPassword(value.password, user?.password_salt || "synthetic-dummy-salt", user?.password_hash || "0".repeat(64));
     // ST-158: each attempt on an existing account joins its owner's sign-in history, with a device summary and country.
     const client = clientOf(request);
     if (user && !valid) await failedSignIn(db, user.id, scope, client).run();
-    if (!user || !valid) return json({ error: "Usuario o contraseña incorrectos." }, 401);
+    if (!user || !valid) {
+      await db.prepare("INSERT INTO login_limits (bucket, attempts, expires_at) VALUES (?,1,?) ON CONFLICT(bucket) DO UPDATE SET attempts=CASE WHEN expires_at<? THEN 1 ELSE attempts+1 END, expires_at=CASE WHEN expires_at<? THEN excluded.expires_at ELSE expires_at END")
+        .bind(account, now + 900000, now, now).run();
+      return json({ error: "Usuario o contraseña incorrectos." }, 401);
+    }
     const token = tokenPrefix(scope) + newToken();
     await db.batch([
       db.prepare("DELETE FROM sessions WHERE expires_at<=?").bind(now),
       db.prepare("DELETE FROM login_limits WHERE expires_at<=?").bind(now),
+      db.prepare("DELETE FROM login_limits WHERE bucket=?").bind(account),
       ...openSession(db, await digest(token), user.id, scope, "password", client, now),
     ]);
     return json({ ok: true }, 200, { "Set-Cookie": cookie(token, request) });

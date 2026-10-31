@@ -22,7 +22,8 @@ Reemplaza la necesidad de recordar el historial. Se actualiza al cerrar cada lot
 | 1.5.1 | Acta de tribunal firmada por cada integrante; Redactar con IA en el diseñador | En producción (#98) |
 | 1.5.2 | Reporte de avance de una sección; «Sugerir campos» en el diseñador | En producción (#99) |
 | 1.5.3 | Aulas en el modelo de datos y en los horarios (capacidad, una clase por aula a la vez) | En producción (#100) |
-| 1.5.4 | wrangler 4.156.0; escáner de dependencias sin excepciones | En PR |
+| 1.5.4 | wrangler 4.156.0; escáner de dependencias sin excepciones | En PR (#101) |
+| 1.5.5 | Auditoría de seguridad manual y sus correcciones (`docs/security/auditoria-2026-11.md`) | En PR |
 
 Siguiente migración libre: **0075** (1.4.0 usa 0070; 1.5.0 usa 0071; 1.5.1 usa 0072; 1.5.2 usa 0073; 1.5.3 usa 0074). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
 
@@ -80,7 +81,7 @@ con apoyo puntual.
    con autorización).
 2. ~~Escáneres en CI~~ (hecho, #89): gitleaks, OSV-Scanner y Semgrep con la regla propia `sql-interpolated-text`
    (`docs/operations/escaneres.md`). Pendiente: hacerlos obligatorios tras dos semanas (desde el 13-nov); ~~actualizar wrangler~~ (1.5.4, sin excepciones); CodeQL: el usuario decidió no pagar GitHub Code Security por ahora (30-oct); se revisa al constituir la empresa.
-3. **Auditoría de seguridad manual** con modelo de amenazas: aislamiento entre organizaciones, permisos por ruta
+3. ~~Auditoría de seguridad manual~~ (1.5.5, `docs/security/auditoria-2026-11.md`; queda la decisión R1) con modelo de amenazas: aislamiento entre organizaciones, permisos por ruta
    (matriz exhaustiva generada desde el enrutador), sesiones, archivos y PDF, datos de menores, IA (entradas del libro y
    salidas). Resultado: `docs/security/auditoria-2026-11.md` con hallazgos priorizados y lotes de corrección.
 4. **SLO y observabilidad:** definir SLO (por ejemplo disponibilidad 99,9 % y p95 < 500 ms en las rutas principales),
