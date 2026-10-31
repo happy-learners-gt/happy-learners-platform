@@ -68,6 +68,12 @@ export function importStore(sql: SqlStorage, scope: string, backup: Backup) {
   if (backup.schemaVersion !== schemaVersion(sql)) throw new RestoreError(`La copia es del esquema ${backup.schemaVersion} y este espacio usa el ${schemaVersion(sql)}.`);
   const present = tables(sql), names = present.filter(name => backup.tables[name] || !OPTIONAL.has(name));
   if (names.length !== Object.keys(backup.tables).length || names.some(name => !backup.tables[name])) throw new RestoreError("La copia no tiene las mismas tablas que este espacio.");
+  // Column names go into the statements below: they must be exactly this store's (security audit 2026-11, H1).
+  for (const name of names) {
+    const expected = columnsOf(sql, name).filter(column => !SECRET[name]?.includes(column)), given = backup.tables[name].columns;
+    if (!Array.isArray(given) || given.length !== expected.length || new Set(given).size !== given.length || given.some(column => !expected.includes(column))) throw new RestoreError(`La copia no tiene las mismas columnas que este espacio en «${name}».`);
+    if (!Array.isArray(backup.tables[name].rows) || backup.tables[name].rows.some(row => !Array.isArray(row) || row.length !== expected.length)) throw new RestoreError(`La copia tiene filas incompletas en «${name}».`);
+  }
   const kept = Object.fromEntries(names.filter(name => SECRET[name]).map(name => [name,
     new Map(sql.exec<Record<string, SqlStorageValue>>(`SELECT id,${SECRET[name].join(",")} FROM "${name}"`).toArray().map(row => [String(row.id), row]))]));
   const unusable: Record<string, () => SqlStorageValue> = {
