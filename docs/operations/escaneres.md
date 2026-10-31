@@ -21,8 +21,8 @@ que no requieren GitHub Advanced Security (el repositorio es privado).
 
 - **Secretos:** `.gitleaksignore`, una huella por línea con un comentario que explica por qué no es un secreto.
 - **Dependencias:** `osv-scanner.toml`, cada excepción con `reason` y `ignoreUntil`: al vencer, el escaneo vuelve a
-  fallar hasta actualizar la dependencia o revisar la excepción. Hoy: `sharp` y `undici` de miniflare (simulador local
-  de wrangler 4.132.0; no llegan a producción), hasta actualizar wrangler.
+  fallar hasta actualizar la dependencia o revisar la excepción. Hoy no hay ninguna: wrangler 4.156.0 (1.5.4) cerró las
+  de `sharp` y `undici` de miniflare.
 - **Código:** `// nosemgrep: <regla>` en la línea, con la razón.
 
 ## Ejecución local
@@ -37,5 +37,5 @@ docker run --rm -v "$PWD:/src" -w /src semgrep/semgrep:1.140.0 semgrep scan --me
 
 1. Tras dos semanas sin falsos positivos, marcar `secrets`, `dependencies` y `code` como verificaciones obligatorias
    de `main`.
-2. Actualizar wrangler y quitar las excepciones de miniflare.
+2. ~~Actualizar wrangler y quitar las excepciones de miniflare~~ (1.5.4).
 3. CodeQL: ver las alternativas en la hoja de ruta (requiere repositorio público o GitHub Advanced Security).

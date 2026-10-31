@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.4 — 2026-10-31
+
+- Mantenimiento: wrangler 4.156.0 (simulador local con `sharp` y `undici` corregidos); el escáner de dependencias queda sin excepciones.
+
 ## 1.5.3 — 2026-10-31
 
 - Aulas en Organización › Horarios: nombre y capacidad, aula habitual de cada sección. Al generar el horario, cada sección recibe una aula para toda la semana (la habitual o la más pequeña que le quepa) y ningún aula tiene dos clases a la vez; la cuadrícula muestra el aula de cada clase.
