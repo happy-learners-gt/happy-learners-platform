@@ -21,9 +21,9 @@ Reemplaza la necesidad de recordar el historial. Se actualiza al cerrar cada lot
 | 1.5.0 | Constructor de documentos: boleta y constancia (`docs/design/constructor-de-reportes.md`) | En producción (#96) |
 | 1.5.1 | Acta de tribunal firmada por cada integrante; Redactar con IA en el diseñador | En producción (#98) |
 | 1.5.2 | Reporte de avance de una sección; «Sugerir campos» en el diseñador | En PR |
-| 1.5.3 | Aulas en el modelo de datos y en los horarios (capacidad, una clase por aula a la vez) | Pendiente |
+| 1.5.3 | Aulas en el modelo de datos y en los horarios (capacidad, una clase por aula a la vez) | En PR |
 
-Siguiente migración libre: **0074** (1.4.0 usa 0070; 1.5.0 usa 0071; 1.5.1 usa 0072; 1.5.2 usa 0073). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
+Siguiente migración libre: **0075** (1.4.0 usa 0070; 1.5.0 usa 0071; 1.5.1 usa 0072; 1.5.2 usa 0073; 1.5.3 usa 0074). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
 
 ## 2. Cómo se trabaja (no repetir errores)
 

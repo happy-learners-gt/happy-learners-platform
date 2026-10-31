@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.3 — 2026-10-31
+
+- Aulas en Organización › Horarios: nombre y capacidad, aula habitual de cada sección. Al generar el horario, cada sección recibe una aula para toda la semana (la habitual o la más pequeña que le quepa) y ningún aula tiene dos clases a la vez; la cuadrícula muestra el aula de cada clase.
+
 ## 1.5.2 — 2026-10-31
 
 - Reporte de avance de una sección, desde Notas: clases dadas de las programadas, cobertura del plan por unidad, asistencia y lecturas obligatorias por estudiante. Usa la plantilla «Reporte de avance» de Documentos o la de por omisión.

@@ -94,6 +94,23 @@ ponderada sobre lo aplicable, de 0 a 100, y es **reproducible**: la misma lecci�
   posterior. Un **solver determinista** (búsqueda con retroceso y heurísticas, en el dominio) devuelve una solución o
   las reglas que no se pueden cumplir. La IA solo traduce reglas escritas en lenguaje natural («la profesora Herrera no
   da clases los viernes») a restricciones, que la persona confirma antes de usarlas (tarea `rules-to-constraints`).
+- **Aulas (1.5.3):** las aulas entran al modelo de datos (`classrooms`: nombre y capacidad; se archivan, no se borran) y
+  cada sección puede tener un **aula habitual** (`course_groups.classroom_id`).
+  - **Dónde:** en Organización › Horarios, una sección «Aulas» lista las aulas con su capacidad y las secciones que las
+    usan; «Agregar aula», editar y archivar. En la tabla de secciones de la misma página, administración elige el aula
+    habitual de cada una («La que quepa» si no tiene).
+  - **Generar horario:** si la organización tiene aulas, cada sección recibe **una** aula para todas sus clases de la
+    semana: la habitual si la tiene; si no, la más pequeña con capacidad para sus estudiantes activos. Un aula no tiene
+    dos clases a la vez, y las secciones que no se regeneran ocupan su aula habitual. Sin aulas registradas, el horario
+    se genera como antes. Una sección que no cabe explica «sin aula libre con capacidad para N».
+  - **Aplicar** guarda el horario y, a la sección sin aula habitual, le asigna la que recibió. La cuadrícula del horario
+    muestra el aula de cada clase.
+
+  ```
+  Aulas                                                         [ Agregar aula ]
+  Aula 1 · 30 estudiantes · 3.º A, 4.º B                         [ Editar ] [ Archivar ]
+  Laboratorio · 20 estudiantes · sin secciones                    [ Editar ] [ Archivar ]
+  ```
 
 ## 6e · Redacción en toda la plataforma (1.4.1)
 
