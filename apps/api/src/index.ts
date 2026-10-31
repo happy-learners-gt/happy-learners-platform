@@ -2,7 +2,8 @@ import type { Activity, Lesson, Member, Organization, Resource } from "@happy-le
 import { hasText, organizationIds, organizationInput, richTextFieldsOf, scopeOfSection, scopeOfShare, scopeOfToken, sessionTouchMs, tokenPrefix } from "@happy-learners/domain";
 import { sha } from "./generated/version";
 import { database } from "./storage";
-import type { Database } from "./storage";
+import type { Database, Usage } from "./storage";
+import { requestLog } from "./telemetry";
 export { OrganizationStore } from "./storage";
 import { cookie, digest, newToken, sessionToken, verifyPassword } from "./auth";
 import { roles } from "./roles";
@@ -103,7 +104,7 @@ async function organizationOf(env: Env, username: string) {
   const found = await Promise.all(organizationIds.map(id => database(env, id).prepare("SELECT 1 AS found FROM users u JOIN memberships m ON m.user_id=u.id WHERE u.username=? AND m.active=1").bind(username).first()));
   return organizationIds[found.findIndex(Boolean)] || organizationIds[0];
 }
-async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "waitUntil">): Promise<Response> {
+async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "waitUntil">, usage?: Usage & { organization?: string | null }): Promise<Response> {
   const url = new URL(request.url); const path = url.pathname; const method = request.method;
   if (!path.startsWith("/api/")) {
     const asset = await env.ASSETS.fetch(request); const result = new Response(asset.body, asset);
@@ -177,7 +178,8 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
     const credentials = input as Record<string, unknown> | null;
     if (typeof credentials?.username === "string" && credentials.username.length <= 64) scope = await organizationOf(env, credentials.username.trim().toLowerCase());
   }
-  const db = database(env, scope);
+  const db = database(env, scope, usage);
+  if (usage) usage.organization = scope;
   if (["/api/health", "/api/version"].includes(path)) {
     if (!["GET", "HEAD"].includes(method)) return json({ error: "Method not allowed" }, 405, { Allow: "GET, HEAD" });
     if (path === "/api/health") await db.prepare("SELECT id FROM organizations LIMIT 1").first();
@@ -499,12 +501,16 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
 }
 export default {
     async fetch(request, env, ctx): Promise<Response> {
-    try { const response = await route(request, env, ctx); if (response.status === 101) return response; for (const [key, value] of Object.entries(headers)) response.headers.set(key, value); if (response.headers.get("Content-Type")?.startsWith("text/calendar")) response.headers.set("Cache-Control", "private, max-age=900"); if (response.headers.has("X-File-SHA256")) response.headers.set("Content-Security-Policy", "sandbox; default-src 'none'; frame-ancestors 'none'"); return response; }
+    const started = Date.now(), usage = { rowsRead: 0, rowsWritten: 0, queries: 0, organization: null as string | null };
+    const api = new URL(request.url).pathname.startsWith("/api/");
+    try { const response = await route(request, env, ctx, usage); if (api) console.log(JSON.stringify(requestLog(request, response, started, usage, sha))); if (response.status === 101) return response; for (const [key, value] of Object.entries(headers)) response.headers.set(key, value); if (response.headers.get("Content-Type")?.startsWith("text/calendar")) response.headers.set("Cache-Control", "private, max-age=900"); if (response.headers.has("X-File-SHA256")) response.headers.set("Content-Security-Policy", "sandbox; default-src 'none'; frame-ancestors 'none'"); return response; }
     catch (error) {
       if (error instanceof Error && error.message === "INPUT") return json({ error: "Revisa los datos del formulario." }, 400);
       const cause = error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 240) : "Unknown error";
       console.error(JSON.stringify({ event: "request_failed", code: "DEPENDENCY_UNAVAILABLE", sha, cause }));
-      return json({ error: "El servicio no está disponible. Vuelve a intentar en un momento." }, 503, { "Retry-After": "30" });
+      const failed = json({ error: "El servicio no está disponible. Vuelve a intentar en un momento." }, 503, { "Retry-After": "30" });
+      if (api) console.log(JSON.stringify(requestLog(request, failed, started, usage, sha)));
+      return failed;
     }
   },
 } satisfies ExportedHandler<Env>;

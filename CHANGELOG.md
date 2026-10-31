@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.6 — 2026-10-31
+
+- Observabilidad: cada petición a la API deja una línea estructurada (ruta sin identificadores, estado, duración y filas leídas y escritas en la base de la organización). SLO de disponibilidad, latencia y cuota de lecturas en `docs/operations/slo.md`, con las lecturas medidas de las pantallas principales.
+
 ## 1.5.5 — 2026-10-31
 
 - Seguridad (auditoría manual de noviembre, `docs/security/auditoria-2026-11.md`): la restauración solo acepta las columnas que tiene la organización; tras 10 intentos fallidos, una cuenta espera 15 minutos aunque los intentos lleguen desde varias direcciones; los códigos de sección eligen cada carácter con la misma probabilidad.
