@@ -42,23 +42,25 @@ En el panel de Cloudflare › Workers › `happy-learners-demo` › Observabilit
 
 ## 4. Lecturas por pantalla (medido el 31-oct-2026)
 
-Con los datos de demostración, como una docente (Lucía Herrera), en el Worker local:
+Con los datos de demostración, en el Worker local; las respuestas son idénticas antes y después (se comparó su huella):
 
-| Ruta | Filas leídas | Consultas |
-| --- | ---: | ---: |
-| `/api/progress` (Inicio) | 3 085 | 18 |
-| `/api/sections` | 2 169 | 5 |
-| `/api/classes` | 931 | 5 |
-| `/api/sections/:id/grades` | 546 | 11 |
-| `/api/courses/:id` | 281 | 9 |
-| `/api/sections/:id/grades/progress.pdf` | 216 | 9 |
-| `/api/courses` | 171 | 6 |
-| `/api/activity` | 123 | 4 |
-| `/api/session` | 17 | 7 |
+| Ruta | Docente antes | Docente en 1.5.7 | Administración antes | Administración en 1.5.7 |
+| --- | ---: | ---: | ---: | ---: |
+| `/api/progress` (Inicio) | 3 083 | 1 132 | 5 275 | 3 324 |
+| `/api/sections` | 2 169 | 689 | 4 812 | 1 848 |
+| `/api/sections/:id` | 360 | 198 | 708 | 553 |
+| `/api/classes` | 931 | 931 | 11 | 11 |
+| `/api/sections/:id/grades` | 546 | — | — | — |
+| `/api/session` | 17 | — | — | — |
 
-Inicio y Secciones leen cientos de veces más que la sesión: cada consulta de `/api/sections` vuelve a evaluar la
-subconsulta de secciones visibles, y cuenta la asistencia de cada clase dos veces. Es el primer lugar para ahorrar
-cuota (siguiente paso 1).
+Qué se cambió en 1.5.7: cada clase guarda cuántas marcas de asistencia tiene y cuántas son presente o tarde
+(migración 0075, con disparadores que las mantienen exactas), así que Inicio y Secciones ya no leen las marcas; las
+secciones visibles se resuelven una vez y las demás consultas van por su índice; las lecciones publicadas se leen desde
+sus unidades; la última actividad de cada curso se lee por su índice.
+
+Queda: `/api/classes` de una docente (lee todas las clases de sus secciones para mostrar las próximas; separar la
+condición no ayudó, el costo está en las uniones de lecciones) y las ~60 consultas de Inicio para administración
+(unidades y currículo por curso).
 
 ## 5. Alertas y página de estado
 
@@ -81,7 +83,7 @@ El plan gratuito de Workers no envía alertas por errores. Mientras tanto:
 
 ## 7. Siguientes pasos
 
-1. Reducir las lecturas de `/api/progress`, `/api/sections` y `/api/classes` (consultas compartidas, conteos en una
-   pasada) y medir de nuevo con §4.
+1. ~~Reducir las lecturas de Inicio y Secciones~~ (1.5.7, −37 % a −68 %); queda `/api/classes` y las consultas por
+   curso de Inicio (§4).
 2. Configurar el monitor externo y su página de estado (usuario).
 3. Al pasar al plan de pago: objetivo 99,9 %, alertas de Cloudflare y Analytics Engine para métricas sin muestreo.

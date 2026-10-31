@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.7 — 2026-10-31
+
+- Menos lecturas de la base: Inicio y Secciones leen entre un 37 % y un 68 % menos filas (cada clase guarda sus conteos de asistencia; consultas por índice). Protege la cuota diaria del plan gratuito; las respuestas no cambian.
+
 ## 1.5.6 — 2026-10-31
 
 - Observabilidad: cada petición a la API deja una línea estructurada (ruta sin identificadores, estado, duración y filas leídas y escritas en la base de la organización). SLO de disponibilidad, latencia y cuota de lecturas en `docs/operations/slo.md`, con las lecturas medidas de las pantallas principales.
