@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { test, expect } from "./local-test";
 import { sessionToken, signIn } from "./helpers";
 
@@ -41,6 +42,14 @@ test("HL-58 ST-044: administration downloads a backup without credentials; resto
     const tampered = structuredClone(backup);
     tampered.tables.organizations.rows[0][1] = "Otra organización";
     expect((await admin.post("/api/organization/restore", { data: tampered })).status()).toBe(400);
+    // Security audit 2026-11 (H1): a column name is never taken from the copy, even with digests that match it.
+    const injected = structuredClone(backup);
+    injected.tables.organizations.columns[1] = 'name") VALUES (1); DROP TABLE users; --';
+    const table = injected.tables.organizations as { columns: string[]; rows: unknown[][] };
+    injected.digests.organizations = createHash("sha256").update(table.columns.join(",") + "\n" + table.rows.map(row => JSON.stringify(row)).sort().join("\n")).digest("hex");
+    const refused = await admin.post("/api/organization/restore", { data: injected });
+    expect(refused.status()).toBe(409);
+    expect((await refused.json()).error).toContain("mismas columnas");
     const restored = await admin.post("/api/organization/restore", { data: backup });
     expect(restored.status(), await restored.text()).toBe(200);
     expect((await restored.json()).digests).toEqual(backup.digests);

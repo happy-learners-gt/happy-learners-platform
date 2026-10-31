@@ -4,7 +4,7 @@ import type { Database } from "./storage";
 import { todayFor } from "./classes";
 import { profileOnLeave } from "./professional";
 import { educatorConflicts } from "./conflicts";
-import { event } from "./team";
+import { event } from "./activity";
 import { completeClosure } from "./closures";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });

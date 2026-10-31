@@ -20,6 +20,20 @@ Iconos: **Fluent System Icons** (`@fluentui/react-icons`) a través de `ui/icons
 
 No se usa `@fluentui/react-components`. Los componentes propios ya cumplen WAI-ARIA (diálogo nativo, menú con teclado, anuncios de estado), así que adoptar los tokens y los iconos oficiales da la misma apariencia sin un motor CSS-in-JS ni reescribir cada pantalla.
 
+## Biblioteca de componentes por niveles
+
+Cada componente de `apps/web/src/ui/` tiene un nivel. Una pantalla compone **patrones**; un patrón usa **moléculas**
+y **átomos**; un átomo no usa a otro componente del mismo nivel salvo `Icon`. `tests/fluent.test.ts` falla si `ui/`
+exporta un componente que no está en esta tabla, y la Guía de estilo muestra los que tienen variantes.
+
+| Nivel | Componentes | Para qué |
+| --- | --- | --- |
+| Átomos | `Icon`, `Button`, `PrimaryAction`, `StatusBadge`, `Field`, `Progress`, `Skeleton`, `Updated`, `Avatar`, `SortHandle`, `InlineName`, `LessonBadge`, `FreedomChip` | Una sola cosa: un control, un dato o un estado |
+| Moléculas | `Breadcrumbs`, `Menu`, `Tabs`, `EmptyState`, `ErrorState`, `Loading`, `StatTiles`, `StatusSteps`, `TimeFit`, `TeamLine`, `AiWrite`, `FreedomPolicyField`, `FreedomMarks`, `CourseCard`, `ResourceCard`, `Bell` | Un grupo de átomos con un propósito (elegir, avisar, resumir) |
+| Patrones | `PageHeader`, `Section`, `AppShell`, `Brand`, `NewSection`, `Modal`, `Drawer`, `ConfirmDialog`, `FeedbackProvider`, `LessonOutline`, `ActivityFeed`, `CourseProgressList`, `FreedomChangeDialog` | Estructura de pantalla, capas y flujos que se repiten |
+
+Al tocar una pantalla que arma a mano algo que ya es un componente de esta tabla, se migra a él en el mismo cambio.
+
 ## Los cinco principios y cómo se aplican
 
 - **Luz.**

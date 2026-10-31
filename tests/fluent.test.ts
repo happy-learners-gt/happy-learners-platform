@@ -22,3 +22,13 @@ it("keeps colours out of components: only white/black on brand or media surfaces
   const allowed = /^(#fff|#000|#e9eaf1|#0d0f1a|rgba\(255, 255, 255, [.\d]+\)|rgba\(13, 15, 26, \.9\))$/;
   expect(colours.filter(colour => !allowed.test(colour))).toEqual([]);
 });
+
+it("lists every component of ui/ in the library levels of docs/design/fluent.md (C.4)", async () => {
+  const { readdirSync } = await import("node:fs");
+  const exported = readdirSync(new URL("../apps/web/src/ui/", import.meta.url)).filter(name => /\.tsx?$/.test(name))
+    .flatMap(name => [...read(`apps/web/src/ui/${name}`).matchAll(/^export (?:function|const) ([A-Z][A-Za-z]+)/gm)].map(match => match[1]));
+  const table = read("docs/design/fluent.md").split("## Biblioteca de componentes por niveles")[1].split("\n## ")[0];
+  const listed = new Set([...table.matchAll(/`([A-Z][A-Za-z]+)`/g)].map(match => match[1]));
+  expect(exported.filter(name => !listed.has(name))).toEqual([]);
+  expect([...listed].filter(name => !exported.includes(name))).toEqual([]);
+});

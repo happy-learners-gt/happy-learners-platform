@@ -4,7 +4,7 @@ import { acceptablePassword, invitationInput, invitationLifetimeMs, invitationMe
 import type { Database } from "./storage";
 import { digest, hashPassword, newToken } from "./auth";
 import { deliver, type Delivery } from "./mail";
-import { event } from "./team";
+import { event } from "./activity";
 import { startOnboarding } from "./onboarding";
 import { openSession, type Client } from "./account";
 import { contractSignedNameInput, localDay, record } from "@happy-learners/domain";

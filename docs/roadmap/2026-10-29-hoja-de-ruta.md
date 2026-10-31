@@ -22,9 +22,14 @@ Reemplaza la necesidad de recordar el historial. Se actualiza al cerrar cada lot
 | 1.5.1 | Acta de tribunal firmada por cada integrante; Redactar con IA en el diseñador | En producción (#98) |
 | 1.5.2 | Reporte de avance de una sección; «Sugerir campos» en el diseñador | En producción (#99) |
 | 1.5.3 | Aulas en el modelo de datos y en los horarios (capacidad, una clase por aula a la vez) | En producción (#100) |
-| 1.5.4 | wrangler 4.156.0; escáner de dependencias sin excepciones | En PR |
+| 1.5.4 | wrangler 4.156.0; escáner de dependencias sin excepciones | En PR (#101) |
+| 1.5.5 | Auditoría de seguridad manual y sus correcciones (`docs/security/auditoria-2026-11.md`) | En PR |
+| 1.5.6 | SLO y observabilidad (`docs/operations/slo.md`): registro por petición con filas leídas | En PR |
+| 1.5.7 | Menos lecturas en Inicio y Secciones (conteos de asistencia por clase, consultas por índice) | En PR |
+| 1.5.8 | Contextos delimitados y patrones (`docs/architecture/`); bitácora y progreso fuera de `team.ts` | En PR |
+| 1.5.9 | Componentes por niveles; decisión sobre Drizzle; material de marca y soporte | En PR |
 
-Siguiente migración libre: **0075** (1.4.0 usa 0070; 1.5.0 usa 0071; 1.5.1 usa 0072; 1.5.2 usa 0073; 1.5.3 usa 0074). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
+Siguiente migración libre: **0076** (1.4.0 usa 0070; 1.5.0 usa 0071; 1.5.1 usa 0072; 1.5.2 usa 0073; 1.5.3 usa 0074; 1.5.7 usa 0075). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
 
 ## 2. Cómo se trabaja (no repetir errores)
 
@@ -80,27 +85,27 @@ con apoyo puntual.
    con autorización).
 2. ~~Escáneres en CI~~ (hecho, #89): gitleaks, OSV-Scanner y Semgrep con la regla propia `sql-interpolated-text`
    (`docs/operations/escaneres.md`). Pendiente: hacerlos obligatorios tras dos semanas (desde el 13-nov); ~~actualizar wrangler~~ (1.5.4, sin excepciones); CodeQL: el usuario decidió no pagar GitHub Code Security por ahora (30-oct); se revisa al constituir la empresa.
-3. **Auditoría de seguridad manual** con modelo de amenazas: aislamiento entre organizaciones, permisos por ruta
+3. ~~Auditoría de seguridad manual~~ (1.5.5, `docs/security/auditoria-2026-11.md`; queda la decisión R1) con modelo de amenazas: aislamiento entre organizaciones, permisos por ruta
    (matriz exhaustiva generada desde el enrutador), sesiones, archivos y PDF, datos de menores, IA (entradas del libro y
    salidas). Resultado: `docs/security/auditoria-2026-11.md` con hallazgos priorizados y lotes de corrección.
-4. **SLO y observabilidad:** definir SLO (por ejemplo disponibilidad 99,9 % y p95 < 500 ms en las rutas principales),
+4. ~~SLO y observabilidad~~ (1.5.6, `docs/operations/slo.md`; quedan reducir las lecturas de Inicio y Secciones y el monitor externo): definir SLO (por ejemplo disponibilidad 99,9 % y p95 < 500 ms en las rutas principales),
    logs estructurados, métricas y alertas, página de estado; documentar en `docs/operations/slo.md`. Se mantiene
    Cloudflare Workers y Durable Objects (no hay razón para migrar de nube).
 5. **Prueba de penetración externa** antes de incorporar instituciones de pago.
 
 ### Carril C · Arquitectura y calidad (incremental, nunca un refactor total)
 
-1. **Contextos delimitados:** documento `docs/architecture/contextos.md` (identidad y accesos, contenido, plan
+1. ~~Contextos delimitados~~ (1.5.8): documento `docs/architecture/contextos.md` (identidad y accesos, contenido, plan
    curricular, secciones y calendario, evaluación, contratos y firmas, IA) con sus límites, datos de cada uno y
    dependencias permitidas; cada cambio de patrón se registra como DEC.
-2. **Patrones por problema:** catálogo corto en `docs/architecture/patrones.md` (motores deterministas en el dominio,
+2. ~~Patrones por problema~~ (1.5.8): catálogo corto en `docs/architecture/patrones.md` (motores deterministas en el dominio,
    compare-and-write con `guardedBatch`, colas en alarmas del Durable Object, migraciones aditivas, etc.) y antipatrones
    detectados con su corrección.
-3. **Refactor por contexto cuando duela:** primero los archivos grandes de la API (`gradebook.ts`, `classes.ts`),
+3. **Refactor por contexto cuando duela** (1.5.8 partió `team.ts`; sigue `classes.ts`, ver `docs/architecture/contextos.md` §5): primero los archivos grandes de la API (`gradebook.ts`, `classes.ts`),
    separando rutas, casos de uso y acceso a datos dentro de su contexto.
-4. **Biblioteca de componentes:** formalizar `ui/` en niveles (átomos, moléculas, patrones) con la Guía de estilo como
+4. ~~Biblioteca de componentes~~ (1.5.9, niveles en `docs/design/fluent.md` con prueba): formalizar `ui/` en niveles (átomos, moléculas, patrones) con la Guía de estilo como
    catálogo vivo y reglas en `docs/design/fluent.md`; migrar pantallas cuando se tocan.
-5. **ORM:** prueba corta con Drizzle (compatible con SQLite de Durable Objects) en un módulo nuevo; decidir con datos.
+5. ~~ORM~~ (1.5.9, `docs/architecture/orm-drizzle.md`: no adoptar por ahora): prueba corta con Drizzle (compatible con SQLite de Durable Objects) en un módulo nuevo; decidir con datos.
 
 ### Carril D · Empresa y marca (lo lleva el usuario)
 
@@ -145,3 +150,7 @@ con apoyo puntual.
 - 2026-10-31: producción repuesta a las 00:19 UTC. 1.5.0 (#96) y 1.5.1 (#98) en producción; un E2E móvil de #96 falló por
   `socket hang up` del servidor local y pasó al reintentar. 1.5.2 (reporte de avance, «Sugerir campos») en PR; las aulas
   pasan a 1.5.3 porque cambian el modelo de datos. El cuerpo del PR lleva `Release: REL-0NN`, no la versión.
+- 2026-10-31: 1.5.4 (#101) en producción; prueba de planificación sin depender de asuetos. Carriles B y C entregados
+  en 1.5.5–1.5.9: auditoría de seguridad (H1–H3 corregidos, R1 pendiente de decisión), SLO y registro por petición con
+  filas leídas, −37 % a −68 % de lecturas en Inicio y Secciones, contextos y patrones, componentes por niveles, Drizzle
+  descartado por ahora. Carril D: material listo en `docs/empresa/marca-y-soporte.md`; las decisiones son del usuario.

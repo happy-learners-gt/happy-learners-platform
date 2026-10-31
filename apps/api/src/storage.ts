@@ -73,10 +73,12 @@ import reportTemplatesMigration from "../../../database/migrations/0071_report_t
 import panelMinutesMigration from "../../../database/migrations/0072_panel_minutes.sql";
 import progressReportMigration from "../../../database/migrations/0073_progress_report.sql";
 import classroomsMigration from "../../../database/migrations/0074_classrooms.sql";
+import attendanceCountsMigration from "../../../database/migrations/0075_attendance_counts.sql";
 import { organizationIds } from "@happy-learners/domain";
 import { exportStore, importStore, RestoreError, type Backup } from "./backup";
 import { processProposals } from "./proposals";
 import { processBookMaps } from "./book-map";
+import type { Usage } from "./telemetry";
 
 /** Values a statement binds; ArrayBuffer is a BLOB (1.5.0: report images). */
 type Value = string | number | null | ArrayBuffer;
@@ -137,7 +139,13 @@ export class OrganizationStore extends DurableObject<Env> {
   }
 
   async query(scope: string, statements: Statement[], guard?: Statement): Promise<Record<string, SqlStorageValue>[][]> {
+    return (await this.measuredQuery(scope, statements, guard)).results;
+  }
+  /** The same as `query`, with the rows the statements read and wrote (SLO and quota, docs/operations/slo.md). */
+  async measuredQuery(scope: string, statements: Statement[], guard?: Statement): Promise<{ results: Record<string, SqlStorageValue>[][]; rowsRead: number; rowsWritten: number }> {
     if (!organizationIds.includes(scope)) throw new Error("Invalid organization");
+    let rowsRead = 0, rowsWritten = 0;
+    const run = (statement: Statement) => { const cursor = this.ctx.storage.sql.exec(statement.sql, ...statement.values); const rows = cursor.toArray(); rowsRead += cursor.rowsRead; rowsWritten += cursor.rowsWritten; return rows; };
     return this.ctx.storage.transactionSync(() => {
       this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, organization_id TEXT NOT NULL)");
       const applied = this.ctx.storage.sql.exec<{ version: number; organization_id: string }>("SELECT version, organization_id FROM schema_migrations ORDER BY version DESC LIMIT 1").toArray();
@@ -227,9 +235,11 @@ export class OrganizationStore extends DurableObject<Env> {
       if (!applied.length || applied[0].version < 72) { runScript(this.ctx.storage.sql, panelMinutesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (72,?)", scope); }
       if (!applied.length || applied[0].version < 73) { runScript(this.ctx.storage.sql, progressReportMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (73,?)", scope); }
       if (!applied.length || applied[0].version < 74) { runScript(this.ctx.storage.sql, classroomsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (74,?)", scope); }
+      if (!applied.length || applied[0].version < 75) { runScript(this.ctx.storage.sql, attendanceCountsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (75,?)", scope); }
       // Compare-and-write plus dependent writes belong to one SQLite transaction.
-      if (guard && !this.ctx.storage.sql.exec(guard.sql, ...guard.values).toArray().length) return [];
-      return statements.map(statement => this.ctx.storage.sql.exec(statement.sql, ...statement.values).toArray());
+      if (guard && !run(guard).length) return { results: [], rowsRead, rowsWritten };
+      const results = statements.map(run);
+      return { results, rowsRead, rowsWritten };
     });
   }
 }
@@ -242,17 +252,21 @@ export class Prepared {
   async run() { await this.db.execute([this]); }
 }
 /** What a Database runs on: the organization's Durable Object, through its stub or, inside it (alarms), itself. */
-type Store = Pick<OrganizationStore, "query" | "exportData" | "importData">;
+type Store = Pick<OrganizationStore, "query" | "measuredQuery" | "exportData" | "importData">;
 export class Database {
-  constructor(private stub: DurableObjectStub<OrganizationStore> | Store, private scope: string) {}
+  constructor(private stub: DurableObjectStub<OrganizationStore> | Store, private scope: string, private usage?: Usage) {}
   prepare(sql: string) { return new Prepared(this, sql); }
-  execute(statements: Prepared[]) { return this.stub.query(this.scope, statements.map(({ sql, values }) => ({ sql, values }))); }
+  private async measured(statements: Prepared[], guard?: Prepared) {
+    const answer = await this.stub.measuredQuery(this.scope, statements.map(({ sql, values }) => ({ sql, values })), guard && { sql: guard.sql, values: guard.values });
+    if (this.usage) { this.usage.rowsRead += answer.rowsRead; this.usage.rowsWritten += answer.rowsWritten; this.usage.queries += 1; }
+    return answer.results;
+  }
+  execute(statements: Prepared[]) { return this.measured(statements); }
   batch(statements: Prepared[]) { return this.execute(statements); }
   exportData() { return this.stub.exportData(this.scope); }
   importData(backup: Backup) { return this.stub.importData(this.scope, backup); }
   async guardedBatch(guard: Prepared, statements: Prepared[]) {
-    const results = await this.stub.query(this.scope, statements.map(({ sql, values }) => ({ sql, values })), { sql: guard.sql, values: guard.values });
-    return results.length > 0;
+    return (await this.measured(statements, guard)).length > 0;
   }
 }
-export function database(env: Env, scope: string) { return new Database(env.ORGANIZATIONS.getByName(scope), scope); }
+export function database(env: Env, scope: string, usage?: Usage) { return new Database(env.ORGANIZATIONS.getByName(scope), scope, usage); }

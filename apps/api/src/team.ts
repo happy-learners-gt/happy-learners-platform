@@ -1,21 +1,11 @@
-import type { ActivityEvent, CourseMember, CourseProgress, Lesson, Member } from "@happy-learners/contracts";
-import { coverage, record } from "@happy-learners/domain";
+import type { ActivityEvent, CourseMember, Member } from "@happy-learners/contracts";
+import { record } from "@happy-learners/domain";
 import type { Database } from "./storage";
-import { coursesFor, curriculumFor, unitsFor } from "./courses";
-import { reachableCourses } from "./access";
 import { scopedCourses } from "./permissions";
 import { notify, type Notifier } from "./notify";
+import { event } from "./activity";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
-type EventInput = Pick<ActivityEvent, "action" | "targetType" | "targetId" | "summary"> & { courseId?: string | null; groupId?: string | null };
-
-/** One audit entry: who did what, on which course and section. Written after the operation succeeds. */
-export function event(db: Database, current: Member, entry: EventInput) {
-  return db.prepare("INSERT INTO activity_events(id,organization_id,actor_id,action,target_type,target_id,course_id,group_id,summary,occurred_at) VALUES (?,?,?,?,?,?,?,?,?,?)")
-    .bind(`event-${crypto.randomUUID()}`, current.organizationId, current.id, entry.action, entry.targetType, entry.targetId, entry.courseId || null, entry.groupId ?? (entry.targetType === "group" ? entry.targetId : null), entry.summary.slice(0, 240), new Date().toISOString());
-}
-export const recordEvent = (db: Database, current: Member, entry: EventInput) => event(db, current, entry).run();
-
 export async function teamsFor(db: Database, organization: string): Promise<Map<string, CourseMember[]>> {
   const rows = (await db.prepare("SELECT cm.course_id AS courseId,cm.user_id AS userId,cm.role,COALESCE(u.display_name,u.username) AS name,u.username FROM course_members cm JOIN users u ON u.id=cm.user_id WHERE cm.organization_id=? ORDER BY CASE cm.role WHEN 'lead' THEN 0 ELSE 1 END,name").bind(organization).all<CourseMember & { courseId: string }>()).results;
   const map = new Map<string, CourseMember[]>();
@@ -65,40 +55,6 @@ export async function updateTeam(courseId: string, version: number, input: unkno
   await notify(db, notifier, current, list.filter(item => before.get(String(item.userId)) !== item.role)
     .map(item => ({ userId: String(item.userId), targetId: courseId, path: `/cursos/${courseId}`, facts: { type: "course_assignment", course, role: item.role as "lead" | "co-teacher" } })));
   return reply({ ok: true });
-}
-
-/**
- * GET /api/progress — for every active course: content, curriculum coverage, attendance and last activity.
- * Feeds "Mis cursos" on the home page and the educators overview for administration.
- */
-export async function progress(current: Member, db: Database) {
-  const reachable = await reachableCourses(db, current);
-  const courses = (await coursesFor(db, current.organizationId)).filter(course => course.status === "active" && (!reachable || reachable.has(course.id)));
-  const teams = await teamsFor(db, current.organizationId);
-  const lessonRows = (await db.prepare("SELECT l.id,l.content,l.course_unit_id AS unitId,l.archived,l.revision,l.draft_version AS draftVersion,l.published_version AS publishedVersion,c.id AS courseId FROM lessons l JOIN courses c ON c.legacy_program_id=l.program_id WHERE c.organization_id=?").bind(current.organizationId).all<{ id: string; content: string; unitId: string; archived: number; revision: number; draftVersion: number; publishedVersion: number; courseId: string }>()).results;
-  // Classes and students count only in the sections the person sees: every one for administration, their own for
-  // educators, and every section of the courses in scope for coordination (DEC-041).
-  const own = current.role === "admin" ? "" : " AND (group_id IN (SELECT group_id FROM section_educators WHERE user_id=?) OR course_id IN (SELECT value FROM json_each(?)))";
-  const mine = current.role === "admin" ? [] : [current.id, JSON.stringify(await scopedCourses(db, current, ["classes.view", "sections.assign"]))];
-  const attendance = (await db.prepare(`SELECT s.course_id AS courseId,count(DISTINCT s.id) AS sessions,sum(CASE WHEN m.status IN ('present','late') THEN 1 ELSE 0 END) AS attended,count(m.learner_id) AS marks FROM class_sessions s LEFT JOIN attendance_marks m ON m.session_id=s.id WHERE s.organization_id=? AND s.status IN ('in_progress','completed')${own.replace("group_id", "s.group_id").replace("OR course_id", "OR s.course_id")} GROUP BY s.course_id`).bind(current.organizationId, ...mine).all<{ courseId: string; sessions: number; attended: number; marks: number }>()).results;
-  const learners = (await db.prepare(`SELECT course_id AS courseId,count(*) AS total FROM group_learners WHERE organization_id=? AND status='active'${own} GROUP BY course_id`).bind(current.organizationId, ...mine).all<{ courseId: string; total: number }>()).results;
-  const last = (await db.prepare(`SELECT course_id AS courseId,max(occurred_at) AS at FROM activity_events WHERE organization_id=? AND course_id IS NOT NULL${own ? ` AND (target_type NOT IN ('group','session')${own.replace(" AND", " OR")})` : ""} GROUP BY course_id`).bind(current.organizationId, ...mine).all<{ courseId: string; at: string }>()).results;
-  const result: CourseProgress[] = [];
-  for (const course of courses) {
-    const rows = lessonRows.filter(row => row.courseId === course.id && !row.archived);
-    const lessons = rows.map(row => ({ ...JSON.parse(row.content), id: row.id, courseUnitId: row.unitId, status: row.revision ? "published" : "draft", revision: row.revision }) as Lesson);
-    const [units, curriculum] = await Promise.all([unitsFor(db, course.id), curriculumFor(db, course.id)]);
-    const plan = coverage(curriculum, units, lessons);
-    const marks = attendance.find(row => row.courseId === course.id);
-    result.push({
-      courseId: course.id, title: course.title, team: teams.get(course.id) || [],
-      lessons: rows.length, published: rows.filter(row => row.revision > 0).length, changes: rows.filter(row => row.revision > 0 && row.draftVersion !== row.publishedVersion).length,
-      outcomes: plan.summary.total, taught: plan.summary.taught, assessed: plan.summary.assessed,
-      sessions: marks?.sessions || 0, attendanceRate: marks?.marks ? Math.round(100 * marks.attended / marks.marks) : null,
-      learners: learners.find(row => row.courseId === course.id)?.total || 0, lastActivity: last.find(row => row.courseId === course.id)?.at || null,
-    });
-  }
-  return reply({ courses: result });
 }
 
 /** GET /api/people — active people of the organization, for choosing a course team. Names and roles only. */

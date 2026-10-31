@@ -3,6 +3,7 @@ import { hasText, organizationIds, organizationInput, richTextFieldsOf, scopeOfS
 import { sha } from "./generated/version";
 import { database } from "./storage";
 import type { Database } from "./storage";
+import { requestLog, type Usage } from "./telemetry";
 export { OrganizationStore } from "./storage";
 import { cookie, digest, newToken, sessionToken, verifyPassword } from "./auth";
 import { roles } from "./roles";
@@ -13,7 +14,8 @@ import { courses, programs, taxonomy } from "./courses";
 import { assessmentMethods, courseAssessment } from "./assessment";
 import { duplicateCourse } from "./duplicate";
 import { accessTo } from "./access";
-import { activity, people, progress } from "./team";
+import { activity, people } from "./team";
+import { progress } from "./home";
 import { legal, pendingFor, publicPrivacy } from "./legal";
 import { classroom } from "./attendance";
 import { calendar, myClasses, student, studentToken } from "./classes";
@@ -103,7 +105,7 @@ async function organizationOf(env: Env, username: string) {
   const found = await Promise.all(organizationIds.map(id => database(env, id).prepare("SELECT 1 AS found FROM users u JOIN memberships m ON m.user_id=u.id WHERE u.username=? AND m.active=1").bind(username).first()));
   return organizationIds[found.findIndex(Boolean)] || organizationIds[0];
 }
-async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "waitUntil">): Promise<Response> {
+async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "waitUntil">, usage?: Usage & { organization?: string | null }): Promise<Response> {
   const url = new URL(request.url); const path = url.pathname; const method = request.method;
   if (!path.startsWith("/api/")) {
     const asset = await env.ASSETS.fetch(request); const result = new Response(asset.body, asset);
@@ -177,7 +179,8 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
     const credentials = input as Record<string, unknown> | null;
     if (typeof credentials?.username === "string" && credentials.username.length <= 64) scope = await organizationOf(env, credentials.username.trim().toLowerCase());
   }
-  const db = database(env, scope);
+  const db = database(env, scope, usage);
+  if (usage) usage.organization = scope;
   if (["/api/health", "/api/version"].includes(path)) {
     if (!["GET", "HEAD"].includes(method)) return json({ error: "Method not allowed" }, 405, { Allow: "GET, HEAD" });
     if (path === "/api/health") await db.prepare("SELECT id FROM organizations LIMIT 1").first();
@@ -307,16 +310,26 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
     const limit = await db.prepare("INSERT INTO login_limits (bucket, attempts, expires_at) VALUES (?,1,?) ON CONFLICT(bucket) DO UPDATE SET attempts=CASE WHEN expires_at<? THEN 1 ELSE attempts+1 END, expires_at=CASE WHEN expires_at<? THEN excluded.expires_at ELSE expires_at END RETURNING attempts")
       .bind(bucket, now + 900000, now, now).first<{ attempts: number }>();
     if (!limit || limit.attempts > 30) return json({ error: "Demasiados intentos. Espera 15 minutos y vuelve a intentar." }, 429, { "Retry-After": "900" });
+    // Security audit 2026-11 (H2): failed attempts also count per account, so guesses spread over many addresses stop
+    // too; signing in clears them. The bucket is a hash of the name, never the name itself.
+    const account = await digest(`account:${value.username.trim().toLowerCase()}`);
+    const failures = await db.prepare("SELECT attempts FROM login_limits WHERE bucket=? AND expires_at>=?").bind(account, now).first<{ attempts: number }>();
+    if (failures && failures.attempts >= 10) return json({ error: "Demasiados intentos. Espera 15 minutos y vuelve a intentar." }, 429, { "Retry-After": "900" });
     const user = await db.prepare("SELECT u.id, u.password_salt, u.password_hash FROM users u JOIN memberships m ON m.user_id=u.id WHERE u.username=? AND m.active=1").bind(value.username.trim().toLowerCase()).first<{ id: string; password_salt: string; password_hash: string }>();
     const valid = await verifyPassword(value.password, user?.password_salt || "synthetic-dummy-salt", user?.password_hash || "0".repeat(64));
     // ST-158: each attempt on an existing account joins its owner's sign-in history, with a device summary and country.
     const client = clientOf(request);
     if (user && !valid) await failedSignIn(db, user.id, scope, client).run();
-    if (!user || !valid) return json({ error: "Usuario o contraseña incorrectos." }, 401);
+    if (!user || !valid) {
+      await db.prepare("INSERT INTO login_limits (bucket, attempts, expires_at) VALUES (?,1,?) ON CONFLICT(bucket) DO UPDATE SET attempts=CASE WHEN expires_at<? THEN 1 ELSE attempts+1 END, expires_at=CASE WHEN expires_at<? THEN excluded.expires_at ELSE expires_at END")
+        .bind(account, now + 900000, now, now).run();
+      return json({ error: "Usuario o contraseña incorrectos." }, 401);
+    }
     const token = tokenPrefix(scope) + newToken();
     await db.batch([
       db.prepare("DELETE FROM sessions WHERE expires_at<=?").bind(now),
       db.prepare("DELETE FROM login_limits WHERE expires_at<=?").bind(now),
+      db.prepare("DELETE FROM login_limits WHERE bucket=?").bind(account),
       ...openSession(db, await digest(token), user.id, scope, "password", client, now),
     ]);
     return json({ ok: true }, 200, { "Set-Cookie": cookie(token, request) });
@@ -489,12 +502,16 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
 }
 export default {
     async fetch(request, env, ctx): Promise<Response> {
-    try { const response = await route(request, env, ctx); if (response.status === 101) return response; for (const [key, value] of Object.entries(headers)) response.headers.set(key, value); if (response.headers.get("Content-Type")?.startsWith("text/calendar")) response.headers.set("Cache-Control", "private, max-age=900"); if (response.headers.has("X-File-SHA256")) response.headers.set("Content-Security-Policy", "sandbox; default-src 'none'; frame-ancestors 'none'"); return response; }
+    const started = Date.now(), usage = { rowsRead: 0, rowsWritten: 0, queries: 0, organization: null as string | null };
+    const api = new URL(request.url).pathname.startsWith("/api/");
+    try { const response = await route(request, env, ctx, usage); if (api) console.log(JSON.stringify(requestLog(request, response, started, usage, sha))); if (response.status === 101) return response; for (const [key, value] of Object.entries(headers)) response.headers.set(key, value); if (response.headers.get("Content-Type")?.startsWith("text/calendar")) response.headers.set("Cache-Control", "private, max-age=900"); if (response.headers.has("X-File-SHA256")) response.headers.set("Content-Security-Policy", "sandbox; default-src 'none'; frame-ancestors 'none'"); return response; }
     catch (error) {
       if (error instanceof Error && error.message === "INPUT") return json({ error: "Revisa los datos del formulario." }, 400);
       const cause = error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 240) : "Unknown error";
       console.error(JSON.stringify({ event: "request_failed", code: "DEPENDENCY_UNAVAILABLE", sha, cause }));
-      return json({ error: "El servicio no está disponible. Vuelve a intentar en un momento." }, 503, { "Retry-After": "30" });
+      const failed = json({ error: "El servicio no está disponible. Vuelve a intentar en un momento." }, 503, { "Retry-After": "30" });
+      if (api) console.log(JSON.stringify(requestLog(request, failed, started, usage, sha)));
+      return failed;
     }
   },
 } satisfies ExportedHandler<Env>;

@@ -2,7 +2,7 @@ import type { CourseRequirements, Member, ProgramPath, StudyProgram } from "@hap
 import { createsCycle, prerequisiteInput, prerequisiteStages } from "@happy-learners/domain";
 import type { Requirement } from "@happy-learners/domain";
 import type { Database } from "./storage";
-import { event } from "./team";
+import { event } from "./activity";
 
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
 

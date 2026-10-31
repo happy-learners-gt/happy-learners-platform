@@ -6,6 +6,10 @@ import { Icon } from "../ui/icons";
 import type { IconName } from "../ui/icons";
 import { Menu } from "../ui/Menu";
 import { moveItem, SortHandle } from "../ui/Sortable";
+import { classLoad } from "@happy-learners/domain";
+import { StatusSteps } from "../ui/StatusSteps";
+import { Tabs } from "../ui/Tabs";
+import { TimeFit } from "../ui/TimeFit";
 import { Button, EmptyState, Field, PageHeader, PrimaryAction, Progress, Section, StatTiles, StatusBadge } from "../ui/primitives";
 
 const demoCourse: Course = { id: "course-demo-guide", title: "Ciencias para curiosos", objective: "Observar, preguntar y comprobar con experimentos sencillos.", educationType: "formal", level: "primary", format: "laboratory", modality: "in-person", pacing: "scheduled", area: "05", settings: {}, status: "active", version: 1, updatedAt: new Date().toISOString() };
@@ -20,7 +24,7 @@ const motion = [["Entrar", "--ease-enter", "Desacelera: lo que aparece llega rá
  */
 export function StyleGuide() {
   const { toast } = useFeedback();
-  const [dialog, setDialog] = useState(false), [replay, setReplay] = useState(0), [segment, setSegment] = useState("a"), [order, setOrder] = useState(["Inicio", "Desarrollo", "Cierre"]);
+  const [dialog, setDialog] = useState(false), [replay, setReplay] = useState(0), [segment, setSegment] = useState("a"), [order, setOrder] = useState(["Inicio", "Desarrollo", "Cierre"]), [tab, setTab] = useState<"plan" | "notas">("plan");
   return <>
     <PageHeader crumbs={[{ label: "Ayuda", href: "/ayuda" }, { label: "Guía de estilo" }]} title="Guía de estilo Fluent"
       description="Los principios de Fluent Design —luz, profundidad, movimiento, material y escala— aplicados a los componentes de Happy Learners. Todo lo que ves aquí usa los mismos componentes y tokens que el resto de la plataforma."/>
@@ -86,6 +90,16 @@ export function StyleGuide() {
           </li>)}</ol>
           <p className="muted small">Arrastra el asa o enfócala y usa las flechas, Inicio y Fin.</p>
         </div>
+        <div className="guide-block"><h3>Pestañas</h3>
+          <Tabs label="Pestañas de ejemplo" value={tab} onChange={setTab} items={[{ value: "plan", label: "Plan" }, { value: "notas", label: "Notas", badge: <StatusBadge tone="info">2</StatusBadge> }]}>
+            <p className="muted small">{tab === "plan" ? "Contenido de «Plan»." : "Contenido de «Notas»."}</p>
+          </Tabs>
+        </div>
+        <div className="guide-block"><h3>Pasos y tiempo</h3><div className="stack">
+          <StatusSteps label="Pasos de ejemplo" steps={[{ id: "a", label: "Borrador", state: "done" }, { id: "b", label: "En revisión", state: "current" }, { id: "c", label: "Publicada", state: "todo" }]}/>
+          <TimeFit load={classLoad(45, [30, 25])}/>
+          <TimeFit load={classLoad(45, [20, 15])} compact/>
+        </div></div>
         <div className="guide-block"><h3>Menús, diálogos y toasts</h3><div className="guide-stack">
           <Menu label="Menú de ejemplo" text="Menú" icon="more" items={[{ label: "Editar", icon: "edit", onSelect: () => undefined }, { label: "Duplicar", icon: "copy", onSelect: () => undefined }, "separator", { label: "Archivar", icon: "archive", danger: true, onSelect: () => undefined }]}/>
           <Button icon="expand" onClick={() => setDialog(true)}>Abrir diálogo</Button>
