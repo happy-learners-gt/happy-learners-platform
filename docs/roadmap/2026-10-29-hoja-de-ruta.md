@@ -17,12 +17,13 @@ Reemplaza la necesidad de recordar el historial. Se actualiza al cerrar cada lot
 | 1.3.6 | Libertad de cátedra por sección (`docs/design/libertad-de-catedra.md`, lotes 4a–4c) | En producción (#90) |
 | 1.3.7 | Biblioteca de recursos didácticos (`docs/design/recursos-didacticos.md`, lotes 5a–5c) | En producción (#92) |
 | 1.4.0–1.4.1 | Asistente como harness: registro y uso de IA, revisión con puntaje, mejora asistida, redacción (`docs/design/asistente-ia.md`) | En producción (#93, #94) |
-| 1.4.2–1.4.3 | Cronograma propuesto y horarios con reglas | En PR (#95) |
-| 1.5.0 | Constructor de documentos: boleta y constancia (`docs/design/constructor-de-reportes.md`) | En PR |
-| 1.5.1 | Acta de tribunal firmada por cada integrante; Redactar con IA en el diseñador | En PR |
-| 1.5.2 | Reporte de avance de una sección; «Sugerir campos» con IA en el diseñador; aulas en los horarios | Pendiente |
+| 1.4.2–1.4.3 | Cronograma propuesto y horarios con reglas | En producción (#95) |
+| 1.5.0 | Constructor de documentos: boleta y constancia (`docs/design/constructor-de-reportes.md`) | En producción (#96) |
+| 1.5.1 | Acta de tribunal firmada por cada integrante; Redactar con IA en el diseñador | En producción (#98) |
+| 1.5.2 | Reporte de avance de una sección; «Sugerir campos» en el diseñador | En PR |
+| 1.5.3 | Aulas en el modelo de datos y en los horarios (capacidad, una clase por aula a la vez) | Pendiente |
 
-Siguiente migración libre: **0073** (1.4.0 usa 0070; 1.5.0 usa 0071; 1.5.1 usa 0072). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
+Siguiente migración libre: **0074** (1.4.0 usa 0070; 1.5.0 usa 0071; 1.5.1 usa 0072; 1.5.2 usa 0073). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
 
 ## 2. Cómo se trabaja (no repetir errores)
 
@@ -141,3 +142,6 @@ con apoyo puntual.
 - 2026-10-30: producción sin servicio desde ~21:05 UTC por agotar la cuota diaria de lecturas de Durable Objects del plan
   gratuito (CI y vista previa comparten cuenta). El usuario decide seguir en el plan gratuito: la vista previa pasa a ser
   bajo pedido y se quitan las capturas de la vista previa y el smoke tras cada despliegue.
+- 2026-10-31: producción repuesta a las 00:19 UTC. 1.5.0 (#96) y 1.5.1 (#98) en producción; un E2E móvil de #96 falló por
+  `socket hang up` del servidor local y pasó al reintentar. 1.5.2 (reporte de avance, «Sugerir campos») en PR; las aulas
+  pasan a 1.5.3 porque cambian el modelo de datos. El cuerpo del PR lleva `Release: REL-0NN`, no la versión.

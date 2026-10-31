@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.2 — 2026-10-31
+
+- Reporte de avance de una sección, desde Notas: clases dadas de las programadas, cobertura del plan por unidad, asistencia y lecturas obligatorias por estudiante. Usa la plantilla «Reporte de avance» de Documentos o la de por omisión.
+- En el diseñador de documentos, «Sugerir campos» propone cambiar por campos los datos escritos en un texto (curso, sección, fecha, estudiante…); cada propuesta se acepta una por una. Los datos reales de la sección se reconocen sin IA.
+
 ## 1.5.1 — 2026-10-30
 
 - Actas de tribunal: en Mis tribunales cada integrante firma el acta de un estudiante con su nombre y contraseña, quien preside al final; el acta guarda las marcas, el resultado y su huella, y las calificaciones quedan fijas desde la primera firma. El PDF usa la plantilla «Acta de tribunal» de Documentos.

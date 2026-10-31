@@ -57,7 +57,7 @@ Constancia de inscripción · Borrador
 ```
 
 - **Tipos:** boleta (por estudiante y ciclo), constancia (por estudiante: inscripción o finalización), acta de tribunal
-  (1.5.1) y reporte de avance de una sección (1.5.1). Cada tipo define sus **campos** y **conjuntos de datos** (por
+  (1.5.1) y reporte de avance de una sección (1.5.2). Cada tipo define sus **campos** y **conjuntos de datos** (por
   ejemplo, la boleta tiene `estudiante.*`, `sección.*`, `ciclo.*` y la tabla `notas` con una fila por curso y periodo).
 - **Alcance:** la plantilla de la organización o la de un programa (la del programa gana para sus secciones), como los
   demás ajustes (DEC-041).
@@ -103,15 +103,17 @@ Boleta de calificaciones · Borrador (basada en v3)                [ Vista previ
   evaluación, notas o dictámenes de cada integrante y resultado). Cada integrante la ve en **Mis tribunales** y la firma
   con su nombre y contraseña (ST-153: huella del documento, firma registrada); quien preside la firma al final. Firmada
   por todos, queda cerrada y verificable con su constancia.
-- **Reporte de avance (1.5.1):** de una sección, con asistencia, cobertura del plan y lecturas.
+- **Reporte de avance (1.5.2):** de una sección, desde Notas: clases dadas de las programadas, cobertura del plan por
+  unidad, asistencia (presentes y tardanzas sobre las marcas no justificadas) y lecturas obligatorias por estudiante.
 - Cada documento generado guarda versión de plantilla, datos usados (resumen) y huella; la actividad registra quién lo
   generó.
 
-## 5. Ayuda de IA (1.5.1)
+## 5. Ayuda de IA (1.5.1–1.5.2)
 
 - En un bloque de texto, «Redactar con IA» (la tarea `write` de 1.4.1) con el tipo de documento como contexto.
-- «Sugerir campos»: dado un texto escrito por la persona («la estudiante X del grado Y obtuvo…»), la IA propone
-  reemplazar las partes por los campos que existen; se aceptan uno por uno.
+- «Sugerir campos» (1.5.2): dado un texto escrito por la persona («la estudiante X del grado Y obtuvo…»), se propone
+  reemplazar las partes por los campos que existen; se aceptan uno por uno. Las partes iguales a un dato real de la
+  sección de la vista previa se reconocen sin IA (y sin enviar nombres de estudiantes al modelo); la IA agrega el resto.
 
 ## Pantallas para capturar (1440 y 390)
 

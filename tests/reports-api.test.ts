@@ -100,4 +100,29 @@ describe("1.5.0 report builder on the built Worker", () => {
     expect(certificate).toContain(inPdf(learner.name));
     expect((await as(educator, `/sections/${section}/grades/certificate.pdf?learner=no-existe`)).status).toBe(404);
   }, 120_000);
+
+  it("1.5.2: the section's progress report, with the default template until the organization designs its own", async () => {
+    const admin = await signIn("admin-demo"), educator = await signIn("lucia.herrera");
+    const section = "seed-group-mat-6a";
+    const book = await read<{ gradebook: { learners: { id: string; name: string }[]; section: { courseTitle: string } } }>(await as(admin, `/sections/${section}/grades`));
+    const report = await pdf(await as(educator, `/sections/${section}/grades/progress.pdf`));
+    expect(report).toContain(inPdf("Reporte de avance"));
+    expect(report).toContain(inPdf("Cobertura del plan"));
+    expect(report).toContain(inPdf(book.gradebook.learners[0].name));
+
+    const created = await read<{ template: Template }>(await as(admin, "/report-templates", "POST", { kind: "progress-report" }), 201);
+    const draft = { ...created.template.draft, header: ["Avance oficial de {{seccion.nombre}}"] };
+    await read(await as(admin, `/report-templates/${created.template.id}`, "PUT", { draft }));
+    expect(await pdf(await as(admin, `/report-templates/${created.template.id}/preview`, "POST", { sectionId: section }))).toContain(inPdf("Avance oficial de"));
+    await read(await as(admin, `/report-templates/${created.template.id}/publish`, "POST", {}));
+    expect(await pdf(await as(educator, `/sections/${section}/grades/progress.pdf`))).toContain(inPdf("Avance oficial de"));
+
+    // «Sugerir campos» without AI configured (this Worker has none): the real values found in the text still become fields.
+    // A progress report has no student field: a student's name stays as written.
+    const text = `Se hace constar que ${book.gradebook.learners[1].name} cursa ${book.gradebook.section.courseTitle}. Emitida el 2 de marzo de 2027.`;
+    const suggested = await read<{ suggestions: { original: string; field: string }[]; ai: boolean }>(await as(admin, `/report-templates/${created.template.id}/suggest-fields`, "POST", { text, sectionId: section }));
+    expect(suggested).toEqual({ suggestions: [{ original: book.gradebook.section.courseTitle, field: "curso.nombre", label: "Curso" }], ai: false });
+    expect(await read(await as(admin, `/report-templates/${created.template.id}/suggest-fields`, "POST", { text: "" }), 400)).toEqual({ error: "Escribe el texto del bloque para sugerir sus campos." });
+    expect((await as(educator, `/report-templates/${created.template.id}/suggest-fields`, "POST", { text })).status).toBe(403);
+  }, 120_000);
 });
