@@ -3,7 +3,7 @@ import { competencyDescription, competencyLimit, competencyName, curriculumPacka
 import type { CurriculumPackage } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
 import { accessTo } from "./access";
-import { event } from "./team";
+import { event } from "./activity";
 
 /**
  * Curriculum packages (official references versioned in the repository):

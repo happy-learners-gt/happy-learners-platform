@@ -8,7 +8,7 @@ import { learnerEducatorPhoto, learnerEducators } from "./professional";
 import { materialsFor } from "./courses";
 import { resources } from "./content";
 import { deliverFile, filesFor } from "./files";
-import { event } from "./team";
+import { event } from "./activity";
 import { digest, newToken } from "./auth";
 import { contractBlock } from "./contracts";
 import { effectiveLessonIds } from "./freedom-plan";

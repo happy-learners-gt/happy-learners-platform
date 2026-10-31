@@ -5,7 +5,7 @@ import { forbidden } from "./access";
 import { freedomPolicyOf, freedomReviewOf } from "./freedom-plan";
 import { reviewersOf } from "./notifications";
 import { notify, type Notifier } from "./notify";
-import { recordEvent } from "./team";
+import { recordEvent } from "./activity";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
 type SectionRow = { id: string; name: string; courseId: string; status: string };

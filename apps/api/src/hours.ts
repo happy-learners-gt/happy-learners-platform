@@ -2,7 +2,7 @@ import type { HoursReport, HoursRow, Member } from "@happy-learners/contracts";
 import { effectiveDuration, formatMinutes, hoursAdjustmentInput, hoursCsv, hoursDay, hoursFilterInput, hoursTotals, inHoursFilter } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { personalZone } from "./preferences";
-import { event } from "./team";
+import { event } from "./activity";
 
 const reply = (data: unknown, status = 200, headers: Record<string, string> = {}) => Response.json(data, { status, headers });
 

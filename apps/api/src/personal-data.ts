@@ -1,7 +1,7 @@
 import type { Member } from "@happy-learners/contracts";
 import { personalDataFile, personalDataFormat, personalDataSections } from "@happy-learners/domain";
 import type { Database } from "./storage";
-import { event } from "./team";
+import { event } from "./activity";
 import { ownHours } from "./hours";
 
 /**

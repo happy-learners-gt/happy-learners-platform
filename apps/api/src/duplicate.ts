@@ -2,7 +2,7 @@ import type { Activity, Lesson, Member } from "@happy-learners/contracts";
 import { sharePrefix } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
 import { curriculumFor, materialsFor, unitsFor } from "./courses";
-import { event } from "./team";
+import { event } from "./activity";
 
 const reply = (data: unknown, status = 200) => Response.json(data, { status });
 const MAX_ORGANIZATION_BYTES = 4 * 1024 * 1024 * 1024;

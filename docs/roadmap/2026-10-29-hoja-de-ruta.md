@@ -26,6 +26,7 @@ Reemplaza la necesidad de recordar el historial. Se actualiza al cerrar cada lot
 | 1.5.5 | Auditoría de seguridad manual y sus correcciones (`docs/security/auditoria-2026-11.md`) | En PR |
 | 1.5.6 | SLO y observabilidad (`docs/operations/slo.md`): registro por petición con filas leídas | En PR |
 | 1.5.7 | Menos lecturas en Inicio y Secciones (conteos de asistencia por clase, consultas por índice) | En PR |
+| 1.5.8 | Contextos delimitados y patrones (`docs/architecture/`); bitácora y progreso fuera de `team.ts` | En PR |
 
 Siguiente migración libre: **0076** (1.4.0 usa 0070; 1.5.0 usa 0071; 1.5.1 usa 0072; 1.5.2 usa 0073; 1.5.3 usa 0074; 1.5.7 usa 0075). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
 
@@ -93,10 +94,10 @@ con apoyo puntual.
 
 ### Carril C · Arquitectura y calidad (incremental, nunca un refactor total)
 
-1. **Contextos delimitados:** documento `docs/architecture/contextos.md` (identidad y accesos, contenido, plan
+1. ~~Contextos delimitados~~ (1.5.8): documento `docs/architecture/contextos.md` (identidad y accesos, contenido, plan
    curricular, secciones y calendario, evaluación, contratos y firmas, IA) con sus límites, datos de cada uno y
    dependencias permitidas; cada cambio de patrón se registra como DEC.
-2. **Patrones por problema:** catálogo corto en `docs/architecture/patrones.md` (motores deterministas en el dominio,
+2. ~~Patrones por problema~~ (1.5.8): catálogo corto en `docs/architecture/patrones.md` (motores deterministas en el dominio,
    compare-and-write con `guardedBatch`, colas en alarmas del Durable Object, migraciones aditivas, etc.) y antipatrones
    detectados con su corrección.
 3. **Refactor por contexto cuando duela:** primero los archivos grandes de la API (`gradebook.ts`, `classes.ts`),
