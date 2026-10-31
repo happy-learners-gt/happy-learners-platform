@@ -29,22 +29,24 @@ export async function sections(path: string, current: Member, db: Database) {
   const bound = id ? [...scope, id] : scope;
   // The visible sections first, then everything else by their ids: each query below is an index lookup by section
   // instead of filtering every section again (docs/operations/slo.md §4).
+  // nosemgrep: sql-interpolated-text -- visible e inScope son fragmentos constantes; los valores van como parámetros
   const groups = (await db.prepare(`SELECT g.id,g.course_id AS courseId,g.name,g.status,g.access_code AS accessCode,g.schedule_weekdays AS weekdays,g.schedule_starts_at AS startsAt,g.schedule_duration AS durationMinutes,g.schedule_from AS "from",g.schedule_until AS until,g.schedule_meetings AS meetings,g.schedule_period_id AS periodId,
       c.title AS courseTitle,c.status AS courseStatus,COALESCE(sp.pacing,c.pacing) AS pacing,EXISTS(SELECT 1 FROM section_educators e WHERE e.group_id=g.id AND e.user_id=?) AS teaches
       FROM course_groups g JOIN courses c ON c.id=g.course_id AND c.organization_id=g.organization_id LEFT JOIN study_programs sp ON sp.id=c.program_id WHERE ${visible}${id ? " AND g.id=?" : ""} ORDER BY c.title,g.status,g.name,g.created_at`).bind(current.id, ...bound).all<Row>()).results;
   const ids = JSON.stringify(groups.map(group => group.id)), courseIds = JSON.stringify([...new Set(groups.map(group => group.courseId))]);
   const inScope = "IN (SELECT value FROM json_each(?))";
   const [learners, classes, planned, published, openings, educators, progressRows] = groups.length ? await db.batch([
-    db.prepare(`SELECT group_id AS groupId,id FROM group_learners WHERE status='active' AND group_id ${inScope}`).bind(ids),
+    db.prepare(`SELECT group_id AS groupId,id FROM group_learners WHERE status='active' AND group_id ${inScope}`).bind(ids), // nosemgrep: sql-interpolated-text -- visible e inScope son fragmentos constantes; los valores van como parámetros
     // Each class keeps its attendance counts (migration 0075): no mark is read here.
+    // nosemgrep: sql-interpolated-text -- visible e inScope son fragmentos constantes; los valores van como parámetros
     db.prepare(`SELECT s.id,s.group_id AS groupId,s.status,s.session_date AS sessionDate,s.starts_at AS startsAt,s.marked_count AS marked,s.attended_count AS attended
       FROM class_sessions s WHERE s.group_id ${inScope} ORDER BY s.session_date,s.starts_at`).bind(ids),
-    db.prepare(`SELECT p.session_id AS sessionId,p.lesson_id AS lessonId,p.outcome FROM class_session_lessons p JOIN class_sessions s ON s.id=p.session_id WHERE s.group_id ${inScope}`).bind(ids),
+    db.prepare(`SELECT p.session_id AS sessionId,p.lesson_id AS lessonId,p.outcome FROM class_session_lessons p JOIN class_sessions s ON s.id=p.session_id WHERE s.group_id ${inScope}`).bind(ids), // nosemgrep: sql-interpolated-text -- visible e inScope son fragmentos constantes; los valores van como parámetros
     // From the units to their lessons (CROSS JOIN keeps that order): otherwise SQLite reads every lesson through `group_id IS NULL`.
-    db.prepare(`SELECT u.course_id AS courseId,l.id FROM learning_units u CROSS JOIN lessons l ON l.course_unit_id=u.id WHERE u.status='active' AND l.archived=0 AND l.revision>0 AND l.group_id IS NULL AND u.course_id ${inScope}`).bind(courseIds),
-    db.prepare(`SELECT group_id AS groupId,count(*) AS total FROM lesson_completions WHERE group_id ${inScope} GROUP BY group_id`).bind(ids),
-    db.prepare(`SELECT e.group_id AS groupId,e.user_id AS userId,COALESCE(u.display_name,u.username) AS name,u.username FROM section_educators e JOIN users u ON u.id=e.user_id WHERE e.group_id ${inScope} ORDER BY name`).bind(ids),
-    db.prepare(`SELECT group_id AS groupId,learner_id AS learnerId,lesson_id AS lessonId,completed_at IS NOT NULL AS completed FROM learner_progress WHERE group_id ${inScope}`).bind(ids),
+    db.prepare(`SELECT u.course_id AS courseId,l.id FROM learning_units u CROSS JOIN lessons l ON l.course_unit_id=u.id WHERE u.status='active' AND l.archived=0 AND l.revision>0 AND l.group_id IS NULL AND u.course_id ${inScope}`).bind(courseIds), // nosemgrep: sql-interpolated-text -- visible e inScope son fragmentos constantes; los valores van como parámetros
+    db.prepare(`SELECT group_id AS groupId,count(*) AS total FROM lesson_completions WHERE group_id ${inScope} GROUP BY group_id`).bind(ids), // nosemgrep: sql-interpolated-text -- visible e inScope son fragmentos constantes; los valores van como parámetros
+    db.prepare(`SELECT e.group_id AS groupId,e.user_id AS userId,COALESCE(u.display_name,u.username) AS name,u.username FROM section_educators e JOIN users u ON u.id=e.user_id WHERE e.group_id ${inScope} ORDER BY name`).bind(ids), // nosemgrep: sql-interpolated-text -- visible e inScope son fragmentos constantes; los valores van como parámetros
+    db.prepare(`SELECT group_id AS groupId,learner_id AS learnerId,lesson_id AS lessonId,completed_at IS NOT NULL AS completed FROM learner_progress WHERE group_id ${inScope}`).bind(ids), // nosemgrep: sql-interpolated-text -- visible e inScope son fragmentos constantes; los valores van como parámetros
   ]) as unknown as [{ groupId: string; id: string }[], ClassRow[], { sessionId: string; lessonId: string; outcome: string | null }[], { courseId: string; id: string }[], { groupId: string; total: number }[], (SectionEducator & { groupId: string })[], { groupId: string; learnerId: string; lessonId: string; completed: number }[]]
     : [[], [], [], [], [], [], []];
   if (id && !groups.length) return unassigned(db, id, current);
