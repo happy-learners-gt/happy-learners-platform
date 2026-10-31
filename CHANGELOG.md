@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.9 — 2026-10-31
+
+- Biblioteca de componentes por niveles (átomos, moléculas, patrones) en `docs/design/fluent.md`, con una prueba que exige catalogar cada componente de `ui/`; la Guía de estilo muestra pestañas, pasos y el ajuste de tiempo.
+- Decisión con datos sobre Drizzle (`docs/architecture/orm-drizzle.md`): no se adopta por ahora.
+- Material para marca, empresa y soporte (`docs/empresa/marca-y-soporte.md`): posicionamiento, criterios y candidatos de nombre, brief creativo y base de conocimientos por rol.
+
 ## 1.5.8 — 2026-10-31
 
 - Arquitectura: contextos delimitados (`docs/architecture/contextos.md`) y catálogo de patrones y antipatrones (`docs/architecture/patrones.md`), con el mapa de importaciones medido. La bitácora de actividad y el progreso de Inicio salen de `team.ts` (`activity.ts`, `home.ts`): se cortan tres importaciones circulares, sin cambios visibles.
