@@ -2,8 +2,8 @@ import type { Activity, Lesson, Member, Organization, Resource } from "@happy-le
 import { hasText, organizationIds, organizationInput, richTextFieldsOf, scopeOfSection, scopeOfShare, scopeOfToken, sessionTouchMs, tokenPrefix } from "@happy-learners/domain";
 import { sha } from "./generated/version";
 import { database } from "./storage";
-import type { Database, Usage } from "./storage";
-import { requestLog } from "./telemetry";
+import type { Database } from "./storage";
+import { requestLog, type Usage } from "./telemetry";
 export { OrganizationStore } from "./storage";
 import { cookie, digest, newToken, sessionToken, verifyPassword } from "./auth";
 import { roles } from "./roles";

@@ -1,10 +1,10 @@
-import type { Usage } from "./storage";
-
 /**
  * One structured line per API request (docs/operations/slo.md): the route as a template, never ids, tokens or query
  * strings; status, duration and the rows the request read and wrote in its organization's database (the free plan's
  * daily quota of rows read is what took the API down on 30-oct-2026). Nothing about the person.
  */
+/** Rows read and written by one request in its organization's database, and how many round trips it took. */
+export interface Usage { rowsRead: number; rowsWritten: number; queries: number }
 export interface RequestLog {
   event: "api"; route: string; method: string; status: number; ms: number;
   rowsRead: number; rowsWritten: number; queries: number; organization: string | null; sha: string; ray: string | null;
