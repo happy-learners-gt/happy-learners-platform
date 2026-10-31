@@ -9,13 +9,15 @@ import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryActi
 /**
  * Organización › Horarios (1.4.3, docs/design/asistente-ia.md §6d): the weekly timetable of the chosen sections, from
  * the school day's periods and rules. The solver decides; the AI only reads rules written in words, which the person
- * confirms. Nothing changes until «Aplicar a las secciones».
+ * confirms. Nothing changes until «Aplicar a las secciones». Classrooms (1.5.3) are listed and edited here, and each
+ * section's usual classroom is chosen in the sections table.
  */
 type Setup = {
   bellSchedules: { id: string; name: string; weekdays: number[]; blocks: SolverBlock[] }[];
-  sections: { id: string; name: string; courseTitle: string; educators: { id: string; name: string }[]; meetingsPerWeek: number }[];
-  educators: { id: string; name: string }[]; year: { from: string; until: string } | null;
+  sections: { id: string; name: string; courseTitle: string; educators: { id: string; name: string }[]; meetingsPerWeek: number; learners: number; classroomId: string | null }[];
+  educators: { id: string; name: string }[]; year: { from: string; until: string } | null; classrooms: Classroom[];
 };
+type Classroom = { id: string; name: string; capacity: number };
 type Choice = { included: boolean; meetingsPerWeek: number; blocksPerMeeting: number };
 const dayLabel = (weekday: number) => weekdayNames[weekday].charAt(0).toUpperCase() + weekdayNames[weekday].slice(1);
 const ruleKinds: { value: SolverRule["kind"]; label: string }[] = [
@@ -70,7 +72,56 @@ function WrittenRules({ onAdd }: { onAdd: (rules: SolverRule[]) => void }) {
   </div>;
 }
 
-function WeekGrid({ result, bell, names, educatorFilter, sectionsOf }: { result: SolverResult; bell: Setup["bellSchedules"][number]; names: Record<string, string>; educatorFilter: string; sectionsOf: (educatorId: string) => Set<string> }) {
+/** Organización › Horarios › Aulas (1.5.3): the classrooms with their capacity and the sections that use them. */
+function Classrooms({ setup, onChange }: { setup: Setup; onChange: (setup: Setup) => void }) {
+  const { toast } = useFeedback();
+  const [editing, setEditing] = useState<string | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  async function save(event: React.FormEvent<HTMLFormElement>, id: string | null) {
+    event.preventDefault();
+    const form = event.currentTarget, data = new FormData(form);
+    setBusy(true); setError("");
+    try {
+      const { classroom } = await api<{ classroom: Classroom }>(id ? `/timetables/classrooms/${id}` : "/timetables/classrooms", id ? "PUT" : "POST", { name: data.get("name"), capacity: Number(data.get("capacity")) });
+      const classrooms = id ? setup.classrooms.map(item => item.id === id ? classroom : item) : [...setup.classrooms, classroom];
+      onChange({ ...setup, classrooms: classrooms.sort((a, b) => a.name.localeCompare(b.name, "es")) });
+      setEditing(null);
+      if (!id) form.reset();
+      toast({ message: id ? "Aula guardada." : `Aula «${classroom.name}» agregada.` });
+    } catch (cause) { setError(message(cause)); }
+    finally { setBusy(false); }
+  }
+  async function archive(room: Classroom) {
+    setBusy(true);
+    try {
+      await api(`/timetables/classrooms/${room.id}`, "DELETE");
+      onChange({ ...setup, classrooms: setup.classrooms.filter(item => item.id !== room.id), sections: setup.sections.map(item => item.classroomId === room.id ? { ...item, classroomId: null } : item) });
+      toast({ message: `Aula «${room.name}» archivada.` });
+    } catch (cause) { toast({ tone: "error", message: message(cause) }); }
+    finally { setBusy(false); }
+  }
+  const fields = (room?: Classroom) => <>
+    <Field label="Nombre del aula"><input name="name" required maxLength={80} defaultValue={room?.name}/></Field>
+    <Field label="Capacidad"><input name="capacity" type="number" required min={1} max={500} defaultValue={room?.capacity ?? 30}/></Field>
+  </>;
+  return <Section title="Aulas">
+    <p className="muted">Con aulas registradas, cada sección recibe una para toda la semana: su aula habitual o la más pequeña con lugar para sus estudiantes. Un aula no tiene dos clases a la vez.</p>
+    {setup.classrooms.length ? <ul className="timetable-rooms">{setup.classrooms.map(room => {
+      const users = setup.sections.filter(item => item.classroomId === room.id).map(item => `${item.courseTitle} · ${item.name}`);
+      return <li key={room.id}>{editing === room.id
+        ? <form className="timetable-room-form" aria-label={`Editar ${room.name}`} onSubmit={event => void save(event, room.id)}>{fields(room)}
+          <div className="button-row"><button className="button primary small" disabled={busy}>Guardar</button><button type="button" className="button ghost small" onClick={() => setEditing(null)}>Cancelar</button></div></form>
+        : <><span><strong>{room.name}</strong> · {room.capacity} estudiantes · <span className="muted">{users.join(", ") || "sin secciones"}</span></span>
+          <span className="button-row"><button type="button" className="button ghost small" onClick={() => setEditing(room.id)}>Editar<span className="sr-only"> {room.name}</span></button>
+            <button type="button" className="button ghost small" disabled={busy} onClick={() => void archive(room)}>Archivar<span className="sr-only"> {room.name}</span></button></span></>}
+      </li>;
+    })}</ul> : <p className="muted">Sin aulas: el horario se genera sin asignar aulas.</p>}
+    <form className="timetable-room-form" aria-label="Agregar aula" onSubmit={event => void save(event, null)}>{fields()}
+      <div className="button-row"><button className="button secondary" disabled={busy}><Icon name="plus" size={16}/>Agregar aula</button></div></form>
+    {error && <p className="field-error" role="alert">{error}</p>}
+  </Section>;
+}
+
+function WeekGrid({ result, bell, names, rooms, educatorFilter, sectionsOf }: { result: SolverResult; bell: Setup["bellSchedules"][number]; names: Record<string, string>; rooms: Record<string, string>; educatorFilter: string; sectionsOf: (educatorId: string) => Set<string> }) {
   const days = [...bell.weekdays].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
   const shown = educatorFilter ? result.meetings.filter(item => sectionsOf(educatorFilter).has(item.sectionId)) : result.meetings;
   const at = (weekday: number, block: SolverBlock) => shown.filter(item => item.weekday === weekday && item.startsAt <= block.startsAt && block.startsAt < endOf(item));
@@ -78,7 +129,7 @@ function WeekGrid({ result, bell, names, educatorFilter, sectionsOf }: { result:
     <thead><tr><th scope="col">Periodo</th>{days.map(day => <th key={day} scope="col">{dayLabel(day)}</th>)}</tr></thead>
     <tbody>{bell.blocks.map(block => <tr key={block.key} className={block.kind === "break" ? "is-break" : undefined}>
       <th scope="row">{block.startsAt}–{block.endsAt}</th>
-      {block.kind === "break" ? <td colSpan={days.length} className="muted">{block.label || "Recreo"}</td> : days.map(day => <td key={day}>{at(day, block).map(item => <span key={item.sectionId} className="timetable-cell">{names[item.sectionId]}</span>)}</td>)}
+      {block.kind === "break" ? <td colSpan={days.length} className="muted">{block.label || "Recreo"}</td> : days.map(day => <td key={day}>{at(day, block).map(item => <span key={item.sectionId} className="timetable-cell">{names[item.sectionId]}{item.classroomId && rooms[item.classroomId] ? <small>{rooms[item.classroomId]}</small> : null}</span>)}</td>)}
     </tr>)}</tbody>
   </table></div>;
 }
@@ -88,7 +139,7 @@ export function TimetablesPage() {
   const { toast } = useFeedback();
   const [setup, setSetup] = useState<Setup | null>(null), [error, setError] = useState("");
   const [bellId, setBellId] = useState(""), [choices, setChoices] = useState<Record<string, Choice>>({}), [rules, setRules] = useState<SolverRule[]>([]);
-  const [result, setResult] = useState<{ result: SolverResult; names: Record<string, string> } | null>(null), [busy, setBusy] = useState(false), [filter, setFilter] = useState("");
+  const [result, setResult] = useState<{ result: SolverResult; names: Record<string, string>; classrooms?: Record<string, string> } | null>(null), [busy, setBusy] = useState(false), [filter, setFilter] = useState("");
   const [range, setRange] = useState({ from: "", until: "" }), [applied, setApplied] = useState<{ name: string; ok: boolean; classes?: number; error?: string }[] | null>(null);
   useEffect(() => {
     void api<Setup>("/timetables").then(data => {
@@ -111,6 +162,12 @@ export function TimetablesPage() {
     catch (cause) { toast({ tone: "error", message: message(cause) }); }
     finally { setBusy(false); }
   }
+  async function setRoom(sectionId: string, classroomId: string) {
+    try {
+      await api(`/timetables/sections/${sectionId}/classroom`, "PUT", { classroomId: classroomId || null });
+      setSetup({ ...setup!, sections: setup!.sections.map(item => item.id === sectionId ? { ...item, classroomId: classroomId || null } : item) }); setResult(null);
+    } catch (cause) { toast({ tone: "error", message: message(cause) }); }
+  }
   async function apply() {
     if (!result) return;
     setBusy(true);
@@ -126,16 +183,19 @@ export function TimetablesPage() {
     <Section title="Jornada y secciones">
       <Field label="Jornada"><select value={bellId} onChange={event => { setBellId(event.target.value); setResult(null); }}>{setup.bellSchedules.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
       <div className="table-card" role="region" aria-label="Secciones del horario" tabIndex={0}><table className="timetable-sections">
-        <thead><tr><th scope="col">Incluir</th><th scope="col">Sección</th><th scope="col">Docentes</th><th scope="col">Clases por semana</th><th scope="col">Periodos por clase</th></tr></thead>
+        <thead><tr><th scope="col">Incluir</th><th scope="col">Sección</th><th scope="col">Docentes</th><th scope="col">Clases por semana</th><th scope="col">Periodos por clase</th>{setup.classrooms.length > 0 && <th scope="col">Aula habitual</th>}</tr></thead>
         <tbody>{setup.sections.map(item => { const choice = choices[item.id]; const label = `${item.courseTitle} · ${item.name}`; return <tr key={item.id}>
           <td><input type="checkbox" aria-label={`Incluir ${label}`} checked={choice.included} onChange={event => { setChoices({ ...choices, [item.id]: { ...choice, included: event.target.checked } }); setResult(null); }}/></td>
-          <th scope="row">{label}</th>
+          <th scope="row">{label} <span className="muted small">· {item.learners} {item.learners === 1 ? "estudiante" : "estudiantes"}</span></th>
           <td>{item.educators.map(educator => educator.name).join(", ") || <span className="muted">Sin docente</span>}</td>
           <td><input type="number" min={1} max={7} aria-label={`Clases por semana de ${label}`} value={choice.meetingsPerWeek} disabled={!choice.included} onChange={event => { setChoices({ ...choices, [item.id]: { ...choice, meetingsPerWeek: Number(event.target.value) } }); setResult(null); }}/></td>
           <td><select aria-label={`Periodos por clase de ${label}`} value={choice.blocksPerMeeting} disabled={!choice.included} onChange={event => { setChoices({ ...choices, [item.id]: { ...choice, blocksPerMeeting: Number(event.target.value) } }); setResult(null); }}>{[1, 2, 3, 4].map(size => <option key={size} value={size}>{size}</option>)}</select></td>
+          {setup.classrooms.length > 0 && <td><select aria-label={`Aula habitual de ${label}`} value={item.classroomId || ""} onChange={event => void setRoom(item.id, event.target.value)}>
+            <option value="">La que quepa</option>{setup.classrooms.map(room => <option key={room.id} value={room.id}>{room.name} ({room.capacity})</option>)}</select></td>}
         </tr>; })}</tbody>
       </table></div>
     </Section>
+    <Classrooms setup={setup} onChange={next => { setSetup(next); setResult(null); }}/>
     <Section title="Reglas">
       <p className="muted">Siempre se cumplen: ningún docente da dos clases a la vez, cada sección tiene a lo sumo una clase por día y se respeta la disponibilidad declarada en el perfil. Agrega las demás.</p>
       {rules.length ? <ul className="timetable-rules">{rules.map((rule, index) => <li key={index}><span>{ruleText(rule, context)}</span><button type="button" className="button ghost small" onClick={() => { setRules(rules.filter((_, at) => at !== index)); setResult(null); }}>Quitar<span className="sr-only"> la regla: {ruleText(rule, context)}</span></button></li>)}</ul> : <p className="muted">Sin reglas adicionales.</p>}
@@ -153,7 +213,7 @@ export function TimetablesPage() {
           <ul>{result.result.unplaced.map(item => <li key={item.sectionId}><strong>{result.names[item.sectionId]}</strong>: {item.placed} de {item.needed} clases. {item.reasons.slice(0, 3).map(reason => `${reason.reason} (${reason.slots})`).join(" · ")}</li>)}</ul>
         </div></div>}
       <Field label="Ver el horario de"><select value={filter} onChange={event => setFilter(event.target.value)}><option value="">Todas las secciones</option>{setup.educators.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
-      <WeekGrid result={result.result} bell={bell} names={result.names} educatorFilter={filter} sectionsOf={sectionsOf}/>
+      <WeekGrid result={result.result} bell={bell} names={result.names} rooms={result.classrooms || {}} educatorFilter={filter} sectionsOf={sectionsOf}/>
       {result.result.status === "solved" && <div className="timetable-apply">
         <div className="ai-price-fields"><Field label="Desde"><input type="date" value={range.from} onChange={event => setRange({ ...range, from: event.target.value })}/></Field><Field label="Hasta"><input type="date" value={range.until} onChange={event => setRange({ ...range, until: event.target.value })}/></Field></div>
         <p className="muted small">Cada sección toma este horario en esas fechas: sus clases pendientes se regeneran y conservan lo planificado, como al guardar su horario.</p>

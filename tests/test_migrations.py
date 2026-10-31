@@ -1759,3 +1759,25 @@ class ProgressReportMigrationTests(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             db.execute(run, ("r2", user, "otra-tarea"))
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class ClassroomsMigrationTests(unittest.TestCase):
+    def test_classrooms_have_unique_active_names_and_sections_may_use_one(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            db.executescript(path.read_text())
+        user = db.execute("SELECT id FROM users LIMIT 1").fetchone()[0]
+        room = "INSERT INTO classrooms(id,organization_id,name,capacity,status,updated_by,updated_at) VALUES (?,'org-demo',?,?,?,?,'t')"
+        db.execute(room, ("c1", "Aula 1", 30, "active", user))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(room, ("c2", "aula 1", 25, "active", user))
+        db.execute(room, ("c3", "Aula 1", 25, "archived", user))
+        for capacity in (0, 501):
+            with self.assertRaises(sqlite3.IntegrityError):
+                db.execute(room, (f"c{capacity}", f"Aula {capacity}", capacity, "active", user))
+        group = db.execute("SELECT id FROM course_groups LIMIT 1").fetchone()[0]
+        db.execute("UPDATE course_groups SET classroom_id='c1' WHERE id=?", (group,))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE course_groups SET classroom_id='no-existe' WHERE id=?", (group,))
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
