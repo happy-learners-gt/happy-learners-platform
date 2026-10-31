@@ -1709,3 +1709,24 @@ class ReportTemplatesMigrationTests(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             db.execute(image, ("i2", "org-demo", "Grande", b"\x00" * (1048577), 10, 10, 3, "a" * 64, user, "t"))
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class PanelMinutesMigrationTests(unittest.TestCase):
+    def test_templates_keep_their_rows_and_accept_panel_minutes(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            if path.name == "0072_panel_minutes.sql":
+                user = db.execute("SELECT id FROM users LIMIT 1").fetchone()[0]
+                db.execute("INSERT INTO report_templates(id,organization_id,kind,program_id,name,draft,published_version,updated_by,updated_at) VALUES ('t1','org-demo','report-card',NULL,'Boleta','{}',1,?,'t')", (user,))
+                db.execute("INSERT INTO report_template_versions(template_id,version,content,published_by,published_at) VALUES ('t1',1,'{}',?,'t')", (user,))
+                db.execute("INSERT INTO generated_documents(id,organization_id,kind,template_id,template_version,subject_type,subject_id,sha256,created_by,created_at) VALUES ('d1','org-demo','report-card','t1',1,'section','g',?,?,'t')", ("a" * 64, user))
+                db.commit()
+            db.executescript(path.read_text())
+        self.assertEqual(db.execute("SELECT id,kind,published_version FROM report_templates").fetchall(), [("t1", "report-card", 1)])
+        self.assertEqual(db.execute("SELECT id,template_id FROM generated_documents").fetchall(), [("d1", "t1")])
+        user = db.execute("SELECT id FROM users LIMIT 1").fetchone()[0]
+        db.execute("INSERT INTO report_templates(id,organization_id,kind,program_id,name,draft,updated_by,updated_at) VALUES ('t2','org-demo','panel-minutes',NULL,'Acta','{}',?,'t')", (user,))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO report_templates(id,organization_id,kind,program_id,name,draft,updated_by,updated_at) VALUES ('t3','org-demo','report-card',NULL,'Otra','{}',?,'t')", (user,))
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])

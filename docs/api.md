@@ -794,3 +794,15 @@ si no hay, la de la organización; sin ninguna, conserva su formato anterior. `G
 ?learner=&tipo=inscripcion|finalizacion` genera la constancia (plantilla publicada o la de por omisión). Cada documento
 generado desde una plantilla queda en `generated_documents` con su versión y su huella SHA-256.
 
+### Actas de tribunal (1.5.1)
+
+Migración `0072_panel_minutes.sql` (además reconstruye las tablas de plantillas para el tipo `panel-minutes`).
+`POST /api/panel-minutes/sign` `{ activityId, sectionId, learnerId, signature: { fullName, password } }` firma el acta del
+estudiante cuando todo el tribunal ya lo calificó: la primera firma crea el acta con su contenido congelado (marca de
+cada integrante y resultado) y su huella SHA-256; la contraseña se verifica como en ST-153 (cinco intentos cada 15
+minutos). Quien preside firma al final (409 mientras falten integrantes); 403 a quien no integra el tribunal. Firmada por
+todos, queda `signed`. Desde la primera firma, `…/panel` responde 409 para ese estudiante y `…/evaluators` 409 para la
+actividad. `GET /api/panel-minutes/:id.pdf` (tribunal, docentes de la sección y administración) dibuja el acta con la
+plantilla publicada «Acta de tribunal» o la de por omisión. `GET /api/me/panels` agrega `chair` y, por estudiante,
+`minute: { id, status, signed, mine }`. `POST /api/ai/write` admite `document-text` (conserva los campos `{{…}}`).
+

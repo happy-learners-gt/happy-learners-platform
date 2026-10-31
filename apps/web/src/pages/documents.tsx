@@ -6,6 +6,7 @@ import { formatInstant } from "../regional";
 import { Modal, useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section, StatusBadge } from "../ui/primitives";
+import { AiWrite } from "../ui/AiWrite";
 
 /**
  * Organización › Documentos (1.5.0, docs/design/constructor-de-reportes.md): templates of the organization's documents
@@ -70,7 +71,8 @@ function BlockProperties({ block, spec, images, onChange }: { block: TemplateBlo
   const alignField = (value: string | undefined, set: (align: "left" | "center" | "right") => void) => <Field label="Alineación"><select value={value || "left"} onChange={event => set(event.target.value as "left")}><option value="left">Izquierda</option><option value="center">Centro</option><option value="right">Derecha</option></select></Field>;
   switch (block.type) {
     case "title": case "text": return <div className="stack">
-      <Field label="Texto" hint="Los campos se insertan desde la lista y se llenan con los datos de cada documento."><textarea rows={block.type === "title" ? 2 : 6} value={block.text} onChange={event => onChange({ ...block, text: event.target.value })}/></Field>
+      <Field label="Texto" hint="Los campos se insertan desde la lista y se llenan con los datos de cada documento."><textarea data-ai-write={`document-${block.id}`} rows={block.type === "title" ? 2 : 6} value={block.text} onChange={event => onChange({ ...block, text: event.target.value })}/></Field>
+      {block.type === "text" && <AiWrite field="document-text" target={`document-${block.id}`} label="Texto"/>}
       <FieldPicker spec={spec} onPick={key => onChange({ ...block, text: `${block.text}{{${key}}}` })}/>
       {alignField(block.align, align => onChange({ ...block, align }))}
       {block.type === "text" && <label className="check"><input type="checkbox" checked={!!block.italic} onChange={event => onChange({ ...block, italic: event.target.checked })}/><span>Cursiva</span></label>}

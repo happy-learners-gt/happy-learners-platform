@@ -30,7 +30,8 @@ Code (sin Cursor).
 | Versión | Contenido |
 | --- | --- |
 | 1.5.0 | Motor de PDF con imágenes y tablas, plantillas versionadas, diseñador, boleta y constancia configurables |
-| 1.5.1 | Acta de tribunal firmada por cada integrante, reporte de avance, ayuda de IA en el diseñador |
+| 1.5.1 | Acta de tribunal firmada por cada integrante, Redactar con IA en los textos del diseñador |
+| 1.5.2 | Reporte de avance de una sección, «Sugerir campos» con IA |
 
 ## 1. Motor de PDF (1.5.0)
 
