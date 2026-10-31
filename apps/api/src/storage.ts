@@ -77,6 +77,7 @@ import { organizationIds } from "@happy-learners/domain";
 import { exportStore, importStore, RestoreError, type Backup } from "./backup";
 import { processProposals } from "./proposals";
 import { processBookMaps } from "./book-map";
+import type { Usage } from "./telemetry";
 
 /** Values a statement binds; ArrayBuffer is a BLOB (1.5.0: report images). */
 type Value = string | number | null | ArrayBuffer;
@@ -250,8 +251,6 @@ export class Prepared {
 }
 /** What a Database runs on: the organization's Durable Object, through its stub or, inside it (alarms), itself. */
 type Store = Pick<OrganizationStore, "query" | "measuredQuery" | "exportData" | "importData">;
-/** Rows read and written by one request, for its log line (docs/operations/slo.md). */
-export interface Usage { rowsRead: number; rowsWritten: number; queries: number }
 export class Database {
   constructor(private stub: DurableObjectStub<OrganizationStore> | Store, private scope: string, private usage?: Usage) {}
   prepare(sql: string) { return new Prepared(this, sql); }
