@@ -41,6 +41,10 @@ Siguiente migración libre: **0073** (1.4.0 usa 0070; 1.5.0 usa 0071; 1.5.1 usa 
 - **Minutos de Actions.** Integrar `main` en la rama antes del último push del PR: así `main` reutiliza la verificación
   del PR (52 s en lugar de unos 16 min, #91). Ensayar localmente lo que pueda fallar (Semgrep, E2E afectadas) antes de
   empujar; un push por PR cuando sea posible.
+- **Cuota de Cloudflare (plan gratuito, decisión del usuario).** Producción y la vista previa comparten 5 millones de
+  filas leídas de Durable Objects al día; agotarlas deja la API en 503 hasta las 00:00 UTC (pasó el 30-oct). La vista
+  previa corre solo con la etiqueta `vista-previa`; el ensayo `Release drill` (lee la base completa varias veces) solo
+  cuando haga falta; nada de pruebas contra producción salvo los flujos críticos.
 - **Despliegue.** Fusionar a `main` despliega producción: requiere autorización explícita del usuario; tras fusionar,
   vigilar `verify`, `deploy` y `critical-flows` en `main`; un fallo intermitente se reintenta con `gh run rerun --failed`.
 - **Pruebas sin fechas frágiles.** Nada de «todos los días desde hoy tienen clase»: la semilla tiene asuetos.
@@ -134,3 +138,6 @@ con apoyo puntual.
   Desde hoy el equipo de desarrollo implementa los lotes 6 (IA como harness) y 7 (constructor de reportes) sin Cursor. Sin CodeQL por ahora.
 - 2026-10-30: 1.3.7, 1.4.0 y 1.4.1 en producción; 1.4.2–1.4.3 (#95) y 1.5.0 en PR, implementados por el equipo de desarrollo. Pendiente 1.5.1
   (actas de tribunal firmadas con el constructor, reporte de avance, IA en el diseñador) y aulas en el modelo para horarios.
+- 2026-10-30: producción sin servicio desde ~21:05 UTC por agotar la cuota diaria de lecturas de Durable Objects del plan
+  gratuito (CI y vista previa comparten cuenta). El usuario decide seguir en el plan gratuito: la vista previa pasa a ser
+  bajo pedido y se quitan las capturas de la vista previa y el smoke tras cada despliegue.
