@@ -261,11 +261,19 @@ test("7 · no E2E contamination is visible: only curated data or cleanable E2E-p
 
 test("8 · HL-150 ST-114: one menu in levels opens sections and courses in place; administration creates a section from it", async ({ page }, info) => {
   const group = e2eName(info, "Sección del menú");
-  await signIn(page, "admin-demo", "/inicio");
+  // IA-01: with more than ten active courses the menu lists eight, those opened recently first, and links to all.
+  await signIn(page, "admin-demo", "/cursos/seed-course-matematicas");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Matemáticas 3.º primaria");
+  await page.goto("/cursos/course-exploradores");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Exploradores");
+  await page.goto("/inicio");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Inicio");
   await openNavigation(page);
   const menu = page.getByRole("navigation", { name: "Navegación principal" });
-  // Each area shows or hides its list in place; the list keeps every active section or course.
+  const all = menu.getByRole("link", { name: /^Todos los cursos \(\d+\)$/ });
+  await expect(all).toHaveAttribute("href", "/cursos");
+  await expect(menu.getByRole("button", { name: /^Mostrar las páginas de / })).toHaveCount(8);
+  // Each area shows or hides its list in place.
   const toggle = menu.getByRole("button", { name: "Mostrar los cursos" });
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(menu.getByRole("link", { name: "Matemáticas 3.º primaria", exact: true })).toBeVisible();
