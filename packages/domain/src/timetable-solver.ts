@@ -6,11 +6,14 @@ import type { StaffAvailabilitySlot } from "@happy-learners/contracts";
  * order (preferred days, then days spread over the week, then earlier). Hard rules are never broken; when a section
  * cannot be placed, the answer says what blocks each slot it could have used. A language model only turns rules
  * written in words into these rules, which a person confirms (task `rules-to-constraints`).
+ * Classrooms (1.5.3): when there are any, each section gets one for all its meetings of the week (its usual one, else the
+ * smallest that fits its students) and no classroom holds two meetings at once. Without classrooms nothing changes.
  */
 export interface SolverBlock { key: string; startsAt: string; endsAt: string; kind: "class" | "break"; label?: string }
 /** A school day: its blocks in order, breaks included (two class blocks are consecutive only without a break between). */
 export interface SolverDay { weekday: number; blocks: SolverBlock[] }
-export interface SolverSection { id: string; name: string; educatorIds: string[]; meetingsPerWeek: number; blocksPerMeeting: number }
+export interface SolverSection { id: string; name: string; educatorIds: string[]; meetingsPerWeek: number; blocksPerMeeting: number; learners?: number; classroomId?: string | null }
+export interface SolverClassroom { id: string; name: string; capacity: number }
 export interface SolverEducator { id: string; name: string; availability: StaffAvailabilitySlot[] }
 export type SolverRule =
   | { kind: "unavailable"; educatorId: string; weekday: number; from: string; to: string }
@@ -19,9 +22,9 @@ export type SolverRule =
   | { kind: "not-on"; sectionId: string; weekday: number }
   | { kind: "preferred-days"; sectionId: string; weekdays: number[] };
 /** Meetings that are already fixed (sections outside this run): they occupy their educators. */
-export interface FixedMeeting { sectionId: string; name?: string; educatorIds: string[]; weekday: number; startsAt: string; durationMinutes: number }
-export interface SolverInput { days: SolverDay[]; sections: SolverSection[]; educators: SolverEducator[]; rules: SolverRule[]; fixed?: FixedMeeting[] }
-export interface SolverMeeting { sectionId: string; weekday: number; startsAt: string; durationMinutes: number }
+export interface FixedMeeting { sectionId: string; name?: string; educatorIds: string[]; weekday: number; startsAt: string; durationMinutes: number; classroomId?: string | null }
+export interface SolverInput { days: SolverDay[]; sections: SolverSection[]; educators: SolverEducator[]; rules: SolverRule[]; fixed?: FixedMeeting[]; classrooms?: SolverClassroom[] }
+export interface SolverMeeting { sectionId: string; weekday: number; startsAt: string; durationMinutes: number; classroomId?: string | null }
 export interface UnplacedSection { sectionId: string; name: string; placed: number; needed: number; reasons: { reason: string; slots: number }[] }
 export type SolverResult =
   | { status: "solved"; meetings: SolverMeeting[]; preferredMissed: number; steps: number }
@@ -34,7 +37,7 @@ const toClock = (minutes: number) => `${String(Math.floor(minutes / 60)).padStar
 const availabilityDay = (weekday: number) => weekday === 0 ? 7 : weekday;
 
 type Candidate = { weekday: number; start: number; end: number };
-type Placed = { sectionId: string; educatorIds: string[]; weekday: number; start: number; end: number };
+type Placed = { sectionId: string; educatorIds: string[]; weekday: number; start: number; end: number; roomId: string | null };
 
 /** Every place a meeting of `size` consecutive class blocks fits, over the days. */
 function slotsOf(days: SolverDay[], size: number): Candidate[] {
@@ -51,7 +54,8 @@ function slotsOf(days: SolverDay[], size: number): Candidate[] {
 
 export function solveTimetable(input: SolverInput, maxSteps = 200_000): SolverResult {
   const educators = new Map(input.educators.map(item => [item.id, item]));
-  const fixed: Placed[] = (input.fixed || []).map(item => ({ sectionId: item.sectionId, educatorIds: item.educatorIds, weekday: item.weekday, start: toMinutes(item.startsAt), end: toMinutes(item.startsAt) + item.durationMinutes }));
+  const fixed: Placed[] = (input.fixed || []).map(item => ({ sectionId: item.sectionId, educatorIds: item.educatorIds, weekday: item.weekday, start: toMinutes(item.startsAt), end: toMinutes(item.startsAt) + item.durationMinutes, roomId: item.classroomId || null }));
+  const rooms = input.classrooms || [];
   const shared = input.rules.filter((rule): rule is Extract<SolverRule, { kind: "shared-students" }> => rule.kind === "shared-students");
   const partners = (sectionId: string) => new Set(shared.filter(rule => rule.sectionIds.includes(sectionId)).flatMap(rule => rule.sectionIds).filter(id => id !== sectionId));
   const maxDaily = new Map(input.rules.flatMap(rule => rule.kind === "max-daily" ? [[rule.educatorId, rule.minutes] as const] : []));
@@ -59,6 +63,16 @@ export function solveTimetable(input: SolverInput, maxSteps = 200_000): SolverRe
   const overlaps = (a: { weekday: number; start: number; end: number }, b: { weekday: number; start: number; end: number }) => a.weekday === b.weekday && a.start < b.end && b.start < a.end;
   const name = (id: string) => educators.get(id)?.name || "Docente";
   const sectionName = (id: string) => input.sections.find(section => section.id === id)?.name || input.fixed?.find(item => item.sectionId === id)?.name || "Otra sección";
+
+  /** The classrooms a meeting of the section may use, best first: the one it already has this week, its usual one, else those that fit it. */
+  function roomsFor(section: SolverSection, placed: Placed[]): SolverClassroom[] {
+    const chosen = placed.find(item => item.sectionId === section.id)?.roomId;
+    if (chosen) return rooms.filter(room => room.id === chosen);
+    const usual = rooms.find(room => room.id === section.classroomId);
+    if (usual) return [usual];
+    return rooms.filter(room => room.capacity >= (section.learners || 0)).sort((a, b) => a.capacity - b.capacity || a.name.localeCompare(b.name, "es"));
+  }
+  const freeRooms = (section: SolverSection, slot: Candidate, placed: Placed[]) => roomsFor(section, placed).filter(room => ![...fixed, ...placed].some(item => item.roomId === room.id && overlaps(item, slot)));
 
   /** Why a slot cannot take a meeting of `section` given what is placed; null when it can. Fixed rules come first. */
   function blocked(section: SolverSection, slot: Candidate, placed: Placed[]): string | null {
@@ -81,11 +95,19 @@ export function solveTimetable(input: SolverInput, maxSteps = 200_000): SolverRe
     const mates = partners(section.id);
     const clash = [...fixed, ...placed].find(item => mates.has(item.sectionId) && overlaps(item, slot));
     if (clash) return `Comparte estudiantes con ${sectionName(clash.sectionId)}, que tiene clase entonces`;
+    if (rooms.length) {
+      const options = roomsFor(section, placed);
+      if (!options.length) return `Sin aula con capacidad para ${section.learners || 0} estudiantes`;
+      if (!freeRooms(section, slot, placed).length) {
+        const busy = [...fixed, ...placed].find(item => item.roomId === options[0].id && overlaps(item, slot));
+        return options.length === 1 && busy ? `${options[0].name} ya tiene clase con ${sectionName(busy.sectionId)}` : `Sin aula libre con capacidad para ${section.learners || 0} estudiantes`;
+      }
+    }
     return null;
   }
 
-  /** Candidates in a fixed order: preferred days, then days not next to the section's other meetings, then earlier. */
-  function ordered(section: SolverSection, placed: Placed[], slots: Candidate[]) {
+  /** Candidates in a fixed order: preferred days, then days not next to the section's other meetings, then earlier; within a slot, the smaller classroom first. */
+  function ordered(section: SolverSection, placed: Placed[], slots: Candidate[]): (Candidate & { roomId: string | null })[] {
     const mine = placed.filter(item => item.sectionId === section.id).map(item => (item.weekday + 6) % 7);
     const wish = preferred.get(section.id);
     const rank = (slot: Candidate) => {
@@ -97,7 +119,7 @@ export function solveTimetable(input: SolverInput, maxSteps = 200_000): SolverRe
       const [x, y] = [rank(a), rank(b)];
       for (let index = 0; index < x.length; index++) if (x[index] !== y[index]) return x[index] - y[index];
       return 0;
-    });
+    }).flatMap((slot): (Candidate & { roomId: string | null })[] => rooms.length ? freeRooms(section, slot, placed).map(room => ({ ...slot, roomId: room.id })) : [{ ...slot, roomId: null }]);
   }
 
   const slotCache = new Map<number, Candidate[]>();
@@ -109,7 +131,7 @@ export function solveTimetable(input: SolverInput, maxSteps = 200_000): SolverRe
     if (!remaining.length) return placed;
     if (++steps > maxSteps) { exhausted = true; return null; }
     // The most constrained meeting first (fewest open slots); ties by the order sections were given.
-    let pick = 0, options: Candidate[] | null = null;
+    let pick = 0, options: ReturnType<typeof ordered> | null = null;
     for (let index = 0; index < remaining.length; index++) {
       const found = ordered(remaining[index], placed, slotsFor(remaining[index]));
       if (!options || found.length < options.length) { pick = index; options = found; }
@@ -136,7 +158,7 @@ export function solveTimetable(input: SolverInput, maxSteps = 200_000): SolverRe
     }
     if (greedy.length > best.length) best = greedy;
   }
-  const meetingsOf = (placed: Placed[]) => placed.map(item => ({ sectionId: item.sectionId, weekday: item.weekday, startsAt: toClock(item.start), durationMinutes: item.end - item.start }))
+  const meetingsOf = (placed: Placed[]) => placed.map(item => ({ sectionId: item.sectionId, weekday: item.weekday, startsAt: toClock(item.start), durationMinutes: item.end - item.start, ...(rooms.length ? { classroomId: item.roomId } : {}) }))
     .sort((a, b) => ((a.weekday + 6) % 7) - ((b.weekday + 6) % 7) || a.startsAt.localeCompare(b.startsAt) || a.sectionId.localeCompare(b.sectionId));
   if (solution) {
     const preferredMissed = solution.filter(item => preferred.get(item.sectionId) && !preferred.get(item.sectionId)!.has(item.weekday)).length;

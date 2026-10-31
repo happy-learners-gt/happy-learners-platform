@@ -185,7 +185,7 @@ export type { AiWriter, WriteAction, WriteField, WriteInput, WriteOutput } from 
 export { defaultClassMinutes, proposeTimetable } from "./timetable-proposal";
 export type { ProposalLesson, ProposalSession, TimetableAssignment, TimetableProposal } from "./timetable-proposal";
 export { solveTimetable, weekdayNames } from "./timetable-solver";
-export type { FixedMeeting, SolverBlock, SolverDay, SolverEducator, SolverInput, SolverMeeting, SolverResult, SolverRule, SolverSection, UnplacedSection } from "./timetable-solver";
+export type { FixedMeeting, SolverClassroom, SolverBlock, SolverDay, SolverEducator, SolverInput, SolverMeeting, SolverResult, SolverRule, SolverSection, UnplacedSection } from "./timetable-solver";
 export { fixtureRulesTranslator, ruleText, rulesPrompt, rulesPromptVersion, rulesSchema, solverRule } from "./timetable-rules";
 export type { RuleContext, RulesInput, RulesOutput, RulesTranslator } from "./timetable-rules";
 export { defaultTemplate, fieldsIn, fill, renderReport, reportKinds, templateInput } from "./report-templates";

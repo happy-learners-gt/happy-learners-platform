@@ -2175,3 +2175,8 @@ section.panel[id^="profile-"] { scroll-margin-top: calc(var(--topbar-h) + var(--
 /* The preview's section list and button go under the title when they do not fit beside it. */
 .document-preview-panel > .panel-header { flex-wrap: wrap; }
 .document-preview-panel > .panel-header h2 { flex: none; }
+.timetable-cell small { display: block; color: var(--color-muted); }
+.timetable-rooms { list-style: none; margin: 0 0 var(--space-3); padding: 0; display: grid; gap: var(--space-2); }
+.timetable-rooms > li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.timetable-room-form { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: end; }
+.timetable-room-form .field { min-width: 10rem; }
