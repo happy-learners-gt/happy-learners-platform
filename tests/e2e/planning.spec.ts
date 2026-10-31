@@ -39,7 +39,8 @@ test("ST-117: a lesson lasts what its activities add up to, and a class warns wi
 
     await signIn(page, "educador-demo", `/secciones/${groupId}/clases`);
     await expect(page.locator(".message-bar.warning")).toContainText("1 clase próxima tiene más lecciones de las que caben en su horario.");
-    const row = page.getByRole("table", { name: /Cronograma de clases de/ }).locator("tbody tr").first();
+    // The schedule also lists days without class (the seed has holidays): the first row that is a class.
+    const row = page.getByRole("table", { name: /Cronograma de clases de/ }).locator("tbody tr").filter({ hasNotText: "Sin clase" }).first();
     await expect(row).toContainText("Excede 10 min");
     await row.getByRole("button", { name: /Planificar/ }).click();
     const dialog = page.getByRole("dialog", { name: /Planificar la clase/ });
