@@ -1687,3 +1687,25 @@ class AiRunsMigrationTests(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             db.execute(price, ("price-4", "org-demo", "otro", "2026-10-01", -1, 10, user, "t"))
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class ReportTemplatesMigrationTests(unittest.TestCase):
+    def test_one_active_template_per_kind_and_scope_and_images_are_bounded(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            db.executescript(path.read_text())
+        user = db.execute("SELECT id FROM users LIMIT 1").fetchone()[0]
+        insert = "INSERT INTO report_templates(id,organization_id,kind,program_id,name,draft,updated_by,updated_at,status) VALUES (?,?,?,?,?,?,?,?,?)"
+        db.execute(insert, ("t1", "org-demo", "report-card", None, "Boleta", "{}", user, "t", "active"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(insert, ("t2", "org-demo", "report-card", None, "Otra boleta", "{}", user, "t", "active"))
+        db.execute(insert, ("t3", "org-demo", "report-card", None, "Boleta archivada", "{}", user, "t", "archived"))
+        db.execute(insert, ("t4", "org-demo", "certificate", None, "Constancia", "{}", user, "t", "active"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(insert, ("t5", "org-demo", "contrato", None, "X", "{}", user, "t", "active"))
+        image = "INSERT INTO report_images(id,organization_id,name,bytes,width,height,components,sha256,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)"
+        db.execute(image, ("i1", "org-demo", "Logo", b"\xff\xd8\xff\xd9", 10, 10, 3, "a" * 64, user, "t"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute(image, ("i2", "org-demo", "Grande", b"\x00" * (1048577), 10, 10, 3, "a" * 64, user, "t"))
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])

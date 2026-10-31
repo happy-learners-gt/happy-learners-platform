@@ -778,3 +778,19 @@ y devuelve el resultado por sección (207 si alguna falló). `POST /api/timetabl
 escrita con la IA (tarea `rules-to-constraints`, en el harness) y devuelve las reglas válidas con su texto para
 confirmarlas, y cuántas partes se omitieron.
 
+## Constructor de documentos (1.5.0)
+
+Migración `0071_report_templates.sql`. Solo administración (403 al resto). `GET /api/report-templates` lista las plantillas
+activas y el catálogo de tipos (`kinds`: campos y conjuntos de datos de la boleta y la constancia). `POST` `{ kind,
+programId?, name? }` crea una plantilla con el diseño por omisión (409 si ya hay una de ese tipo y alcance). `GET|PUT|DELETE
+/api/report-templates/:id` lee, guarda el borrador `{ draft, name }` (validado contra los campos, conjuntos y columnas del
+tipo, y las imágenes de la organización) o la archiva. `POST …/publish` crea la versión siguiente (inmutable); `POST
+…/restore?version=n` devuelve el borrador a esa versión; `POST …/preview` `{ draft?, sectionId, learnerId? }` devuelve el
+PDF con los datos reales de la sección sin registrar el documento. `GET|POST /api/report-images`: imágenes JPEG de hasta 1 MB
+(el diseñador convierte PNG a JPEG en el navegador), cuerpo binario con `X-File-Name`.
+
+La boleta (`GET /api/sections/:id/grades/report.pdf`) usa la versión publicada de la plantilla del programa del curso o,
+si no hay, la de la organización; sin ninguna, conserva su formato anterior. `GET /api/sections/:id/grades/certificate.pdf
+?learner=&tipo=inscripcion|finalizacion` genera la constancia (plantilla publicada o la de por omisión). Cada documento
+generado desde una plantilla queda en `generated_documents` con su versión y su huella SHA-256.
+

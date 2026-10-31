@@ -203,6 +203,7 @@ function Sidebar() {
       {page({ href: "/organizacion", label: "Organización", icon: "settings", hue: "coral", active: path === "/organizacion" })}
       {page({ href: "/organizacion/calendario", label: "Calendario institucional", icon: "calendar", hue: "amber", active: path === "/organizacion/calendario" })}
       {page({ href: "/organizacion/horarios", label: "Horarios", icon: "clock", hue: "sky", active: path === "/organizacion/horarios" })}
+      {page({ href: "/organizacion/documentos", label: "Documentos", icon: "file", hue: "green", active: path.startsWith("/organizacion/documentos") })}
       {page({ href: "/organizacion/ia", label: "Uso de IA", icon: "sparkles", hue: "violet", active: path === "/organizacion/ia" })}
       {page({ href: "/educadores", label: "Educadores", icon: "users", hue: "pink", active: path === "/educadores" })}
       {page({ href: "/contratos", label: "Contratos y políticas", icon: "file", hue: "violet", active: path === "/contratos" })}
