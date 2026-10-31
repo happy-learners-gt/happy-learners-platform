@@ -173,6 +173,12 @@ li[data-drop=after]::before { bottom: -2px; }
 .sidebar-context .sidebar-eyebrow { color: var(--tone-ink); }
 .sidebar-secondary { display: grid; gap: var(--space-2); padding-top: var(--space-4); border-top: 1px solid var(--color-border); }
 .sidebar-secondary .sidebar-eyebrow { padding: 0 var(--space-3); }
+/* IA-01: administration in groups; each group names what it administers. */
+.nav-group + .nav-group { margin-top: var(--space-2); }
+.nav-group-label { display: block; padding: var(--space-1) var(--space-3) 2px; color: var(--color-muted); font-size: var(--text-xs); }
+/* «Todos los cursos (n)» closes the list of courses: a quieter row with its arrow at the end. */
+.sidebar nav a.nav-more { color: var(--color-primary-ink); font-weight: var(--weight-medium); }
+.sidebar nav a.nav-more .icon { margin-left: auto; flex: none; }
 .sidebar-note { display: flex; align-items: center; gap: var(--space-2); margin-top: auto; padding: var(--space-3); border-radius: var(--radius-md); background: var(--color-surface-muted); color: var(--color-muted); font-size: var(--text-xs); }
 .mobile-only { display: none; }
 .drawer-backdrop { display: none; }

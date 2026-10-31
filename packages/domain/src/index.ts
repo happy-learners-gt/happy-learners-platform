@@ -9,7 +9,7 @@ export { createsCycle, dependents, maxPrerequisites, prerequisiteInput, prerequi
 export type { Requirement } from "./prerequisites";
 export { maxWorkGroups, nextInPath, pathIndicators, sectionIndicators, wholeSection, workGroupInput } from "./sections";
 export type { SectionClass } from "./sections";
-export { moduleNavigation } from "./navigation";
+export { menuCourseLimit, menuCourses, moduleNavigation, rememberCourse } from "./navigation";
 export { calendarFeed, escapeText, feedWindow, foldLine, zonedInstant } from "./calendar-feed";
 export type { FeedClass } from "./calendar-feed";
 export { canonicalJson, documentCanonical, gatedKinds, isLegalKind, legalDraftInput, legalKinds, legalLabels, pendingAgreement, pendingDocuments, signatureCanonical, signedKinds, signedNameInput } from "./legal";
@@ -19,7 +19,7 @@ export { accountInput, acceptablePassword, maxPasswordLength, minPasswordLength,
 export type { AccountRole } from "./accounts";
 export { dailyMailCap, emailPattern, invitationDays, invitationInput, invitationLifetimeMs, invitationMessage, invitationState, mailAttempts, mailDecision, normalizeEmail, roleLabel } from "./mail";
 export type { InvitationDetails, MailMessage, MailResult, MailSender, MailStatus } from "./mail";
-export type { ModuleLesson } from "./navigation";
+export type { MenuCourse, ModuleLesson } from "./navigation";
 export { isCalendarDay, weekdays, scheduleInput, scheduleDates, breakInput, breakOn, carryOver, scheduleSummary, lessonsInOrder, periodWeek, classSequence, maxScheduleDays, maxScheduledClasses, meetingOn, meetingsOf } from "./schedule";
 export type { ScheduleMeeting, SectionSchedule } from "./schedule";
 export { easterSunday, ruleInput, occurrences, nextYearRules, ruleSummary, guatemalaTemplate } from "./calendar-rules";

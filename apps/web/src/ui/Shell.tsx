@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent, MouseEvent, ReactNode } from "react";
 import type { Course, MyPanel, SectionSummary, StudyProgram } from "@happy-learners/contracts";
-import { fictional } from "@happy-learners/domain";
+import { fictional, menuCourses, rememberCourse } from "@happy-learners/domain";
 import { api, message } from "../api";
 import { Link, useNavigation } from "../navigation";
 import { roleLabel, useSession } from "../session";
@@ -113,6 +113,20 @@ function useTree(trail: string[]) {
 
 const byName = (a: string, b: string) => a.localeCompare(b, "es", { numeric: true });
 
+/** The courses this person opened recently in this browser (IA-01, TD-003): ids only, most recent first. */
+function useRecentCourses(person: string, opened: string | undefined) {
+  const key = `hl-recent-courses:${person}`;
+  const read = () => { try { const value = JSON.parse(localStorage.getItem(key) || "[]"); return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : []; } catch { return []; } };
+  const [recent, setRecent] = useState<string[]>(read);
+  useEffect(() => {
+    if (!opened) return;
+    const next = rememberCourse(read(), opened);
+    try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* Private mode: the menu ranks without history. */ }
+    setRecent(next);
+  }, [key, opened]);
+  return recent;
+}
+
 function Sidebar() {
   const { member, organization } = useSession();
   const { url } = useNavigation();
@@ -131,7 +145,8 @@ function Sidebar() {
   const page = (item: Page, size = 20) => <li key={item.href}><Link href={item.href} className={`tree-link tone-${item.hue}`} aria-current={item.active ? "page" : undefined}><span className="nav-icon"><Icon name={item.icon} size={size} filled={item.active}/></span><span className="tree-label">{item.label}</span></Link></li>;
   // On its own page, choosing a level shows or hides it, every time; from anywhere else it opens it and goes there.
   const select = (key: string, href: string) => (event: MouseEvent<HTMLAnchorElement>) => { if (path === href) { event.preventDefault(); toggle(key); } else expand(key); };
-  const listedCourses = (courses || []).filter(item => item.status === "active" || item.id === currentCourse).sort((a, b) => byName(a.title, b.title));
+  const recent = useRecentCourses(member.id, currentCourse);
+  const { listed: listedCourses, hidden: hiddenCourses } = menuCourses(courses || [], { id: member.id, current: currentCourse, recent });
   const sectionsOf = (courseId: string) => (sections || []).filter(item => item.courseId === courseId && (item.status === "active" || item.id === current?.id)).sort((a, b) => byName(a.name, b.name));
   const settingsOf = (course: Course | undefined) => course && programs ? courseConfiguration(course, programs.find(item => item.id === course.programId) || null).settings : null;
   const coursePages = (course: Course) => {
@@ -182,7 +197,7 @@ function Sidebar() {
     <nav aria-label="Navegación principal"><ul className="nav-tree">
       {page({ href: "/inicio", label: "Inicio", icon: "home", hue: "violet", active: path === "/inicio" })}
       {page({ href: "/agenda", label: "Agenda", icon: "calendar", hue: "coral", active: path === "/agenda" })}
-      {page({ href: "/horas", label: admin ? "Horas efectivas" : "Mis horas", icon: "clock", hue: "green", active: path === "/horas" })}
+      {!admin && page({ href: "/horas", label: "Mis horas", icon: "clock", hue: "green", active: path === "/horas" })}
       <Node id="courses" href="/cursos" label="Cursos" icon="courses" hue="sky" open={open.has("courses")} active={path === "/cursos" || path === "/cursos/nuevo"}
         toggleLabel="Mostrar los cursos" onToggle={() => toggle("courses")} onSelect={select("courses", "/cursos")}
         add={admin ? <Link href="/cursos/nuevo" className="nav-action" aria-label="Agregar un curso" title="Agregar un curso"><Icon name="plus" size={16}/></Link> : undefined}>
@@ -193,6 +208,7 @@ function Sidebar() {
             {coursePages(course)}
           </Node>;
         }) : <li className="nav-empty">{admin ? "Aún no hay cursos activos." : "Aún no tienes cursos asignados."}</li>}
+        {hiddenCourses > 0 && <li><Link href="/cursos" className="tree-link nav-more" aria-current={path === "/cursos" ? "page" : undefined}><span className="tree-label">Todos los cursos ({listedCourses.filter(item => item.status === "active").length + hiddenCourses})</span><Icon name="arrowRight" size={16}/></Link></li>}
       </Node>
       {panels.length > 0 && page({ href: "/tribunales", label: "Mis tribunales", icon: "team", hue: "violet", active: path === "/tribunales" })}
       {page({ href: "/biblioteca", label: "Biblioteca", icon: "library", hue: "teal", active: path === "/biblioteca" })}
@@ -200,22 +216,42 @@ function Sidebar() {
       {page({ href: "/ayuda", label: "Ayuda", icon: "help", hue: "amber", active: path === "/ayuda" })}
     </ul></nav>
     {admin && <nav aria-label="Administración" className="sidebar-secondary"><span className="sidebar-eyebrow">Administración</span><ul className="nav-tree">
-      {page({ href: "/organizacion", label: "Organización", icon: "settings", hue: "coral", active: path === "/organizacion" })}
-      {page({ href: "/organizacion/calendario", label: "Calendario institucional", icon: "calendar", hue: "amber", active: path === "/organizacion/calendario" })}
-      {page({ href: "/organizacion/horarios", label: "Horarios", icon: "clock", hue: "sky", active: path === "/organizacion/horarios" })}
-      {page({ href: "/organizacion/documentos", label: "Documentos", icon: "file", hue: "green", active: path.startsWith("/organizacion/documentos") })}
-      {page({ href: "/organizacion/ia", label: "Uso de IA", icon: "sparkles", hue: "violet", active: path === "/organizacion/ia" })}
-      {page({ href: "/educadores", label: "Educadores", icon: "users", hue: "pink", active: path === "/educadores" })}
-      {page({ href: "/contratos", label: "Contratos y políticas", icon: "file", hue: "violet", active: path === "/contratos" })}
-      {page({ href: "/perfiles", label: "Revisión de perfiles", icon: "check", hue: "sky", active: path === "/perfiles" })}
-      {page({ href: "/configuracion-academica", label: "Configuración académica", icon: "grid", hue: "green", active: path === "/configuracion-academica" })}
-      {page({ href: "/roles-y-accesos", label: "Roles y accesos", icon: "shield", hue: "violet", active: path === "/roles-y-accesos" })}
-      {page({ href: "/notificaciones", label: "Notificaciones", icon: "send", hue: "teal", active: path === "/notificaciones" })}
+      {administration.map(group => <li key={group.label} className="nav-group">
+        <span className="nav-group-label" id={`nav-group-${group.id}`}>{group.label}</span>
+        <ul aria-labelledby={`nav-group-${group.id}`}>{group.pages.map(item => page({ ...item, active: item.match ? path.startsWith(item.href) : path === item.href }))}</ul>
+      </li>)}
     </ul></nav>}
     {fictional(member.organizationId) && <p className="sidebar-note"><Icon name="shield" size={16}/><span>Demostración con datos ficticios</span></p>}
     {creating && <NewSection courses={courses || []} preferred={creating} onClose={() => setCreating(null)}/>}
   </div>;
 }
+
+/**
+ * Administration grouped by what is administered, in the order a new institution is set up
+ * (docs/transformacion/arquitectura-de-informacion.md). Names stay as they were; only their place changes.
+ */
+const administration: { id: string; label: string; pages: (Omit<Page, "active"> & { match?: boolean })[] }[] = [
+  { id: "institucion", label: "Institución", pages: [
+    { href: "/organizacion", label: "Organización", icon: "settings", hue: "coral" },
+    { href: "/organizacion/calendario", label: "Calendario institucional", icon: "calendar", hue: "amber" },
+    { href: "/organizacion/horarios", label: "Horarios", icon: "clock", hue: "sky" },
+    { href: "/organizacion/documentos", label: "Documentos", icon: "file", hue: "green", match: true },
+  ] },
+  { id: "personas", label: "Personas", pages: [
+    { href: "/educadores", label: "Educadores", icon: "users", hue: "pink" },
+    { href: "/contratos", label: "Contratos y políticas", icon: "file", hue: "violet" },
+    { href: "/perfiles", label: "Revisión de perfiles", icon: "check", hue: "sky" },
+    { href: "/horas", label: "Horas efectivas", icon: "clock", hue: "green" },
+  ] },
+  { id: "academico", label: "Académico", pages: [
+    { href: "/configuracion-academica", label: "Configuración académica", icon: "grid", hue: "green" },
+  ] },
+  { id: "gobierno", label: "Gobierno", pages: [
+    { href: "/roles-y-accesos", label: "Roles y accesos", icon: "shield", hue: "violet" },
+    { href: "/notificaciones", label: "Notificaciones", icon: "send", hue: "teal" },
+    { href: "/organizacion/ia", label: "Uso de IA", icon: "sparkles", hue: "violet" },
+  ] },
+];
 
 function Placeholder() {
   return <li className="nav-placeholder" aria-hidden="true"><span className="skeleton-line"/><span className="skeleton-line"/></li>;
