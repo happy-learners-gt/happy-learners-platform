@@ -20,8 +20,9 @@ Reemplaza la necesidad de recordar el historial. Se actualiza al cerrar cada lot
 | 1.4.2–1.4.3 | Cronograma propuesto y horarios con reglas | En producción (#95) |
 | 1.5.0 | Constructor de documentos: boleta y constancia (`docs/design/constructor-de-reportes.md`) | En producción (#96) |
 | 1.5.1 | Acta de tribunal firmada por cada integrante; Redactar con IA en el diseñador | En producción (#98) |
-| 1.5.2 | Reporte de avance de una sección; «Sugerir campos» en el diseñador | En PR |
-| 1.5.3 | Aulas en el modelo de datos y en los horarios (capacidad, una clase por aula a la vez) | En PR |
+| 1.5.2 | Reporte de avance de una sección; «Sugerir campos» en el diseñador | En producción (#99) |
+| 1.5.3 | Aulas en el modelo de datos y en los horarios (capacidad, una clase por aula a la vez) | En producción (#100) |
+| 1.5.4 | wrangler 4.156.0; escáner de dependencias sin excepciones | En PR |
 
 Siguiente migración libre: **0075** (1.4.0 usa 0070; 1.5.0 usa 0071; 1.5.1 usa 0072; 1.5.2 usa 0073; 1.5.3 usa 0074). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
 
@@ -78,8 +79,7 @@ con apoyo puntual.
    producción en la vista previa). Pendiente: simulacro en cada cambio con una copia anónima (requiere tocar `.github/`
    con autorización).
 2. ~~Escáneres en CI~~ (hecho, #89): gitleaks, OSV-Scanner y Semgrep con la regla propia `sql-interpolated-text`
-   (`docs/operations/escaneres.md`). Pendiente: hacerlos obligatorios tras dos semanas; actualizar wrangler (vence la
-   excepción de miniflare el 30-nov); CodeQL: el usuario decidió no pagar GitHub Code Security por ahora (30-oct); se revisa al constituir la empresa.
+   (`docs/operations/escaneres.md`). Pendiente: hacerlos obligatorios tras dos semanas (desde el 13-nov); ~~actualizar wrangler~~ (1.5.4, sin excepciones); CodeQL: el usuario decidió no pagar GitHub Code Security por ahora (30-oct); se revisa al constituir la empresa.
 3. **Auditoría de seguridad manual** con modelo de amenazas: aislamiento entre organizaciones, permisos por ruta
    (matriz exhaustiva generada desde el enrutador), sesiones, archivos y PDF, datos de menores, IA (entradas del libro y
    salidas). Resultado: `docs/security/auditoria-2026-11.md` con hallazgos priorizados y lotes de corrección.
