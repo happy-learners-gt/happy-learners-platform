@@ -4,7 +4,7 @@ import type { ResourceRole } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { accessTo } from "./access";
 import { apaOf } from "./resources";
-import { event } from "./team";
+import { event } from "./activity";
 
 /**
  * The course's bibliography: GET/POST /api/courses/:id/bibliography and PUT/DELETE /api/courses/:id/bibliography/:refId.

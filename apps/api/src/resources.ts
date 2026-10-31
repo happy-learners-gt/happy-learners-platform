@@ -4,7 +4,7 @@ import type { CitationResource, IndexEntry, LookupResult, OutlineNode, ResourceR
 import type { Database } from "./storage";
 import { accessTo } from "./access";
 import { configurationOf } from "./courses";
-import { event } from "./team";
+import { event } from "./activity";
 
 /**
  * Course resources (1.3.7): the library item and its record, its index, readings and reading marks.

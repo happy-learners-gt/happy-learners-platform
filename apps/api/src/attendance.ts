@@ -2,7 +2,7 @@ import type { ClassGroup, CourseAccess, GroupLearner, Member, SectionEducator } 
 import { maxSectionEducators, newGroupCode, seesSection, teachesSection } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { configurationOf } from "./courses";
-import { event } from "./team";
+import { event } from "./activity";
 import { accessTo, forbidden } from "./access";
 import { fillLessons, saveSchedule, scheduleOf, sessions, todayFor } from "./classes";
 import { educatorConflicts } from "./conflicts";

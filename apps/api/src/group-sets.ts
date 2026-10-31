@@ -2,7 +2,7 @@ import type { Member } from "@happy-learners/contracts";
 import { formGroups, groupRulesInput, type FormedGroups, type GroupRules } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { scopedCourses } from "./permissions";
-import { event } from "./team";
+import { event } from "./activity";
 import { sectionSetName, sectionWorkGroups } from "./workgroups";
 import { effectiveActivityIds } from "./freedom-plan";
 

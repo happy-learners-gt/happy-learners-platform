@@ -2,7 +2,7 @@ import type { Member, NotificationRecord, NotificationSetting } from "@happy-lea
 import type { NotificationType } from "@happy-learners/domain";
 import { isConfigurableType, isNotificationType, lockedBy, notificationCatalog, notificationTypes, policyInput, preferencesInput, receivesOn } from "@happy-learners/domain";
 import type { Database } from "./storage";
-import { event } from "./team";
+import { event } from "./activity";
 import { mandatoryTypes, preferencesOf } from "./notify";
 export { notify, type Notice, type Notifier } from "./notify";
 

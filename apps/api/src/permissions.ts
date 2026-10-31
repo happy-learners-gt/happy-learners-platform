@@ -1,7 +1,7 @@
 import type { AccessEvent, GrantablePermission, Member, PermissionKey, ProgramScope, SecurityGroup } from "@happy-learners/contracts";
 import { builtInRoles, grantedIn, grantsInput, permissionAreas, permissionCatalog, permissionsOf, reachLabels, scopeInput, scopeLabel, securityGroupInput } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
-import { event } from "./team";
+import { event } from "./activity";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
 const now = () => new Date().toISOString();

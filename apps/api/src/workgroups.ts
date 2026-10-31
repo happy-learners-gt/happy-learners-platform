@@ -1,7 +1,7 @@
 import type { Activity, CourseAccess, GroupActivity, Member, SectionWorkGroups, StudentActivityGroups } from "@happy-learners/contracts";
 import { maxWorkGroups, teachesSection, workGroupInput } from "@happy-learners/domain";
 import type { Database } from "./storage";
-import { event } from "./team";
+import { event } from "./activity";
 import { effectiveLessonIds } from "./freedom-plan";
 import { forbidden } from "./access";
 

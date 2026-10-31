@@ -3,7 +3,7 @@ import type { Database } from "./storage";
 import { createAccount, resetPassword } from "./accounts";
 import type { Notifier } from "./notify";
 import { departurePreview, recordDeparture } from "./departures";
-import { event } from "./team";
+import { event } from "./activity";
 import { setCoordination } from "./permissions";
 import { profileOnLeave } from "./professional";
 

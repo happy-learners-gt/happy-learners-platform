@@ -4,7 +4,7 @@ import type { Database } from "./storage";
 import { accessTo, forbidden, outsider } from "./access";
 import { configurationOf, gradingSchemeError } from "./courses";
 import { freedomPolicyOf } from "./freedom-plan";
-import { event } from "./team";
+import { event } from "./activity";
 
 /**
  * The course's evaluation (lote 3c). One activity at a time, shared by every section.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.8 — 2026-10-31
+
+- Arquitectura: contextos delimitados (`docs/architecture/contextos.md`) y catálogo de patrones y antipatrones (`docs/architecture/patrones.md`), con el mapa de importaciones medido. La bitácora de actividad y el progreso de Inicio salen de `team.ts` (`activity.ts`, `home.ts`): se cortan tres importaciones circulares, sin cambios visibles.
+
 ## 1.5.7 — 2026-10-31
 
 - Menos lecturas de la base: Inicio y Secciones leen entre un 37 % y un 68 % menos filas (cada clase guarda sus conteos de asistencia; consultas por índice). Protege la cuota diaria del plan gratuito; las respuestas no cambian.

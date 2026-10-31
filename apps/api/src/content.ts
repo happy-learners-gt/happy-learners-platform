@@ -2,7 +2,7 @@ import type { Activity, Lesson, LessonReview, Member, Resource, ReviewItem } fro
 import { assesses, lessonMinutes, moduleNavigation, sharePrefix, lessonOutcomes, outcomeCodes, resourceIdsOf, sequenceTemplates, studentActivities, validActivities, validOutcomeIds } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { configurationOf, curriculumFor, materialsFor } from "./courses";
-import { event, recordEvent } from "./team";
+import { event, recordEvent } from "./activity";
 import { filesFor } from "./files";
 import { accessTo, forbidden, reachableCourses } from "./access";
 import { scopedCourses } from "./permissions";

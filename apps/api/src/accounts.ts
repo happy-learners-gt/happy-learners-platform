@@ -2,7 +2,7 @@ import type { Member } from "@happy-learners/contracts";
 import { acceptablePassword, accountInput, maxPasswordLength } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { digest, hashPassword, newTemporaryPassword, verifyPassword } from "./auth";
-import { event } from "./team";
+import { event } from "./activity";
 import { startOnboarding } from "./onboarding";
 import { sendNotice } from "./account-notices";
 import { notify, type Notifier } from "./notify";

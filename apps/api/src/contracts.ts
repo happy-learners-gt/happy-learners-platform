@@ -5,7 +5,7 @@ import {
 } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
 import { digest } from "./auth";
-import { event } from "./team";
+import { event } from "./activity";
 import { agreementBlock, confirmIdentity } from "./legal";
 
 /**
