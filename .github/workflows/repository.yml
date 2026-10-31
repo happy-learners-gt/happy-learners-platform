@@ -1,7 +1,9 @@
 name: Platform delivery
 
 on:
+  # «labeled» lets a pull request ask for its preview by getting the «vista-previa» label.
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
   # Production is checked after every deployment; the daily run only confirms it is still serving (DEC-044 FinOps).
   schedule:
@@ -89,9 +91,11 @@ jobs:
 
   # Pull requests from this repository get an isolated preview: separate Worker, Durable Objects and
   # R2 bucket, deployed from the verified artifact, then checked with the read-only smoke suite.
+  # Only on request (label «vista-previa»): the preview reads from the same Cloudflare account as production, and the
+  # free plan allows 5 million Durable Object rows read a day (on 30 Oct 2026 CI used them up and production stopped).
   preview:
     needs: verify
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'vista-previa')
     runs-on: ubuntu-latest
     concurrency:
       group: demo-preview
@@ -136,10 +140,6 @@ jobs:
         env:
           BASE_URL: ${{ env.PREVIEW_URL }}
           EXPECTED_SHA: ${{ github.sha }}
-      - name: Preview route screenshots
-        run: node scripts/screenshots.mjs .release-evidence/preview-screenshots
-        env:
-          BASE_URL: ${{ env.PREVIEW_URL }}
       - name: Publish preview URL
         if: always()
         run: echo "Preview ${PREVIEW_URL} · SHA ${GITHUB_SHA}" >> "$GITHUB_STEP_SUMMARY"
@@ -246,15 +246,8 @@ jobs:
         env:
           BASE_URL: https://happy-learners-demo.lfmendoza-alvarez.workers.dev
           EXPECTED_SHA: ${{ steps.expected.outputs.sha }}
-      - if: github.event_name != 'schedule'
-        run: npm ci
-      - if: github.event_name != 'schedule'
-        run: npx --no-install playwright install --with-deps chromium
-      - if: github.event_name != 'schedule'
-        run: npm run test:smoke
-        env:
-          BASE_URL: https://happy-learners-demo.lfmendoza-alvarez.workers.dev
-          EXPECTED_SHA: ${{ github.sha }}
+      # The critical flows are the check after a deployment; the full smoke suite runs only in a requested preview,
+      # to keep within the Durable Object reads of the free plan.
       - uses: actions/upload-artifact@v4
         if: always()
         with:

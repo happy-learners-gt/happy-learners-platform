@@ -12,7 +12,10 @@ cambio descrito en el manual de despliegue de `happy-learners-ops`.
 
 ## Publicación
 
-1. El PR pasa `Platform delivery`: verificación, pruebas de navegador, accesibilidad y la vista previa aislada.
+1. El PR pasa `Platform delivery`: verificación, pruebas de navegador y accesibilidad (en la máquina de CI, sin tocar
+   Cloudflare). La vista previa aislada corre solo si el PR tiene la etiqueta `vista-previa`: comparte con producción la
+   cuota diaria de filas leídas de Durable Objects del plan gratuito (5 millones), que el 30 de octubre de 2026 se agotó
+   y dejó producción sin servicio hasta el reinicio de las 00:00 UTC.
 2. La integración en `main` construye un artefacto, lo verifica y lo publica en producción. Si el PR estaba al día con
    `main` (el commit de integración tiene el mismo árbol que la cabeza del PR) y esa cabeza pasó `Platform delivery`
    completo, no se repiten la verificación ni las pruebas de navegador: solo se reconstruye el artefacto con el SHA de
