@@ -7,8 +7,10 @@ const workflow = parse(readFileSync(".github/workflows/repository.yml", "utf8"))
 describe("delivery gate", () => {
   it("never runs the content-writing E2E suite against production", () => {
     const checks = workflow.jobs["critical-flows"].steps;
-    expect(checks.find((step: { run?: string }) => step.run === "npm run test:smoke").env.BASE_URL).toMatch(/^https:/);
-    expect(checks.some((step: { run?: string }) => step.run === "npm run test:e2e")).toBe(false);
+    // Production gets only the critical flows: no E2E suite and, to stay within the Durable Object reads of the free
+    // plan (the 30 Oct 2026 outage), no smoke suite after each deployment either.
+    expect(checks.find((step: { run?: string }) => step.run === "node scripts/critical-flows.mjs").env.BASE_URL).toMatch(/^https:/);
+    expect(checks.some((step: { run?: string }) => step.run === "npm run test:e2e" || step.run === "npm run test:smoke")).toBe(false);
     // The full suite runs in verify against local servers only: desktop and mobile at once, never with BASE_URL.
     const e2e = workflow.jobs.verify.steps.find((step: { name?: string }) => step.name === "E2E (desktop and mobile in parallel)");
     expect(e2e.env?.BASE_URL).toBeUndefined();
@@ -92,7 +94,9 @@ describe("delivery gate", () => {
   it("deploys pull-request previews in isolation and only runs read-only checks against them", () => {
     const preview = workflow.jobs.preview;
     expect(preview.needs).toBe("verify");
-    expect(preview.if).toBe("github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository");
+    // Only when asked for with the «vista-previa» label: the preview shares the account's Durable Object reads.
+    expect(preview.if).toBe("github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'vista-previa')");
+    expect(workflow.on.pull_request).toEqual({ types: ["opened", "synchronize", "reopened", "labeled"] });
     const steps = preview.steps as { name?: string; run?: string; env?: Record<string, string>; uses?: string; with?: Record<string, string> }[];
     const index = (name: string) => steps.findIndex(step => step.name === name);
     expect(index("Confirm artifact version")).toBeLessThan(index("Isolate preview configuration"));
