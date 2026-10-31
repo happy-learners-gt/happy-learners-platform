@@ -778,6 +778,16 @@ y devuelve el resultado por sección (207 si alguna falló). `POST /api/timetabl
 escrita con la IA (tarea `rules-to-constraints`, en el harness) y devuelve las reglas válidas con su texto para
 confirmarlas, y cuántas partes se omitieron.
 
+**Aulas (1.5.3).** Migración `0074_classrooms.sql` (`classrooms`, `course_groups.classroom_id`). `GET /api/timetables`
+agrega `classrooms` (activas: `id`, `name`, `capacity`) y, por sección, `learners` (estudiantes activos) y `classroomId`
+(aula habitual). `POST /api/timetables/classrooms` `{ name, capacity 1–500 }` crea un aula (409 si el nombre ya existe
+entre las activas); `PUT /api/timetables/classrooms/:id` la edita; `DELETE` la archiva y deja sin aula habitual a las
+secciones que la usaban. `PUT /api/timetables/sections/:id/classroom` `{ classroomId | null }` fija el aula habitual.
+Con aulas, `solve` da a cada sección una sola aula para la semana (la habitual, o la más pequeña con capacidad para sus
+estudiantes), nunca dos clases en la misma aula a la vez (las secciones no incluidas ocupan su aula habitual), y cada
+reunión trae `classroomId`; la respuesta agrega `classrooms` (id → nombre). `apply` asigna a la sección sin aula
+habitual la que recibió. Sin aulas, nada cambia.
+
 ## Constructor de documentos (1.5.0)
 
 Migración `0071_report_templates.sql`. Solo administración (403 al resto). `GET /api/report-templates` lista las plantillas

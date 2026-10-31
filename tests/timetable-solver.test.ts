@@ -137,4 +137,31 @@ describe("1.4.3 timetable solver with one impossible section", () => {
     expect(result.meetings.filter(item => item.sectionId === "mat")).toHaveLength(3);
     expect(result.unplaced.map(item => [item.sectionId, item.placed, item.needed])).toEqual([["taller", 0, 1]]);
   });
+
+  it("1.5.3 classrooms: one per section for the week, the smallest that fits, never two meetings at once", () => {
+    const sections = base.sections.map(section => ({ ...section, learners: section.id === "mat-b" ? 28 : 18 }));
+    const classrooms = [{ id: "grande", name: "Aula grande", capacity: 30 }, { id: "chica", name: "Aula chica", capacity: 20 }];
+    const result = solveTimetable({ ...base, sections, classrooms });
+    expect(result.status).toBe("solved");
+    const roomOf = (id: string) => new Set(result.meetings.filter(item => item.sectionId === id).map(item => item.classroomId));
+    expect(roomOf("mat-b")).toEqual(new Set(["grande"]));
+    for (const id of ["mat-a", "len-a"]) expect(roomOf(id).size).toBe(1);
+    const pairs = result.meetings.flatMap((a, i) => result.meetings.slice(i + 1).map(b => [a, b] as const));
+    expect(pairs.filter(([a, b]) => a.classroomId === b.classroomId && clash(a, b))).toEqual([]);
+    // Without classrooms, the answer is the one it always was.
+    expect(solveTimetable(base).meetings.every(item => !("classroomId" in item))).toBe(true);
+  });
+
+  it("1.5.3 classrooms: a usual classroom is kept, other sections occupy theirs, and a section too big says why", () => {
+    const classrooms = [{ id: "unica", name: "Aula 1", capacity: 25 }];
+    const one = { ...base, rules: [], sections: [{ ...base.sections[0], learners: 20, classroomId: "unica" }], classrooms,
+      fixed: [{ sectionId: "otra", name: "Ciencias 3.º A", educatorIds: ["beto"], weekday: 1, startsAt: "07:00", durationMinutes: 45, classroomId: "unica" }] };
+    const kept = solveTimetable(one);
+    expect(kept.status).toBe("solved");
+    expect(kept.meetings.every(item => item.classroomId === "unica" && !(item.weekday === 1 && item.startsAt === "07:00"))).toBe(true);
+    const big = solveTimetable({ ...one, sections: [{ ...base.sections[0], learners: 40 }], fixed: [] });
+    expect(big.status).toBe("impossible");
+    expect(big.status === "impossible" && big.unplaced[0].reasons.map(item => item.reason)).toEqual(["Sin aula con capacidad para 40 estudiantes"]);
+  });
 });
+
