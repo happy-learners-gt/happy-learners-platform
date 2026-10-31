@@ -1781,3 +1781,27 @@ class ClassroomsMigrationTests(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             db.execute("UPDATE course_groups SET classroom_id='no-existe' WHERE id=?", (group,))
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class AttendanceCountsMigrationTests(unittest.TestCase):
+    def test_each_class_keeps_exact_attendance_counts(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            db.executescript(path.read_text())
+        recount = """SELECT count(*) FROM class_sessions s WHERE s.marked_count <> (SELECT count(*) FROM attendance_marks m WHERE m.session_id=s.id)
+            OR s.attended_count <> (SELECT count(*) FROM attendance_marks m WHERE m.session_id=s.id AND m.status IN ('present','late'))"""
+        self.assertGreater(db.execute("SELECT count(*) FROM attendance_marks").fetchone()[0], 0)
+        self.assertEqual(db.execute(recount).fetchone()[0], 0)
+        session, learner = db.execute("""SELECT s.id, l.id FROM class_sessions s JOIN group_learners l ON l.group_id=s.group_id
+            WHERE NOT EXISTS (SELECT 1 FROM attendance_marks m WHERE m.session_id=s.id AND m.learner_id=l.id) LIMIT 1""").fetchone()
+        before = db.execute("SELECT marked_count, attended_count FROM class_sessions WHERE id=?", (session,)).fetchone()
+        db.execute("INSERT INTO attendance_marks(session_id,learner_id,status,updated_at) VALUES (?,?,'present','t')", (session, learner))
+        self.assertEqual(db.execute("SELECT marked_count, attended_count FROM class_sessions WHERE id=?", (session,)).fetchone(), (before[0] + 1, before[1] + 1))
+        db.execute("UPDATE attendance_marks SET status='absent' WHERE session_id=? AND learner_id=?", (session, learner))
+        self.assertEqual(db.execute("SELECT marked_count, attended_count FROM class_sessions WHERE id=?", (session,)).fetchone(), (before[0] + 1, before[1]))
+        db.execute("INSERT INTO attendance_marks(session_id,learner_id,status,updated_at) VALUES (?,?,'late','t') ON CONFLICT(session_id,learner_id) DO UPDATE SET status=excluded.status", (session, learner))
+        self.assertEqual(db.execute("SELECT marked_count, attended_count FROM class_sessions WHERE id=?", (session,)).fetchone(), (before[0] + 1, before[1] + 1))
+        db.execute("DELETE FROM attendance_marks WHERE session_id=? AND learner_id=?", (session, learner))
+        self.assertEqual(db.execute("SELECT marked_count, attended_count FROM class_sessions WHERE id=?", (session,)).fetchone(), before)
+        self.assertEqual(db.execute(recount).fetchone()[0], 0)

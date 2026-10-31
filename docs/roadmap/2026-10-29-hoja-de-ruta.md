@@ -25,8 +25,9 @@ Reemplaza la necesidad de recordar el historial. Se actualiza al cerrar cada lot
 | 1.5.4 | wrangler 4.156.0; escáner de dependencias sin excepciones | En PR (#101) |
 | 1.5.5 | Auditoría de seguridad manual y sus correcciones (`docs/security/auditoria-2026-11.md`) | En PR |
 | 1.5.6 | SLO y observabilidad (`docs/operations/slo.md`): registro por petición con filas leídas | En PR |
+| 1.5.7 | Menos lecturas en Inicio y Secciones (conteos de asistencia por clase, consultas por índice) | En PR |
 
-Siguiente migración libre: **0075** (1.4.0 usa 0070; 1.5.0 usa 0071; 1.5.1 usa 0072; 1.5.2 usa 0073; 1.5.3 usa 0074). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
+Siguiente migración libre: **0076** (1.4.0 usa 0070; 1.5.0 usa 0071; 1.5.1 usa 0072; 1.5.2 usa 0073; 1.5.3 usa 0074; 1.5.7 usa 0075). Producción: `https://happy-learners-demo.lfmendoza-alvarez.workers.dev`.
 
 ## 2. Cómo se trabaja (no repetir errores)
 

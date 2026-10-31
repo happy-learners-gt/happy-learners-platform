@@ -26,22 +26,27 @@ export async function sections(path: string, current: Member, db: Database) {
   const [id, sub] = [path.split("/")[3], path.split("/")[4]];
   if (sub === "progress") return progress(id, current, db);
   const scope = [current.organizationId, current.role === "admin" ? 1 : 0, JSON.stringify(await wideCourses(db, current)), current.id];
-  const inScope = `IN (SELECT g.id FROM course_groups g WHERE ${visible}${id ? " AND g.id=?" : ""})`;
   const bound = id ? [...scope, id] : scope;
-  const [groups, learners, classes, planned, published, openings, educators, progressRows] = await db.batch([
-    db.prepare(`SELECT g.id,g.course_id AS courseId,g.name,g.status,g.access_code AS accessCode,g.schedule_weekdays AS weekdays,g.schedule_starts_at AS startsAt,g.schedule_duration AS durationMinutes,g.schedule_from AS "from",g.schedule_until AS until,g.schedule_meetings AS meetings,g.schedule_period_id AS periodId,
+  // The visible sections first, then everything else by their ids: each query below is an index lookup by section
+  // instead of filtering every section again (docs/operations/slo.md §4).
+  const groups = (await db.prepare(`SELECT g.id,g.course_id AS courseId,g.name,g.status,g.access_code AS accessCode,g.schedule_weekdays AS weekdays,g.schedule_starts_at AS startsAt,g.schedule_duration AS durationMinutes,g.schedule_from AS "from",g.schedule_until AS until,g.schedule_meetings AS meetings,g.schedule_period_id AS periodId,
       c.title AS courseTitle,c.status AS courseStatus,COALESCE(sp.pacing,c.pacing) AS pacing,EXISTS(SELECT 1 FROM section_educators e WHERE e.group_id=g.id AND e.user_id=?) AS teaches
-      FROM course_groups g JOIN courses c ON c.id=g.course_id AND c.organization_id=g.organization_id LEFT JOIN study_programs sp ON sp.id=c.program_id WHERE ${visible}${id ? " AND g.id=?" : ""} ORDER BY c.title,g.status,g.name,g.created_at`).bind(current.id, ...bound),
-    db.prepare(`SELECT group_id AS groupId,id FROM group_learners WHERE status='active' AND group_id ${inScope}`).bind(...bound),
-    db.prepare(`SELECT s.id,s.group_id AS groupId,s.status,s.session_date AS sessionDate,s.starts_at AS startsAt,
-      (SELECT count(*) FROM attendance_marks m WHERE m.session_id=s.id) AS marked,(SELECT count(*) FROM attendance_marks m WHERE m.session_id=s.id AND m.status IN ('present','late')) AS attended
-      FROM class_sessions s WHERE s.group_id ${inScope} ORDER BY s.session_date,s.starts_at`).bind(...bound),
-    db.prepare(`SELECT p.session_id AS sessionId,p.lesson_id AS lessonId,p.outcome FROM class_session_lessons p JOIN class_sessions s ON s.id=p.session_id WHERE s.group_id ${inScope}`).bind(...bound),
-    db.prepare(`SELECT u.course_id AS courseId,l.id FROM lessons l JOIN learning_units u ON u.id=l.course_unit_id WHERE u.status='active' AND l.archived=0 AND l.revision>0 AND l.group_id IS NULL AND u.course_id IN (SELECT g.course_id FROM course_groups g WHERE ${visible}${id ? " AND g.id=?" : ""})`).bind(...bound), // nosemgrep: sql-interpolated-text -- inScope es un fragmento constante
-    db.prepare(`SELECT group_id AS groupId,count(*) AS total FROM lesson_completions WHERE group_id ${inScope} GROUP BY group_id`).bind(...bound),
-    db.prepare(`SELECT e.group_id AS groupId,e.user_id AS userId,COALESCE(u.display_name,u.username) AS name,u.username FROM section_educators e JOIN users u ON u.id=e.user_id WHERE e.group_id ${inScope} ORDER BY name`).bind(...bound),
-    db.prepare(`SELECT group_id AS groupId,learner_id AS learnerId,lesson_id AS lessonId,completed_at IS NOT NULL AS completed FROM learner_progress WHERE group_id ${inScope}`).bind(...bound),
-  ]) as unknown as [Row[], { groupId: string; id: string }[], ClassRow[], { sessionId: string; lessonId: string; outcome: string | null }[], { courseId: string; id: string }[], { groupId: string; total: number }[], (SectionEducator & { groupId: string })[], { groupId: string; learnerId: string; lessonId: string; completed: number }[]];
+      FROM course_groups g JOIN courses c ON c.id=g.course_id AND c.organization_id=g.organization_id LEFT JOIN study_programs sp ON sp.id=c.program_id WHERE ${visible}${id ? " AND g.id=?" : ""} ORDER BY c.title,g.status,g.name,g.created_at`).bind(current.id, ...bound).all<Row>()).results;
+  const ids = JSON.stringify(groups.map(group => group.id)), courseIds = JSON.stringify([...new Set(groups.map(group => group.courseId))]);
+  const inScope = "IN (SELECT value FROM json_each(?))";
+  const [learners, classes, planned, published, openings, educators, progressRows] = groups.length ? await db.batch([
+    db.prepare(`SELECT group_id AS groupId,id FROM group_learners WHERE status='active' AND group_id ${inScope}`).bind(ids),
+    // Each class keeps its attendance counts (migration 0075): no mark is read here.
+    db.prepare(`SELECT s.id,s.group_id AS groupId,s.status,s.session_date AS sessionDate,s.starts_at AS startsAt,s.marked_count AS marked,s.attended_count AS attended
+      FROM class_sessions s WHERE s.group_id ${inScope} ORDER BY s.session_date,s.starts_at`).bind(ids),
+    db.prepare(`SELECT p.session_id AS sessionId,p.lesson_id AS lessonId,p.outcome FROM class_session_lessons p JOIN class_sessions s ON s.id=p.session_id WHERE s.group_id ${inScope}`).bind(ids),
+    // From the units to their lessons (CROSS JOIN keeps that order): otherwise SQLite reads every lesson through `group_id IS NULL`.
+    db.prepare(`SELECT u.course_id AS courseId,l.id FROM learning_units u CROSS JOIN lessons l ON l.course_unit_id=u.id WHERE u.status='active' AND l.archived=0 AND l.revision>0 AND l.group_id IS NULL AND u.course_id ${inScope}`).bind(courseIds),
+    db.prepare(`SELECT group_id AS groupId,count(*) AS total FROM lesson_completions WHERE group_id ${inScope} GROUP BY group_id`).bind(ids),
+    db.prepare(`SELECT e.group_id AS groupId,e.user_id AS userId,COALESCE(u.display_name,u.username) AS name,u.username FROM section_educators e JOIN users u ON u.id=e.user_id WHERE e.group_id ${inScope} ORDER BY name`).bind(ids),
+    db.prepare(`SELECT group_id AS groupId,learner_id AS learnerId,lesson_id AS lessonId,completed_at IS NOT NULL AS completed FROM learner_progress WHERE group_id ${inScope}`).bind(ids),
+  ]) as unknown as [{ groupId: string; id: string }[], ClassRow[], { sessionId: string; lessonId: string; outcome: string | null }[], { courseId: string; id: string }[], { groupId: string; total: number }[], (SectionEducator & { groupId: string })[], { groupId: string; learnerId: string; lessonId: string; completed: number }[]]
+    : [[], [], [], [], [], [], []];
   if (id && !groups.length) return unassigned(db, id, current);
   const today = await todayFor(db, current.organizationId);
   const lessonsOf = new Map<string, string[]>(), completedOf = new Map<string, string[]>();
