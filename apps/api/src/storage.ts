@@ -69,12 +69,15 @@ import demoSectionFreedomMigration from "../../../database/migrations/0067_demo_
 import courseResourcesMigration from "../../../database/migrations/0068_course_resources.sql";
 import demoResourcesMigration from "../../../database/migrations/0069_demo_resources.sql";
 import aiRunsMigration from "../../../database/migrations/0070_ai_runs.sql";
+import reportTemplatesMigration from "../../../database/migrations/0071_report_templates.sql";
 import { organizationIds } from "@happy-learners/domain";
 import { exportStore, importStore, RestoreError, type Backup } from "./backup";
 import { processProposals } from "./proposals";
 import { processBookMaps } from "./book-map";
 
-type Statement = { sql: string; values: (string | number | null)[] };
+/** Values a statement binds; ArrayBuffer is a BLOB (1.5.0: report images). */
+type Value = string | number | null | ArrayBuffer;
+type Statement = { sql: string; values: Value[] };
 /**
  * Durable Object SQLite rejects a single SQL string beyond its length limit. Large migrations (the demo seed)
  * keep one statement per line and run in chunks of whole lines, inside the caller's transaction.
@@ -217,6 +220,7 @@ export class OrganizationStore extends DurableObject<Env> {
       if (!applied.length || applied[0].version < 68) { this.ctx.storage.sql.exec(courseResourcesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (68,?)", scope); }
       if (!applied.length || applied[0].version < 69) { runScript(this.ctx.storage.sql, demoResourcesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (69,?)", scope); }
       if (!applied.length || applied[0].version < 70) { this.ctx.storage.sql.exec(aiRunsMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (70,?)", scope); }
+      if (!applied.length || applied[0].version < 71) { this.ctx.storage.sql.exec(reportTemplatesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (71,?)", scope); }
       // Compare-and-write plus dependent writes belong to one SQLite transaction.
       if (guard && !this.ctx.storage.sql.exec(guard.sql, ...guard.values).toArray().length) return [];
       return statements.map(statement => this.ctx.storage.sql.exec(statement.sql, ...statement.values).toArray());
@@ -224,9 +228,9 @@ export class OrganizationStore extends DurableObject<Env> {
   }
 }
 export class Prepared {
-  values: (string | number | null)[] = [];
+  values: Value[] = [];
   constructor(public db: Database, public sql: string) {}
-  bind(...values: (string | number | null)[]) { this.values = values; return this; }
+  bind(...values: Value[]) { this.values = values; return this; }
   async all<T>() { return { results: (await this.db.execute([this]))[0] as T[] }; }
   async first<T>() { return (await this.all<T>()).results[0] || null; }
   async run() { await this.db.execute([this]); }
