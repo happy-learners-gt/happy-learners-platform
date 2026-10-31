@@ -1,101 +1,10 @@
 # OSV-Scanner (security.yml). Each exception says why it does not reach production and expires: on that date the
 # scan fails again until the dependency is updated or the exception is reviewed.
-
-# miniflare (local simulator of wrangler, pinned by wrangler 4.132.0) brings sharp 0.35.4 and undici 7.29.0. Neither
-# ships in the Worker or the web bundle: they run only in local development and the tests. Fixed by updating
-# wrangler (4.156.0 brings sharp 0.35.5 and undici 7.30.1), which changes the local runtime and goes in its own change.
-
-[[IgnoredVulns]]
-id = "GHSA-wq5f-xc86-pv6w"
-ignoreUntil = 2026-11-30
-reason = "sharp 0.35.4 solo en miniflare (desarrollo y pruebas); se corrige al actualizar wrangler"
-
-[[IgnoredVulns]]
-id = "GHSA-2gqq-gqf2-x968"
-ignoreUntil = 2026-11-30
-reason = "undici 7.29.0 solo en miniflare (desarrollo y pruebas); se corrige al actualizar wrangler"
-
-[[IgnoredVulns]]
-id = "GHSA-2jfj-6hjv-fm6j"
-ignoreUntil = 2026-11-30
-reason = "undici 7.29.0 solo en miniflare (desarrollo y pruebas); se corrige al actualizar wrangler"
-
-[[IgnoredVulns]]
-id = "GHSA-2m5v-pch6-74hx"
-ignoreUntil = 2026-11-30
-reason = "undici 7.29.0 solo en miniflare (desarrollo y pruebas); se corrige al actualizar wrangler"
-
-[[IgnoredVulns]]
-id = "GHSA-3wwx-pv8p-q78v"
-ignoreUntil = 2026-11-30
-reason = "undici 7.29.0 solo en miniflare (desarrollo y pruebas); se corrige al actualizar wrangler"
-
-[[IgnoredVulns]]
-id = "GHSA-3xpg-4rpp-hhhm"
-ignoreUntil = 2026-11-30
-reason = "undici 7.29.0 solo en miniflare (desarrollo y pruebas); se corrige al actualizar wrangler"
-
-[[IgnoredVulns]]
-id = "GHSA-4qv8-2p9j-2685"
-ignoreUntil = 2026-11-30
-reason = "undici 7.29.0 solo en miniflare (desarrollo y pruebas); se corrige al actualizar wrangler"
-
-[[IgnoredVulns]]
-id = "GHSA-4w7w-5xrc-9h26"
-ignoreUntil = 2026-11-30
-reason = "undici 7.29.0 solo en miniflare (desarrollo y pruebas); se corrige al actualizar wrangler"
-
-[[IgnoredVulns]]
-id = "GHSA-55wc-3pg8-jfw6"
-ignoreUntil = 2026-11-30
-reason = "undici 7.29.0 solo en miniflare (desarrollo y pruebas); se corrige al actualizar wrangler"
-
-[[IgnoredVulns]]
-id = "GHSA-8436-99hf-9mmv"
-ignoreUntil = 2026-11-30
-reason = "undici 7.29.0 solo en miniflare (desarrollo y pruebas); se corrige al actualizar wrangler"
-
-[[IgnoredVulns]]
-id = "GHSA-9fm3-97px-rjf6"
-ignoreUntil = 2026-11-30
-reason = "undici 7.29.0 solo en miniflare (desarrollo y pruebas); se corrige al actualizar wrangler"
-
-[[IgnoredVulns]]
-id = "GHSA-f72v-6w45-q472"
-ignoreUntil = 2026-11-30
-reason = "undici 7.29.0 solo en miniflare (desarrollo y pruebas); se corrige al actualizar wrangler"
-
-[[IgnoredVulns]]
-id = "GHSA-pmjh-fq2x-6v4x"
-ignoreUntil = 2026-11-30
-reason = "undici 7.29.0 solo en miniflare (desarrollo y pruebas); se corrige al actualizar wrangler"
-
-[[IgnoredVulns]]
-id = "GHSA-qrxm-fqhp-jwvm"
-ignoreUntil = 2026-11-30
-reason = "undici 7.29.0 solo en miniflare (desarrollo y pruebas); se corrige al actualizar wrangler"
-
-[[IgnoredVulns]]
-id = "GHSA-r53p-7pc4-xj5r"
-ignoreUntil = 2026-11-30
-reason = "undici 7.29.0 solo en miniflare (desarrollo y pruebas); se corrige al actualizar wrangler"
-
-[[IgnoredVulns]]
-id = "GHSA-rfgv-xxqx-mfg5"
-ignoreUntil = 2026-11-30
-reason = "undici 7.29.0 solo en miniflare (desarrollo y pruebas); se corrige al actualizar wrangler"
-
-[[IgnoredVulns]]
-id = "GHSA-rx4f-c7p8-82vq"
-ignoreUntil = 2026-11-30
-reason = "undici 7.29.0 solo en miniflare (desarrollo y pruebas); se corrige al actualizar wrangler"
-
-[[IgnoredVulns]]
-id = "GHSA-w293-vg96-wgc3"
-ignoreUntil = 2026-11-30
-reason = "undici 7.29.0 solo en miniflare (desarrollo y pruebas); se corrige al actualizar wrangler"
-
-[[IgnoredVulns]]
-id = "GHSA-xjj6-f33q-929c"
-ignoreUntil = 2026-11-30
-reason = "undici 7.29.0 solo en miniflare (desarrollo y pruebas); se corrige al actualizar wrangler"
+#
+# No exceptions: updating wrangler to 4.156.0 (1.5.4) brought miniflare's sharp 0.35.5 and undici 7.30.1, which closed
+# the 19 that expired on 2026-11-30. Add new ones as:
+#
+# [[IgnoredVulns]]
+# id = "GHSA-…"
+# ignoreUntil = AAAA-MM-DD
+# reason = "por qué no llega a producción y cómo se corrige"
