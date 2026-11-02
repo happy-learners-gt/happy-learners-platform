@@ -9,19 +9,19 @@
 
 ## Hecho
 
-- M0: auditoría sobre la app en local y espacio del programa (`docs/transformacion/`).
-- IA-01: `menuCourses`/`rememberCourse` en `packages/domain/src/navigation.ts` (pruebas en `tests/navigation.test.ts`);
-  `ui/Shell.tsx` (`useRecentCourses`, `administration`); estilos `.nav-group*`, `.nav-more` en `style.css`; E2E 8 de
-  `ux-flows.spec.ts` adaptada al nuevo comportamiento.
+- M0: auditoría y espacio del programa. M1 (PR 1.6.0): IA-01 menú que escala, IA-03 Agenda por rol (+ lecturas),
+  IA-02 migas. Commits `2165477`, `156704c` y siguientes en `feat/HL-15-transformacion`.
 
-## Siguiente acción: IA-03 · Agenda por rol
+## Siguiente acción: M2
 
-- Problema: `admin-demo` abre `/agenda` en «Mis secciones», vacía (T6 de la auditoría).
-- Leer `apps/web/src/pages/agenda/Agenda.tsx` (filtro «Ver») y `docs/design/agenda-y-calendario.md` antes de cambiar.
-- Criterio: administración (y coordinación con alcance) abre en la vista de toda la institución o de su alcance;
-  docentes sin cambios; E2E de agenda en local.
-
-Después: IA-02 (migas por grupo), cerrar M1 (versión 1.6.0 en `package.json`, PR con evidencia, pedir AP-02).
+1. Si el PR 1.6.0 sigue abierto: revisar su CI (`gh pr checks`); un E2E intermitente se reintenta con
+   `gh run rerun --failed` tras reproducirlo en local. No fusionar sin autorización (AP-02).
+2. Crear `feat/HL-15-flujos-e-ia` desde esta rama (apilada) para M2.
+3. **AI-01:** leer `apps/api/src/openai.ts`, `ai-runs.ts`, `ai-assist.ts`, `ai-usage.ts` y `docs/design/asistente-ia.md`;
+   escribir `docs/transformacion/ia.md`: inventario de capacidades (entrada, contexto, permisos, salida, validación,
+   aprobación humana, evaluación), brechas y el rediseño de «Uso de IA» como «Inteligencia artificial».
+4. **WF-01:** recorrer en la app los 5 flujos (incorporar educador, configurar ciclo, armar horario, registrar horas,
+   emitir boleta), contar pasos y páginas, y escribir `docs/transformacion/flujos.md`.
 
 ## Cómo verificar en local
 

@@ -6,7 +6,7 @@ día y limitaciones registradas. Fusionado a `main` ≠ resultado de producto lo
 | Hito | Objetivo | Entregables | Estado | Evidencia |
 | --- | --- | --- | --- | --- |
 | M0 | Descubrimiento y sistema del programa | `docs/transformacion/` | DONE (31-oct) | Auditoría sobre la app en local; línea base `6651930` |
-| M1 | Navegación que escala (Fase 2) | IA-01, IA-02, IA-03 | IN_PROGRESS | — |
+| M1 | Navegación que escala (Fase 2) | IA-01, IA-02, IA-03 | REVIEW (PR 1.6.0, espera AP-02) | verify 512/512; E2E locales de navegación, agenda, layout, axe, horarios, documentos e IA en escritorio y móvil; Agenda −42 % a −72 % de lecturas con respuestas idénticas |
 | M2 | Flujos y arquitectura de IA especificados (Fase 1 restante) | AUD-02, WF-01, AI-01 | READY | — |
 | M3 | Inicio institucional por excepciones | HOME-01 | BACKLOG | — |
 | M4 | Operación: horas, calendario, horarios, agenda (Fase 3) | HRS-01, CAL-01, SCH-01 | BACKLOG | — |

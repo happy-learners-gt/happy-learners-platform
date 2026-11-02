@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.6.0 — sin publicar
+## 1.6.0 — 2026-11-02
 
 - Programa de transformación del producto (`docs/transformacion/`): auditoría con puntajes por módulo, arquitectura de información objetivo, decisiones, cola de aprobaciones, riesgos y presupuesto, y estado retomable entre sesiones.
 - Menú que escala (IA-01): con más de diez cursos activos, «Cursos» muestra ocho (el abierto, los abiertos hace poco en este navegador, los de su equipo y los modificados más recientemente) y termina en «Todos los cursos (n)». Administración se agrupa en Institución, Personas, Académico y Gobierno; Horas efectivas de administración pasa a Personas y los docentes conservan «Mis horas».
