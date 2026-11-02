@@ -68,8 +68,10 @@ test("HL-142 ST-110: a self-paced section has no schedule or classes; each stude
     await entry.getByRole("button", { name: "Abrir" }).click();
     await expect(page).toHaveURL(/\/estudiante$/);
     await expect(page.getByRole("heading", { name: "¿Quién eres?" })).toBeVisible();
-    await page.getByRole("button", { name: beto, exact: true }).click();
-    await expect(page.locator(".student-next")).toContainText(`Hola, ${beto}`);
+    // R1: the student finds themselves by their short name; the section's own pages keep the full one.
+    const short = "E2E B.";
+    await page.getByRole("button", { name: short, exact: true }).click();
+    await expect(page.locator(".student-next")).toContainText(`Hola, ${short}`);
     await expect(page.locator(".student-next")).toContainText("Empieza el curso");
     await page.getByRole("button", { name: `Abrir lección: ${lessons[0].title}` }).click();
     await expect(page).toHaveURL(new RegExp(`/aprender/${lessons[0].shareCode}`));
@@ -77,7 +79,7 @@ test("HL-142 ST-110: a self-paced section has no schedule or classes; each stude
     const nextStep = page.getByRole("button", { name: "Siguiente", exact: true });
     while (await nextStep.isVisible()) await nextStep.click();
     await page.getByRole("button", { name: "Terminar lección" }).click();
-    await expect(page.getByRole("status").filter({ hasText: "¡Bien hecho" })).toContainText(beto);
+    await expect(page.getByRole("status").filter({ hasText: "¡Bien hecho" })).toContainText(short);
     await page.getByRole("link", { name: "Volver a mi sección" }).click();
     await expect(page.locator(".student-next")).toContainText("Continúa donde te quedaste");
     await expect(page.locator(".student-path li.is-done")).toHaveCount(1);
