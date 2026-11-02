@@ -46,8 +46,8 @@ y qué sigue avanzando mientras tanto.
 
 ## AP-05 · Prueba de penetración externa
 
-- Requisito antes de incorporar instituciones de pago. Implica contratar un tercero (gasto). Claude Code prepara el
-  alcance (cola SEC-03): superficies (web, API, códigos públicos, archivos, IA, respaldo), cuentas de prueba en una
+- Requisito antes de incorporar instituciones de pago. Implica contratar un tercero (gasto). Alcance listo en
+  `docs/security/alcance-pentest.md` (SEC-03): superficies (web, API, códigos públicos, archivos, IA, respaldo), cuentas de prueba en una
   organización aislada, reglas de enfrentamiento y criterio de cierre. **Bloquea:** la preparación comercial, no el
   desarrollo.
 
