@@ -38,7 +38,8 @@ test("HL-142 ST-110: a self-paced section has no schedule or classes; each stude
     expect((await student.post("/api/student/login", { data: { code: accessCode } })).status()).toBe(200);
     let space = await (await student.get("/api/student/space")).json() as Space;
     expect(space).toMatchObject({ pacing: "self-paced", learner: null });
-    expect(space.roster.map(person => person.name)).toEqual([ana, beto]);
+    // R1: the code shows short names (first word and an initial), never the full ones.
+    expect(space.roster.map(person => person.name)).toEqual(["E2E A.", "E2E B."]);
     expect(space.path.map(unit => [unit.name, unit.lessons.map(lesson => lesson.title)])).toEqual([[`${E2E_PREFIX} Saludos`, [lessons[0].title, lessons[1].title]], [`${E2E_PREFIX} Números`, [lessons[2].title]]]);
     expect((await student.post("/api/student/progress", { data: { shareCode: lessons[0].shareCode } })).status()).toBe(409);
     expect((await student.post("/api/student/identity", { data: { learnerId: "learner-elsewhere" } })).status()).toBe(400);
@@ -46,10 +47,10 @@ test("HL-142 ST-110: a self-paced section has no schedule or classes; each stude
     // Opening a lesson records it; finishing it in the player counts it in the student's progress.
     expect((await student.post("/api/student/progress", { data: { shareCode: "NOT-IN-COURSE" } })).status()).toBe(404);
     expect((await student.post("/api/student/progress", { data: { shareCode: lessons[0].shareCode } })).status()).toBe(200);
-    expect(await (await student.post(`/api/share/${lessons[0].shareCode}/complete`)).json()).toMatchObject({ ok: true, learner: ana });
+    expect(await (await student.post(`/api/share/${lessons[0].shareCode}/complete`)).json()).toMatchObject({ ok: true, learner: "E2E A." });
     expect((await student.post("/api/student/progress", { data: { shareCode: lessons[1].shareCode } })).status()).toBe(200);
     space = await (await student.get("/api/student/space")).json() as Space;
-    expect(space.learner).toEqual({ id: anaId, name: ana });
+    expect(space.learner).toEqual({ id: anaId, name: "E2E A." });
     expect(space.roster).toEqual([]);
     expect(space.path[0].lessons.map(lesson => [lesson.opened, lesson.completed])).toEqual([[true, true], [true, false]]);
 
