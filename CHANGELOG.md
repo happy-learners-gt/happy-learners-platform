@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.0 — 2026-11-02
+
+- Programa de transformación del producto (`docs/transformacion/`): auditoría con puntajes por módulo, arquitectura de información objetivo, decisiones, cola de aprobaciones, riesgos y presupuesto, y estado retomable entre sesiones.
+- Menú que escala (IA-01): con más de diez cursos activos, «Cursos» muestra ocho (el abierto, los abiertos hace poco en este navegador, los de su equipo y los modificados más recientemente) y termina en «Todos los cursos (n)». Administración se agrupa en Institución, Personas, Académico y Gobierno; Horas efectivas de administración pasa a Personas y los docentes conservan «Mis horas».
+- Agenda por rol (IA-03): sin un alcance elegido, quien no imparte secciones pero ve más (administración, coordinación) abre en todo lo que puede ver en lugar de «Mis secciones» vacía. En móvil, «Ver» y «Mostrar» ocupan una fila cada uno y los filtros ya no se aplastan.
+- Menos lecturas en la Agenda: la asistencia sale del contador de cada clase (0075) y cada lista de estudiantes se cuenta una vez por sección: −72 % en la vista de la organización (6 483 → 1 829 filas) y −42 % en la de un docente (503 → 294), con respuestas idénticas.
+
 ## 1.5.9 — 2026-10-31
 
 - Biblioteca de componentes por niveles (átomos, moléculas, patrones) en `docs/design/fluent.md`, con una prueba que exige catalogar cada componente de `ui/`; la Guía de estilo muestra pestañas, pasos y el ajuste de tiempo.
