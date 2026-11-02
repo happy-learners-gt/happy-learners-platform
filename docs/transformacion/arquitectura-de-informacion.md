@@ -69,7 +69,7 @@ contextual (IA-05), no antes.
 | --- | --- | --- |
 | IA-01 | Cursos con los 8 más relevantes y «Todos los cursos (n)»; Administración agrupada en Institución, Personas, Académico y Gobierno; Horas efectivas de administración pasa a Personas | Hecho (1.6.0, sin publicar) |
 | IA-02 | Migas por grupo en las páginas de administración | Pendiente |
-| IA-03 | Agenda por rol: administración abre en la vista de toda la institución | Pendiente |
+| IA-03 | Agenda por rol: administración abre en la vista de toda la institución | Hecho (1.6.0, sin publicar) |
 | IA-04 | Revisión de perfiles como bandeja dentro de Educadores (la ruta `/perfiles` redirige) | Pendiente |
 | IA-05 | Ayuda contextual desde `?`; Ayuda sale del menú lateral | Pendiente (depende de la base de conocimientos) |
 | IA-06 | Calendario institucional unifica ciclos, jornadas y asuetos; Organización queda en identidad, región y respaldo | Pendiente (Fase 3) |

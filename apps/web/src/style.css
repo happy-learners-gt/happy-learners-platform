@@ -1444,7 +1444,7 @@ ul.cell-list li svg { display: inline-block; vertical-align: -2px; margin-right:
 .agenda-views button.is-selected { background: var(--color-surface); color: var(--color-primary-ink); font-weight: var(--weight-bold); box-shadow: var(--shadow-xs), inset 0 -2px 0 var(--colorCompoundBrandStroke); }
 .agenda-tools { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 .agenda-scope { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); white-space: nowrap; }
-.agenda-scope select { max-width: 12rem; }
+.agenda-scope select { max-width: min(16rem, 100%); }
 .agenda-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0; min-width: 0; }
 .agenda-filters > span { font-size: var(--text-sm); }
 .agenda-filters .chip-button[aria-pressed="true"] { border-color: var(--color-primary); background: var(--violet-soft); color: var(--violet-ink); font-weight: var(--weight-bold); }
@@ -1511,8 +1511,10 @@ ul.cell-list li svg { display: inline-block; vertical-align: -2px; margin-right:
   .agenda-nav .button { min-height: 32px; padding: 0 var(--space-2); }
   .agenda-bar > .menu .icon-button { width: 32px; height: 32px; }
   .agenda-views button { min-height: 28px; padding: 0 5px; font-size: var(--text-xs); }
-  .agenda-tools { overflow-x: auto; flex-wrap: nowrap; }
-  .agenda-filters { flex-wrap: nowrap; }
+  /* «Ver» and «Mostrar» take a row each; only the chips scroll sideways, so the first ones are always in view. */
+  .agenda-tools { flex-wrap: wrap; gap: var(--space-2); }
+  .agenda-filters { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; }
+  .agenda-filters .chip-button, .agenda-filters > span { flex: none; white-space: nowrap; }
 }
 /* Calendar subscription (ST-125): the private link, its actions and how to subscribe in each calendar. */
 .calendar-sync { margin-top: var(--space-5); display: grid; gap: var(--space-3); }
