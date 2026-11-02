@@ -10,17 +10,17 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | IA-02 | Navegación | Migas coherentes con el menú en administración (TD-006) | P1 | IA-01 | DONE | Ninguna página de administración muestra un padre que el menú no tiene |
 | IA-03 | Navegación | Agenda por rol: administración abre en la vista institucional | P1 | IA-01 | DONE | `admin-demo` abre `/agenda` con clases visibles; docentes sin cambios |
 | AUD-02 | Auditoría | Vista docente, móvil y oscuro de todos los módulos; Biblioteca y Equipo en detalle; puntajes actualizados | P1 | PRG-01 | READY | Matriz sin «preliminar» |
-| WF-01 | Flujos | Especificar 5 flujos críticos: incorporar educador, configurar ciclo, armar horario, registrar horas, emitir boleta | P1 | PRG-01 | READY | Documento con persona, pasos, reglas, excepciones y fricciones medidas en la app |
+| WF-01 | Flujos | Especificar 5 flujos críticos: incorporar educador, configurar ciclo, armar horario, registrar horas, emitir boleta | P1 | PRG-01 | DONE | Documento con persona, pasos, reglas, excepciones y fricciones medidas en la app |
 | AI-01 | IA | Arquitectura de IA: inventario de capacidades actuales (`openai.ts`, `ai-runs.ts`, puertos del dominio), modelo de skills, permisos, evaluación; rediseño de «Uso de IA» | P1 | PRG-01 | DONE | `docs/transformacion/ia.md` basado en el código, con brechas priorizadas |
 | AIG-1 | IA / Seguridad | Límite de uso en tareas de IA síncronas (H4) | P0 | AI-01 | DONE | 429 tras 60 por persona y hora; prueba en `proposals.test.ts` |
 | AIG-2 | IA | Evaluaciones para las 6 tareas sin casos, con un caso de texto hostil cada una | P1 | AI-01 | READY | `tests/ai-evals/<tarea>.cases.json` y verificación en `./scripts/verify` con el fixture |
 | AIG-4 | IA | Medir la aceptación de lo propuesto (aceptado/descartado por ejecución) | P1 | AI-01 | BACKLOG | Columna o evento sin texto; visible en Uso de IA |
 | AIG-5 | IA / UX | «Uso de IA» → «Inteligencia artificial»: capacidades, dónde se usan, aceptación, costo | P1 | AIG-4 | BACKLOG | Puntaje del módulo ≥ 4.0 |
 | HOME-01 | Inicio | Inicio por excepciones: cursos que necesitan atención primero, el resto plegado | P1 | IA-01 | BACKLOG | Administración ve ≤ 8 tarjetas + «Ver todos»; KPIs de excepción con datos existentes; lecturas medidas sin aumento |
-| HRS-01 | Operación | Horas efectivas: periodo por defecto, agrupación por persona, corrección en lote, sin tabla de 60+ filas | P1 | IA-01, WF-01 | BACKLOG | Ver WF-01 |
-| CAL-01 | Operación | Calendario institucional unificado (IA-06) | P2 | WF-01 | BACKLOG | — |
-| SCH-01 | Operación | Horarios: horario vigente visible, conflictos, vistas por docente/aula | P2 | WF-01 | BACKLOG | — |
-| PPL-01 | Personas | Incorporación de educadores de punta a punta; Revisión de perfiles en Educadores (IA-04) | P2 | WF-01 | BACKLOG | — |
+| HRS-01 | Operación | Horas efectivas: periodo por defecto, agrupación por persona, corrección en lote, sin tabla de 60+ filas | P1 | IA-01, WF-01 | READY | `docs/transformacion/flujos.md` F4: periodo = mes; resumen por persona con contrato; bandeja «por revisar» con corrección en lote; detalle bajo demanda |
+| CAL-01 | Operación | Calendario institucional unificado (IA-06) | P2 | WF-01 | READY | — |
+| SCH-01 | Operación | Horarios: horario vigente visible, conflictos, vistas por docente/aula | P2 | WF-01 | READY | — |
+| PPL-01 | Personas | Incorporación de educadores de punta a punta; Revisión de perfiles en Educadores (IA-04) | P2 | WF-01 | READY | — |
 | SEC-01 | Seguridad | R1 según AP-01 | P1 | AP-01 | BLOCKED | — |
 | SEC-02 | Seguridad | Verificar que `/api/health` no lea el DO; documentar configuración del monitor (AP-03) | P2 | — | READY | Prueba que lo garantiza; guía en `docs/operations/slo.md` |
 | SEC-03 | Seguridad | Alcance del pentest externo (AP-05) | P2 | — | READY | `docs/security/alcance-pentest.md` |
