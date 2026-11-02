@@ -89,7 +89,7 @@ El plan gratuito de Workers no envía alertas por errores. Mientras tanto:
 2. Configurar el monitor externo y su página de estado (usuario).
 3. Al pasar al plan de pago: objetivo 99,9 %, alertas de Cloudflare y Analytics Engine para métricas sin muestreo.
 
-## Monitor externo de `/api/health` (SEC-02, pendiente de cuenta: AP-03)
+## 8. Monitor externo de `/api/health` (SEC-02, pendiente de cuenta: AP-03)
 
 `GET /api/health` responde `{"status":"ok"}` solo si el Durable Object de la organización responde: lee **una** fila
 (`index.ts`, `SELECT id FROM organizations LIMIT 1`). Por eso detecta también la cuota de lecturas agotada (el 503 del
