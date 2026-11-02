@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.6.1 — sin publicar
+## 1.6.1 — 2026-11-02
 
 - Privacidad (R1, decisión del dueño): quien tiene el código de una sección ve, para elegirse, la primera palabra del nombre de cada estudiante y una inicial («Ana L.»); si dos coinciden, más iniciales o un número. El nombre completo ya no sale de la sección hacia el código. El personal no cambia.
 - Inicio por excepciones (HOME-01): «Avance de los cursos» muestra hasta seis, primero los que necesitan atención (asistencia baja, sin plan, resultados sin evaluar, cambios sin publicar, sin actividad en 30 días, lecciones sin publicar), cada uno con sus dos motivos principales, y «Ver todos (n)». En la demo, Inicio de administración pasa de 25 tarjetas (~4 200 px) a 6 (~2 200 px). Sin lecturas nuevas.
