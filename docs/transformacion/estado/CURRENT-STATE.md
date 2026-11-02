@@ -5,7 +5,8 @@
 - **Producción:** `6651930` (1.5.9, PR #102)
 - **Ramas:**
   - `feat/HL-15-transformacion` → PR #103 (M1). Corregido en `2a12450` el fallo de CI (`notifications.spec.ts`: la
-    etiqueta «Personas» del menú chocaba con `getByLabel("Persona")`). CI relanzado.
+    etiqueta «Personas» del menú chocaba con `getByLabel("Persona")`). **CI verde** (verify 21 min, escáneres y
+    trazabilidad); espera AP-02.
   - `feat/HL-15-flujos-e-ia` (apilada; integra #103), sin push: AI-01, AIG-1 (H4), WF-01, HRS-01, HOME-01, SEC-02,
     SEC-03.
 - **Últimas verificaciones (02-nov):** `./scripts/verify` verde en ambas ramas (516 pruebas en la apilada; un fallo
