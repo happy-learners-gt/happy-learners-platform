@@ -148,7 +148,7 @@ export function TimetablesPage() {
       setRange({ from: data.year?.from || "", until: data.year?.until || "" });
     }, cause => setError(message(cause)));
   }, []);
-  const header = <PageHeader crumbs={[{ label: "Organización", href: "/organizacion" }, { label: "Horarios" }]} title="Horarios" description="Genera el horario semanal de las secciones con la jornada y las reglas. Nada cambia hasta que lo apliques."/>;
+  const header = <PageHeader title="Horarios" description="Genera el horario semanal de las secciones con la jornada y las reglas. Nada cambia hasta que lo apliques."/>;
   if (error) return <>{header}<ErrorState error={error}/></>;
   if (!setup) return <>{header}<Loading label="Cargando secciones y jornadas…" lines={6}/></>;
   if (!setup.bellSchedules.length) return <>{header}<EmptyState icon="clock" title="Primero define una jornada">En <strong>Organización</strong>, crea la jornada con sus periodos y recreos; el horario se arma sobre ella.</EmptyState></>;
