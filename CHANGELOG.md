@@ -2,6 +2,7 @@
 
 ## 1.6.1 — sin publicar
 
+- Inicio por excepciones (HOME-01): «Avance de los cursos» muestra hasta seis, primero los que necesitan atención (asistencia baja, sin plan, resultados sin evaluar, cambios sin publicar, sin actividad en 30 días, lecciones sin publicar), cada uno con sus dos motivos principales, y «Ver todos (n)». En la demo, Inicio de administración pasa de 25 tarjetas (~4 200 px) a 6 (~2 200 px). Sin lecturas nuevas.
 - Horas efectivas (HRS-01): abre en los últimos 30 días con periodos de un clic (este mes, mes anterior, todo, personalizado); los totales por educador, curso y sección van en pestañas; «Por revisar» filtra las clases que necesitan corrección; la lista muestra 25 clases a la vez; si el periodo está vacío pero hay historial, un botón lo abre.
 - Seguridad (H4): las tareas de IA que la persona espera (redactar, mejorar, sugerir campos, interpretar reglas) tienen un límite de 60 por persona y hora; al pasarlo responden 429 con un mensaje claro y «Sugerir campos» sigue ofreciendo los campos de los ejemplos.
 - Arquitectura de IA del programa (`docs/transformacion/ia.md`): inventario de las 7 capacidades, brechas priorizadas y decisión de no introducir agentes por ahora.
