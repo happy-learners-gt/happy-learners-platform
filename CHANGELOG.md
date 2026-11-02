@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.2 — sin publicar
+
+- Incorporación institucional de cada educador (PPL-01, `docs/design/incorporacion-institucional.md`): en Educadores, la columna «Incorporación» abre la lista de pasos de la persona (bienvenida, perfil revisado, contrato, equipo de un curso, secciones) con su estado en palabras y la acción que falta; «Crear contrato» abre el contrato con la persona ya elegida. Sin rutas ni lecturas por persona nuevas (una petición a la lista de perfiles por revisar al abrir Educadores).
+
 ## 1.6.1 — 2026-11-02
 
 - Privacidad (R1, decisión del dueño): quien tiene el código de una sección ve, para elegirse, la primera palabra del nombre de cada estudiante y una inicial («Ana L.»); si dos coinciden, más iniciales o un número. El nombre completo ya no sale de la sección hacia el código. El personal no cambia.

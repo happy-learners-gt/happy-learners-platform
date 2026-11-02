@@ -22,7 +22,8 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | HRS-01 | Operación | Horas efectivas: periodo por defecto, agrupación por persona, corrección en lote, sin tabla de 60+ filas | P1 | IA-01, WF-01 | DONE | `docs/transformacion/flujos.md` F4: periodo = mes; resumen por persona con contrato; bandeja «por revisar» con corrección en lote; detalle bajo demanda |
 | CAL-01 | Operación | Calendario institucional unificado (IA-06) | P2 | WF-01 | READY | — |
 | SCH-01 | Operación | Horarios: horario vigente visible, conflictos, vistas por docente/aula | P2 | WF-01 | READY | — |
-| PPL-01 | Personas | Incorporación de educadores de punta a punta; Revisión de perfiles en Educadores (IA-04) | P2 | WF-01 | READY | — |
+| PPL-01 | Personas | Incorporación de educadores de punta a punta; Revisión de perfiles en Educadores (IA-04) | P2 | WF-01 | DONE | — |
+| PPL-02 | Personas | Asignar cursos y secciones desde la incorporación (ruta que agrega una persona al equipo sin reenviar el equipo completo) | P2 | PPL-01 | READY | Diálogo con curso y rol; E2E |
 | SEC-01 | Seguridad | R1 paso 1: nombre e inicial con el código de sección | P1 | AP-01 | DONE | `shortLearnerNames` con pruebas; E2E `pacing` |
 | SEC-05 | Seguridad | R1 paso 2 (opcional): código personal por estudiante como ajuste de la sección | P3 | SEC-01 | BACKLOG | Diseño primero; tarjetas imprimibles |
 | SEC-02 | Seguridad | Verificar que `/api/health` no lea el DO; documentar configuración del monitor (AP-03) | P2 | — | DONE | Prueba que lo garantiza; guía en `docs/operations/slo.md` |
