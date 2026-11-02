@@ -44,6 +44,21 @@ alternativas, consecuencias.
   curso › …). Los grupos del menú (Institución, Personas, Académico, Gobierno) son encabezados sin página propia.
 - **Alternativas:** migas con el grupo como elemento sin enlace (descartado: parece navegable y no lleva a nada).
 
+## TD-007 · Sin marco de agentes por ahora (02-nov-2026)
+
+- **Contexto:** el mandato pide evaluar agentes y orquestación multi-paso.
+- **Decisión:** no se introduce. Las 7 tareas de IA son de un paso, con salida de esquema estricto, validación
+  determinista y aceptación humana; ninguna mejora con un plan multi-paso o con herramientas que escriban. Se revisa
+  cuando aparezca una tarea que necesite reunir datos de varios contextos y proponer una acción compuesta (candidata:
+  asistente de configuración del ciclo, M4).
+
+## TD-008 · Límite de IA por persona y hora (02-nov-2026)
+
+- **Decisión:** 60 peticiones síncronas por persona y hora, con el balde de `login_limits` (sin tabla nueva). Es una
+  guarda de seguridad, no un límite comercial: el tope por organización y plan queda para el dueño (AP-07).
+- **Alternativas:** tope mensual por organización (decisión de negocio); límite dentro de `tracked()` (descartado:
+  también cortaría trabajo en cola que la persona no está esperando).
+
 ## TD-004 · Un PR por hito y nada se fusiona sin autorización (31-oct-2026)
 
 - Fusionar a `main` despliega producción. Cada hito llega como un PR coherente, con `main` integrado antes del último
