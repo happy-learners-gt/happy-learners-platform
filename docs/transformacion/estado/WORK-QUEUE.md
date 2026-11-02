@@ -23,8 +23,9 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | CAL-01 | Operación | Calendario institucional unificado (IA-06) | P2 | WF-01 | READY | — |
 | SCH-01 | Operación | Horarios: horario vigente visible, conflictos, vistas por docente/aula | P2 | WF-01 | READY | — |
 | PPL-01 | Personas | Incorporación de educadores de punta a punta; Revisión de perfiles en Educadores (IA-04) | P2 | WF-01 | READY | — |
-| SEC-01 | Seguridad | R1 según AP-01 | P1 | AP-01 | BLOCKED | — |
+| SEC-01 | Seguridad | R1 paso 1: nombre e inicial con el código de sección | P1 | AP-01 | DONE | `shortLearnerNames` con pruebas; E2E `pacing` |
+| SEC-05 | Seguridad | R1 paso 2 (opcional): código personal por estudiante como ajuste de la sección | P3 | SEC-01 | BACKLOG | Diseño primero; tarjetas imprimibles |
 | SEC-02 | Seguridad | Verificar que `/api/health` no lea el DO; documentar configuración del monitor (AP-03) | P2 | — | DONE | Prueba que lo garantiza; guía en `docs/operations/slo.md` |
 | SEC-03 | Seguridad | Alcance del pentest externo (AP-05) | P2 | — | DONE | `docs/security/alcance-pentest.md` |
-| SEC-04 | Seguridad | Escáneres obligatorios el 13-nov (AP-04) | P2 | AP-04 | BLOCKED | Protección de rama con los tres checks |
+| SEC-04 | Seguridad | Escáneres obligatorios el 13-nov (AP-04) | P2 | AP-04 | READY (13-nov) | Protección de rama con los tres checks |
 | HLP-01 | Ayuda | Ayuda contextual por página (IA-05) | P3 | AP-06 | BACKLOG | — |

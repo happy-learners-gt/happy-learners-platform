@@ -59,7 +59,7 @@ antes de incorporar instituciones de pago.
 | H2 | Media | El límite de inicio de sesión era solo por dirección: intentos repartidos entre muchas direcciones podían seguir probando contraseñas de una cuenta. | Corregido en 1.5.5: además, 10 intentos fallidos por cuenta cada 15 minutos (el balde es un hash del nombre); iniciar sesión lo limpia. Prueba en `route-matrix.test.ts`. |
 | H3 | Baja | El código de sección elegía caracteres con `byte % 31`: sesgo leve. | Corregido en 1.5.5: muestreo con rechazo. |
 | H4 | Media | Las tareas de IA síncronas (redactar, mejorar, sugerir campos, interpretar reglas) no tenían límite de uso: una cuenta comprometida o un script podía generar gasto ilimitado con el proveedor (OWASP LLM10, consumo ilimitado). Encontrado en la revisión de IA del programa de transformación (`docs/transformacion/ia.md`, AIG-1). | Corregido en 1.6.1: 60 peticiones por persona y hora (`aiAllowed`, `ai-runs.ts`), 429 con mensaje claro; «Sugerir campos» sigue ofreciendo los campos de los ejemplos. Prueba en `proposals.test.ts`. |
-| R1 | Media (decisión de producto) | Quien tiene el código de una sección ve los nombres completos de sus estudiantes para elegirse (`classes.ts`, ruta del estudiante). Son menores. | Pendiente de decisión: mostrar nombre e inicial, o códigos por estudiante. |
+| R1 | Media (decisión de producto) | Quien tiene el código de una sección ve los nombres completos de sus estudiantes para elegirse (`classes.ts`, ruta del estudiante). Son menores. | Corregido en 1.6.1 (decisión del dueño, 02-nov): con el código se ve la primera palabra del nombre y una inicial («Ana L.»), con más iniciales o un número si dos coinciden (`shortLearnerNames`); también el nombre propio tras elegirse. El personal sigue viendo nombres completos. Pendiente opcional: código personal por estudiante (SEC-05). |
 | R2 | Baja | PBKDF2 con 100 000 iteraciones (OWASP sugiere 600 000). Es el máximo que admite workerd. | Aceptado: límites por dirección y por cuenta (H2). Revisar si la plataforma sube el máximo o admite Argon2. |
 | R3 | Baja | `/api/people` muestra a todo el personal los nombres de usuario de la organización (se usa para formar equipos). | Aceptado: con H2, conocer un nombre no permite adivinar su contraseña. |
 | R4 | Baja | CSP permite `style-src 'unsafe-inline'` (estilos en línea de React). | Aceptado: sin HTML del usuario en la página, no hay vía de inyección. |
@@ -81,7 +81,7 @@ Las preferencias (`preferences.ts`) mapean cada clave validada a una columna por
 
 ## 5. Siguientes pasos
 
-1. Decidir R1 (nombres visibles con el código de sección).
+1. ~~Decidir R1~~ (1.6.1: nombre e inicial).
 2. 13-nov: hacer obligatorios `secrets`, `dependencies` y `code` en `main` (dos semanas sin falsos positivos).
 3. Prueba de penetración externa antes de instituciones de pago (B.5).
 4. Repetir esta auditoría en cada versión mayor; `route-matrix.test.ts` y Semgrep la sostienen entre tanto.

@@ -198,5 +198,6 @@ export { progressRecord, progressSummary } from "./progress-report";
 export type { LearnerProgress, ProgressInput, ProgressSummary } from "./progress-report";
 export { attentionLabels, courseAttention, homeCourses, lowAttendance } from "./home";
 export type { AttentionReason } from "./home";
+export { shortLearnerNames } from "./short-names";
 export { applySuggestion, checkedSuggestions, exampleSuggestions, fixtureSuggester, suggestInput, suggestPrompt, suggestPromptVersion, suggestSchema } from "./field-suggestions";
 export type { FieldSuggester, FieldSuggestion, SuggestField, SuggestInput, SuggestOutput } from "./field-suggestions";
