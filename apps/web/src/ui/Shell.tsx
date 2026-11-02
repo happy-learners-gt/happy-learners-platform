@@ -217,8 +217,9 @@ function Sidebar() {
     </ul></nav>
     {admin && <nav aria-label="Administración" className="sidebar-secondary"><span className="sidebar-eyebrow">Administración</span><ul className="nav-tree">
       {administration.map(group => <li key={group.label} className="nav-group">
-        <span className="nav-group-label" id={`nav-group-${group.id}`}>{group.label}</span>
-        <ul aria-labelledby={`nav-group-${group.id}`}>{group.pages.map(item => page({ ...item, active: item.match ? path.startsWith(item.href) : path === item.href }))}</ul>
+        {/* The label is read before its list; naming the list too would make «Personas» a second label on every page. */}
+        <span className="nav-group-label">{group.label}</span>
+        <ul>{group.pages.map(item => page({ ...item, active: item.match ? path.startsWith(item.href) : path === item.href }))}</ul>
       </li>)}
     </ul></nav>}
     {fictional(member.organizationId) && <p className="sidebar-note"><Icon name="shield" size={16}/><span>Demostración con datos ficticios</span></p>}
