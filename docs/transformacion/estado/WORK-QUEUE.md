@@ -11,7 +11,11 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | IA-03 | Navegación | Agenda por rol: administración abre en la vista institucional | P1 | IA-01 | DONE | `admin-demo` abre `/agenda` con clases visibles; docentes sin cambios |
 | AUD-02 | Auditoría | Vista docente, móvil y oscuro de todos los módulos; Biblioteca y Equipo en detalle; puntajes actualizados | P1 | PRG-01 | READY | Matriz sin «preliminar» |
 | WF-01 | Flujos | Especificar 5 flujos críticos: incorporar educador, configurar ciclo, armar horario, registrar horas, emitir boleta | P1 | PRG-01 | READY | Documento con persona, pasos, reglas, excepciones y fricciones medidas en la app |
-| AI-01 | IA | Arquitectura de IA: inventario de capacidades actuales (`openai.ts`, `ai-runs.ts`, puertos del dominio), modelo de skills, permisos, evaluación; rediseño de «Uso de IA» | P1 | PRG-01 | READY | `docs/transformacion/ia.md` basado en el código, con brechas priorizadas |
+| AI-01 | IA | Arquitectura de IA: inventario de capacidades actuales (`openai.ts`, `ai-runs.ts`, puertos del dominio), modelo de skills, permisos, evaluación; rediseño de «Uso de IA» | P1 | PRG-01 | DONE | `docs/transformacion/ia.md` basado en el código, con brechas priorizadas |
+| AIG-1 | IA / Seguridad | Límite de uso en tareas de IA síncronas (H4) | P0 | AI-01 | DONE | 429 tras 60 por persona y hora; prueba en `proposals.test.ts` |
+| AIG-2 | IA | Evaluaciones para las 6 tareas sin casos, con un caso de texto hostil cada una | P1 | AI-01 | READY | `tests/ai-evals/<tarea>.cases.json` y verificación en `./scripts/verify` con el fixture |
+| AIG-4 | IA | Medir la aceptación de lo propuesto (aceptado/descartado por ejecución) | P1 | AI-01 | BACKLOG | Columna o evento sin texto; visible en Uso de IA |
+| AIG-5 | IA / UX | «Uso de IA» → «Inteligencia artificial»: capacidades, dónde se usan, aceptación, costo | P1 | AIG-4 | BACKLOG | Puntaje del módulo ≥ 4.0 |
 | HOME-01 | Inicio | Inicio por excepciones: cursos que necesitan atención primero, el resto plegado | P1 | IA-01 | BACKLOG | Administración ve ≤ 8 tarjetas + «Ver todos»; KPIs de excepción con datos existentes; lecturas medidas sin aumento |
 | HRS-01 | Operación | Horas efectivas: periodo por defecto, agrupación por persona, corrección en lote, sin tabla de 60+ filas | P1 | IA-01, WF-01 | BACKLOG | Ver WF-01 |
 | CAL-01 | Operación | Calendario institucional unificado (IA-06) | P2 | WF-01 | BACKLOG | — |

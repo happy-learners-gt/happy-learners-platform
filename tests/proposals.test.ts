@@ -371,3 +371,15 @@ describe("assisted improvement and writing on the built Worker (1.4.1)", () => {
     expect(usage.recent.find(run => run.task === "lesson-improve")).toMatchObject({ generator: "fixture", status: "ok", courseId: "course-exploradores" });
   }, 60_000);
 });
+
+describe("AI usage limit on the built Worker (AIG-1)", () => {
+  it("stops a person after 60 requests in an hour, with a clear 429, and leaves everyone else working", async () => {
+    const heavy = await signIn("lucia.herrera"), other = await signIn("ana.lopez");
+    const write = { field: "lesson-objective", action: "shorten", text: "Saludar en inglés. Presentarse con su nombre." };
+    for (let index = 0; index < 60; index++) expect((await as(heavy, "/ai/write", "POST", write)).status).toBe(200);
+    expect(await errorOf(await as(heavy, "/ai/write", "POST", write), 429)).toBe("Usaste la IA muchas veces en la última hora. Vuelve a intentar más tarde.");
+    // Invalid requests are answered before the limit, and another person is not affected.
+    expect((await as(heavy, "/ai/write", "POST", { field: "contraseña", action: "draft", text: "" })).status).toBe(400);
+    expect((await as(other, "/ai/write", "POST", write)).status).toBe(200);
+  }, 60_000);
+});

@@ -11,6 +11,7 @@ y qué sigue avanzando mientras tanto.
 | AP-04 | Escáneres obligatorios en `main` desde el 13-nov | Pendiente (fecha) |
 | AP-05 | Prueba de penetración externa | Pendiente (antes de instituciones de pago) |
 | AP-06 | Nombre, marca, empresa y mesa de ayuda (carril D) | Pendiente |
+| AP-07 | Tope mensual de IA por organización y plan | Pendiente (sin urgencia; hay guarda por persona) |
 
 ## AP-01 · R1: qué ve un estudiante al entrar con el código de su sección
 
@@ -54,3 +55,10 @@ y qué sigue avanzando mientras tanto.
 
 - Material listo en `docs/empresa/marca-y-soporte.md`. Claude Code no inventa identidad ni políticas. Mientras tanto se
   usa «Happy Learners» y la Ayuda actual.
+
+## AP-07 · Tope de IA por organización
+
+- **Hoy:** desde 1.6.1, 60 peticiones síncronas por persona y hora (guarda de seguridad). No hay tope mensual por
+  organización ni por plan: el uso de OpenAI se paga con la clave de HL.
+- **Recomendación:** decidirlo junto con los planes comerciales; técnicamente cuesta poco (sumar `ai_runs` del mes).
+- **Bloquea:** nada hoy.

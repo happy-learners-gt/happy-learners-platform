@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.1 — sin publicar
+
+- Seguridad (H4): las tareas de IA que la persona espera (redactar, mejorar, sugerir campos, interpretar reglas) tienen un límite de 60 por persona y hora; al pasarlo responden 429 con un mensaje claro y «Sugerir campos» sigue ofreciendo los campos de los ejemplos.
+- Arquitectura de IA del programa (`docs/transformacion/ia.md`): inventario de las 7 capacidades, brechas priorizadas y decisión de no introducir agentes por ahora.
+
 ## 1.6.0 — 2026-11-02
 
 - Programa de transformación del producto (`docs/transformacion/`): auditoría con puntajes por módulo, arquitectura de información objetivo, decisiones, cola de aprobaciones, riesgos y presupuesto, y estado retomable entre sesiones.
