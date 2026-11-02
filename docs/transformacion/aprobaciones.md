@@ -34,8 +34,8 @@ y qué sigue avanzando mientras tanto.
 ## AP-03 · Monitor externo de `/api/health`
 
 - **Recomendación:** un servicio con plan gratuito (por ejemplo UptimeRobot, comprobación cada 5 min, alerta por
-  correo al dueño). Costo 0; ~288 peticiones al día. Antes de activarlo, el equipo de desarrollo verifica que `/api/health` no lea
-  filas del Durable Object (para no gastar cuota). **Requiere al usuario:** crear la cuenta (credenciales propias).
+  correo al dueño). Costo 0; ~288 peticiones al día. Verificado (SEC-02): `/api/health` lee una fila del Durable Object,
+  288 al día de 5 M, y así detecta también la cuota agotada. Configuración en `docs/operations/slo.md`. **Requiere al usuario:** crear la cuenta (credenciales propias).
   **Alternativa:** el cron diario de GitHub Actions ya existente (detecta caídas tarde: hasta 24 h).
 
 ## AP-04 · Escáneres obligatorios en `main`
