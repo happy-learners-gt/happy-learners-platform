@@ -26,7 +26,7 @@ export function DocumentsPage() {
     void api<{ templates: TemplateView[]; kinds: Record<ReportKind, ReportKindSpec> }>("/report-templates").then(data => { setTemplates(data.templates); setKinds(data.kinds); }, cause => setError(message(cause)));
     void api<{ programs: { id: string; name: string }[] }>("/programs").then(data => setPrograms(data.programs)).catch(() => setPrograms([]));
   }, []);
-  const header = <PageHeader crumbs={[{ label: "Organización", href: "/organizacion" }, { label: "Documentos" }]} title="Documentos"
+  const header = <PageHeader title="Documentos"
     description="Las plantillas de la boleta y la constancia, con el membrete de la institución. Sin plantilla publicada, los documentos conservan su formato de siempre."
     primary={<PrimaryAction icon="plus" onClick={() => setCreating(true)}>Nueva plantilla</PrimaryAction>}/>;
   if (error) return <>{header}<ErrorState error={error}/></>;
@@ -153,7 +153,7 @@ export function DocumentDesigner({ id }: { id: string }) {
       .then(([one, all, files, list]) => { setTemplate(one.template); setDraft(one.template.draft); setVersions(one.versions); setKinds(all.kinds); setImages(files.images); setSections(list.sections); setPreviewSection(list.sections[0]?.id || ""); }, cause => setError(message(cause)));
   }, [id]);
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
-  const header = <PageHeader crumbs={[{ label: "Organización", href: "/organizacion" }, { label: "Documentos", href: "/organizacion/documentos" }, { label: template?.name || "Plantilla" }]} title={template?.name || "Plantilla"}
+  const header = <PageHeader crumbs={[{ label: "Documentos", href: "/organizacion/documentos" }, { label: template?.name || "Plantilla" }]} title={template?.name || "Plantilla"}
     description={template ? `${template.publishedVersion ? `Publicada v${template.publishedVersion}` : "Sin publicar"}${dirty ? " · Cambios sin guardar" : ""}` : undefined}
     actions={template && <><Button icon="clock" onClick={() => setHistory(true)}>Historial</Button><Button busy={busy === "save"} disabled={!!busy || !dirty} onClick={() => void save()}>Guardar</Button></>}
     primary={template && <PrimaryAction icon="send" busy={busy === "publish"} disabled={!!busy} onClick={() => void publish()}>Publicar</PrimaryAction>}/>;

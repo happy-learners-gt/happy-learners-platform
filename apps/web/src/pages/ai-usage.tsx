@@ -69,7 +69,7 @@ export function AiUsagePage() {
   const [usage, setUsage] = useState<Usage | null>(null), [error, setError] = useState(""), [pricing, setPricing] = useState<string | null>(null);
   useEffect(() => { setUsage(null); void api<Usage>(`/organization/ai-usage?mes=${month}`).then(setUsage, cause => setError(message(cause))); }, [month]);
   const go = (to: string) => navigate(`/organizacion/ia?mes=${to}`, true);
-  const header = <PageHeader crumbs={[{ label: "Organización", href: "/organizacion" }, { label: "Uso de IA" }]} title="Uso de IA"
+  const header = <PageHeader title="Uso de IA"
     description="Qué hizo la IA de la organización, para quién y cuánto costó. Nunca se guarda el texto que se le envía ni lo que responde."
     actions={<Button icon="plus" onClick={() => setPricing("")}>Registrar precio</Button>}/>;
   if (error) return <>{header}<ErrorState error={error}/></>;

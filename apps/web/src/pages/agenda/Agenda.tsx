@@ -121,7 +121,8 @@ export function Agenda() {
   const fromUrl = views.find(item => item.query === requested)?.id;
   const view = fromUrl || preferences?.agendaView || (narrow ? "day" : "week");
   const anchor = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get("fecha") || "") ? url.searchParams.get("fecha")! : personalToday();
-  const scope = url.searchParams.get("ver") || "mine";
+  // Without «ver», the API picks the scope (IA-03): its answer says which one, and the selector shows it.
+  const scope = url.searchParams.get("ver") || "";
   const weekStart = preferences?.weekStart || 1;
   const show = new Set(preferences?.agendaShow || kinds.map(item => item.id));
   const [data, setData] = useState<AgendaPayload | null>(null), [error, setError] = useState(""), [selected, setSelected] = useState<AgendaItem | null>(null), [subscribe, setSubscribe] = useState(false);
@@ -129,7 +130,7 @@ export function Agenda() {
   const range = rangeOf(view, anchor, weekStart);
 
   useEffect(() => {
-    const query = new URLSearchParams({ from: addDays(range.from, -1), until: addDays(range.until, 1), scope });
+    const query = new URLSearchParams({ from: addDays(range.from, -1), until: addDays(range.until, 1), ...scope ? { scope } : {} });
     let live = true;
     setError("");
     api<AgendaPayload>(`/agenda?${query}`).then(result => { if (live) setData(result); }, cause => { if (live) setError(message(cause)); });
@@ -182,7 +183,7 @@ export function Agenda() {
         <Menu label="Más acciones de la agenda" items={[{ label: "Suscribirme", icon: "calendar", onSelect: () => setSubscribe(true) }]}/>
       </div>
       <div className="agenda-tools">
-        {data?.canWiden && <label className="agenda-scope">Ver<select value={data.scopes.some(item => item.value === scope) ? scope : "mine"} onChange={event => visit({ ver: event.target.value })}>
+        {data?.canWiden && <label className="agenda-scope">Ver<select value={data.scopes.some(item => item.value === data.scope) ? data.scope : "mine"} onChange={event => visit({ ver: event.target.value })}>
           {data.scopes.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
         </select></label>}
         <div className="agenda-filters" role="group" aria-label="Mostrar">

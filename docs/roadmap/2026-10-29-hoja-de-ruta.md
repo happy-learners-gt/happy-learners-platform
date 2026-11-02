@@ -1,5 +1,9 @@
 # Hoja de ruta de Happy Learners (desde el 29 de octubre de 2026)
 
+> **Desde el 31-oct-2026 el plan vivo es el programa de transformación: [`docs/transformacion/`](../transformacion/README.md).**
+> Este documento queda como historia de 1.2–1.5.9; sus pendientes (R1, monitor externo, escáneres obligatorios,
+> pentest, carril D) pasaron a `docs/transformacion/aprobaciones.md` y a la cola de trabajo.
+
 Documento de arranque para cualquier sesión futura: dónde está el producto, qué falta, en qué orden y cómo se trabaja.
 Reemplaza la necesidad de recordar el historial. Se actualiza al cerrar cada lote o decisión (sección «Bitácora»).
 
