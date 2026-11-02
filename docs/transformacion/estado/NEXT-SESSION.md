@@ -10,14 +10,16 @@
 ## Hecho
 
 - M0 y M1 (PR #103: menú, Agenda por rol y lecturas, migas; corrección `2a12450`).
-- En `feat/HL-15-flujos-e-ia` (1.6.1, sin push): `ia.md` + límite de IA (H4), `flujos.md`, Horas efectivas (HRS-01).
+- En `feat/HL-15-flujos-e-ia` (1.6.1, sin push): `ia.md` + límite de IA (H4), `flujos.md`, Horas efectivas (HRS-01),
+  Inicio por excepciones (HOME-01), monitor documentado (SEC-02), alcance del pentest (SEC-03).
 
 ## Siguiente acción
 
 1. `gh pr checks 103`: si `verify` falla, leer `gh run view <id> --log-failed | grep -E "✘|Error: "`, reproducir la
    prueba en local y corregir en `feat/HL-15-transformacion` (luego `git merge` en la rama apilada).
 2. Con #103 verde: avisar al usuario (AP-02). No fusionar sin su autorización.
-3. Siguiente tarea de la cola: **HOME-01** (Inicio por excepciones; medir lecturas de `/api/progress` antes y después).
+3. Siguiente tarea de la cola: **PPL-01** (F1 en `flujos.md`): lista de incorporación con acciones en el detalle de la
+   persona en Educadores; empezar por `apps/web/src/pages/admin.tsx` (`Members`, `setDetail`) y `contracts.tsx` (`Nuevo contrato`).
 4. El PR de 1.6.1 se abre cuando #103 esté fusionado (base `main`), para no gastar minutos en una base que cambia.
 
 ## Cómo verificar en local
