@@ -199,5 +199,7 @@ export type { LearnerProgress, ProgressInput, ProgressSummary } from "./progress
 export { attentionLabels, courseAttention, homeCourses, lowAttendance } from "./home";
 export type { AttentionReason } from "./home";
 export { shortLearnerNames } from "./short-names";
+export { incorporationSteps } from "./incorporation";
+export type { IncorporationAction, IncorporationInput, IncorporationStep, IncorporationStepId } from "./incorporation";
 export { applySuggestion, checkedSuggestions, exampleSuggestions, fixtureSuggester, suggestInput, suggestPrompt, suggestPromptVersion, suggestSchema } from "./field-suggestions";
 export type { FieldSuggester, FieldSuggestion, SuggestField, SuggestInput, SuggestOutput } from "./field-suggestions";

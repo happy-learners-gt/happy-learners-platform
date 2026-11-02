@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { AcademicProfile, Contract, ContractPhase, CourseFormat, EffectivePreferences, CourseSettings, EducationLevel, EducationType, Member, Modality, OnboardingPerson, Organization, Pacing, StudyProgram, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
 import { accountInput, areaLabel, contractPhaseLabels, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, pacings, settingChoices, settingDefinitions, settingText, settingValue, suggestedLocales, timezoneGroups, utcOffset } from "@happy-learners/domain";
+import { incorporationSteps } from "@happy-learners/domain";
 import type { FreedomPolicy, SettingKey } from "@happy-learners/domain";
 import { plural } from "../model";
 import { Avatar } from "../ui/progress";
@@ -26,7 +27,7 @@ import { ClosureRequests } from "./account";
 import { ExpiringDocuments, PersonDetail } from "./profile";
 import { CoordinationBadge, CoordinationDialog } from "./access";
 import { OnboardingBadge, OnboardingFilter, useOnboardingPeople } from "./onboarding";
-import type { OnboardingPersonStatus } from "@happy-learners/contracts";
+import type { OnboardingPersonStatus, ProfileReviewQueue } from "@happy-learners/contracts";
 import { currentRegional } from "../regional";
 import { localeLabel } from "./preferences";
 
@@ -130,19 +131,22 @@ function MemberList() {
   const [members, setMembers] = useState<MemberStats[] | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState("");
   const [adding, setAdding] = useState(false), [inviting, setInviting] = useState(false), [issued, setIssued] = useState<Issued | null>(null), [revision, setRevision] = useState(0);
   const [leaving, setLeaving] = useState<{ id: string; name: string } | null>(null), { member: me } = useSession();
-  const [detail, setDetail] = useState<{ id: string; name: string } | null>(null);
+  // PPL-01: the name and «Perfil y expediente» open the profile; the incorporation column and tab open the incorporation.
+  const [detail, setDetail] = useState<{ id: string; name: string; tab?: "incorporation" } | null>(null);
   const [coordinating, setCoordinating] = useState<MemberStats | null>(null);
-  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [contracts, setContracts] = useState<Contract[]>([]), [pendingProfiles, setPendingProfiles] = useState<ReadonlySet<string>>(new Set());
   const onboarding = useOnboardingPeople(revision), [onboardingFilter, setOnboardingFilter] = useState<OnboardingPersonStatus | "">("");
   const tab = educatorTabOf(url.hash);
   const load = async () => {
     setError("");
     try {
-      const [people, listed] = await Promise.all([
+      const [people, listed, reviews] = await Promise.all([
         api<{ members: MemberStats[] }>("/members"),
         api<{ contracts: Contract[] }>("/contracts").catch(() => ({ contracts: [] as Contract[] })),
+        // PPL-01: who has a profile waiting for approval, for each person's incorporation.
+        api<ProfileReviewQueue>("/profile-reviews").catch(() => null),
       ]);
-      setMembers(people.members); setContracts(listed.contracts); setRevision(value => value + 1);
+      setMembers(people.members); setContracts(listed.contracts); setPendingProfiles(new Set(reviews?.profiles.map(item => item.userId) || [])); setRevision(value => value + 1);
     } catch (cause) { setError(message(cause)); }
   };
   useEffect(() => { void load(); }, []);
@@ -167,6 +171,11 @@ function MemberList() {
   const tabs = <nav className="tabs scrollable-tabs" aria-label="Secciones de educadores">
     {educatorTabs.map(item => <Link key={item.id} href={item.href} className="tab" aria-current={item.id === "contratos" ? undefined : tab === item.id ? "page" : undefined}>{item.label}</Link>)}
   </nav>;
+  const incorporationOf = (id: string) => {
+    const person = members?.find(item => item.id === id);
+    return person ? incorporationSteps({ role: person.role, onboarding: onboarding?.get(id), profilePending: pendingProfiles.has(id),
+      contract: currentContractOf(contracts, id)?.phase || null, leads: person.leads || 0, coTeaches: person.coTeaches || 0, sections: person.sections || 0 }) : undefined;
+  };
   if (error) return <>{header}{tabs}<ErrorState error={error} retry={() => void load()}/></>;
   if (!members) return <>{header}{tabs}<Loading label="Cargando equipo…"/></>;
   const visible = members.filter(member => !onboardingFilter || onboarding?.get(member.id)?.status === onboardingFilter);
@@ -189,7 +198,7 @@ function MemberList() {
             <td>{member.role === "admin" ? "Administración" : "Educador"}{member.coordination && <><br/><CoordinationBadge scope={member.coordination}/></>}</td>
             <td className="cell-load">{load.summary ? <><span>{load.summary}</span>{load.detail && <span className="muted small">{load.detail}</span>}</> : <span className="muted">—</span>}</td>
             <td>{contract ? <StatusBadge tone={contractTone[contract.phase]}>{contractPhaseLabels[contract.phase]}</StatusBadge> : <span className="muted">—</span>}</td>
-            <td>{onboarding ? <OnboardingBadge person={onboarding.get(member.id)} compact/> : <span className="muted">…</span>}</td>
+            <td>{onboarding ? <button type="button" className="cell-button" aria-label={`Qué le falta a ${name}`} onClick={() => setDetail({ id: member.id, name, tab: "incorporation" })}><OnboardingBadge person={onboarding.get(member.id)} compact/></button> : <span className="muted">…</span>}</td>
             <td><StatusBadge tone={!member.active ? "neutral" : member.mustChangePassword ? "warning" : "success"}>{!member.active ? "Sin acceso" : member.mustChangePassword ? "Contraseña temporal" : "Activo"}</StatusBadge>{member.departedOn && <span className="muted small departed-on">Salió el {departureDay(member.departedOn)}</span>}</td>
             <td className="cell-actions">{owner ? <Menu label={`Acciones de ${name}`} items={[{ label: "Perfil y expediente", icon: "user", onSelect: () => setDetail({ id: member.id, name }) }]}/> : <Menu label={`Acciones de ${name}`} items={[
               { label: "Perfil y expediente", icon: "user", onSelect: () => setDetail({ id: member.id, name }) },
@@ -204,13 +213,13 @@ function MemberList() {
       </table></div>
     </>}
     {(tab === "invitaciones" || inviting) && <Invitations inviting={inviting} onInviting={setInviting} onChanged={() => void load()}/>}
-    {tab === "incorporacion" && <OnboardingPeople members={members} people={onboarding} filter={onboardingFilter} onFilter={setOnboardingFilter} onOpen={setDetail}/>}
+    {tab === "incorporacion" && <OnboardingPeople members={members} people={onboarding} filter={onboardingFilter} onFilter={setOnboardingFilter} onOpen={person => setDetail({ ...person, tab: "incorporation" })}/>}
     {tab === "cierres" && <ClosureRequests revision={revision} onDeparture={setLeaving}/>}
     {tab === "documentos" && <ExpiringDocuments onOpen={setDetail} revision={revision}/>}
     {adding && <AccountDialog onClose={() => setAdding(false)} onCreated={async result => { setAdding(false); setIssued(result); await load(); }}/>}
     {coordinating && <CoordinationDialog person={{ id: coordinating.id, name: coordinating.displayName || coordinating.username }} current={coordinating.coordination || null} onClose={() => setCoordinating(null)} onDone={async text => { setCoordinating(null); await load(); toast({ message: text }); }}/>}
     {issued && <TemporaryPassword issued={issued} onClose={() => setIssued(null)}/>}
-    {detail && <PersonDetail person={detail} onClose={() => { setDetail(null); void load(); }}/>}
+    {detail && <PersonDetail person={detail} incorporation={incorporationOf(detail.id)} initialTab={detail.tab} onClose={() => { setDetail(null); void load(); }}/>}
     {leaving && <DepartureDialog person={leaving} onClose={() => setLeaving(null)} onDone={async date => { const name = leaving.name; setLeaving(null); await load(); toast({ message: `Salida de ${name} registrada el ${departureDay(date)}. Ya no puede entrar.` }); }}/>}
   </>;
 }

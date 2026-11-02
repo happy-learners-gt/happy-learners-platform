@@ -112,3 +112,26 @@ test("DEC-046: administration publishes a template, invites with a contract, the
     await blockedContext.close();
   } finally { await admin.dispose(); }
 });
+
+test("PPL-01: a new educator's incorporation says what is missing and «Crear contrato» opens the contract with that person chosen", async ({ page, playwright, baseURL }, info) => {
+  const admin = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("admin-demo")}` } });
+  try {
+    const name = e2eName(info, "Incorporación"), username = `e2e-inc-${info.project.name}-${Date.now().toString(36)}`;
+    const account = await admin.post("/api/members", { data: { displayName: name, username, role: "educator" } });
+    expect(account.status(), await account.text()).toBe(201);
+    await signIn(page, "admin-demo", "/educadores");
+    // The incorporation column opens the incorporation: nothing done by administration yet, and the person's own welcome pending.
+    await page.getByRole("button", { name: `Qué le falta a ${name}` }).click();
+    const dialog = page.getByRole("dialog", { name });
+    await expect(dialog.getByRole("tab", { name: "Incorporación" })).toHaveAttribute("aria-selected", "true");
+    await expect(dialog).toContainText("le falta: bienvenida, contrato, equipo de un curso, secciones");
+    await expect(dialog).toContainText("Pendiente · Esperando a la persona");
+    await expect(dialog.getByRole("link", { name: `Ver cursos para ${name}` })).toHaveCount(2);
+    await dialog.getByRole("link", { name: `Crear contrato para ${name}` }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Contratos y políticas");
+    const created = page.getByRole("dialog", { name: "Nuevo contrato" });
+    await expect(created.getByLabel("Persona")).toHaveValue((await account.json()).member.id);
+    const violations = (await new AxeBuilder({ page }).withTags(wcag).analyze()).violations;
+    expect(violations.map(item => item.id)).toEqual([]);
+  } finally { await admin.dispose(); }
+});

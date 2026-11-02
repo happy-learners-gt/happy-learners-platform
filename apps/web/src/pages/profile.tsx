@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent, ReactNode } from "react";
 import type { ExpiringDocuments as Overview, StaffAvailabilitySlot, StaffDocument, StaffFile, StaffProfile } from "@happy-learners/contracts";
 import { availabilityDays, maxSpecialties, staffDocumentInput, staffDocumentLabel, staffDocumentTypes, staffProfileInput } from "@happy-learners/domain";
+import type { IncorporationAction, IncorporationStep } from "@happy-learners/domain";
 import { api, ApiError, message, sendFile } from "../api";
 import { Link, useUnsavedChanges } from "../navigation";
 import { Modal, useFeedback } from "../ui/feedback";
@@ -219,9 +220,10 @@ function DocumentDialog({ userId, today, onClose, onDone }: { userId: string; to
 }
 
 /** Administration's view of one person: profile and staff file, as tabs. */
-export function PersonDetail({ person, onClose }: { person: { id: string; name: string }; onClose: () => void }) {
-  const [tab, setTab] = useState<"profile" | "file">("profile");
-  const base = useId(), tabs: [typeof tab, string][] = [["profile", "Perfil"], ["file", "Expediente"]];
+/** `incorporation` (PPL-01): what administration still has to do for this person, in its own tab; `initialTab` opens it. */
+export function PersonDetail({ person, incorporation, initialTab, onClose }: { person: { id: string; name: string }; incorporation?: IncorporationStep[]; initialTab?: "incorporation"; onClose: () => void }) {
+  const [tab, setTab] = useState<"incorporation" | "profile" | "file">(initialTab && incorporation ? initialTab : "profile");
+  const base = useId(), tabs: [typeof tab, string][] = [["profile", "Perfil"], ["file", "Expediente"], ...incorporation ? [["incorporation", "Incorporación"] as [typeof tab, string]] : []];
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   function onKey(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return;
@@ -230,7 +232,8 @@ export function PersonDetail({ person, onClose }: { person: { id: string; name: 
     setTab(tabs[next][0]); refs.current[next]?.focus();
   }
   let panel: ReactNode = null;
-  if (tab === "profile") panel = <ProfileSummary userId={person.id}/>;
+  if (tab === "incorporation" && incorporation) panel = <IncorporationList person={person} steps={incorporation}/>;
+  else if (tab === "profile") panel = <ProfileSummary userId={person.id}/>;
   else panel = <StaffFileSection userId={person.id} title="Expediente" admin/>;
   return <Modal title={person.name} onClose={onClose} wide>
     <div role="tablist" aria-label={`Datos de ${person.name}`} className="tabs">
@@ -238,6 +241,24 @@ export function PersonDetail({ person, onClose }: { person: { id: string; name: 
     </div>
     <div role="tabpanel" id={`${base}-panel`} aria-labelledby={`${base}-${tab}`} className="tab-panel">{panel}</div>
   </Modal>;
+}
+
+const incorporationAction: Record<IncorporationAction, { label: string; href: (id: string) => string }> = {
+  "review-profile": { label: "Revisar perfil", href: () => "/perfiles" },
+  "create-contract": { label: "Crear contrato", href: id => `/contratos?persona=${encodeURIComponent(id)}#contratos` },
+  "open-courses": { label: "Ver cursos", href: () => "/cursos" },
+};
+/** PPL-01: the steps, in order, each with its state in words and the action that completes it, where administration has one. */
+function IncorporationList({ person, steps }: { person: { id: string; name: string }; steps: IncorporationStep[] }) {
+  const missing = steps.filter(step => !step.done);
+  return <div className="stack">
+    <p className="muted">{missing.length ? `${steps.length - missing.length} de ${steps.length} pasos · le falta: ${missing.map(step => step.label.toLowerCase()).join(", ")}` : "Lista para impartir: todos los pasos completos."}</p>
+    <ol className="incorporation-steps">{steps.map(step => <li key={step.id} className={step.done ? "is-done" : undefined}>
+      <Icon name={step.done ? "check" : "clock"} size={18}/>
+      <span><strong>{step.label}</strong><span className="muted small">{step.done ? "Hecho · " : "Pendiente · "}{step.detail}</span></span>
+      {step.action && <Link className="button secondary small" href={incorporationAction[step.action].href(person.id)} aria-label={`${incorporationAction[step.action].label} para ${person.name}`}>{incorporationAction[step.action].label}</Link>}
+    </li>)}</ol>
+  </div>;
 }
 
 /** Administration: active people with expired documents or documents that expire within 30 days. */
