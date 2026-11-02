@@ -28,6 +28,15 @@ alternativas, consecuencias.
   en el plan gratuito y otra migración; se reconsidera si se necesita la relevancia entre dispositivos).
 - **Consecuencia:** en otro navegador el orden empieza por equipo y fecha de modificación.
 
+## TD-005 · La Agenda elige el alcance por rol en el servidor (02-nov-2026)
+
+- **Contexto:** administración abría una semana vacía (T6). El cliente no sabe si la persona imparte secciones.
+- **Decisión:** si la petición no trae `scope`, la API elige: «Mis secciones» si imparte alguna; si no, «Toda la
+  organización» o el primer programa de su alcance. La respuesta dice el alcance elegido y el selector lo muestra.
+  Un `?ver=` explícito siempre manda.
+- **Costo:** la vista de la organización leía 6 483 filas (7 semanas, demo); se bajó a 1 829 en el mismo cambio para
+  que el nuevo valor por defecto no gaste cuota.
+
 ## TD-004 · Un PR por hito y nada se fusiona sin autorización (31-oct-2026)
 
 - Fusionar a `main` despliega producción. Cada hito llega como un PR coherente, con `main` integrado antes del último

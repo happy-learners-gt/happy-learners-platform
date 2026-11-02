@@ -91,7 +91,8 @@ export async function agenda(url: URL, current: Member, db: Database) {
   const from = url.searchParams.get("from") || "", until = url.searchParams.get("until") || "";
   if (!dayPattern.test(from) || !dayPattern.test(until) || from > until) return reply({ error: "Indica un rango de fechas válido." }, 400);
   if (span(from, until) > 399) return reply({ error: "El rango puede ser de hasta 400 días." }, 400);
-  const parsed = parseScope(url.searchParams.get("scope") || "mine");
+  const requested = url.searchParams.get("scope");
+  let parsed = parseScope(requested || "mine");
   if ("error" in parsed) return reply(parsed, 400);
   const widen = widenOf(current);
   const today = await todayFor(db, current.organizationId);
@@ -103,6 +104,12 @@ export async function agenda(url: URL, current: Member, db: Database) {
     db.prepare("SELECT group_id AS id FROM section_educators WHERE user_id=? AND organization_id=?").bind(current.id, current.organizationId).all<{ id: string }>(),
   ]);
   const taughtIds = new Set(taught.results.map(row => row.id));
+  // IA-03: without a chosen scope, someone who teaches no section but sees more (administration, coordination) opens
+  // on everything they can see, not on an empty «Mis secciones».
+  if (!requested && !taughtIds.size && widen) {
+    const program = "all" in widen ? undefined : programs.results.find(row => programAllowed(widen, row.id));
+    if ("all" in widen || program) parsed = parseScope("all" in widen ? "organization" : `program:${program!.id}`) as ResolvedScope;
+  }
   const sections: SectionRow[] = sectionRows.results.map(row => ({ id: row.id, name: row.name, courseId: row.courseId, courseTitle: row.courseTitle, programId: row.programId, schedule: scheduleOf(row) }));
   const knownProgram = programs.results.find(row => row.id === parsed.id);
   const knownSection = sections.find(row => row.id === parsed.id);
@@ -187,13 +194,16 @@ async function railOf(db: Database, current: Member, sections: SectionRow[], pro
 
 async function classesBetween(db: Database, organizationId: string, sectionIds: string[], from: string, until: string) {
   if (!sectionIds.length) return [] as ClassRow[];
-  return (await db.prepare(`SELECT s.id,s.group_id AS sectionId,s.session_date AS date,s.starts_at AS startsAt,s.duration_minutes AS durationMinutes,s.status,s.origin,
-    g.name AS sectionName,c.id AS courseId,c.title AS courseTitle,c.program_id AS programId,
-    (SELECT count(*) FROM group_learners gl WHERE gl.group_id=s.group_id AND gl.status='active') AS total,
-    (SELECT count(*) FROM attendance_marks m WHERE m.session_id=s.id) AS marked
+  const rows = (await db.prepare(`SELECT s.id,s.group_id AS sectionId,s.session_date AS date,s.starts_at AS startsAt,s.duration_minutes AS durationMinutes,s.status,s.origin,
+    g.name AS sectionName,c.id AS courseId,c.title AS courseTitle,c.program_id AS programId,s.marked_count AS marked
     FROM class_sessions s JOIN course_groups g ON g.id=s.group_id JOIN courses c ON c.id=g.course_id
     WHERE s.organization_id=? AND s.session_date>=? AND s.session_date<=? AND s.group_id IN (${sectionIds.map(() => "?").join(",")})
-    ORDER BY s.session_date,s.starts_at`).bind(organizationId, from, until, ...sectionIds).all<ClassRow>()).results;
+    ORDER BY s.session_date,s.starts_at`).bind(organizationId, from, until, ...sectionIds).all<Omit<ClassRow, "total">>()).results;
+  // Each section's roster is counted once, not once per class; the marks come from the class's own counter (0075).
+  const sections = [...new Set(rows.map(row => row.sectionId))];
+  const totals = new Map(sections.length ? (await db.prepare(`SELECT group_id AS id,count(*) AS total FROM group_learners WHERE status='active' AND group_id IN (${sections.map(() => "?").join(",")}) GROUP BY group_id`)
+    .bind(...sections).all<{ id: string; total: number }>()).results.map(row => [row.id, row.total]) : []);
+  return rows.map(row => ({ ...row, total: totals.get(row.sectionId) || 0 }));
 }
 async function lessonsOf(db: Database, sessionIds: string[]) {
   const grouped = new Map<string, { id: string; title: string }[]>();

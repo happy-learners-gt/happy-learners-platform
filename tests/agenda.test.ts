@@ -90,6 +90,10 @@ describe("agenda on the built Worker", () => {
       expect(items.find(item => item.type === "due" && item.title === "Ensayo")).toMatchObject({ date: "2027-03-15", sectionId: group });
     }
     expect(seen.canWiden).toBe(true);
+    // IA-03: without a scope, administration (teaches nothing, sees everything) opens on the whole organization;
+    // an educator on their own sections.
+    expect(await read<{ scope: string }>(await as(admin, query))).toMatchObject({ scope: "organization" });
+    expect(await read<{ scope: string }>(await as(educator, query))).toMatchObject({ scope: "mine" });
     expect((await read<{ preferences: { agendaView: string; agendaShow: string[] } }>(await as(educator, "/me/preferences", "PUT", { agendaView: "month", agendaShow: ["class", "due"] }))).preferences).toMatchObject({ agendaView: "month", agendaShow: ["class", "due"] });
   });
 });
