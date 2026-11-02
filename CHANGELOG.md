@@ -2,6 +2,7 @@
 
 ## 1.6.1 — sin publicar
 
+- Horas efectivas (HRS-01): abre en los últimos 30 días con periodos de un clic (este mes, mes anterior, todo, personalizado); los totales por educador, curso y sección van en pestañas; «Por revisar» filtra las clases que necesitan corrección; la lista muestra 25 clases a la vez; si el periodo está vacío pero hay historial, un botón lo abre.
 - Seguridad (H4): las tareas de IA que la persona espera (redactar, mejorar, sugerir campos, interpretar reglas) tienen un límite de 60 por persona y hora; al pasarlo responden 429 con un mensaje claro y «Sugerir campos» sigue ofreciendo los campos de los ejemplos.
 - Arquitectura de IA del programa (`docs/transformacion/ia.md`): inventario de las 7 capacidades, brechas priorizadas y decisión de no introducir agentes por ahora.
 

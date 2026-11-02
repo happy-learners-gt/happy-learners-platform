@@ -105,3 +105,15 @@ export function hoursCsv(rows: HoursRow[], timezone: string) {
   lines.push(["Total", "", "", "", "", "", "", total, decimalHours(total), "", ""]);
   return "﻿" + lines.map(line => line.map(csvCell).join(",")).join("\r\n") + "\r\n";
 }
+
+/** The preset periods of «Horas efectivas» (HRS-01); «todo» has no range. */
+export type HoursPeriod = "30-dias" | "mes" | "mes-anterior" | "todo";
+const shiftDay = (day: string, days: number) => { const date = new Date(`${day}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
+/** The days a preset covers, both included, counted from the person's own today (YYYY-MM-DD). */
+export function hoursPeriodRange(period: HoursPeriod | "personalizado", today: string): { from: string; to: string } | null {
+  const month = today.slice(0, 8);
+  if (period === "30-dias") return { from: shiftDay(today, -29), to: today };
+  if (period === "mes") return { from: `${month}01`, to: today };
+  if (period === "mes-anterior") { const last = shiftDay(`${month}01`, -1); return { from: `${last.slice(0, 8)}01`, to: last }; }
+  return null;
+}

@@ -307,6 +307,9 @@ fieldset:disabled input, fieldset:disabled select, fieldset:disabled textarea { 
 .chip-button { color: var(--color-ink); }
 .chip-button:hover { background: var(--violet-soft); border-color: var(--color-primary-line); }
 .chip-button.is-archived { color: var(--color-muted); border-style: dashed; }
+/* A chip that toggles a filter shows it is on the same way everywhere. */
+.chip-button[aria-pressed="true"] { border-color: var(--color-primary); background: var(--violet-soft); color: var(--violet-ink); font-weight: var(--weight-bold); }
+.chip-button[aria-pressed] { cursor: pointer; }
 .chip input:checked + span { border-color: var(--color-primary); background: var(--violet-soft); color: var(--violet-ink); font-weight: var(--weight-bold); }
 .chip input:focus-visible + span { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .segmented { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-muted); }
