@@ -6,7 +6,7 @@ y qué sigue avanzando mientras tanto.
 | Id | Decisión | Estado |
 | --- | --- | --- |
 | AP-01 | R1: nombres de estudiantes visibles con el código de sección | Pendiente |
-| AP-02 | Fusionar y desplegar el PR de cada hito | Pendiente: PR 1.6.0 (M1) |
+| AP-02 | Fusionar y desplegar el PR de cada hito | Pendiente: PR #103 (1.6.0, M1), CI verde el 02-nov |
 | AP-03 | Monitor externo de `/api/health` | Pendiente |
 | AP-04 | Escáneres obligatorios en `main` desde el 13-nov | Pendiente (fecha) |
 | AP-05 | Prueba de penetración externa | Pendiente (antes de instituciones de pago) |
