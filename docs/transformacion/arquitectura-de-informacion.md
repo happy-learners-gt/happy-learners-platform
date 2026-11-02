@@ -58,8 +58,9 @@ contextual (IA-05), no antes.
    todos (ocultar uno o dos no ahorra nada).
 3. Cada grupo de administración tiene un encabezado visible; los nombres de página no cambian en el mismo incremento
    que su posición (un cambio a la vez para quien ya usa la plataforma).
-4. URL, migas y menú cuentan la misma jerarquía. `/organizacion/*` se conserva por compatibilidad; las migas dicen el
-   grupo real («Institución › Horarios»).
+4. URL, migas y menú cuentan la misma jerarquía. `/organizacion/*` se conserva por compatibilidad. Las migas solo
+   muestran profundidad real (una página dentro de otra: «Documentos › Boleta»); los grupos del menú son encabezados,
+   no páginas, y no aparecen como migas (TD-006).
 5. Un concepto, un lugar: los contratos se gestionan en Contratos y políticas; Educadores muestra el estado del contrato
    de cada persona y enlaza allí.
 
@@ -68,7 +69,7 @@ contextual (IA-05), no antes.
 | Id | Incremento | Estado |
 | --- | --- | --- |
 | IA-01 | Cursos con los 8 más relevantes y «Todos los cursos (n)»; Administración agrupada en Institución, Personas, Académico y Gobierno; Horas efectivas de administración pasa a Personas | Hecho (1.6.0, sin publicar) |
-| IA-02 | Migas por grupo en las páginas de administración | Pendiente |
+| IA-02 | Migas solo con profundidad real: Horarios, Documentos y Uso de IA dejan de colgar de «Organización» | Hecho (1.6.0, sin publicar) |
 | IA-03 | Agenda por rol: administración abre en la vista de toda la institución | Hecho (1.6.0, sin publicar) |
 | IA-04 | Revisión de perfiles como bandeja dentro de Educadores (la ruta `/perfiles` redirige) | Pendiente |
 | IA-05 | Ayuda contextual desde `?`; Ayuda sale del menú lateral | Pendiente (depende de la base de conocimientos) |

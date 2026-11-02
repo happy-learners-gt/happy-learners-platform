@@ -37,6 +37,13 @@ alternativas, consecuencias.
 - **Costo:** la vista de la organización leía 6 483 filas (7 semanas, demo); se bajó a 1 829 en el mismo cambio para
   que el nuevo valor por defecto no gaste cuota.
 
+## TD-006 · Las migas muestran profundidad, no grupos (02-nov-2026)
+
+- **Contexto:** Horarios, Documentos y Uso de IA mostraban «Organización ›», un padre que el menú no tiene.
+- **Decisión:** las migas solo aparecen cuando una página vive dentro de otra (Documentos › plantilla; Cursos ›
+  curso › …). Los grupos del menú (Institución, Personas, Académico, Gobierno) son encabezados sin página propia.
+- **Alternativas:** migas con el grupo como elemento sin enlace (descartado: parece navegable y no lleva a nada).
+
 ## TD-004 · Un PR por hito y nada se fusiona sin autorización (31-oct-2026)
 
 - Fusionar a `main` despliega producción. Cada hito llega como un PR coherente, con `main` integrado antes del último
