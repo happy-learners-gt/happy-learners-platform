@@ -150,3 +150,28 @@ vacíos); capturas solo donde las métricas lo pidieron.
 
 Lo que más pesa ahora en la meta (≥ 4.0): Ayuda (2.60), Uso de IA (3.00), Documentos (2.90), Contratos y Revisión de
 perfiles (3.10), y lo visual de Agenda, Horas y Calendario (tarjetas y listas largas sin jerarquía).
+
+## 8. Tercera pasada: módulos sin tocar (AUD-03, 03-nov-2026)
+
+Sobre 1.6.19 con los datos de demostración, en escritorio (1365 px) y móvil (390 px), con la misma matriz y pesos.
+Capturas y medidas tomadas con Playwright; alto en px de la página completa.
+
+| Módulo | Antes | Ahora | Puntajes (UX Vis AI Func Coh A11y Conf Seg) | Evidencia |
+| --- | --- | --- | --- | --- |
+| Cursos | 4.20 (preliminar) | **3.75** | 3 4 4 4 4 4 4 4 | 25 tarjetas sin agrupar: 3 903 px en escritorio y **9 945 px en móvil**; seis filtros pero sin orden ni «necesita atención» |
+| Roles y accesos | 3.35 | **3.40** | 3 3 3 4 4 4 4 4 | Matriz de 16 filas (2 036 / 2 573 px); grupos y coordinación quedan al final |
+| Documentos | 2.90 | **3.40** | 4 3 3 3 3 4 4 4 | Sin plantillas en la demostración: solo se ve el estado vacío (DOC-01 lo hizo útil); el diseñador no se puede mostrar |
+| Notificaciones | 3.20 | **3.60** | 3 4 4 3 4 4 4 4 | «Guardar avisos obligatorios» deshabilitado sin explicar; «correo sin configurar» como texto suelto; registro vacío sin siguiente paso |
+| Biblioteca | 3.15 | **3.70** | 4 4 3 3 4 4 4 4 | Lista clara con filtros; «Recurso general» frente a «Disponible» sin explicar; no se ve en qué lecciones se usa cada recurso |
+| Equipo | 3.15 | **3.85** | 4 4 4 3 4 4 4 4 | Directorio claro; tarjetas de alto desigual; no muestra los cursos que imparte cada persona |
+
+Incrementos de M8, en orden (brecha a la meta × uso):
+
+| Id | Incremento | Meta |
+| --- | --- | --- |
+| CUR-01 | Cursos agrupados por programa y ordenados por atención, con vista de lista compacta; en móvil, tarjetas compactas | ≤ 3 500 px en móvil con 25 cursos; 4.3 |
+| ACC-01 | Roles y accesos: pestañas (Matriz, Grupos de seguridad, Coordinación, Historial); la matriz agrupada y plegable por área | 4.2 |
+| DOC-02 | Documentos: plantillas de demostración (boleta, constancia) para que el módulo se pueda ver y revisar; luego auditar el diseñador | 4.0 |
+| NOT-01 | Notificaciones: explicar qué es obligatorio y por qué el botón espera un cambio; aviso de correo sin configurar como `message-bar` con el siguiente paso | 4.0 |
+| LIB-01 | Biblioteca: leyenda de «general» y «del curso», y «Usado en N lecciones» enlazado | 4.0 |
+| TEAM-01 | Equipo: tarjetas de alto uniforme y los cursos que imparte cada persona | 4.0 |
