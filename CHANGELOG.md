@@ -5,6 +5,9 @@
 - Revisión de perfiles pasa a ser una pestaña de Educadores (IA-04), con lo que espera revisión contado en la
   pestaña; `/perfiles` lleva ahí y el menú de administración pierde una entrada. El paso «Revisar perfil» de la
   incorporación abre la pestaña.
+- Contratos y políticas abre en los contratos del equipo (CON-01): lo que espera acción (firma, por terminar, por
+  enviar) aparece contado y primero, y cada conteo filtra la lista; las fechas se leen como fechas. Plantillas pasa a
+  la segunda pestaña.
 - Horas efectivas ya no suma en silencio solo parte del historial (PERF-03): si «Todo el historial» pasa de 5 000
   clases, la página avisa que los totales son parciales y la exportación pide elegir un periodo.
 - Horas efectivas corrige en lote (HRS-02): en «Por revisar», administración da a las clases sin registro de inicio

@@ -194,3 +194,17 @@ export function contractPhase(contract: Pick<Contract, "status" | "startDate" | 
 /** In force on a day: signed by both, started, and not yet ended, expired nor superseded. */
 export const contractInForce = (contract: Pick<Contract, "status" | "startDate" | "endDate" | "terminationDate">, today: string) =>
   ["in-force", "ending"].includes(contractPhase(contract, today));
+
+/**
+ * CON-01 (docs/transformacion/auditoria.md): Contratos opens on what waits for administration. These phases are
+ * counted above the list and come first in it, in this order; the rest follow by how current they are.
+ */
+export const contractAttentionPhases = ["awaiting-signature", "ending", "draft"] as const satisfies readonly ContractPhase[];
+export const contractAttentionLabels: Record<(typeof contractAttentionPhases)[number], string> = { "awaiting-signature": "Esperan firma", ending: "Por terminar", draft: "Por enviar" };
+const attentionRank: Record<ContractPhase, number> = {
+  "awaiting-signature": 0, ending: 1, draft: 2, scheduled: 3, "in-force": 4, expired: 5, terminated: 6, declined: 7, voided: 8, superseded: 9,
+};
+/** The contracts in the order administration works on them: waiting first, then the newest, then by name. */
+export function contractsByAttention<T extends Pick<Contract, "phase" | "startDate" | "partyName">>(contracts: T[]): T[] {
+  return [...contracts].sort((a, b) => attentionRank[a.phase] - attentionRank[b.phase] || b.startDate.localeCompare(a.startDate) || a.partyName.localeCompare(b.partyName, "es"));
+}

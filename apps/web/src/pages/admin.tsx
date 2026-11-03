@@ -96,7 +96,7 @@ type MemberStats = Member & { leads: number; coTeaches: number; sections: number
 const educatorTabs = [
   { id: "personas", label: "Personas", href: "/educadores" },
   { id: "invitaciones", label: "Invitaciones", href: "/educadores#invitaciones" },
-  { id: "contratos", label: "Contratos", href: "/contratos#contratos" },
+  { id: "contratos", label: "Contratos", href: "/contratos" },
   { id: "incorporacion", label: "Incorporación", href: "/educadores#incorporacion" },
   { id: "perfiles", label: "Revisión de perfiles", href: "/educadores#perfiles" },
   { id: "cierres", label: "Cierres de cuenta", href: "/educadores#cierres" },
