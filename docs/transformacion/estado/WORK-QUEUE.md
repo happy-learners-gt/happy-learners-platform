@@ -44,4 +44,5 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | SEC-06 | Seguridad | DAST gratuito: OWASP ZAP baseline contra un Worker local en el runner (nunca producción ni vista previa) | P1 | AP-05 | DONE | 1.6.13: `dast.yml` semanal; triaje en `docs/security/dast.md`; CSP sin comodín en `connect-src`, COOP y CORP |
 | SEC-07 | Seguridad | ZAP autenticado (cuentas de prueba) y reglas activas contra el Worker local | P2 | SEC-06 | READY | Informe triado en `dast.md` |
 | QA-03 | Calidad | `studio.spec.ts` «archiving…» (móvil) falla al repetirse contra el mismo servidor (también en `main`); en CI pasa por servidor nuevo | P3 | — | BACKLOG | Pasa con `--repeat-each=3` |
+| QA-04 | Calidad | `profiles.test.ts` CA3 falló bajo carga: un evento anterior quedó con `occurred_at` posterior (el reloj del Worker puede leer unos ms atrás entre peticiones). Arreglo propuesto: `event()` con `max(ahora, último occurred_at de la organización)`, como las correcciones de horas | P2 | — | READY | Pasa solo; diagnóstico del 03-nov |
 | HLP-01 | Ayuda | Ayuda contextual por página (IA-05) | P3 | AP-06 | BACKLOG | — |
