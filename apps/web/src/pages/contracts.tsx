@@ -66,6 +66,9 @@ export function ContractsPage() {
   const { url } = useNavigation();
   const tab = tabOf(url.hash);
   const [creatingTemplate, setCreatingTemplate] = useState(false), [creatingContract, setCreatingContract] = useState(false), [editingTemplate, setEditingTemplate] = useState(false);
+  // PPL-01: «Crear contrato» from a person's incorporation opens the dialog with that person chosen.
+  const persona = url.searchParams.get("persona") || undefined;
+  useEffect(() => { if (persona && tab === "contratos") setCreatingContract(true); }, [persona, tab]);
   if (member.role !== "admin") return <><PageHeader title="Contratos y políticas"/><EmptyState icon="shield" title="Esta sección es para administración">Pide a administración cualquier cambio de plantillas, contratos o políticas.</EmptyState></>;
   const primary = tab === "plantillas" && !editingTemplate
     ? <PrimaryAction icon="plus" onClick={() => setCreatingTemplate(true)}>Nueva plantilla</PrimaryAction>
@@ -76,7 +79,7 @@ export function ContractsPage() {
       {tabs.map(item => <Link key={item.id} href={item.href} className="tab" aria-current={tab === item.id ? "page" : undefined}>{item.label}</Link>)}
     </nav>
     {tab === "plantillas" && <TemplatesTab creating={creatingTemplate} onCreating={setCreatingTemplate} onEditing={setEditingTemplate}/>}
-    {tab === "contratos" && <ContractsTab creating={creatingContract} onCreating={setCreatingContract}/>}
+    {tab === "contratos" && <ContractsTab creating={creatingContract} onCreating={setCreatingContract} preferred={persona}/>}
     {tab === "politicas" && <LegalSettings/>}
     {tab === "ajustes" && <SettingsTab/>}
   </>;
@@ -246,7 +249,7 @@ export function TermsFields({ engagement, value, onChange, allowed }: { engageme
   </div>;
 }
 
-function ContractsTab({ creating, onCreating }: { creating: boolean; onCreating: (value: boolean) => void }) {
+function ContractsTab({ creating, onCreating, preferred }: { creating: boolean; onCreating: (value: boolean) => void; preferred?: string }) {
   const { toast, confirm } = useFeedback();
   const [contracts, setContracts] = useState<Contract[] | null>(null), [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [people, setPeople] = useState<Member[]>([]);
@@ -282,7 +285,7 @@ function ContractsTab({ creating, onCreating }: { creating: boolean; onCreating:
         </tr>)}</tbody>
       </table></div>}
     {selected && <ContractDetail contract={selected} onClose={() => setSelected(null)} onChanged={next => { setSelected(next); load(); }} onGone={() => { setSelected(null); load(); }} toast={toast} confirm={confirm}/>}
-    {creating && <NewContractDialog people={people} templates={templates} onClose={() => onCreating(false)} onCreated={item => { onCreating(false); setSelected(item); load(); }}/>}
+    {creating && <NewContractDialog people={people} templates={templates} preferred={preferred} onClose={() => onCreating(false)} onCreated={item => { onCreating(false); setSelected(item); load(); }}/>}
     <ContractVerify/>
   </>;
 }
@@ -364,9 +367,11 @@ function SignAndSend({ onClose, onSubmit, busy }: { onClose: () => void; onSubmi
   </Modal>;
 }
 
-function NewContractDialog({ people, templates, onClose, onCreated }: { people: Member[]; templates: ContractTemplate[]; onClose: () => void; onCreated: (contract: Contract) => void }) {
+function NewContractDialog({ people, templates, preferred, onClose, onCreated }: { people: Member[]; templates: ContractTemplate[]; preferred?: string; onClose: () => void; onCreated: (contract: Contract) => void }) {
   const published = templates.filter(item => item.status === "active" && item.current);
-  const [templateId, setTemplateId] = useState(published[0]?.id || ""), [userId, setUserId] = useState(people[0]?.id || "");
+  const [templateId, setTemplateId] = useState(published[0]?.id || ""), [userId, setUserId] = useState((people.some(item => item.id === preferred) ? preferred : people[0]?.id) || "");
+  // The people may arrive after the dialog opens: choose the preferred one, or the first, once they do.
+  useEffect(() => { if (!userId && people.length) setUserId(people.some(item => item.id === preferred) ? preferred! : people[0].id); }, [people.length]);
   const chosen = published.find(item => item.id === templateId);
   const [terms, setTerms] = useState<ContractTerms>(chosen?.current?.defaults || defaultTerms("volunteer"));
   const [startDate, setStartDate] = useState(""), [endDate, setEndDate] = useState("");

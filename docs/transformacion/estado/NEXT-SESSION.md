@@ -15,12 +15,23 @@
 
 ## Siguiente acción
 
-1. `gh pr checks 103`: si `verify` falla, leer `gh run view <id> --log-failed | grep -E "✘|Error: "`, reproducir la
-   prueba en local y corregir en `feat/HL-15-transformacion` (luego `git merge` en la rama apilada).
-2. Con #103 verde: avisar al usuario (AP-02). No fusionar sin su autorización.
-3. Siguiente tarea de la cola: **PPL-01** (F1 en `flujos.md`): lista de incorporación con acciones en el detalle de la
-   persona en Educadores; empezar por `apps/web/src/pages/admin.tsx` (`Members`, `setDetail`) y `contracts.tsx` (`Nuevo contrato`).
-4. El PR de 1.6.1 se abre cuando #103 esté fusionado (base `main`), para no gastar minutos en una base que cambia.
+1. `gh pr checks <PR 1.6.2>` (ver `gh pr list`). Verde → `gh pr merge <n> --merge` (autorizado por el usuario el 02-nov) y vigilar `verify`,
+   `deploy` y `critical-flows` en `main` (`gh run list --branch main -L 2`). Rojo → leer el log y corregir en
+   `feat/HL-15-incorporacion`.
+2. Antes de cada push: `rm -rf build && npm run build` y las E2E afectadas (una build vieja ocultó un fallo en #104).
+3. Siguiente de la cola: **CAL-01** (calendario institucional unificado, F2 en `flujos.md`; diseño primero en
+   `docs/design/`) o **PPL-02**. Al cerrar un hito: versión, verify, push, PR, CI verde, fusionar.
+4. **13-nov:** SEC-04, escáneres obligatorios en `main` (`gh api repos/happy-learners-gt/happy-learners-platform/branches/main/protection`,
+   checks `secrets`, `dependencies`, `code`), revisando antes que no hubo falsos positivos.
+
+## Lecciones de esta sesión
+
+- Un `aria-label` que contiene la etiqueta de otro campo rompe `getByLabel` (substring sin distinguir mayúsculas):
+  pasó con «Personas» y con «Incorporación». Regla en `docs/design/fluent.md`.
+- Comprobar que un archivo no existe antes de crearlo (se sobrescribió `tests/roster.test.ts`) y que el conteo de
+  pruebas sube lo esperado.
+- `./scripts/verify` tiene fallos intermitentes por carga en pruebas sobre el Worker; se confirman corriendo esos
+  archivos solos.
 
 ## Cómo verificar en local
 
