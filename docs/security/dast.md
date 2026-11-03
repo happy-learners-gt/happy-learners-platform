@@ -40,7 +40,8 @@ informativos). Sin hallazgos altos.
 - **Trampa encontrada:** ZAP no expande variables de entorno en el `replacer`; la primera corrida mandó la cookie
   literal `${COOKIE}` y todo respondió 401 (resultado inválido, descartado). El flujo escribe la cookie sobre
   `__SESSION_COOKIE__` en una copia del plan y la borra antes de subir el informe. **Comprobar siempre** en el registro
-  del Worker que hubo respuestas 200 y no solo 401.
+  del Worker que hubo respuestas 200 y no solo 401: el paso «Check the scan was signed in» lo hace en CI y falla si
+  no hay sesión. Primera corrida en CI (run 41701799418, rama de 1.6.14): ambos trabajos verdes, mismos hallazgos.
 - **Resultado válido:** 198 respuestas 200 con sesión, 199 respuestas 400 (los intentos de inyección los rechaza la
   validación), 114 404, 20 405, 2 403 y **ningún 500**. Hallazgos: solo los ya aceptados (`style-src 'unsafe-inline'`) y
   falsos positivos (IP privada y marcas de tiempo en el JS). Sin inyección, XSS ni fuga de datos detectadas.

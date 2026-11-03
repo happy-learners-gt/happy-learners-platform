@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.15 — 2026-11-03
+
+- IA (AIG-3): redactar un campo y sugerir campos de documentos pueden usar un modelo menor y más barato,
+  `OPENAI_MODEL_SHORT`; sin esa variable todo sigue usando `OPENAI_MODEL`. Cada ejecución registra el modelo que
+  realmente usó, para que el costo y el presupuesto salgan con su precio.
+
 ## 1.6.14 — 2026-11-03
 
 - Seguridad (SEC-07): el escaneo semanal con OWASP ZAP suma una pasada con sesión de administración y reglas activas

@@ -283,7 +283,9 @@ páginas, así que corregir el mapa permite una propuesta nueva.
 `OPENAI_API_KEY`, `OPENAI_MODEL` y `LESSON_MAX_OUTPUT_TOKENS` (sin ejecutarlo ni mostrar valores) y los pasa al Worker
 por un archivo temporal privado. `LESSON_MAX_OUTPUT_TOKENS` vale 16000 por defecto y `LESSON_REQUEST_TIMEOUT_MS`,
 120000. En producción serían secretos del Worker (`OPENAI_API_KEY`) y variables (`OPENAI_MODEL`), configurados por
-quien administra el despliegue.
+quien administra el despliegue. Opcionales: `OPENAI_MODEL_SHORT` (AIG-3), un modelo menor para redactar un campo y
+sugerir campos de documentos (sin ella usan `OPENAI_MODEL`; registrar también su precio en «Inteligencia
+artificial»), y `AI_BUDGET_PER_PERSON_USD` / `AI_BUDGET_MIN_USD` (AIG-6, por defecto 2 y 20).
 
 ### Paquetes curriculares (0051)
 
