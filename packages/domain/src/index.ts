@@ -206,3 +206,5 @@ export { timetableConflicts } from "./timetable-conflicts";
 export type { ScheduledSection, TimetableConflict } from "./timetable-conflicts";
 export { applySuggestion, checkedSuggestions, exampleSuggestions, fixtureSuggester, suggestInput, suggestPrompt, suggestPromptVersion, suggestSchema } from "./field-suggestions";
 export type { FieldSuggester, FieldSuggestion, SuggestField, SuggestInput, SuggestOutput } from "./field-suggestions";
+export { amountCents, formatCents, hoursPay, hoursPayable, personContract } from "./hours-pay";
+export type { HoursPay } from "./hours-pay";

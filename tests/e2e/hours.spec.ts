@@ -46,6 +46,8 @@ test("ST-152: an educator starts and completes a class and sees its hours; admin
     await expect(rows.first()).toContainText("Corregida");
     await expect(rows.first()).toContainText("Motivo: Comenzó la clase tarde en la plataforma");
     await expect(page.locator(".stat-tile").filter({ hasText: "Horas efectivas" })).toContainText("50 min");
+    // HRS-03 (AP-08): administration reads each person's hours with their contract in force.
+    await expect(page.getByRole("table", { name: "Horas por educador" }).getByRole("columnheader", { name: "Según contrato" })).toBeVisible();
     await page.waitForTimeout(400);
     const { violations } = await new AxeBuilder({ page }).withTags(wcag).analyze();
     expect(violations.map(item => `horas: ${item.id} · ${item.nodes.map(node => node.target.join(" ")).slice(0, 3).join(" | ")}`)).toEqual([]);
