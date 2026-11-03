@@ -78,6 +78,11 @@ test("administration generates a timetable with rules, applies it to the section
     // The page: a rule written in words is interpreted, confirmed and listed before generating.
     await signIn(page, "admin-demo", "/organizacion/horarios");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Horarios");
+    // SCH-01: the page opens on the timetable in force (the seed has sections with schedules), with the generator below it.
+    const current = page.locator("section").filter({ has: page.getByRole("heading", { name: "Horario vigente" }) });
+    await expect(current.getByRole("region", { name: "lunes" })).toBeVisible();
+    await expect(current.getByLabel("Ver")).toHaveValue("");
+    await expect(page.getByRole("heading", { name: "Generar un horario nuevo" })).toBeVisible();
     await page.getByLabel("Escribe una regla").fill(`${teacherName} no da clases el viernes.`);
     await page.getByRole("button", { name: "Interpretar" }).click();
     const proposed = page.getByRole("region", { name: "Reglas interpretadas" });
