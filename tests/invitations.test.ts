@@ -11,6 +11,7 @@ import type { MailMessage, MailResult, MailSender } from "../packages/domain/src
 import { attempt, BrevoMailSender, brevoEndpoint, deliver, DisabledMailSender, mailSender, sanitize } from "../apps/api/src/mail";
 import type { OutboxStore } from "../apps/api/src/mail";
 import { acceptPending } from "./accept-pending";
+import { listenOnTestPort } from "./test-port";
 
 // ST-121 (HL-167): invitations by e-mail (DEC-042). Domain and adapters first, then the built Worker on a fresh store.
 const details = { organization: "Colegio Ficticio", displayName: "Paula <Gómez>", role: "educator" as const, inviter: "Marta Ruiz", link: "https://example.test/invitacion/d_" + "a".repeat(64), expiresAt: "2026-10-22T18:00:00.000Z", timezone: "America/Guatemala" };
@@ -116,8 +117,7 @@ let logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-invitations-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

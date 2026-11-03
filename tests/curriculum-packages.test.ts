@@ -8,6 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { CoursePackageView, CurriculumPackageSummary, Curriculum } from "../packages/contracts/src/index";
 import { competencyDescription, competencyName, curriculumPackages, indicatorEvidence, linkPlan, packageOf, packageProblems } from "../packages/domain/src/index";
+import { listenOnTestPort } from "./test-port";
 
 // Curriculum packages: official references versioned in the repository. The first one is CNB Guatemala's
 // «Dosificación de los aprendizajes · Matemáticas · Sexto Grado»: 7 competencies and 26 achievement indicators.
@@ -55,8 +56,7 @@ let logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-packages-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

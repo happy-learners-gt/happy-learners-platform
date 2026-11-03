@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { BookMapView, CourseProposals, Lesson } from "../packages/contracts/src/index";
 import { draftFromOutput, fixtureGenerator, pagesLabel, pdfFile, pdfString, proposalProblem, proposalPrompt, relevantPages, sequenceOf, validActivities, wrap } from "../packages/domain/src/index";
 import type { ProposalInput } from "../packages/domain/src/index";
+import { listenOnTestPort } from "./test-port";
 
 // Rebanada 5a: lesson proposals from the main book and the plan's indicators, processed by the organization's
 // Durable Object alarm with a deterministic fixture generator, and the delivery PDF with published content only.
@@ -99,8 +100,7 @@ let logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-proposals-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

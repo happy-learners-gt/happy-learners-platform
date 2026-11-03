@@ -7,6 +7,7 @@ import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { legalDraftInput, pendingDocuments } from "@happy-learners/domain";
+import { listenOnTestPort } from "./test-port";
 
 // ST-126 (HL-172) and ST-127 (HL-173) against the built Worker, in a store of their own: publishing a version gates
 // every account of the organization, so these checks never share data with the other acceptance tests.
@@ -16,8 +17,7 @@ let logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-legal-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
