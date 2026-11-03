@@ -2203,3 +2203,6 @@ section.panel[id^="profile-"] { scroll-margin-top: calc(var(--topbar-h) + var(--
 /* A table cell that opens its detail: the content stays as it is, the whole cell is the button. */
 .cell-button { display: inline-flex; padding: 2px; border: 0; border-radius: var(--radius-sm); background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .cell-button:hover { background: var(--color-surface-hover); }
+/* CAL-01: the year chosen at the top applies to every block of the calendar. */
+.calendar-year { max-width: 12rem; }
+.agenda-rule-list li .agenda-rule-actions { display: flex; align-items: center; gap: var(--space-1); flex: none; }

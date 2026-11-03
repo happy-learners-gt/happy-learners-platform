@@ -27,12 +27,14 @@ test("the institutional calendar applies a template, generates a year, skips one
   const preview = page.getByRole("dialog", { name: `Generar el año ${year}` });
   await expect(preview.getByRole("heading", { name: /Se crean/ })).toBeVisible();
   await preview.getByRole("button", { name: `Confirmar y generar ${year}` }).click();
-  await expect(page.locator(".agenda-event").filter({ hasText: "Año Nuevo" })).toBeVisible();
-
-  const newYear = page.locator(".agenda-event").filter({ hasText: "Año Nuevo" }).first();
+  // CAL-01: each holiday shows and manages its date of the year in its own rule; the event list keeps the rest.
+  const newYear = page.locator(".agenda-rule-list > li").filter({ hasText: "Año Nuevo" }).first();
+  await expect(newYear).toContainText(`1 ene`);
+  await expect(newYear).not.toContainText("se crea al generar el año");
+  await expect(page.locator(".agenda-event").filter({ hasText: "Año Nuevo" })).toHaveCount(0);
   await newYear.getByRole("button", { name: "Acciones de Año Nuevo" }).click();
-  await page.getByRole("menuitem", { name: "Saltar esta ocurrencia" }).click();
-  await expect(newYear).toContainText("Omitido");
+  await page.getByRole("menuitem", { name: `Saltar la fecha de ${year}` }).click();
+  await expect(newYear).toContainText("omitida");
 
   await page.getByRole("button", { name: "Más acciones del calendario" }).click();
   await page.getByRole("menuitem", { name: "Agregar evento" }).click();
