@@ -46,7 +46,7 @@ it("asks to sign in again over the current page when the session expires", async
   expect((screen.getByLabelText("Usuario", { selector: "#renew-username" }) as HTMLInputElement).value).toBe("educador-demo");
   expect(screen.getByRole("navigation", { name: "Navegación principal" })).toBeTruthy();
 });
-it("shows the school year with its periods in Organización and divides a new one into bimestres", async () => {
+it("shows the school year with its periods in Calendario institucional and divides a new one into bimestres", async () => {
   const member = { id: "user-0", username: "admin-demo", role: "admin", organizationId: "org-demo", permissions: { admin: true, coordination: null, grants: {} } };
   const periods = [["Primer bimestre", "2027-01-11", "2027-03-19"], ["Segundo bimestre", "2027-03-20", "2027-05-28"], ["Tercer bimestre", "2027-05-29", "2027-08-06"], ["Cuarto bimestre", "2027-08-07", "2027-10-22"]]
     .map(([name, from, until], index) => ({ id: `period-${index}`, position: index + 1, name, from, until }));
