@@ -13,13 +13,16 @@
 - **En curso:** nada a medias
 - **Requieren al usuario:** AP-03 cuenta del monitor; AP-05 proveedor y presupuesto del pentest; AP-06 marca y empresa;
   AP-07 tope de IA por organización
-- **Siguiente acción:** fusionar 1.6.5; luego AUD-02, PERF-02, HRS-02; el 13-nov, SEC-04
+- **Siguiente acción:** fusionar 1.6.6 (PERF-02 y el marcado de Semgrep que #108 dejó en rojo en `main`); luego
+  AUD-02, PERF-03, HRS-02; el 13-nov, SEC-04
+- **Incidente 03-nov:** #108 se fusionó con el escáner `code` (Semgrep) en rojo porque la automatización solo miraba
+  `verify`. Corregido en 1.6.6; desde ahora se exige que todos los checks pasen.
 
 | Carril | Estado |
 | --- | --- |
 | Navegación | M1 en producción (1.6.0) |
 | Inicio | HOME-01 en producción (1.6.1) |
-| Personas | PPL-01 (1.6.2) en producción; PPL-02 en PR (1.6.5) |
+| Personas | PPL-01 (1.6.2) y PPL-02 (1.6.5, `f39db63`) en producción |
 | Operación | HRS-01, CAL-01, SCH-01 en producción (1.6.4, `d1efeb6`); HRS-02 listo |
 | IA | AI-01 y AIG-1 en producción; AIG-2 P2 |
 | Seguridad | H4 y R1 en producción; SEC-02/03 hechos; SEC-04 el 13-nov |
