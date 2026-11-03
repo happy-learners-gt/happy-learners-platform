@@ -13,7 +13,7 @@
   desplegar los PR de cada hito con CI verde; aplicar las recomendaciones de la cola que no requieren cuentas ni gasto.
 - **En curso:** nada a medias
 - **Requieren al usuario:** AP-03 cuenta del monitor; AP-05 proveedor y presupuesto del pentest; AP-06 marca y empresa;
-  AP-07 tope de IA por organización
+  AP-07 tope de IA por organización; AP-08 montos según contrato en Horas (DEC-043)
 - **Siguiente acción:** fusionar 1.6.9; luego IA-04 (Revisión de perfiles en
   Educadores), PERF-03, HRS-02; el 13-nov, SEC-04
 - **Incidente 03-nov:** #108 se fusionó con el escáner `code` (Semgrep) en rojo porque la automatización solo miraba

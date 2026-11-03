@@ -62,3 +62,13 @@ y qué sigue avanzando mientras tanto.
   organización ni por plan: el uso de OpenAI se paga con la clave de HL.
 - **Recomendación:** decidirlo junto con los planes comerciales; técnicamente cuesta poco (sumar `ai_runs` del mes).
 - **Bloquea:** nada hoy.
+
+## AP-08 · ¿Horas efectivas muestra montos según contrato?
+
+- **Hoy:** DEC-043 dice que las horas reconocen el voluntariado y equilibran la carga, «no son nómina». Desde los
+  contratos (ST-15x) un contrato puede ser por hora o por clase, con monto y moneda.
+- **Propuesta (HRS-03):** columna «Según contrato» en el resumen por persona, solo para administración: tarifa por
+  hora × horas, o por clase × clases que suman, con el contrato vigente; los contratos fijos y sin remuneración se
+  muestran como tales. Rotulada como referencia, no como cálculo de nómina.
+- **Por qué pide decisión:** cambia el principio de DEC-043 y muestra montos de dinero por persona.
+- **Bloquea:** HRS-03.
