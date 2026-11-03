@@ -22,7 +22,7 @@ test("DEC-046: administration publishes a template, invites with a contract, the
   const password = "Una frase para firmar el contrato 2026";
   const admin = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("admin-demo")}` } });
   try {
-    await signIn(page, "admin-demo", "/contratos");
+    await signIn(page, "admin-demo", "/contratos#plantillas");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Contratos y políticas");
     await page.getByRole("button", { name: "Nueva plantilla" }).click();
     const create = page.getByRole("dialog", { name: "Nueva plantilla" });

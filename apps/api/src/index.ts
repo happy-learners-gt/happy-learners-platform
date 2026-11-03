@@ -260,7 +260,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (path === "/api/legal/signatures/verify") methods[path] = ["POST"];
   // ST-152: effective hours, their export and administration's corrections.
   if (path === "/api/hours" || path === "/api/hours/export") methods[path] = ["GET"];
-  if (/^\/api\/hours\/[a-z0-9-]+\/adjustment$/.test(path)) methods[path] = ["POST"];
+  if (/^\/api\/hours\/[a-z0-9-]+\/adjustment$/.test(path) || path === "/api/hours/adjustments") methods[path] = ["POST"];
   // ST-122: guided onboarding.
   if (path === "/api/onboarding" || path === "/api/onboarding/people") methods[path] = ["GET"];
   if (/^\/api\/onboarding\/steps\/[a-z]+$/.test(path)) methods[path] = ["POST"];

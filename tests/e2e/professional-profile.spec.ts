@@ -77,8 +77,11 @@ test("HL-15 ST-154 ST-155 ST-156 ST-157: an educator completes and sends their p
     await expect(page.getByRole("status").filter({ hasText: "Administración está revisando tu perfil" })).toBeVisible();
     await adminContext.addCookies([{ name: "hl_session", value: await sessionToken("admin-demo"), url: origin, httpOnly: true, sameSite: "Strict" }]);
     const adminPage = await adminContext.newPage();
+    // IA-04: the old address opens the review inside Educadores, with what is waiting counted on its tab.
     await adminPage.goto("/perfiles");
-    await expect(adminPage.getByRole("heading", { level: 1 })).toHaveText("Revisión de perfiles");
+    await expect(adminPage).toHaveURL(/\/educadores#perfiles$/);
+    await expect(adminPage.getByRole("heading", { level: 1 })).toHaveText("Educadores");
+    await expect(adminPage.getByRole("navigation", { name: "Secciones de educadores" }).getByRole("link", { name: /^Revisión de perfiles \(\d+\)$/ })).toHaveAttribute("aria-current", "page");
     await adminPage.getByRole("button", { name: `Revisar el perfil de ${name}` }).click();
     let review = adminPage.getByRole("dialog", { name: `Perfil de ${name}` });
     await expect(review).toContainText("Primera publicación");
@@ -119,7 +122,7 @@ test("HL-15 ST-154 ST-155 ST-156 ST-157: an educator completes and sends their p
     await expect(toast(page)).toContainText("Perfil enviado a revisión.");
     await adminPage.reload();
     await expect(adminPage.getByRole("article", { name: `Perfil de ${name}` })).toContainText("Docente de ciencias para primaria");
-    await adminPage.goto("/perfiles");
+    await adminPage.goto("/educadores#perfiles");
     await adminPage.getByRole("button", { name: `Revisar el perfil de ${name}` }).click();
     review = adminPage.getByRole("dialog", { name: `Perfil de ${name}` });
     await expect(review).toContainText("Cambia respecto a la versión publicada: Identidad");
@@ -142,7 +145,7 @@ test("HL-15 ST-154 ST-155 ST-156 ST-157: an educator completes and sends their p
     await credential.getByRole("button", { name: "Guardar y enviar a verificación" }).click();
     await expect(toast(page)).toContainText("Credencial enviada a verificación.");
     await expect(page.getByRole("list", { name: "Tus credenciales" })).toContainText("En verificación");
-    await adminPage.goto("/perfiles");
+    await adminPage.goto("/educadores#perfiles");
     await adminPage.getByRole("button", { name: `Verificar Licencia docente ficticia de ${name}` }).click();
     await expect(toast(adminPage)).toContainText("«Licencia docente ficticia» verificada.");
     await audit(adminPage, "revisión de perfiles");

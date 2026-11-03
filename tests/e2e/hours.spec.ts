@@ -68,5 +68,19 @@ test("ST-152: an educator starts and completes a class and sees its hours; admin
     // The educator now sees the corrected hours.
     await signIn(page, "educador-demo", `/horas?curso=${courseId}`);
     await expect(page.locator(".stat-tile").filter({ hasText: "Horas efectivas" })).toContainText("50 min");
+
+    // HRS-02: a class completed without its start is «por revisar»; administration gives it its planned duration.
+    const second = ((await (await admin.get(`${path}/sessions`)).json()).sessions as { id: string; groupId: string; sessionDate: string }[]).filter(item => item.groupId === groupId && item.id !== first.id)[0];
+    const educatorApi = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("educador-demo")}` } });
+    try { expect((await educatorApi.post(`${path}/sessions/${second.id}/complete`)).status()).toBe(200); } finally { await educatorApi.dispose(); }
+    await signIn(page, "admin-demo", `/horas?curso=${courseId}&periodo=todo`);
+    await page.getByRole("button", { name: "Por revisar (1)" }).click();
+    await page.getByRole("button", { name: "Corregir 1 clase con su duración planificada" }).click();
+    const batch = page.getByRole("dialog", { name: "Corregir con la duración planificada" });
+    await expect(batch).toContainText("45 min");
+    await batch.getByLabel("Motivo de la corrección").fill("La dio sin registrar el inicio");
+    await batch.getByRole("button", { name: "Corregir clases" }).click();
+    await expect(toast(page)).toContainText("1 clase corregida (45 min)");
+    await expect(page.locator(".stat-tile").filter({ hasText: "Horas efectivas" })).toContainText("1 h 35 min");
   } finally { await admin.dispose(); }
 });

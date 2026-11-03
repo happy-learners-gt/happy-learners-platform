@@ -241,7 +241,6 @@ const administration: { id: string; label: string; pages: (Omit<Page, "active"> 
   { id: "personas", label: "Personas", pages: [
     { href: "/educadores", label: "Educadores", icon: "users", hue: "pink" },
     { href: "/contratos", label: "Contratos y políticas", icon: "file", hue: "violet" },
-    { href: "/perfiles", label: "Revisión de perfiles", icon: "check", hue: "sky" },
     { href: "/horas", label: "Horas efectivas", icon: "clock", hue: "green" },
   ] },
   { id: "academico", label: "Académico", pages: [

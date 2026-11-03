@@ -8,11 +8,12 @@ import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { acceptPending } from "./accept-pending";
-import type { Contract, ContractReceiptRecord, ContractTemplate, ContractTerms, ContractVerification, RichTextDocument } from "../packages/contracts/src/index";
+import type { Contract, ContractPhase, ContractReceiptRecord, ContractTemplate, ContractTerms, ContractVerification, RichTextDocument } from "../packages/contracts/src/index";
 import {
   compensationAllowed, compensationSummary, contractCanonical, contractDatesInput, contractInForce, contractPhase, contractSignatureCanonical, contractTermsFor, contractTermsInput, contractVersionInput,
   mergeContract, richPlainText,
 } from "../packages/domain/src/index";
+import { contractsByAttention } from "../packages/domain/src/index";
 
 const sha256 = (text: string) => createHash("sha256").update(text, "utf8").digest("hex");
 
@@ -24,6 +25,13 @@ const volunteer: ContractTerms = { role: "Educador voluntario", compensation: { 
 const services: ContractTerms = { role: "Tutor de matemáticas", compensation: { kind: "hourly", amount: "125.50", currency: "GTQ" }, term: { kind: "fixed", months: 6 }, noticeDays: 15, location: "hybrid" };
 
 describe("DEC-046 contract rules", () => {
+  it("CON-01: what waits for administration comes first, then the newest", () => {
+    const item = (partyName: string, phase: ContractPhase, startDate: string) => ({ partyName, phase, startDate });
+    const sorted = contractsByAttention([item("Ana", "in-force", "2026-09-01"), item("Beto", "draft", "2026-11-01"), item("Carla", "awaiting-signature", "2026-10-01"),
+      item("Dora", "ending", "2026-01-15"), item("Eva", "in-force", "2026-10-01"), item("Abel", "awaiting-signature", "2026-10-01")]);
+    expect(sorted.map(contract => contract.partyName)).toEqual(["Abel", "Carla", "Dora", "Beto", "Eva", "Ana"]);
+  });
+
   it("who is paid follows from the engagement", () => {
     expect(compensationAllowed("volunteer", "none")).toBe(true);
     expect(compensationAllowed("volunteer", "hourly")).toBe(false);

@@ -744,6 +744,8 @@ export interface HoursRow {
   day: string; startedAt: string | null; completedAt: string;
   educatorId: string | null; educatorName: string | null; computedMinutes: number; minutes: number; state: HoursState;
   adjustment: HoursAdjustment | null; adjustments: number;
+  /** The class's planned duration, which a batch correction gives to the classes «por revisar» (HRS-02). */
+  plannedMinutes?: number | null;
 }
 export interface HoursTotal { id: string; name: string; minutes: number; classes: number }
 export interface HoursFilter { from: string | null; to: string | null; course: string | null; section: string | null; person: string | null }
@@ -752,6 +754,8 @@ export interface HoursReport {
   totals: { people: HoursTotal[]; courses: HoursTotal[]; sections: HoursTotal[] };
   /** What the filters can choose from: the courses, sections and people of the classes the person may see in the period (1.6.6). */
   options: { courses: { id: string; name: string }[]; sections: { id: string; name: string; courseId: string }[]; people: { id: string; name: string }[] };
+  /** PERF-03: more classes than one report reads; it has the most recent ones and its sums are partial. */
+  truncated?: boolean;
 }
 export interface HoursAdjustmentInput { minutes: number; educatorId?: string; reason: string }
 /**

@@ -35,7 +35,7 @@ test("ST-151 ST-153: administration publishes a contract template, the educator 
   test.setTimeout(120_000);
   const stamp = `${info.project.name} ${Date.now()}`;
   const title = `Acuerdo ficticio ${stamp}`;
-  await signIn(page, "admin-externo", "/contratos");
+  await signIn(page, "admin-externo", "/contratos#plantillas");
   await passGate(page, "Administración Externa Ficticia");
   await page.getByRole("button", { name: "Nueva plantilla" }).click();
   const create = page.getByRole("dialog", { name: "Nueva plantilla" });
