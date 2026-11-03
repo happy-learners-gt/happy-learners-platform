@@ -9,7 +9,7 @@
 
 ## Hecho
 
-- 1.6.0–1.6.9 en producción (#103–#112, 02 y 03-nov): menú y Agenda por rol, Inicio por excepciones, Horas por
+- 1.6.0–1.6.10 en producción (#103–#113, 02 y 03-nov): menú y Agenda por rol, Inicio por excepciones, Horas por
   periodo y con la mitad de lecturas, R1, límite de IA (H4), incorporación de educadores (con agregar a un curso),
   calendario unificado, horario vigente con choques, orden estable de la actividad, contraste AA en oscuro y
   segunda pasada de la auditoría (AUD-02). 1.6.8 (DOC-01, #111): empezar una plantilla de documento en un paso. 1.6.9 (AIG-4/5): propuestas usadas e
@@ -17,7 +17,7 @@
 
 ## Siguiente acción
 
-1. `git status` y `git fetch && git merge origin/main` si avanzó. Confirmar que el PR de 1.6.10 está fusionado.
+1. `git status` y `git fetch && git merge origin/main` si avanzó. Confirmar que el PR de 1.6.11 está fusionado.
 2. Siguiente de la cola: **AIG-4b** (aceptación de propuestas de lecciones y mapa), HOME-02 y Configuración
    académica (3.15). HRS-03 espera AP-08.
 3. Por cada hito: `rm -rf build && npm run build`, E2E afectadas, `./scripts/verify`, versión y CHANGELOG, push, PR,
