@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.6 — 2026-11-02
+
+- Menos lecturas en Horas efectivas (PERF-02): el periodo se aplica en la consulta (con un día de margen por la zona horaria) y solo se unen las clases cercanas a él. Vista por defecto (30 días): −51 % en administración (590 → 291 filas) y −46 % para un docente (540 → 292), con respuestas idénticas. Las listas de los filtros ofrecen los cursos, secciones y personas con clases en el periodo.
+
 ## 1.6.5 — 2026-11-02
 
 - La actividad ordena los eventos del mismo instante por orden de registro (antes por su identificador, al azar): la lista ya no cambia de orden entre lecturas.
