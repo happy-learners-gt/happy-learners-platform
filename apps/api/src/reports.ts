@@ -3,7 +3,7 @@ import { checkedSuggestions, defaultTemplate, exampleSuggestions, fixtureSuggest
 import type { PdfImage, ReportKind, ReportRecord, ReportTemplate, SuggestOutput } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { aiGate, aiRunId, tracked } from "./ai-runs";
-import { openAiSettings, openAiSuggester } from "./openai";
+import { openAiSettings, openAiSuggester, shortModel } from "./openai";
 
 /**
  * The report builder (1.5.0, docs/design/constructor-de-reportes.md), administration only: templates with a draft and
@@ -143,7 +143,7 @@ export async function reports(path: string, method: string, input: unknown, requ
     if (suggester && env && !await aiGate(db, current, env)) {
       try {
         runId = aiRunId();
-        proposed = await tracked(db, { id: runId, organizationId: current.organizationId, userId: current.id, courseId: null, task: "suggest-fields", promptVersion: suggestPromptVersion, generator: suggester.kind, model: settings ? settings.model : "fixture", inputChars: asked.text.length },
+        proposed = await tracked(db, { id: runId, organizationId: current.organizationId, userId: current.id, courseId: null, task: "suggest-fields", promptVersion: suggestPromptVersion, generator: suggester.kind, model: settings ? shortModel(settings) : "fixture", inputChars: asked.text.length },
           observe => suggester.suggest(asked, observe));
       // What was found without the model is still worth showing.
       } catch { return reply({ suggestions: checkedSuggestions(found, asked), ai: false, notice: "La IA no respondió: se muestran solo los datos reconocidos en el texto." }); }

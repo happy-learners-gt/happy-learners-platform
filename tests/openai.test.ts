@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { failureOf, openAiGenerator, openAiSettings, TransientError } from "../apps/api/src/openai";
+import { failureOf, openAiGenerator, openAiRulesTranslator, openAiSettings, openAiWriter, TransientError } from "../apps/api/src/openai";
 import { draftFromOutput, proposalProblem, sequenceOf, validActivities } from "../packages/domain/src/index";
 import type { ProposalInput } from "../packages/domain/src/index";
 
@@ -24,6 +24,17 @@ describe("OpenAI lesson generator (no network)", () => {
     expect(openAiSettings({})).toBeNull();
     expect(openAiSettings({ OPENAI_API_KEY: "k" })).toBeNull();
     expect(openAiSettings({ OPENAI_API_KEY: "k", OPENAI_MODEL: "m", LESSON_MAX_OUTPUT_TOKENS: "8000", LESSON_REQUEST_TIMEOUT_MS: "1" })).toEqual({ key: "k", model: "m", maxOutputTokens: 8000, timeoutMs: undefined });
+  });
+
+  it("AIG-3: short tasks use OPENAI_MODEL_SHORT when it is set, the rest keep OPENAI_MODEL", async () => {
+    const both = openAiSettings({ OPENAI_API_KEY: "k", OPENAI_MODEL: "grande", OPENAI_MODEL_SHORT: " pequeno " })!;
+    expect(both).toMatchObject({ model: "grande", shortModel: "pequeno" });
+    expect(openAiSettings({ OPENAI_API_KEY: "k", OPENAI_MODEL: "grande", OPENAI_MODEL_SHORT: "" })).not.toHaveProperty("shortModel");
+    const models: string[] = [];
+    const fake = async (_url: unknown, init?: RequestInit) => { models.push(JSON.parse(String(init!.body)).model); return answer(message(JSON.stringify({ text: "Hola." })))(); };
+    await openAiWriter(both, fake as typeof fetch).write({ field: "lesson-objective", action: "shorten", text: "Hola a todos.", context: {} } as never).catch(() => undefined);
+    await openAiRulesTranslator(both, fake as typeof fetch).translate({ text: "Herrera no da clases los viernes", context: { sections: [], educators: [], classrooms: [] } } as never).catch(() => undefined);
+    expect(models).toEqual(["pequeno", "grande"]);
   });
 
   it("asks the Responses API for strict structured output, unstored, and reads the message after the reasoning", async () => {
