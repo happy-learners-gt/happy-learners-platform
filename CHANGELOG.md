@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.6.2 — sin publicar
+## 1.6.2 — 2026-11-02
 
 - Incorporación institucional de cada educador (PPL-01, `docs/design/incorporacion-institucional.md`): en Educadores, la columna «Incorporación» abre la lista de pasos de la persona (bienvenida, perfil revisado, contrato, equipo de un curso, secciones) con su estado en palabras y la acción que falta; «Crear contrato» abre el contrato con la persona ya elegida. Sin rutas ni lecturas por persona nuevas (una petición a la lista de perfiles por revisar al abrir Educadores).
 
