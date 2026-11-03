@@ -23,6 +23,7 @@ import { DepartureDialog, departureDay } from "./departure";
 import { Invitations } from "./invitations";
 import { ClosureRequests } from "./account";
 import { ExpiringDocuments, PersonDetail } from "./profile";
+import { ProfileReviews } from "./professional";
 import { CoordinationBadge, CoordinationDialog } from "./access";
 import { OnboardingBadge, OnboardingFilter, useOnboardingPeople } from "./onboarding";
 import type { OnboardingPersonStatus, ProfileReviewQueue } from "@happy-learners/contracts";
@@ -97,12 +98,13 @@ const educatorTabs = [
   { id: "invitaciones", label: "Invitaciones", href: "/educadores#invitaciones" },
   { id: "contratos", label: "Contratos", href: "/contratos#contratos" },
   { id: "incorporacion", label: "Incorporación", href: "/educadores#incorporacion" },
+  { id: "perfiles", label: "Revisión de perfiles", href: "/educadores#perfiles" },
   { id: "cierres", label: "Cierres de cuenta", href: "/educadores#cierres" },
   { id: "documentos", label: "Documentos por vencer", href: "/educadores#documentos" },
 ] as const;
 type EducatorTab = Exclude<(typeof educatorTabs)[number]["id"], "contratos">;
 const educatorTabOf = (hash: string): EducatorTab => ({
-  "": "personas", "#personas": "personas", "#invitaciones": "invitaciones", "#incorporacion": "incorporacion", "#cierres": "cierres", "#documentos": "documentos",
+  "": "personas", "#personas": "personas", "#invitaciones": "invitaciones", "#incorporacion": "incorporacion", "#perfiles": "perfiles", "#cierres": "cierres", "#documentos": "documentos",
 } as const)[hash] || "personas";
 const contractTone: Record<ContractPhase, Tone> = {
   draft: "neutral", "awaiting-signature": "warning", scheduled: "info", "in-force": "success", ending: "warning",
@@ -131,7 +133,7 @@ function MemberList() {
   // PPL-01: the name and «Perfil y expediente» open the profile; the incorporation column and tab open the incorporation.
   const [detail, setDetail] = useState<{ id: string; name: string; tab?: "incorporation" } | null>(null);
   const [coordinating, setCoordinating] = useState<MemberStats | null>(null);
-  const [contracts, setContracts] = useState<Contract[]>([]), [pendingProfiles, setPendingProfiles] = useState<ReadonlySet<string>>(new Set());
+  const [contracts, setContracts] = useState<Contract[]>([]), [pendingProfiles, setPendingProfiles] = useState<ReadonlySet<string>>(new Set()), [toReview, setToReview] = useState(0);
   const onboarding = useOnboardingPeople(revision), [onboardingFilter, setOnboardingFilter] = useState<OnboardingPersonStatus | "">("");
   const tab = educatorTabOf(url.hash);
   const load = async () => {
@@ -143,7 +145,8 @@ function MemberList() {
         // PPL-01: who has a profile waiting for approval, for each person's incorporation.
         api<ProfileReviewQueue>("/profile-reviews").catch(() => null),
       ]);
-      setMembers(people.members); setContracts(listed.contracts); setPendingProfiles(new Set(reviews?.profiles.map(item => item.userId) || [])); setRevision(value => value + 1);
+      setMembers(people.members); setContracts(listed.contracts); setPendingProfiles(new Set(reviews?.profiles.map(item => item.userId) || []));
+      setToReview((reviews?.profiles.length || 0) + (reviews?.credentials.length || 0)); setRevision(value => value + 1);
     } catch (cause) { setError(message(cause)); }
   };
   useEffect(() => { void load(); }, []);
@@ -166,7 +169,7 @@ function MemberList() {
     primary={members && <PrimaryAction icon="plus" onClick={() => setAdding(true)}>Agregar cuenta</PrimaryAction>}
     actions={members && <button type="button" className="button secondary" onClick={invite}><Icon name="send" size={16}/>Invitar por correo</button>}/>;
   const tabs = <nav className="tabs scrollable-tabs" aria-label="Secciones de educadores">
-    {educatorTabs.map(item => <Link key={item.id} href={item.href} className="tab" aria-current={item.id === "contratos" ? undefined : tab === item.id ? "page" : undefined}>{item.label}</Link>)}
+    {educatorTabs.map(item => <Link key={item.id} href={item.href} className="tab" aria-current={item.id === "contratos" ? undefined : tab === item.id ? "page" : undefined}>{item.id === "perfiles" && toReview ? `${item.label} (${toReview})` : item.label}</Link>)}
   </nav>;
   const incorporationOf = (id: string) => {
     const person = members?.find(item => item.id === id);
@@ -211,6 +214,7 @@ function MemberList() {
     </>}
     {(tab === "invitaciones" || inviting) && <Invitations inviting={inviting} onInviting={setInviting} onChanged={() => void load()}/>}
     {tab === "incorporacion" && <OnboardingPeople members={members} people={onboarding} filter={onboardingFilter} onFilter={setOnboardingFilter} onOpen={person => setDetail({ ...person, tab: "incorporation" })}/>}
+    {tab === "perfiles" && <ProfileReviews onChanged={() => void load()}/>}
     {tab === "cierres" && <ClosureRequests revision={revision} onDeparture={setLeaving}/>}
     {tab === "documentos" && <ExpiringDocuments onOpen={setDetail} revision={revision}/>}
     {adding && <AccountDialog onClose={() => setAdding(false)} onCreated={async result => { setAdding(false); setIssued(result); await load(); }}/>}
