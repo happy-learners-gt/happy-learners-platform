@@ -9,16 +9,18 @@
 
 ## Hecho
 
-- 1.6.0–1.6.3 en producción el 02-nov (#103–#106): menú y Agenda por rol, Inicio por excepciones, Horas por periodo,
-  R1, límite de IA (H4), incorporación de educadores, calendario unificado. Documentación del programa al día.
+- 1.6.0–1.6.6 en producción (#103–#109, 02 y 03-nov): menú y Agenda por rol, Inicio por excepciones, Horas por
+  periodo y con la mitad de lecturas, R1, límite de IA (H4), incorporación de educadores (con agregar a un curso),
+  calendario unificado, horario vigente con choques, orden estable de la actividad.
 
 ## Siguiente acción
 
 1. `git status`: rama `feat/HL-15-siguiente` con este estado sin push. `git fetch && git merge origin/main` si avanzó.
-2. Siguiente de la cola: **SCH-01** (F3 en `flujos.md`: Horarios abre en el horario vigente por sección, docente o aula,
-   con conflictos; el generador como acción secundaria). Diseño primero en `docs/design/`.
+2. Siguiente de la cola: **AUD-02** (completar la matriz de `auditoria.md` con la vista docente, móvil y oscuro y
+   puntajes nuevos tras 1.6.x), luego PERF-03 y HRS-02.
 3. Por cada hito: `rm -rf build && npm run build`, E2E afectadas, `./scripts/verify`, versión y CHANGELOG, push, PR,
-   CI verde → `gh pr merge <n> --merge` (autorizado) → vigilar `verify`, `deploy`, `critical-flows` en `main`.
+   **todos** los checks verdes (también `code`/Semgrep; correr `uvx semgrep scan --config .semgrep` antes) →
+   `gh pr merge <n> --merge` (autorizado) → vigilar `verify`, `deploy`, `critical-flows` en `main`.
 4. **13-nov:** SEC-04, escáneres obligatorios en `main` (protección de rama con `secrets`, `dependencies`, `code`),
    revisando antes que no hubo falsos positivos.
 
