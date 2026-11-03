@@ -13,12 +13,19 @@ export function failureOf(error: unknown): AiRunStatus {
   return message === "refusal" ? "refused" : message.startsWith("incomplete") ? "incomplete" : "error";
 }
 
-type Settings = { key: string; model: string; maxOutputTokens?: number; timeoutMs?: number };
+type Settings = { key: string; model: string; shortModel?: string; maxOutputTokens?: number; timeoutMs?: number };
+declare global { interface Env { OPENAI_MODEL_SHORT?: string } }
+/**
+ * AIG-3 (docs/transformacion/ia.md): short tasks (writing a field, suggesting a document's fields) may use a smaller
+ * model, OPENAI_MODEL_SHORT; without it they use OPENAI_MODEL. The model recorded in ai_runs is the one used.
+ */
+export const shortModel = (settings: Settings) => settings.shortModel || settings.model;
 /** The settings an environment gives, or null when OpenAI is not configured (both the secret and the model are needed). */
-export function openAiSettings(env: Pick<Env, "OPENAI_API_KEY" | "OPENAI_MODEL" | "LESSON_MAX_OUTPUT_TOKENS" | "LESSON_REQUEST_TIMEOUT_MS">): Settings | null {
+export function openAiSettings(env: Pick<Env, "OPENAI_API_KEY" | "OPENAI_MODEL" | "OPENAI_MODEL_SHORT" | "LESSON_MAX_OUTPUT_TOKENS" | "LESSON_REQUEST_TIMEOUT_MS">): Settings | null {
   if (!env.OPENAI_API_KEY || !env.OPENAI_MODEL) return null;
   const number = (value: string | undefined, min: number, max: number) => { const parsed = Number(value); return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : undefined; };
-  return { key: env.OPENAI_API_KEY, model: env.OPENAI_MODEL, maxOutputTokens: number(env.LESSON_MAX_OUTPUT_TOKENS, 500, 32000), timeoutMs: number(env.LESSON_REQUEST_TIMEOUT_MS, 5000, 300000) };
+  const short = env.OPENAI_MODEL_SHORT?.trim();
+  return { key: env.OPENAI_API_KEY, model: env.OPENAI_MODEL, ...(short && short.length <= 80 ? { shortModel: short } : {}), maxOutputTokens: number(env.LESSON_MAX_OUTPUT_TOKENS, 500, 32000), timeoutMs: number(env.LESSON_REQUEST_TIMEOUT_MS, 5000, 300000) };
 }
 
 /** One request to OpenAI's Responses API with structured output (strict JSON Schema), unstored; the parsed answer. */
@@ -59,11 +66,11 @@ export function openAiImprover(settings: Settings, request: typeof fetch = fetch
 }
 /** «Redactar con IA» (1.4.1): a short text, so a short answer and a short wait. */
 export function openAiWriter(settings: Settings, request: typeof fetch = fetch): AiWriter {
-  return { kind: "openai", write: (input, observe) => structured<WriteOutput>({ ...settings, maxOutputTokens: 2000, timeoutMs: Math.min(settings.timeoutMs || 30_000, 30_000) }, request, "write", writeSchema, writePrompt(input), observe) };
+  return { kind: "openai", write: (input, observe) => structured<WriteOutput>({ ...settings, model: shortModel(settings), maxOutputTokens: 2000, timeoutMs: Math.min(settings.timeoutMs || 30_000, 30_000) }, request, "write", writeSchema, writePrompt(input), observe) };
 }
 /** Fields for a document's text (1.5.2): parts of the text and the field that replaces each, shown one by one. */
 export function openAiSuggester(settings: Settings, request: typeof fetch = fetch): FieldSuggester {
-  return { kind: "openai", suggest: (input, observe) => structured<SuggestOutput>({ ...settings, maxOutputTokens: 2000, timeoutMs: Math.min(settings.timeoutMs || 30_000, 30_000) }, request, "suggest_fields", suggestSchema, suggestPrompt(input), observe) };
+  return { kind: "openai", suggest: (input, observe) => structured<SuggestOutput>({ ...settings, model: shortModel(settings), maxOutputTokens: 2000, timeoutMs: Math.min(settings.timeoutMs || 30_000, 30_000) }, request, "suggest_fields", suggestSchema, suggestPrompt(input), observe) };
 }
 /** Timetable rules in words (1.4.3): structured rules a person confirms. */
 export function openAiRulesTranslator(settings: Settings, request: typeof fetch = fetch): RulesTranslator {

@@ -6,7 +6,7 @@ import type { AiWriter, LessonImprover } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { accessTo } from "./access";
 import { aiGate, aiOutcomeInput, aiRunId, recordOutcome, tracked } from "./ai-runs";
-import { openAiImprover, openAiSettings, openAiWriter } from "./openai";
+import { openAiImprover, openAiSettings, openAiWriter, shortModel } from "./openai";
 
 /**
  * Assisted improvement and writing (1.4.1, docs/design/asistente-ia.md §6c and §6e). POST /api/lessons/:id/improve takes
@@ -32,10 +32,10 @@ function draftActivities(value: unknown): Activity[] | null {
 const notConfigured = () => reply({ error: "La IA no está configurada en esta organización." }, 503);
 const unavailable = () => reply({ error: "La IA no respondió. Vuelve a intentar en unos minutos." }, 502);
 
-function generators(env: Env): { improver: LessonImprover; writer: AiWriter; model: string } | null {
+function generators(env: Env): { improver: LessonImprover; writer: AiWriter; model: string; writerModel: string } | null {
   const settings = openAiSettings(env);
-  if (settings) return { improver: openAiImprover(settings), writer: openAiWriter(settings), model: settings.model };
-  return env.LESSON_GENERATOR === "fixture" ? { improver: fixtureImprover, writer: fixtureWriter, model: "fixture" } : null;
+  if (settings) return { improver: openAiImprover(settings), writer: openAiWriter(settings), model: settings.model, writerModel: shortModel(settings) };
+  return env.LESSON_GENERATOR === "fixture" ? { improver: fixtureImprover, writer: fixtureWriter, model: "fixture", writerModel: "fixture" } : null;
 }
 
 /** What a course's reviews need, read the same way the browser does. */
@@ -100,7 +100,7 @@ export async function aiAssist(path: string, method: string, input: unknown, cur
     const runId = aiRunId();
     const output = await tracked(db, {
       id: runId, organizationId: current.organizationId, userId: current.id, courseId, task: "write", promptVersion: writePromptVersion,
-      generator: engines.writer.kind, model: engines.model, inputChars: JSON.stringify(request).length,
+      generator: engines.writer.kind, model: engines.writerModel, inputChars: JSON.stringify(request).length,
     }, observe => engines.writer.write(request, observe));
     const result = writtenText(output, request);
     return "error" in result ? reply(result, 422) : reply({ ...result, runId });
