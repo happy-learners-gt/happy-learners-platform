@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { SolverBlock, SolverResult, SolverRule } from "@happy-learners/domain";
-import { ruleText, weekdayNames } from "@happy-learners/domain";
+import { ruleText, timetableConflicts, weekdayNames } from "@happy-learners/domain";
+import { Link } from "../navigation";
 import { api, message } from "../api";
 import { useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
@@ -14,7 +15,8 @@ import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryActi
  */
 type Setup = {
   bellSchedules: { id: string; name: string; weekdays: number[]; blocks: SolverBlock[] }[];
-  sections: { id: string; name: string; courseTitle: string; educators: { id: string; name: string }[]; meetingsPerWeek: number; learners: number; classroomId: string | null }[];
+  sections: { id: string; name: string; courseTitle: string; educators: { id: string; name: string }[]; meetingsPerWeek: number; learners: number; classroomId: string | null;
+    meetings?: { weekday: number; startsAt: string; durationMinutes: number }[] }[];
   educators: { id: string; name: string }[]; year: { from: string; until: string } | null; classrooms: Classroom[];
 };
 type Classroom = { id: string; name: string; capacity: number };
@@ -148,10 +150,10 @@ export function TimetablesPage() {
       setRange({ from: data.year?.from || "", until: data.year?.until || "" });
     }, cause => setError(message(cause)));
   }, []);
-  const header = <PageHeader title="Horarios" description="Genera el horario semanal de las secciones con la jornada y las reglas. Nada cambia hasta que lo apliques."/>;
+  const header = <PageHeader title="Horarios" description="El horario vigente de las secciones, con sus choques, y el generador de un horario nuevo con la jornada y las reglas. Nada cambia hasta que lo apliques."/>;
   if (error) return <>{header}<ErrorState error={error}/></>;
   if (!setup) return <>{header}<Loading label="Cargando secciones y jornadas…" lines={6}/></>;
-  if (!setup.bellSchedules.length) return <>{header}<EmptyState icon="clock" title="Primero define una jornada">En <strong>Organización</strong>, crea la jornada con sus periodos y recreos; el horario se arma sobre ella.</EmptyState></>;
+  if (!setup.bellSchedules.length) return <>{header}<EmptyState icon="clock" title="Primero define una jornada">En <Link href="/organizacion/calendario">Calendario institucional</Link>, crea la jornada con sus periodos y recreos; el horario se arma sobre ella.</EmptyState></>;
   const context = { sections: setup.sections.map(item => ({ id: item.id, name: `${item.courseTitle} · ${item.name}` })), educators: setup.educators };
   const bell = setup.bellSchedules.find(item => item.id === bellId)!;
   const included = setup.sections.filter(item => choices[item.id]?.included);
@@ -180,6 +182,8 @@ export function TimetablesPage() {
   }
   return <>
     {header}
+    <CurrentTimetable setup={setup}/>
+    <h2 className="timetable-generate-title">Generar un horario nuevo</h2>
     <Section title="Jornada y secciones">
       <Field label="Jornada"><select value={bellId} onChange={event => { setBellId(event.target.value); setResult(null); }}>{setup.bellSchedules.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
       <div className="table-card" role="region" aria-label="Secciones del horario" tabIndex={0}><table className="timetable-sections">
@@ -222,4 +226,44 @@ export function TimetablesPage() {
       {applied && <ul className="timetable-applied">{applied.map(item => <li key={item.name}><StatusBadge tone={item.ok ? "success" : "danger"}>{item.ok ? "Aplicado" : "No se aplicó"}</StatusBadge> {item.name}{item.ok ? ` · ${item.classes} clases pendientes` : ` · ${item.error}`}</li>)}</ul>}
     </Section>}
   </>;
+}
+
+const dayOrder = [1, 2, 3, 4, 5, 6, 0];
+
+/**
+ * SCH-01 (docs/transformacion/flujos.md F3): the timetable in force, by weekday, for every section or for one educator or
+ * classroom, with its conflicts first. Read from what the page already loads.
+ */
+function CurrentTimetable({ setup }: { setup: Setup }) {
+  const [view, setView] = useState("");
+  const rooms = new Map(setup.classrooms.map(room => [room.id, room.name])), people = new Map(setup.educators.map(person => [person.id, person.name]));
+  const sections = setup.sections.filter(section => section.meetings?.length);
+  const conflicts = timetableConflicts(sections.map(section => ({ id: section.id, name: section.name, educatorIds: section.educators.map(person => person.id), classroomId: section.classroomId, meetings: section.meetings || [] })));
+  const label = (id: string) => { const section = setup.sections.find(item => item.id === id); return section ? `${section.courseTitle} · ${section.name}` : id; };
+  const [kind, id] = view.split(":");
+  const shown = sections.filter(section => !view || (kind === "educator" ? section.educators.some(person => person.id === id) : section.classroomId === id));
+  const days = dayOrder.map(weekday => ({ weekday, items: shown.flatMap(section => (section.meetings || []).filter(meeting => meeting.weekday === weekday).map(meeting => ({ section, meeting })))
+    .sort((a, b) => a.meeting.startsAt.localeCompare(b.meeting.startsAt)) })).filter(day => day.items.length);
+  return <Section title="Horario vigente" action={sections.length ? <Field label="Ver"><select value={view} onChange={event => setView(event.target.value)}>
+    <option value="">Todas las secciones</option>
+    <optgroup label="Docente">{setup.educators.map(person => <option key={person.id} value={`educator:${person.id}`}>{person.name}</option>)}</optgroup>
+    {setup.classrooms.length > 0 && <optgroup label="Aula">{setup.classrooms.map(room => <option key={room.id} value={`classroom:${room.id}`}>{room.name}</option>)}</optgroup>}
+  </select></Field> : undefined}>
+    {!sections.length ? <p className="muted">Ninguna sección tiene horario todavía. Genera uno abajo o configúralo en el Horario de cada sección.</p> : <>
+      {conflicts.length > 0 && <div className="form-alert" role="alert"><Icon name="alert" size={18}/><div>
+        <strong>{conflicts.length === 1 ? "1 choque" : `${conflicts.length} choques`} en el horario vigente</strong>
+        <ul className="timetable-conflicts">{conflicts.map(item => <li key={`${item.kind}-${item.resourceId}-${item.weekday}-${item.sectionIds.join("-")}`}>
+          {item.kind === "educator" ? people.get(item.resourceId) || "Un docente" : `El aula ${rooms.get(item.resourceId) || ""}`.trim()} tiene dos clases el {weekdayNames[item.weekday]} a las {item.startsAt}: {label(item.sectionIds[0])} y {label(item.sectionIds[1])}.
+        </li>)}</ul>
+      </div></div>}
+      {!days.length ? <p className="muted">Sin clases para lo que elegiste.</p> : <div className="timetable-week">{days.map(day => <section key={day.weekday} aria-label={weekdayNames[day.weekday]}>
+        <h3>{weekdayNames[day.weekday][0].toLocaleUpperCase("es") + weekdayNames[day.weekday].slice(1)}</h3>
+        <ul>{day.items.map(({ section, meeting }) => <li key={`${section.id}-${meeting.startsAt}`}>
+          <span className="timetable-time">{meeting.startsAt}–{endOf(meeting)}</span>
+          <strong>{section.courseTitle}</strong>
+          <span className="muted small">{section.name}{section.educators.length ? ` · ${section.educators.map(person => person.name).join(", ")}` : ""}{section.classroomId && rooms.get(section.classroomId) ? ` · ${rooms.get(section.classroomId)}` : ""}</span>
+        </li>)}</ul>
+      </section>)}</div>}
+    </>}
+  </Section>;
 }

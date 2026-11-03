@@ -49,6 +49,8 @@ export async function timetables(path: string, method: string, input: unknown, c
   if (method === "GET") return reply({
     bellSchedules: data.bells.map(row => ({ id: row.id, name: row.name, weekdays: daysOf(row.weekdays), blocks: JSON.parse(row.blocks) as SolverBlock[] })),
     sections: data.sections.map(row => ({ id: row.id, name: row.name, courseId: row.courseId, courseTitle: row.courseTitle, educators: educatorsOf(row.id).map(({ id, name }) => ({ id, name })), meetingsPerWeek: meetingsOf(scheduleOf(row)).length,
+      // SCH-01: the timetable in force, to show it before generating another (already read with the section).
+      meetings: meetingsOf(scheduleOf(row)).map(({ weekday, startsAt, durationMinutes }) => ({ weekday, startsAt, durationMinutes })),
       learners: row.learners, classroomId: data.classrooms.some(room => room.id === row.classroomId) ? row.classroomId : null })),
     educators: context.educators, year: data.year, classrooms: data.classrooms,
   });
