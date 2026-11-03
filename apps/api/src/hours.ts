@@ -15,7 +15,12 @@ type Stored = {
  * The completed classes of the organization with the correction in force (the latest one). Cancelled, planned and
  * running classes never appear: they add no hours (ST-152 CA3). `own` keeps the classes attributed to that person.
  */
-async function storedRows(db: Database, organizationId: string, own: string | null, sessionId?: string) {
+/** One day before or after, so the time zone never leaves a class of the period out; the exact cut is `inHoursFilter`. */
+const shiftDay = (day: string, days: number) => { const date = new Date(`${day}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
+async function storedRows(db: Database, organizationId: string, own: string | null, sessionId?: string, period?: { from: string | null; to: string | null }) {
+  // PERF-02: a class's day is when it started (or its date, if it never started); only classes near the period are joined.
+  const from = period?.from ? shiftDay(period.from, -1) : null, to = period?.to ? shiftDay(period.to, 1) : null;
+  // nosemgrep: sql-interpolated-text -- own, sessionId, from y to agregan fragmentos constantes; los valores van como parámetros
   return (await db.prepare(`SELECT s.id AS sessionId,s.course_id AS courseId,c.title AS courseTitle,s.group_id AS sectionId,g.name AS sectionName,s.session_date AS sessionDate,
       s.started_at AS startedAt,s.completed_at AS completedAt,s.taught_by AS taughtBy,COALESCE(u.display_name,u.username) AS taughtByName,
       (SELECT count(*) FROM class_hour_adjustments x WHERE x.session_id=s.id) AS adjustments,
@@ -24,8 +29,8 @@ async function storedRows(db: Database, organizationId: string, own: string | nu
     FROM class_sessions s JOIN courses c ON c.id=s.course_id JOIN course_groups g ON g.id=s.group_id LEFT JOIN users u ON u.id=s.taught_by
     LEFT JOIN class_hour_adjustments a ON a.id=(SELECT x.id FROM class_hour_adjustments x WHERE x.session_id=s.id ORDER BY x.adjusted_at DESC,x.rowid DESC LIMIT 1)
     LEFT JOIN users ae ON ae.id=a.educator_after LEFT JOIN users ab ON ab.id=a.adjusted_by
-    WHERE s.organization_id=? AND s.status='completed' AND s.completed_at IS NOT NULL${own ? " AND COALESCE(a.educator_after,s.taught_by)=?" : ""}${sessionId ? " AND s.id=?" : ""}
-    ORDER BY s.completed_at DESC,s.id LIMIT 5000`).bind(organizationId, ...(own ? [own] : []), ...(sessionId ? [sessionId] : [])).all<Stored>()).results;
+    WHERE s.organization_id=? AND s.status='completed' AND s.completed_at IS NOT NULL${own ? " AND COALESCE(a.educator_after,s.taught_by)=?" : ""}${sessionId ? " AND s.id=?" : ""}${from ? " AND COALESCE(substr(s.started_at,1,10),s.session_date)>=?" : ""}${to ? " AND COALESCE(substr(s.started_at,1,10),s.session_date)<=?" : ""}
+    ORDER BY s.completed_at DESC,s.id LIMIT 5000`).bind(organizationId, ...(own ? [own] : []), ...(sessionId ? [sessionId] : []), ...(from ? [from] : []), ...(to ? [to] : [])).all<Stored>()).results;
 }
 function hoursRow(row: Stored, timezone: string): HoursRow {
   const computed = effectiveDuration(row.startedAt, row.completedAt);
@@ -46,7 +51,7 @@ async function report(url: URL, current: Member, db: Database): Promise<HoursRep
   const filter = hoursFilterInput(url.searchParams);
   if ("error" in filter) return filter;
   const timezone = await personalZone(db, current), admin = current.role === "admin";
-  const visible = (await storedRows(db, current.organizationId, admin ? null : current.id)).map(row => hoursRow(row, timezone));
+  const visible = (await storedRows(db, current.organizationId, admin ? null : current.id, undefined, filter)).map(row => hoursRow(row, timezone));
   const rows = visible.filter(row => inHoursFilter(row, filter)).sort((a, b) => b.day.localeCompare(a.day) || (b.startedAt || b.completedAt).localeCompare(a.startedAt || a.completedAt));
   const unique = <T extends { id: string }>(items: T[]) => [...new Map(items.map(item => [item.id, item])).values()];
   return {
