@@ -245,7 +245,7 @@ export function PersonDetail({ person, incorporation, initialTab, onChanged, onC
 }
 
 const incorporationAction: Record<Exclude<IncorporationAction, "add-to-course">, { label: string; href: (id: string) => string }> = {
-  "review-profile": { label: "Revisar perfil", href: () => "/perfiles" },
+  "review-profile": { label: "Revisar perfil", href: () => "/educadores#perfiles" },
   "create-contract": { label: "Crear contrato", href: id => `/contratos?persona=${encodeURIComponent(id)}#contratos` },
   "open-courses": { label: "Ver cursos", href: () => "/cursos" },
 };

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.10 — 2026-11-03
+
+- Revisión de perfiles pasa a ser una pestaña de Educadores (IA-04), con lo que espera revisión contado en la
+  pestaña; `/perfiles` lleva ahí y el menú de administración pierde una entrada. El paso «Revisar perfil» de la
+  incorporación abre la pestaña.
+
 ## 1.6.9 — 2026-11-03
 
 - Uso de IA muestra «Propuestas usadas» (AIG-4): de lo que la IA propone al redactar, al mejorar una lección, al
