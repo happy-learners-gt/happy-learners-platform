@@ -21,7 +21,7 @@ const newId = () => `b-${crypto.randomUUID().slice(0, 8)}`;
 export function DocumentsPage() {
   const { navigate } = useNavigation();
   const [templates, setTemplates] = useState<TemplateView[] | null>(null), [kinds, setKinds] = useState<Record<ReportKind, ReportKindSpec> | null>(null), [error, setError] = useState("");
-  const [creating, setCreating] = useState(false), [programs, setPrograms] = useState<{ id: string; name: string }[]>([]);
+  const [creating, setCreating] = useState(false), [starting, setStarting] = useState<ReportKind | "">(""), [programs, setPrograms] = useState<{ id: string; name: string }[]>([]);
   useEffect(() => {
     void api<{ templates: TemplateView[]; kinds: Record<ReportKind, ReportKindSpec> }>("/report-templates").then(data => { setTemplates(data.templates); setKinds(data.kinds); }, cause => setError(message(cause)));
     void api<{ programs: { id: string; name: string }[] }>("/programs").then(data => setPrograms(data.programs)).catch(() => setPrograms([]));
@@ -37,7 +37,12 @@ export function DocumentsPage() {
       <div><Link href={`/organizacion/documentos/${item.id}`}><strong>{item.name}</strong></Link>
         <span className="muted"> · {kinds[item.kind].label} · {item.programName ? `Programa ${item.programName}` : "Toda la organización"}</span></div>
       {item.publishedVersion ? <StatusBadge tone="success">Publicada v{item.publishedVersion}</StatusBadge> : <StatusBadge tone="warning">Borrador</StatusBadge>}
-    </li>)}</ul> : <EmptyState icon="file" title="Aún no hay plantillas">La boleta y la constancia se generan con su formato de siempre. Crea una plantilla para usar el membrete y el diseño de la institución.</EmptyState>}
+    </li>)}</ul> : <EmptyState icon="file" title="Aún no hay plantillas"
+      // Documentos (audit 2.90): one step from the empty page to the designer, starting from the document's usual format.
+      action={<div className="button-row">{(Object.keys(kinds) as ReportKind[]).map(kind => <Button key={kind} variant="secondary" icon="plus" busy={starting === kind} disabled={!!starting}
+        onClick={() => { setStarting(kind); void api<{ template: TemplateView }>("/report-templates", "POST", { kind, programId: null, name: kinds[kind].label })
+          .then(result => navigate(`/organizacion/documentos/${result.template.id}`), cause => { setStarting(""); setError(message(cause)); }); }}>{`Empezar con ${kinds[kind].label.toLowerCase()}`}</Button>)}</div>}>
+      La boleta y la constancia se generan con su formato de siempre. Empieza una plantilla desde ese formato para agregar el membrete y el diseño de la institución; nada cambia hasta que la publiques.</EmptyState>}
     {creating && <Modal title="Nueva plantilla" onClose={() => setCreating(false)}>
       <form className="stack" onSubmit={event => {
         event.preventDefault();
