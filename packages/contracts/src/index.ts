@@ -750,7 +750,7 @@ export interface HoursFilter { from: string | null; to: string | null; course: s
 export interface HoursReport {
   filter: HoursFilter; timezone: string; scope: "all" | "own"; rows: HoursRow[]; minutes: number;
   totals: { people: HoursTotal[]; courses: HoursTotal[]; sections: HoursTotal[] };
-  /** What the filters can choose from: the courses, sections and people of the classes the person may see. */
+  /** What the filters can choose from: the courses, sections and people of the classes the person may see in the period (1.6.6). */
   options: { courses: { id: string; name: string }[]; sections: { id: string; name: string; courseId: string }[]; people: { id: string; name: string }[] };
 }
 export interface HoursAdjustmentInput { minutes: number; educatorId?: string; reason: string }
