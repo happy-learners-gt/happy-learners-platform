@@ -158,7 +158,8 @@ test("an expired session asks to sign in again and keeps the unsaved edit", asyn
 });
 
 test("archiving asks for confirmation and can be undone", async ({ page }, info) => {
-  const title = e2eName(info, "Archivo");
+  // QA-03: unique per run; the restored lesson stays, so a repeated run against the same server would find two.
+  const title = e2eName(info, `Archivo ${Date.now().toString(36)}`);
   await signIn(page, "educador-demo", "/cursos/course-exploradores/contenido");
   await createLesson(page, "Greetings", title, "Probar el archivo de lecciones.");
   await page.getByRole("navigation", { name: "Ubicación" }).getByRole("link", { name: "Contenido", exact: true }).click();
