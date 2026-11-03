@@ -84,6 +84,8 @@ test("administration configures programs and library tags; courses inherit what 
   await expect(row).toContainText("Educación primaria");
   await expect(row).toContainText("Fija: nombre de las partes del curso");
 
+  await page.getByRole("navigation", { name: "Secciones de la configuración académica" }).getByRole("link", { name: "Etiquetas" }).click();
+
   await page.getByRole("button", { name: "Crear grupo de etiquetas", exact: true }).click();
   dialog = page.getByRole("dialog", { name: "Crear grupo de etiquetas" });
   await dialog.getByLabel("Nombre").fill(tags);
@@ -100,6 +102,7 @@ test("administration configures programs and library tags; courses inherit what 
   await dialog.getByLabel("Nombre").fill("Comprensión lectora");
   await dialog.getByRole("button", { name: "Guardar" }).click();
   await expect(group).toContainText("Comprensión lectora");
+  await page.getByRole("navigation", { name: "Secciones de la configuración académica" }).getByRole("link", { name: "Estándares" }).click();
   await page.getByText("Niveles educativos · CINE 2011").click();
   await expect(page.getByRole("rowheader", { name: "Secundaria alta" })).toBeVisible();
   // Administration creates the courses.

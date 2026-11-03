@@ -51,7 +51,7 @@ test("a university scheme, a rubric in the grid and a panel finished from Mis tr
   await call(educator, `/sections/${group}/grades/activities/${idOf("Defensa")}/evaluators`, "PUT", { evaluators: [{ userId: educatorId, chair: true }, { userId: carlosId, chair: false }] });
   await call(educator, `/sections/${group}/grades`, "PUT", { scores: [{ activityId: idOf("Examen final"), learnerId: learner, points: 20 }] });
 
-  await signIn(page, "admin-demo", "/configuracion-academica");
+  await signIn(page, "admin-demo", "/configuracion-academica#evaluacion");
   await page.getByRole("button", { name: "Acciones de Universidad: categorías y GPA" }).click();
   await page.getByRole("menuitem", { name: "Editar" }).click();
   await expect(page.getByRole("status", { name: "Vista previa" })).toBeVisible();

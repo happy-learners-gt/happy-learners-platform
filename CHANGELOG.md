@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.11 — 2026-11-03
+
+- Configuración académica se divide en pestañas (ACA-01): Programas, Evaluación, Etiquetas y Estándares, en lugar de
+  cinco paneles apilados. «Administrar esquemas» desde un curso abre Evaluación.
+
 ## 1.6.10 — 2026-11-03
 
 - Revisión de perfiles pasa a ser una pestaña de Educadores (IA-04), con lo que espera revisión contado en la
