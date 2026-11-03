@@ -41,6 +41,7 @@ y qué sigue avanzando mientras tanto.
   Cloudflare y avisa por correo si la plataforma no responde (como el 30-oct, cuando nadie se enteró hasta entrar).
   Sigue pendiente solo la cuenta gratuita (UptimeRobot, Better Stack o similar), que va a nombre del dueño. Un cron de
   GitHub Actions cada 5 min no conviene: en un repositorio privado gastaría ~8 600 min/mes de los 2 000 gratuitos.
+- **Resuelto 03-nov:** el dueño creó el monitor en UptimeRobot y probó la alerta. AP-03 cerrado.
 
 ## AP-04 · Escáneres obligatorios en `main`
 

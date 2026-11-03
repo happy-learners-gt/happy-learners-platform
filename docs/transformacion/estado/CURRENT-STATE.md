@@ -12,7 +12,7 @@
 - **Autorización vigente (02-nov, del usuario):** «sigue adelante con el merge y también todo lo demás»: fusionar y
   desplegar los PR de cada hito con CI verde; aplicar las recomendaciones de la cola que no requieren cuentas ni gasto.
 - **En curso:** nada a medias
-- **Requieren al usuario:** AP-03 sigue esperando la cuenta del monitor; AP-05 pentest manual de pago (SEC-06 gratuito en curso); AP-06 marca
+- **Requieren al usuario:** AP-05 pentest manual de pago (SEC-06 gratuito en curso); AP-06 marca
   («Acervum» en discusión); AP-07 y AP-08 decididos el 03-nov
 - **Siguiente acción:** SEC-07 (ZAP autenticado), AIG-4b, HOME-02, Configuración académica (3.15); el 13-nov, SEC-04
 - **Incidente 03-nov:** #108 se fusionó con el escáner `code` (Semgrep) en rojo porque la automatización solo miraba
