@@ -61,6 +61,9 @@ Puerto del dominio (prompt versionado, esquema, validación)  ◄── evaluaci
 Adaptador: openai (modelo por tarea, AIG-3) │ fixture (CI)
 ```
 
+AIG-6 (1.6.13, AP-07): presupuesto mensual por organización en USD; cada petición a la IA suma las ejecuciones del
+mes (una fila leída por ejecución); las ejecuciones sin precio no cuentan y la página lo avisa.
+
 Orden de trabajo: AIG-1 (hecho en 1.6.1: 60 por persona y hora) → AIG-2 y AIG-4 (M6) → AIG-5 rediseño de «Inteligencia artificial» (M6) → AIG-3
 → AIG-6 cuando el dueño decida el plan.
 

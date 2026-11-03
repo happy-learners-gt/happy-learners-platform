@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { AiPrice, AiRun, AiTotals, AiUsageSummary } from "@happy-learners/domain";
+import type { AiBudget, AiPrice, AiRun, AiTotals, AiUsageSummary } from "@happy-learners/domain";
 import { aiCapabilities, aiDecidedTasks, aiTaskLabels, aiTasks } from "@happy-learners/domain";
 import { api, message } from "../api";
 import { useNavigation } from "../navigation";
@@ -15,7 +15,7 @@ import type { Tone } from "../ui/primitives";
  * the institution, where, who decides and how much of what it proposes is used this month; then what it consumed and
  * cost at the prices administration sets, by task, course and person, and the latest runs. No text is kept.
  */
-type Usage = { engine: "openai" | "fixture" | null; month: string; previousMonth: string; summary: AiUsageSummary; previous: AiTotals; prices: AiPrice[]; unpriced: string[]; recent: (AiRun & { cost: number | null })[] };
+type Usage = { engine: "openai" | "fixture" | null; budget: AiBudget; month: string; previousMonth: string; summary: AiUsageSummary; previous: AiTotals; prices: AiPrice[]; unpriced: string[]; recent: (AiRun & { cost: number | null })[] };
 
 const monthName = (month: string) => new Intl.DateTimeFormat("es", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${month}-01T00:00:00Z`));
 const capitalized = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
@@ -107,6 +107,11 @@ export function AiUsagePage() {
     </nav>
     {!usage.engine && <p className="message-bar warning" role="status"><Icon name="alert" size={18}/>
       <span>La IA no está configurada en esta organización: sus funciones aparecen, pero responden que no está disponible.</span></p>}
+    {/* AIG-6: past 80 % of the month's budget, administration is told before the AI stops. */}
+    {usage.budget.level !== "ok" && <p className="message-bar warning" role="status"><Icon name="alert" size={18}/>
+      <span>{usage.budget.level === "exhausted"
+        ? `Se usó el presupuesto de IA de este mes (${usd(usage.budget.spent)} de ${usd(usage.budget.budget)}): la IA responde que no está disponible y las propuestas en cola esperan al mes próximo.`
+        : `Se usó el ${Math.round(usage.budget.spent / usage.budget.budget * 100)} % del presupuesto de IA de este mes (${usd(usage.budget.spent)} de ${usd(usage.budget.budget)}).`}</span></p>}
     {usage.unpriced.length > 0 && <p className="message-bar warning" role="status"><Icon name="alert" size={18}/>
       <span>Sin precio registrado: {usage.unpriced.join(", ")}. Su costo aparece como «No disponible».</span>
       <Button variant="ghost" onClick={() => setPricing(usage.unpriced[0])}>Registrar precio</Button></p>}
@@ -114,6 +119,7 @@ export function AiUsagePage() {
       { label: "Ejecuciones", value: number(summary.total.runs), icon: "sparkles", hue: "violet" },
       { label: "Propuestas usadas", value: acceptance(summary.total), icon: "check", hue: "teal" },
       { label: "Costo estimado", value: usd(summary.total.cost), icon: "spark", hue: "green" },
+      { label: "Presupuesto de este mes", value: `${usd(usage.budget.spent)} de ${usd(usage.budget.budget)}`, icon: "clock", hue: "amber" },
       { label: "Con error", value: number(summary.total.errors), icon: "alert", hue: "coral" },
     ]}/>
     <p className="muted">{change === null ? `En ${monthName(usage.previousMonth)} no hubo ejecuciones.` : `${change >= 0 ? `${change} % más` : `${-change} % menos`} ejecuciones que en ${monthName(usage.previousMonth)} (${number(previous.runs)}, ${usd(previous.cost)}).`}</p>

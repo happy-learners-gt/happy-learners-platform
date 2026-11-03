@@ -1,4 +1,5 @@
-import type { AiRunStatus, AiTask, AiTokenUsage } from "@happy-learners/domain";
+import type { AiPrice, AiRun, AiRunStatus, AiTask, AiTokenUsage } from "@happy-learners/domain";
+import { aiBudget, aiBudgetMinimumUsd, aiBudgetPerPersonUsd, runCost } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { failureOf } from "./openai";
 import { digest } from "./auth";
@@ -61,4 +62,33 @@ export async function recordOutcome(db: Database, organizationId: string, userId
   const decided = await db.prepare("UPDATE ai_runs SET proposed_items=?,accepted_items=?,decided_at=? WHERE id=? AND organization_id=? AND user_id=? AND status='ok' AND decided_at IS NULL AND created_at>=? RETURNING id")
     .bind(outcome.proposed, outcome.accepted, now.toISOString(), runId, organizationId, userId, new Date(now.getTime() - 86400000).toISOString()).first<{ id: string }>();
   return !!decided;
+}
+
+declare global { interface Env { AI_BUDGET_PER_PERSON_USD?: string; AI_BUDGET_MIN_USD?: string } }
+const usd = (value: string | undefined, fallback: number) => { const amount = Number(value); return value !== undefined && value !== "" && Number.isFinite(amount) && amount >= 0 ? amount : fallback; };
+/**
+ * AIG-6: this month's AI budget of the organization and what it spent at the prices administration registered. The
+ * runs are summed by model and day in the query; Happy Learners sets the amounts per deployment (AI_BUDGET_*).
+ */
+export async function aiBudgetOf(db: Database, organizationId: string, env: Pick<Env, "AI_BUDGET_PER_PERSON_USD" | "AI_BUDGET_MIN_USD">) {
+  const month = `${new Date().toISOString().slice(0, 7)}-01`;
+  const [people, groups, prices] = await db.batch([
+    db.prepare("SELECT count(*) AS total FROM memberships WHERE organization_id=? AND active=1").bind(organizationId),
+    db.prepare(`SELECT model,generator,substr(created_at,1,10) AS day,sum(input_tokens) AS inputTokens,sum(output_tokens) AS outputTokens,sum(input_tokens IS NULL OR output_tokens IS NULL) AS unknown
+      FROM ai_runs WHERE organization_id=? AND created_at>=? GROUP BY model,generator,day`).bind(organizationId, month),
+    db.prepare("SELECT model,effective_from AS effectiveFrom,input_per_million AS inputPerMillion,output_per_million AS outputPerMillion FROM ai_prices WHERE organization_id=?").bind(organizationId),
+  ]) as unknown as [{ total: number }[], { model: string; generator: "openai" | "fixture"; day: string; inputTokens: number | null; outputTokens: number | null; unknown: number }[], AiPrice[]];
+  let spent = 0, unpriced = false;
+  for (const group of groups) {
+    const cost = runCost({ generator: group.generator, model: group.model, createdAt: `${group.day}T00:00:00Z`, inputTokens: group.inputTokens ?? 0, outputTokens: group.outputTokens ?? 0 } as AiRun, prices);
+    if (cost === null || (group.generator === "openai" && group.unknown > 0)) unpriced = true;
+    spent += cost || 0;
+  }
+  return aiBudget(Number(people[0]?.total) || 0, Math.round(spent * 1_000_000) / 1_000_000, unpriced, usd(env.AI_BUDGET_PER_PERSON_USD, aiBudgetPerPersonUsd), usd(env.AI_BUDGET_MIN_USD, aiBudgetMinimumUsd));
+}
+export const aiBudgetSpent = () => Response.json({ error: "La organización usó el presupuesto de IA de este mes. Vuelve a intentar el mes próximo o pide a administración que lo revise en Inteligencia artificial." }, { status: 429 });
+/** The checks before a person's request to the AI: the organization's budget, then their hourly limit. */
+export async function aiGate(db: Database, current: { id: string; organizationId: string }, env: Pick<Env, "AI_BUDGET_PER_PERSON_USD" | "AI_BUDGET_MIN_USD">): Promise<Response | null> {
+  if ((await aiBudgetOf(db, current.organizationId, env)).level === "exhausted") return aiBudgetSpent();
+  return await aiAllowed(db, current.id) ? null : aiLimited();
 }
