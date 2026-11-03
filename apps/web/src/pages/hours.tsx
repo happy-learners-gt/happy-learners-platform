@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { HoursReport, HoursRow, HoursState, HoursTotal } from "@happy-learners/contracts";
 import type { HoursPeriod } from "@happy-learners/domain";
-import { formatMinutes, hoursPeriodRange as periodRange, hoursStateLabels, maxAdjustedMinutes, maxAdjustmentReason, minAdjustmentReason } from "@happy-learners/domain";
+import { formatMinutes, hoursPeriodRange as periodRange, hoursStateLabels, maxAdjustedMinutes, maxAdjustmentReason, maxBatchAdjustments, minAdjustmentReason } from "@happy-learners/domain";
 import { api, message } from "../api";
 import { useNavigation } from "../navigation";
 import { useSession } from "../session";
@@ -40,7 +40,7 @@ type Totalled = "people" | "courses" | "sections";
 export function HoursPage() {
   const { member } = useSession(), { url, navigate } = useNavigation(), { toast } = useFeedback();
   const admin = member.role === "admin";
-  const [report, setReport] = useState<HoursReport | null>(null), [error, setError] = useState(""), [adjusting, setAdjusting] = useState<HoursRow | null>(null);
+  const [report, setReport] = useState<HoursReport | null>(null), [error, setError] = useState(""), [adjusting, setAdjusting] = useState<HoursRow | null>(null), [batch, setBatch] = useState<HoursRow[] | null>(null);
   const custom = !!(url.searchParams.get("desde") || url.searchParams.get("hasta"));
   const requested = url.searchParams.get("periodo") as Period | null;
   const period: Period = custom ? "personalizado" : periods.some(item => item.value === requested) && requested !== "personalizado" ? requested! : "30-dias";
@@ -77,6 +77,8 @@ export function HoursPage() {
   const counted = report.rows.filter(row => row.minutes > 0).length, pending = report.rows.filter(toReview).length;
   const any = Object.keys(keys).some(key => url.searchParams.get(key)) || !!url.searchParams.get("periodo");
   const listed = show === "revisar" ? report.rows.filter(toReview) : report.rows;
+  // HRS-02: the classes «por revisar» that a batch can correct with their planned duration.
+  const batchable = admin ? report.rows.filter(row => toReview(row) && !!row.plannedMinutes && !!row.educatorId).slice(0, maxBatchAdjustments) : [];
   const totals = { people: report.totals.people, courses: report.totals.courses, sections: report.totals.sections };
   return <>
     {header}
@@ -134,9 +136,12 @@ export function HoursPage() {
             {admin && <td><Button variant="ghost" icon="edit" aria-label={`Corregir las horas de la clase del ${sessionDay(row.day, "short")} en ${row.sectionName}`} onClick={() => setAdjusting(row)}>Corregir</Button></td>}
           </tr>)}</tbody>
         </table></div>
+        {show === "revisar" && batchable.length > 0 && <div className="button-row"><Button variant="secondary" icon="check" onClick={() => setBatch(batchable)}>
+          {batchable.length === 1 ? "Corregir 1 clase con su duración planificada" : `Corregir ${batchable.length} clases con su duración planificada`}</Button></div>}
         {listed.length > shown && <div className="button-row"><Button variant="secondary" onClick={() => setShown(shown + pageSize)}>Mostrar {Math.min(pageSize, listed.length - shown)} más de {listed.length - shown}</Button></div>}
       </Section>
     </>}
+    {batch && <BatchDialog rows={batch} onClose={() => setBatch(null)} onDone={async text => { setBatch(null); toast({ message: text }); await load(); }}/>}
     {adjusting && <AdjustDialog row={adjusting} onClose={() => setAdjusting(null)} onDone={async text => { setAdjusting(null); toast({ message: text }); await load(); }}/>}
   </>;
 }
@@ -146,6 +151,34 @@ function Totals({ label, items }: { label: string; items: HoursTotal[] }) {
     <thead><tr><th scope="col">{label}</th><th scope="col">Clases</th><th scope="col">Horas</th></tr></thead>
     <tbody>{items.map(item => <tr key={item.id}><th scope="row">{item.name}</th><td>{item.classes}</td><td>{formatMinutes(item.minutes)}</td></tr>)}</tbody>
   </table></div>;
+}
+
+/** HRS-02: the classes «por revisar» get their planned duration at once, with one reason; each keeps its correction. */
+function BatchDialog({ rows, onClose, onDone }: { rows: HoursRow[]; onClose: () => void; onDone: (text: string) => Promise<void> }) {
+  const [reason, setReason] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const minutes = rows.reduce((sum, row) => sum + (row.plannedMinutes || 0), 0), valid = reason.trim().length >= minAdjustmentReason;
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!valid) return;
+    setBusy(true); setError("");
+    try {
+      const result = await api<{ corrected: number; skipped: number; minutes: number }>("/hours/adjustments", "POST", { sessionIds: rows.map(row => row.sessionId), reason });
+      await onDone(`${result.corrected === 1 ? "1 clase corregida" : `${result.corrected} clases corregidas`} (${formatMinutes(result.minutes)}).${result.skipped ? ` ${result.skipped} ya no estaban por revisar.` : ""} Quedó en la actividad.`);
+    } catch (cause) { setError(message(cause)); setBusy(false); }
+  }
+  return <Modal title="Corregir con la duración planificada" onClose={onClose}>
+    <form className="stack" onSubmit={submit} aria-label="Corregir con la duración planificada"><fieldset className="stack" disabled={busy}>
+      {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
+      <p>{rows.length === 1 ? "1 clase por revisar suma" : `${rows.length} clases por revisar suman`} {formatMinutes(minutes)} con la duración que tenían planificada. Cada una conserva a su educador y su corrección queda en el historial; después puedes corregir cualquiera de a una.</p>
+      <Field label="Motivo de la corrección" hint={`De ${minAdjustmentReason} a ${maxAdjustmentReason} caracteres. Queda en la actividad.`}>
+        <textarea rows={3} required minLength={minAdjustmentReason} maxLength={maxAdjustmentReason} value={reason} onChange={event => setReason(event.target.value)}/>
+      </Field>
+      <div className="modal-actions">
+        <button type="button" className="button ghost" onClick={onClose}>Cancelar</button>
+        <button className="button primary" disabled={!valid}>{busy ? "Guardando…" : "Corregir clases"}</button>
+      </div>
+    </fieldset></form>
+  </Modal>;
 }
 
 /** Administration corrects the minutes or the person of a completed class; the reason is mandatory and goes to the activity. */

@@ -66,6 +66,20 @@ export function hoursAdjustmentInput(value: unknown): { minutes: number; educato
   return { minutes, educatorId: typeof educatorId === "string" ? educatorId : null, reason: reason.trim().replace(/\s+/g, " ").normalize("NFC") };
 }
 
+/**
+ * HRS-02: several classes «por revisar» corrected at once with their planned duration and one reason (up to 100, the
+ * ones on screen). Each keeps its own correction in the history, as if made one by one.
+ */
+export const maxBatchAdjustments = 100;
+export function hoursBatchInput(value: unknown): { sessionIds: string[]; reason: string } | { error: string } {
+  const { sessionIds, reason } = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
+  if (!Array.isArray(sessionIds) || !sessionIds.length || sessionIds.length > maxBatchAdjustments || !sessionIds.every(id => typeof id === "string" && idPattern.test(id)))
+    return { error: `Elige de 1 a ${maxBatchAdjustments} clases para corregir.` };
+  const checked = hoursAdjustmentInput({ minutes: 0, reason });
+  if ("error" in checked) return checked;
+  return { sessionIds: [...new Set(sessionIds as string[])], reason: checked.reason };
+}
+
 /** Totals per person, course and section, the largest first. Rows without a person are left out of the people. */
 export function hoursTotals(rows: HoursRow[]) {
   const group = (key: (row: HoursRow) => [string, string] | null) => {
