@@ -90,9 +90,11 @@ test("HOME-02: the educator's home on a phone stays short and the folded activit
     await expect(feed.locator("li:visible")).toHaveCount(total);
   }
   // HOME-03: sections and courses fold the same way; every button opens its list in full.
-  for (const folded of await page.locator(".fold-on-phones").all()) {
-    const list = folded.locator(":scope > :first-child > li"), total = await list.count();
-    await folded.getByRole("button", { name: /^Mostrar \d+ más$/ }).click();
-    await expect(list.filter({ visible: true })).toHaveCount(total);
+  // Opening a list removes its fold class, so each wrapper is held as an element, not found again by its class.
+  while (await page.locator(".fold-on-phones").count()) {
+    const wrapper = (await page.locator(".fold-on-phones").first().elementHandle())!;
+    const total = await wrapper.evaluate(element => element.firstElementChild!.children.length);
+    await (await wrapper.$("button"))!.click();
+    await expect.poll(() => wrapper.evaluate(element => [...element.firstElementChild!.children].filter(item => (item as HTMLElement).offsetParent !== null).length)).toBe(total);
   }
 });
