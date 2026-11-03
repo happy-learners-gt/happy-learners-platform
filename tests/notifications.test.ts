@@ -10,6 +10,7 @@ import { dailyMailCap, maxNotificationsPerRequest, notificationCatalog, notifica
 import type { MailSender, NotificationType } from "../packages/domain/src/index";
 import { notify } from "../apps/api/src/notify";
 import type { NotifyStore as Database } from "../apps/api/src/notify";
+import { listenOnTestPort } from "./test-port";
 
 // ST-124 (HL-170): e-mail notifications. Domain rules first, then the built Worker on a fresh store (no Brevo key).
 describe("HL-170 notification rules and message", () => {
@@ -116,8 +117,7 @@ let logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-notifications-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

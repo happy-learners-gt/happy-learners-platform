@@ -7,6 +7,7 @@ import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { availabilityInput, documentStatus, staffDocumentInput, staffProfileInput } from "../packages/domain/src/index";
+import { listenOnTestPort } from "./test-port";
 
 // ST-149 (educator profile) and ST-150 (staff file), tracked as HL-15. Domain rules first, then the built Worker.
 describe("HL-15 ST-149 ST-150 profile and staff file rules", () => {
@@ -43,8 +44,7 @@ let logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-profiles-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

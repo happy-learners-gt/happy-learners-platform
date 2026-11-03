@@ -6,6 +6,7 @@ import { createServer } from "node:net";
 import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { listenOnTestPort } from "./test-port";
 
 // ST-049: two sections of one course keep different plans, and «igual» still answers as it does today.
 
@@ -15,8 +16,7 @@ let logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-freedom-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

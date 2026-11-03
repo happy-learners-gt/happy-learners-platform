@@ -7,6 +7,7 @@ import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import type { Lesson, Resource } from "../packages/contracts/src/index";
+import { listenOnTestPort } from "./test-port";
 
 let worker: ChildProcess;
 let origin: string;
@@ -14,8 +15,7 @@ let logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-acceptance-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   const port = address.port;

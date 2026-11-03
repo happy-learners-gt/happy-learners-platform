@@ -8,6 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { EducatorConflict } from "../packages/contracts/src/index";
 import { outsideAvailability } from "../packages/domain/src/index";
+import { listenOnTestPort } from "./test-port";
 
 // DEC-047: the weekly availability each educator declares counts when they are assigned to a section. Classes outside
 // it need a confirmation with a reason, like an overlap with another section (DEC-035), and the confirmation is kept.
@@ -29,8 +30,7 @@ let logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-contracts-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

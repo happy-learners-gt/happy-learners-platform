@@ -6,6 +6,7 @@ import { createServer } from "node:net";
 import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { listenOnTestPort } from "./test-port";
 
 let worker: ChildProcess;
 let origin = "";
@@ -13,8 +14,7 @@ let logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-agenda-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

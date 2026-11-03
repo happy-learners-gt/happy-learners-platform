@@ -6,6 +6,7 @@ import { createServer } from "node:net";
 import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { listenOnTestPort } from "./test-port";
 
 // Security audit 2026-11 (docs/security/auditoria-2026-11.md): every route the API declares, read from its source,
 // answers 401 without a session unless it is one of the public routes listed here on purpose. A new route that skips
@@ -15,8 +16,7 @@ let origin = "", logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-routes-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

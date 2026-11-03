@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.17 — 2026-11-03
+
+- Pruebas (QA-05): los Workers de prueba ya no fallan al arrancar con «Address already in use». Elegían un puerto que
+  el sistema podía dar enseguida a otro Worker; ahora usan puertos fuera de ese rango y saltan los ocupados.
+
 ## 1.6.16 — 2026-11-03
 
 - «Inteligencia artificial» mide también las propuestas de lecciones y el mapa al plan (AIG-4b): cuántas lecciones
