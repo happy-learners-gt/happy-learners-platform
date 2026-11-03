@@ -52,6 +52,7 @@ Con los datos de demostración, en el Worker local; las respuestas son idéntica
 | `/api/classes` | 931 | 931 | 11 | 11 |
 | `/api/sections/:id/grades` | 546 | — | — | — |
 | `/api/session` | 17 | — | — | — |
+| `/api/hours` (30 días, 1.6.6) | 540 → 292 | — | 590 → 291 | — |
 | `/api/agenda` (7 semanas, 1.6.0) | 503 → 294 | — | 6 483 → 1 829 (organización) | — |
 
 Qué se cambió en 1.5.7: cada clase guarda cuántas marcas de asistencia tiene y cuántas son presente o tarde
