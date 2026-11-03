@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.18 — 2026-11-03
+
+- Inicio en el teléfono (HOME-02): la actividad reciente muestra las tres últimas entradas y un botón «Mostrar N más»
+  para el resto; la página del educador baja de 3 849 a 3 412 px de alto sin ocultar nada para siempre.
+
 ## 1.6.17 — 2026-11-03
 
 - Pruebas (QA-05): los Workers de prueba ya no fallan al arrancar con «Address already in use». Elegían un puerto que

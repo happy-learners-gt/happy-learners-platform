@@ -74,3 +74,18 @@ test("the profile's section bar keeps the section chosen through the scroll and 
   await page.mouse.wheel(0, -100000);
   await expect(bar.locator("[aria-current=true]")).toHaveText(labels[0]);
 });
+
+test("HOME-02: the educator's home on a phone stays short and the folded activity opens in full", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile", "the fold is for narrow screens");
+  await signIn(page, "educador-demo", "/inicio");
+  await settle(page);
+  // Other specs add classes and activity: the bound leaves room for them while catching a return to ~5 900 px.
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(3800);
+  const feed = page.locator(".activity-feed").first(), more = page.getByRole("button", { name: /^Mostrar \d+ más$/ });
+  if (await more.count()) {
+    await expect(feed.locator("li:visible")).toHaveCount(3);
+    const total = await feed.locator("li").count();
+    await more.click();
+    await expect(feed.locator("li:visible")).toHaveCount(total);
+  }
+});
