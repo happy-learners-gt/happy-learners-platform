@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.20 — 2026-11-03
+
+- Documentación del programa de transformación: tercera pasada de la auditoría sobre los módulos que no se habían
+  tocado (Cursos 3.75 con 9 945 px en móvil, Roles y accesos 3.40, Documentos 3.40, Notificaciones 3.60, Biblioteca
+  3.70, Equipo 3.85), hitos al día (M2 a M6 hechos, M7 en curso) y la segunda ola en la cola (M8 a M11). Cierre del
+  Sprint 04.
+
 ## 1.6.19 — 2026-11-03
 
 - Inicio en el teléfono (HOME-03): «Tus secciones» muestra dos y «Mis cursos» tres, cada lista con «Mostrar N más»

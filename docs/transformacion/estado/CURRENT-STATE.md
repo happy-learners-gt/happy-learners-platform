@@ -6,7 +6,7 @@
 - **Producción:** 1.6.19 (`bed2d16`, PR #122). Del 02 al 03-nov: #103–#122 (1.6.0–1.6.19), cada uno con todos los checks
   del PR, `verify`, `deploy` y `critical-flows` verdes en `main` (salvo #108, ver incidente). Escaneo completo de
   seguridad en `main` el 03-nov: verde.
-- **Rama:** `feat/HL-15-estado-1619` (desde `main`), solo estado, sin push.
+- **Rama:** `feat/HL-15-segunda-ola` (1.6.20: AUD-03 y plan de la segunda ola; cierre de SPR-004).
 - **Últimas verificaciones:** `./scripts/verify` verde (77 archivos, 523 pruebas); E2E afectadas con build limpia en
   escritorio y móvil en cada PR; CI verde en cada PR.
 - **Autorización vigente (02-nov, del usuario):** «sigue adelante con el merge y también todo lo demás»: fusionar y
