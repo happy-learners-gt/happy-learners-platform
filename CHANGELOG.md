@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.16 — 2026-11-03
+
+- «Inteligencia artificial» mide también las propuestas de lecciones y el mapa al plan (AIG-4b): cuántas lecciones
+  propuestas en el mes se publicaron o se descartaron, y cuántos mapas revisados por la IA confirmó el equipo tal cual
+  o corrigió. Se lee de lo que ya existe; no se guarda nada nuevo.
+
 ## 1.6.15 — 2026-11-03
 
 - IA (AIG-3): redactar un campo y sugerir campos de documentos pueden usar un modelo menor y más barato,

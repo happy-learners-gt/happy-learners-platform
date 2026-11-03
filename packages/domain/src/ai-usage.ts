@@ -21,7 +21,7 @@ export interface AiUsageSummary { total: AiTotals; byTask: (AiTotals & { task: A
 export const aiTasks: AiTask[] = ["lesson-proposal", "book-map", "lesson-review-explain", "lesson-improve", "write", "rules-to-constraints", "suggest-fields"];
 /**
  * AIG-4: the tasks whose answer the person decides on item by item where it is shown. Lesson proposals and the book
- * map are decided later, in the lesson and the map themselves, and are not measured yet.
+ * map are decided later, in the lesson and the map themselves; their acceptance is read from the data (AIG-4b).
  */
 export const aiDecidedTasks: AiTask[] = ["lesson-improve", "write", "rules-to-constraints", "suggest-fields"];
 export const aiTaskLabels: Record<AiTask, string> = {

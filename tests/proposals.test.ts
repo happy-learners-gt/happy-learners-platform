@@ -226,6 +226,11 @@ describe("lesson proposals and the delivery PDF on the built Worker", () => {
     await read(await as(educator, `/lessons/${first.id}`, "PUT", { ...current, courseUnitId: unit, title: "CAMBIO SIN PUBLICAR", instructions: "", draftVersion: current.draftVersion }));
     // Editing through the regular API keeps the provenance.
     expect((await read<{ lesson: Lesson }>(await as(educator, `/lessons/${first.id}?draft=1`))).lesson.generated).toMatchObject({ source: "fixture", indicator: "1.1" });
+    // AIG-4b: a proposed lesson counts as used once published; the other is still undecided.
+    const later = (await read<{ later: { proposals: { proposed: number; used: number; discarded: number } } }>(await as(admin, "/organization/ai-usage"))).later.proposals;
+    expect(later.proposed).toBeGreaterThanOrEqual(2);
+    expect(later.used).toBeGreaterThanOrEqual(1);
+    expect(later.used).toBeLessThan(later.proposed);
 
     // The delivery PDF: only the published version, with the letterhead and the footer.
     const group = (await read<{ id: string }>(await as(admin, `/courses/${course}/groups`, "POST", { name: "Sexto A" }), 201)).id;
@@ -303,6 +308,10 @@ describe("book map on the built Worker (rebanada 5b)", () => {
     const asked = await read<CourseProposals>(await as(educator, `/courses/${course}/proposals`, "POST", { unitId: unit, outcomeIds: [polygons.outcomeId, perimeter.outcomeId] }), 202);
     expect(asked.jobs[0].items.map(item => [item.pages, item.status])).toEqual([[[], "error"], [[3], "queued"]]);
     expect(asked.jobs[0].items[0].error).toContain("marcaron que el libro no trata");
+    // AIG-4b: the maps the AI reviewed are counted, with what the team confirmed as proposed or corrected.
+    const maps = (await read<{ later: { bookMap: { reviewed: number; kept: number; changed: number } } }>(await as(admin, "/organization/ai-usage"))).later.bookMap;
+    expect(maps.reviewed).toBeGreaterThanOrEqual(1);
+    expect(maps.kept + maps.changed).toBeLessThanOrEqual(maps.reviewed);
     expect(calendar.code).toBe("7.3");
   }, 60_000);
 });
