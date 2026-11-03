@@ -9,7 +9,7 @@
 
 ## Hecho
 
-- 1.6.0–1.6.17 en producción (#103–#120, 02 y 03-nov): menú y Agenda por rol, Inicio por excepciones, Horas por
+- 1.6.0–1.6.18 en producción (#103–#121, 02 y 03-nov): menú y Agenda por rol, Inicio por excepciones, Horas por
   periodo y con la mitad de lecturas, R1, límite de IA (H4), incorporación de educadores (con agregar a un curso),
   calendario unificado, horario vigente con choques, orden estable de la actividad, contraste AA en oscuro y
   segunda pasada de la auditoría (AUD-02). 1.6.8 (DOC-01, #111): empezar una plantilla de documento en un paso. 1.6.9 (AIG-4/5): propuestas usadas e
@@ -17,8 +17,8 @@
 
 ## Siguiente acción
 
-1. `git status` y `git fetch && git merge origin/main` si avanzó. Confirmar que el PR de 1.6.18 está fusionado.
-2. Siguiente de la cola: el 13-nov SEC-04 (escáneres obligatorios); PERF-04 (P3); HLP-01 espera AP-06.
+1. `git status` y `git fetch && git merge origin/main` si avanzó. Rama `feat/HL-15-estado-1618` con este estado sin push.
+2. Siguiente de la cola: HOME-03 (P3); el 13-nov SEC-04 (escáneres obligatorios); PERF-04 (P3); HLP-01 espera AP-06.
    Decisiones del dueño del 03-nov en `aprobaciones.md` (AP-03…AP-08).
 3. Por cada hito: `rm -rf build && npm run build`, E2E afectadas, `./scripts/verify`, versión y CHANGELOG, push, PR,
    **todos** los checks verdes (también `code`/Semgrep; correr `uvx semgrep scan --config .semgrep` antes) →
@@ -27,6 +27,9 @@
    revisando antes que no hubo falsos positivos.
 
 ## Lecciones de esta sesión
+
+- En E2E con datos compartidos, no fijar umbrales que dependen de cuántos datos agregaron otras pruebas (alto
+  total de una página): medir el bloque que cambia.
 
 - Las pruebas sobre el Worker no deben usar fechas fijas cercanas: el Worker solo planifica clases desde hoy y
   `academic-years`/`availability` vencieron el 03-nov. Usar «el lunes siguiente a hoy».
