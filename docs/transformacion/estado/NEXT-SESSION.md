@@ -15,10 +15,10 @@
 
 ## Siguiente acción
 
-1. `gh pr checks 104`. Verde → `gh pr merge 104 --merge` (autorizado por el usuario el 02-nov) y vigilar `verify`,
+1. `gh pr checks <PR 1.6.2>` (ver `gh pr list`). Verde → `gh pr merge <n> --merge` (autorizado por el usuario el 02-nov) y vigilar `verify`,
    `deploy` y `critical-flows` en `main` (`gh run list --branch main -L 2`). Rojo → leer el log y corregir en
-   `feat/HL-15-flujos-e-ia`.
-2. `git switch feat/HL-15-incorporacion && git merge origin/main` (PPL-01, 1.6.2, sin push).
+   `feat/HL-15-incorporacion`.
+2. Antes de cada push: `rm -rf build && npm run build` y las E2E afectadas (una build vieja ocultó un fallo en #104).
 3. Siguiente de la cola: **CAL-01** (calendario institucional unificado, F2 en `flujos.md`; diseño primero en
    `docs/design/`) o **PPL-02**. Al cerrar un hito: versión, verify, push, PR, CI verde, fusionar.
 4. **13-nov:** SEC-04, escáneres obligatorios en `main` (`gh api repos/happy-learners-gt/happy-learners-platform/branches/main/protection`,
