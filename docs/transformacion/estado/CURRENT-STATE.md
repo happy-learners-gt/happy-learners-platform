@@ -6,15 +6,15 @@
 - **Producción:** 1.6.11 (`6f61d63`, PR #114). Del 02 al 03-nov: #103–#114 (1.6.0–1.6.11), cada uno con todos los checks
   del PR, `verify`, `deploy` y `critical-flows` verdes en `main` (salvo #108, ver incidente). Escaneo completo de
   seguridad en `main` el 03-nov: verde.
-- **Rama:** `feat/HL-15-estado-1611` (desde `main`), solo estado, sin push.
+- **Rama:** `feat/HL-15-horas-contrato` (1.6.12: HRS-03 por AP-08).
 - **Últimas verificaciones:** `./scripts/verify` verde (77 archivos, 523 pruebas); E2E afectadas con build limpia en
   escritorio y móvil en cada PR; CI verde en cada PR.
 - **Autorización vigente (02-nov, del usuario):** «sigue adelante con el merge y también todo lo demás»: fusionar y
   desplegar los PR de cada hito con CI verde; aplicar las recomendaciones de la cola que no requieren cuentas ni gasto.
 - **En curso:** nada a medias
-- **Requieren al usuario:** AP-03 cuenta del monitor; AP-05 proveedor y presupuesto del pentest; AP-06 marca y empresa;
-  AP-07 tope de IA por organización; AP-08 montos según contrato en Horas (DEC-043)
-- **Siguiente acción:** AIG-4b, HOME-02, Configuración académica (3.15); el 13-nov, SEC-04
+- **Requieren al usuario:** AP-03 sigue esperando la cuenta del monitor; AP-05 pentest manual de pago (SEC-06 gratuito en curso); AP-06 marca
+  («Acervum» en discusión); AP-07 y AP-08 decididos el 03-nov
+- **Siguiente acción:** fusionar 1.6.12; luego AIG-6 (presupuesto de IA, AP-07), SEC-06 (ZAP contra la vista previa), AIG-4b, HOME-02, Configuración académica (3.15); el 13-nov, SEC-04
 - **Incidente 03-nov:** #108 se fusionó con el escáner `code` (Semgrep) en rojo porque la automatización solo miraba
   `verify`. Corregido en 1.6.6 (#109, todos los checks verdes);
   desde ahora la fusión automática exige que todos los checks pasen.
