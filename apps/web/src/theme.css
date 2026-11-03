@@ -111,6 +111,8 @@
   /* Fluent's dark brand foreground (step 100) is under 4.5:1 on dark surfaces with this ramp; step 130 passes. */
   --color-primary-ink: var(--brand-130); --color-info: var(--brand-130);
   --color-primary-line: var(--brand-60);
+  /* AUD-02: the status red (#dc626d) is 3.97:1 on a danger badge over a toned card; Fluent's dark red foreground passes (≥ 4.9:1). */
+  --color-danger: var(--colorPaletteRedForeground1);
   --gradient-brand: linear-gradient(135deg, color-mix(in srgb, var(--brand-40) 70%, var(--color-canvas)) 0%, color-mix(in srgb, var(--brand-60) 48%, var(--color-canvas)) 100%);
   --welcome-shape: color-mix(in srgb, var(--color-on-primary) 6%, transparent);
   --welcome-shape-strong: color-mix(in srgb, var(--color-on-primary) 12%, transparent);
