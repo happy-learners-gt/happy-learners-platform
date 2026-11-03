@@ -744,6 +744,8 @@ export interface HoursRow {
   day: string; startedAt: string | null; completedAt: string;
   educatorId: string | null; educatorName: string | null; computedMinutes: number; minutes: number; state: HoursState;
   adjustment: HoursAdjustment | null; adjustments: number;
+  /** The class's planned duration, which a batch correction gives to the classes «por revisar» (HRS-02). */
+  plannedMinutes?: number | null;
 }
 export interface HoursTotal { id: string; name: string; minutes: number; classes: number }
 export interface HoursFilter { from: string | null; to: string | null; course: string | null; section: string | null; person: string | null }

@@ -7,6 +7,9 @@
   incorporación abre la pestaña.
 - Horas efectivas ya no suma en silencio solo parte del historial (PERF-03): si «Todo el historial» pasa de 5 000
   clases, la página avisa que los totales son parciales y la exportación pide elegir un periodo.
+- Horas efectivas corrige en lote (HRS-02): en «Por revisar», administración da a las clases sin registro de inicio
+  o de más de 8 h su duración planificada, con un solo motivo. Cada clase conserva su educador y su corrección en el
+  historial, y la actividad registra el lote.
 
 ## 1.6.9 — 2026-11-03
 
