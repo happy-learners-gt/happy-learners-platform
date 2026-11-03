@@ -25,6 +25,12 @@ pentest, que sigue siendo requisito antes de instituciones de pago (`docs/securi
 | Divulgación de IP privada / marcas de tiempo en JS | Bajo | **Falso positivo:** cadenas del paquete de íconos y de la librería de fechas |
 | Contenido almacenable / aplicación moderna | Informativo | Sin acción |
 
+## Corrida en CI del 03-nov-2026 (`main` 1.6.13, run 41689429482)
+
+Confirma las correcciones: ya no aparecen el comodín de CSP ni la falta de COOP/CORP. Quedan solo los aceptados o
+falsos positivos de la tabla anterior (`style-src 'unsafe-inline'`, COEP, IP privada y marcas de tiempo en JS,
+informativos). Sin hallazgos altos.
+
 ## Siguiente
 
 - Escaneo autenticado (contexto de ZAP con inicio de sesión de las cuentas de prueba) para las páginas internas y la

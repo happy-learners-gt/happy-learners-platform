@@ -9,7 +9,7 @@
 
 ## Hecho
 
-- 1.6.0–1.6.12 en producción (#103–#115, 02 y 03-nov): menú y Agenda por rol, Inicio por excepciones, Horas por
+- 1.6.0–1.6.13 en producción (#103–#116, 02 y 03-nov): menú y Agenda por rol, Inicio por excepciones, Horas por
   periodo y con la mitad de lecturas, R1, límite de IA (H4), incorporación de educadores (con agregar a un curso),
   calendario unificado, horario vigente con choques, orden estable de la actividad, contraste AA en oscuro y
   segunda pasada de la auditoría (AUD-02). 1.6.8 (DOC-01, #111): empezar una plantilla de documento en un paso. 1.6.9 (AIG-4/5): propuestas usadas e
@@ -17,7 +17,7 @@
 
 ## Siguiente acción
 
-1. `git status` y `git fetch && git merge origin/main` si avanzó. Confirmar que el PR de 1.6.13 está fusionado.
+1. `git status` y `git fetch && git merge origin/main` si avanzó. Rama `feat/HL-15-estado-1613` con este estado sin push.
 2. Siguiente de la cola: **SEC-07** (ZAP autenticado contra el Worker local), **AIG-4b**, HOME-02, QA-03.
    Decisiones del dueño del 03-nov en `aprobaciones.md` (AP-03…AP-08).
 3. Por cada hito: `rm -rf build && npm run build`, E2E afectadas, `./scripts/verify`, versión y CHANGELOG, push, PR,
