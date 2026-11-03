@@ -56,3 +56,51 @@ jobs:
           name: zap-baseline-${{ github.sha }}
           path: zap/
           if-no-files-found: warn
+
+  # SEC-07: the same local Worker with administration signed in; active rules too, only because it is local.
+  authenticated:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Start the Worker locally
+        run: |
+          node_modules/.bin/wrangler dev --local --config build/wrangler.json --ip 127.0.0.1 --port 8787 --inspector-port 0 --persist-to "$RUNNER_TEMP/db" > "$RUNNER_TEMP/worker.log" 2>&1 &
+          for attempt in $(seq 1 90); do curl -sf http://127.0.0.1:8787/api/health && exit 0; sleep 1; done
+          cat "$RUNNER_TEMP/worker.log"; exit 1
+      - name: ZAP with a signed-in session
+        run: |
+          # The demo's synthetic account, only on this runner's local Worker.
+          cookie="$(curl -s -D - -o /dev/null -X POST http://127.0.0.1:8787/api/login -H 'Content-Type: application/json' -H 'Origin: http://127.0.0.1:8787' \
+            -d '{"username":"admin-demo","password":"Aprender-2026!"}' | grep -i '^set-cookie: hl_session=' | head -1 | sed 's/^[Ss]et-[Cc]ookie: //; s/;.*//')"
+          [ -n "$cookie" ] || { echo "No se pudo iniciar sesión"; exit 1; }
+          echo "::add-mask::$cookie"
+          mkdir -p zap && chmod 777 zap && sed "s|__SESSION_COOKIE__|$cookie|" .zap/authenticated.yaml > zap/authenticated.yaml
+          docker run --rm --network host -e TARGET=http://127.0.0.1:8787 -v "$PWD/zap:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable \
+            zap.sh -cmd -autorun /zap/wrk/authenticated.yaml
+      - name: Summary
+        if: always()
+        run: |
+          [ -f zap/zap-authenticated.json ] || { echo "ZAP no produjo informe." >> "$GITHUB_STEP_SUMMARY"; exit 0; }
+          {
+            echo "## ZAP con sesión (reglas pasivas y activas)"
+            echo "| Riesgo | Hallazgo | Instancias |"
+            echo "| --- | --- | --- |"
+            jq -r '.site[].alerts[] | "| \(.riskdesc) | \(.name) | \(.count) |"' zap/zap-authenticated.json
+          } >> "$GITHUB_STEP_SUMMARY"
+          # The plan carries the session: it is not uploaded.
+          rm -f zap/authenticated.yaml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-authenticated-${{ github.sha }}
+          path: zap/
+          if-no-files-found: warn

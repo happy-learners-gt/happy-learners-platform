@@ -1,0 +1,77 @@
+# SEC-07 (docs/security/dast.md): ZAP with a signed-in session against a Worker started on the same machine, never
+# production nor the preview. TARGET comes from the environment; ZAP does not expand variables in the replacer, so the
+# workflow writes the session cookie over __SESSION_COOKIE__ in a copy of this plan. The cookie is added to every request; logout, password, restore and backup are left out so the scan neither ends its
+# own session nor overwrites the data. The single-page app's routes are not links, so the API is seeded explicitly.
+env:
+  contexts:
+    - name: platform
+      urls: ["${TARGET}"]
+      includePaths: ["${TARGET}.*"]
+      excludePaths:
+        - ".*/api/logout.*"
+        - ".*/api/account/password.*"
+        - ".*/password.*"
+        - ".*/api/organization/(restore|backup).*"
+        - ".*/api/login.*"
+  parameters:
+    failOnError: true
+    progressToStdout: true
+jobs:
+  - type: replacer
+    rules:
+      - description: session
+        matchType: req_header
+        matchString: Cookie
+        replacementString: "__SESSION_COOKIE__"
+      - description: origin
+        matchType: req_header
+        matchString: Origin
+        replacementString: "${TARGET}"
+  - type: requestor
+    requests:
+      - url: "${TARGET}/inicio"
+      - url: "${TARGET}/api/session"
+      - url: "${TARGET}/api/courses"
+      - url: "${TARGET}/api/courses/course-exploradores"
+      - url: "${TARGET}/api/sections"
+      - url: "${TARGET}/api/programs"
+      - url: "${TARGET}/api/members"
+      - url: "${TARGET}/api/people"
+      - url: "${TARGET}/api/contracts"
+      - url: "${TARGET}/api/profile-reviews"
+      - url: "${TARGET}/api/hours?from=2026-01-01&to=2026-12-31"
+      - url: "${TARGET}/api/activity?limit=20"
+      - url: "${TARGET}/api/agenda"
+      - url: "${TARGET}/api/calendar"
+      - url: "${TARGET}/api/search?q=ingles"
+      - url: "${TARGET}/api/organization"
+      - url: "${TARGET}/api/organization/ai-usage"
+      - url: "${TARGET}/api/report-templates"
+      - url: "${TARGET}/api/legal/documents"
+      - url: "${TARGET}/api/access/matrix"
+      - url: "${TARGET}/api/onboarding/people"
+      - url: "${TARGET}/api/progress"
+      - url: "${TARGET}/api/resources"
+      - url: "${TARGET}/api/taxonomy"
+  - type: spider
+    parameters:
+      context: platform
+      maxDuration: 2
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 5
+  - type: activeScan
+    parameters:
+      context: platform
+      maxScanDurationInMins: 12
+      maxRuleDurationInMins: 2
+  - type: report
+    parameters:
+      template: traditional-json
+      reportDir: /zap/wrk
+      reportFile: zap-authenticated.json
+  - type: report
+    parameters:
+      template: traditional-html
+      reportDir: /zap/wrk
+      reportFile: zap-authenticated.html
