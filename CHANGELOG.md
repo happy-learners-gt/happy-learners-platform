@@ -2,6 +2,7 @@
 
 ## 1.6.5 — 2026-11-02
 
+- La actividad ordena los eventos del mismo instante por orden de registro (antes por su identificador, al azar): la lista ya no cambia de orden entre lecturas.
 - Incorporación (PPL-02): el paso «Equipo de un curso» agrega a la persona a un curso desde su lista, con su rol (responsable o colabora); usa la misma ruta y la misma guardia de versión que Curso › Configuración. Las secciones se siguen asignando en el curso, donde se resuelven los choques de horario.
 
 ## 1.6.4 — 2026-11-02
