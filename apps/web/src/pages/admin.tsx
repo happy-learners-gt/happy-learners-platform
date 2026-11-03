@@ -286,13 +286,27 @@ function TemporaryPassword({ issued, onClose }: { issued: Issued; onClose: () =>
   </Modal>;
 }
 
+/** ACA-01: one tab per thing administered, so the page stays one screen tall (as Educadores and Contratos). */
+const academicTabs = [
+  { id: "programas", label: "Programas", href: "/configuracion-academica" },
+  { id: "evaluacion", label: "Evaluación", href: "/configuracion-academica#evaluacion" },
+  { id: "etiquetas", label: "Etiquetas", href: "/configuracion-academica#etiquetas" },
+  { id: "estandares", label: "Estándares", href: "/configuracion-academica#estandares" },
+] as const;
+type AcademicTab = (typeof academicTabs)[number]["id"];
+const academicTabOf = (hash: string): AcademicTab => academicTabs.find(item => `#${item.id}` === hash)?.id || "programas";
+
 export function AcademicSettings() {
-  return <AdminOnly title="Configuración académica"><PageHeader title="Configuración académica" description="Programas que agrupan cursos y comparten su configuración, etiquetas para la biblioteca y los estándares con que se describe cada curso."/>
-    <ProgramEditor/>
-    <GradingSchemes/>
-    <TaxonomyEditor/>
-    <CurriculumPackages/>
-    <StandardsReference/>
+  const { url } = useNavigation();
+  const tab = academicTabOf(url.hash);
+  return <AdminOnly title="Configuración académica"><PageHeader title="Configuración académica" description="Programas que agrupan cursos y comparten su configuración, esquemas de evaluación, etiquetas para la biblioteca y los estándares con que se describe cada curso."/>
+    <nav className="tabs scrollable-tabs" aria-label="Secciones de la configuración académica">
+      {academicTabs.map(item => <Link key={item.id} href={item.href} className="tab" aria-current={tab === item.id ? "page" : undefined}>{item.label}</Link>)}
+    </nav>
+    {tab === "programas" && <ProgramEditor/>}
+    {tab === "evaluacion" && <GradingSchemes/>}
+    {tab === "etiquetas" && <TaxonomyEditor/>}
+    {tab === "estandares" && <><CurriculumPackages/><StandardsReference/></>}
   </AdminOnly>;
 }
 
