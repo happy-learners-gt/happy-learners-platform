@@ -21,15 +21,19 @@ const capitalized = (text: string) => text.charAt(0).toUpperCase() + text.slice(
 const shift = (month: string, by: number) => { const date = new Date(`${month}-01T00:00:00Z`); date.setUTCMonth(date.getUTCMonth() + by); return date.toISOString().slice(0, 7); };
 const number = (value: number) => new Intl.NumberFormat("es").format(value);
 export const usd = (value: number | null) => value === null ? "No disponible" : new Intl.NumberFormat("es", { style: "currency", currency: "USD", minimumFractionDigits: value > 0 && value < 0.01 ? 4 : 2 }).format(value);
+/** AIG-4: share of what the AI proposed that people used, over the answers they decided on. */
+const acceptance = (totals: AiTotals) => totals.acceptance === null ? "—" : `${Math.round(totals.acceptance * 100)} %`;
+const used = (totals: AiTotals) => totals.acceptance === null ? "—" : `${acceptance(totals)} (${number(totals.acceptedItems)} de ${number(totals.proposedItems)})`;
 const seconds = (ms: number) => `${new Intl.NumberFormat("es", { maximumFractionDigits: 1 }).format(ms / 1000)} s`;
 const statusOf: Record<AiRun["status"], [string, Tone]> = { ok: ["Correcta", "success"], error: ["Error", "danger"], transient: ["Se reintenta", "warning"], refused: ["Rechazada", "warning"], incomplete: ["Incompleta", "warning"] };
 
 function Breakdown({ title, rows }: { title: string; rows: (AiTotals & { label: string })[] }) {
   return <div className="table-card" role="region" aria-label={title} tabIndex={0}><table className="ai-usage-table">
     <caption className="sr-only">{title}</caption>
-    <thead><tr><th scope="col">{title}</th><th scope="col">Ejecuciones</th><th scope="col">Errores</th><th scope="col">Tokens</th><th scope="col">Costo estimado</th><th scope="col">Duración media</th></tr></thead>
+    <thead><tr><th scope="col">{title}</th><th scope="col">Ejecuciones</th><th scope="col">Errores</th><th scope="col">Propuestas usadas</th><th scope="col">Tokens</th><th scope="col">Costo estimado</th><th scope="col">Duración media</th></tr></thead>
     <tbody>{rows.map(row => <tr key={row.label}>
       <th scope="row">{row.label}</th><td>{number(row.runs)}</td><td>{row.errors ? number(row.errors) : "—"}</td>
+      <td>{used(row)}</td>
       <td>{number(row.inputTokens + row.outputTokens)}</td><td>{usd(row.cost)}</td><td>{seconds(row.averageMs)}</td>
     </tr>)}</tbody>
   </table></div>;
@@ -90,11 +94,15 @@ export function AiUsagePage() {
       { label: "Ejecuciones", value: number(summary.total.runs), icon: "sparkles", hue: "violet" },
       { label: "Costo estimado", value: usd(summary.total.cost), icon: "spark", hue: "green" },
       { label: "Tokens", value: number(summary.total.inputTokens + summary.total.outputTokens), icon: "text", hue: "sky" },
+      { label: "Propuestas usadas", value: acceptance(summary.total), icon: "check", hue: "teal" },
       { label: "Con error", value: number(summary.total.errors), icon: "alert", hue: "coral" },
     ]}/>
     <p className="muted">{change === null ? `En ${monthName(usage.previousMonth)} no hubo ejecuciones.` : `${change >= 0 ? `${change} % más` : `${-change} % menos`} ejecuciones que en ${monthName(usage.previousMonth)} (${number(previous.runs)}, ${usd(previous.cost)}).`}</p>
     {summary.total.runs === 0 ? <EmptyState icon="sparkles" title="Sin uso de IA este mes">Aquí aparecerán las propuestas de lecciones, las revisiones del mapa al plan y las demás tareas de IA.</EmptyState> : <>
-      <Section title="Por tarea"><Breakdown title="Tarea" rows={summary.byTask}/></Section>
+      <Section title="Por tarea">
+        <p className="muted">«Propuestas usadas» cuenta, de lo que la IA propuso al redactar, al mejorar lecciones, al sugerir campos de documentos y al interpretar reglas de horario, cuánto aceptó la persona. Las propuestas de lecciones y el mapa al plan aún no se miden.</p>
+        <Breakdown title="Tarea" rows={summary.byTask}/>
+      </Section>
       <Section title="Por curso"><Breakdown title="Curso" rows={summary.byCourse}/></Section>
       <Section title="Por persona"><Breakdown title="Persona" rows={summary.byPerson}/></Section>
       <Section title="Últimas ejecuciones">

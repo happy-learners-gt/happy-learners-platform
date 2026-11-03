@@ -2,7 +2,7 @@ import type { Member } from "@happy-learners/contracts";
 import { checkedSuggestions, defaultTemplate, exampleSuggestions, fixtureSuggester, jpegImage, pdfFile, renderReport, reportKinds, suggestInput, suggestPromptVersion, templateInput } from "@happy-learners/domain";
 import type { PdfImage, ReportKind, ReportRecord, ReportTemplate, SuggestOutput } from "@happy-learners/domain";
 import type { Database } from "./storage";
-import { aiAllowed, tracked } from "./ai-runs";
+import { aiAllowed, aiRunId, tracked } from "./ai-runs";
 import { openAiSettings, openAiSuggester } from "./openai";
 
 /**
@@ -138,16 +138,17 @@ export async function reports(path: string, method: string, input: unknown, requ
     const found = [exampleSuggestions(asked), ...named.map(name => exampleSuggestions({ ...asked, fields: [{ key: "estudiante.nombre", label: "", example: name }] }))];
     const settings = env ? openAiSettings(env) : null;
     const suggester = settings ? openAiSuggester(settings) : env?.LESSON_GENERATOR === "fixture" ? fixtureSuggester : null;
-    let proposed: SuggestOutput = { suggestions: [] };
+    let proposed: SuggestOutput = { suggestions: [] }, runId: string | undefined;
     // Over the hourly AI limit, the fields found in the examples are still offered.
     if (suggester && await aiAllowed(db, current.id)) {
       try {
-        proposed = await tracked(db, { organizationId: current.organizationId, userId: current.id, courseId: null, task: "suggest-fields", promptVersion: suggestPromptVersion, generator: suggester.kind, model: settings ? settings.model : "fixture", inputChars: asked.text.length },
+        runId = aiRunId();
+        proposed = await tracked(db, { id: runId, organizationId: current.organizationId, userId: current.id, courseId: null, task: "suggest-fields", promptVersion: suggestPromptVersion, generator: suggester.kind, model: settings ? settings.model : "fixture", inputChars: asked.text.length },
           observe => suggester.suggest(asked, observe));
       // What was found without the model is still worth showing.
       } catch { return reply({ suggestions: checkedSuggestions(found, asked), ai: false, notice: "La IA no respondió: se muestran solo los datos reconocidos en el texto." }); }
     }
-    return reply({ suggestions: checkedSuggestions([...found, proposed], asked), ai: !!suggester });
+    return reply({ suggestions: checkedSuggestions([...found, proposed], asked), ai: !!suggester, ...(runId ? { runId } : {}) });
   }
   // Preview: the draft sent (or the stored one) with a real section's data, without recording a document.
   const checked = templateInput({ ...((body.draft as object) || JSON.parse(row.draft)), kind: row.kind }, await imageIds());

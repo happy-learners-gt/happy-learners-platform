@@ -3,6 +3,7 @@ import type { SolverBlock, SolverResult, SolverRule } from "@happy-learners/doma
 import { ruleText, timetableConflicts, weekdayNames } from "@happy-learners/domain";
 import { Link } from "../navigation";
 import { api, message } from "../api";
+import { reportAiOutcome } from "../ui/ai-outcome";
 import { useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section, StatusBadge } from "../ui/primitives";
@@ -54,10 +55,12 @@ function RuleForm({ setup, onAdd }: { setup: Setup; onAdd: (rule: SolverRule) =>
 
 function WrittenRules({ onAdd }: { onAdd: (rules: SolverRule[]) => void }) {
   const [text, setText] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
-  const [proposed, setProposed] = useState<{ rule: SolverRule; text: string; checked: boolean }[] | null>(null), [dropped, setDropped] = useState(0);
+  const [proposed, setProposed] = useState<{ rule: SolverRule; text: string; checked: boolean }[] | null>(null), [dropped, setDropped] = useState(0), [runId, setRunId] = useState<string>();
   async function read() {
+    // AIG-4: interpreting again leaves the rules shown unused.
+    if (proposed?.length) reportAiOutcome(runId, proposed.length, 0);
     setBusy(true); setError("");
-    try { const answer = await api<{ rules: { rule: SolverRule; text: string }[]; dropped: number }>("/timetables/rules", "POST", { text }); setProposed(answer.rules.map(item => ({ ...item, checked: true }))); setDropped(answer.dropped); }
+    try { const answer = await api<{ rules: { rule: SolverRule; text: string }[]; dropped: number; runId?: string }>("/timetables/rules", "POST", { text }); setProposed(answer.rules.map(item => ({ ...item, checked: true }))); setDropped(answer.dropped); setRunId(answer.runId); }
     catch (cause) { setError(message(cause)); }
     finally { setBusy(false); }
   }
@@ -69,7 +72,7 @@ function WrittenRules({ onAdd }: { onAdd: (rules: SolverRule[]) => void }) {
       {proposed.length ? <ul>{proposed.map((item, index) => <li key={index}><label className="check"><input type="checkbox" checked={item.checked} onChange={event => setProposed(proposed.map((other, at) => at === index ? { ...other, checked: event.target.checked } : other))}/><span>{item.text}</span></label></li>)}</ul>
         : <p className="muted">No se reconoció ninguna regla con las secciones y docentes de la organización.</p>}
       {dropped > 0 && <p className="muted small">{dropped === 1 ? "Se omitió 1 parte que no corresponde a ninguna sección o docente." : `Se omitieron ${dropped} partes que no corresponden a ninguna sección o docente.`}</p>}
-      {proposed.some(item => item.checked) && <div className="button-row"><button type="button" className="button primary small" onClick={() => { onAdd(proposed.filter(item => item.checked).map(item => item.rule)); setProposed(null); setText(""); }}>Agregar las marcadas</button></div>}
+      {proposed.some(item => item.checked) && <div className="button-row"><button type="button" className="button primary small" onClick={() => { onAdd(proposed.filter(item => item.checked).map(item => item.rule)); reportAiOutcome(runId, proposed.length, proposed.filter(item => item.checked).length); setProposed(null); setText(""); }}>Agregar las marcadas</button></div>}
     </div>}
   </div>;
 }

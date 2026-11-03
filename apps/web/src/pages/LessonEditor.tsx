@@ -406,9 +406,9 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
     if (focus) setTimeout(() => card?.querySelector<HTMLElement>("input, textarea, [contenteditable=true]")?.focus({ preventScroll: true }), 250);
   };
   // 1.4.1: the improvement is asked for the draft as it is now, and what the person accepts goes into the draft.
-  const improveDraft = async () => (await api<{ changes: ImproveChange[] }>(`/lessons/${lessonId}/improve`, "POST", {
+  const improveDraft = () => api<{ changes: ImproveChange[]; runId?: string }>(`/lessons/${lessonId}/improve`, "POST", {
     objective: draft.objective, activities: draft.activities, sequence: draft.sequence, outcomeIds: draft.outcomeIds, materials: lesson.materials,
-  })).changes;
+  });
   function applyImprovement(accepted: ImproveChange[]) {
     // Ids are made once, so applying again to the latest activities gives the same ones.
     const created = accepted.filter(change => change.kind === "new-activity").flatMap(() => [`activity-${crypto.randomUUID()}`, `block-${crypto.randomUUID()}`]);

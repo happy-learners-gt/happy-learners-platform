@@ -41,7 +41,8 @@ test("a lesson shows its review score, explains each check and leads to the acti
 
   await signIn(page, "admin-demo", "/organizacion/ia");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Uso de IA");
-  await expect(page.locator(".stat-tile")).toHaveCount(4);
+  await expect(page.locator(".stat-tile")).toHaveCount(5);
+  await expect(page.locator(".stat-tile", { hasText: "Propuestas usadas" })).toBeVisible();
   await page.getByRole("button", { name: "Registrar precio" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Precio de un modelo" });
   await dialog.getByLabel("Modelo").fill("modelo-e2e");
