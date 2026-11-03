@@ -9,20 +9,26 @@
 
 ## Hecho
 
-- 1.6.0–1.6.3 en producción el 02-nov (#103–#106): menú y Agenda por rol, Inicio por excepciones, Horas por periodo,
-  R1, límite de IA (H4), incorporación de educadores, calendario unificado. Documentación del programa al día.
+- 1.6.0–1.6.7 en producción (#103–#110, 02 y 03-nov): menú y Agenda por rol, Inicio por excepciones, Horas por
+  periodo y con la mitad de lecturas, R1, límite de IA (H4), incorporación de educadores (con agregar a un curso),
+  calendario unificado, horario vigente con choques, orden estable de la actividad, contraste AA en oscuro y
+  segunda pasada de la auditoría (AUD-02). 1.6.8 (DOC-01, #111): empezar una plantilla de documento en un paso.
 
 ## Siguiente acción
 
-1. `git status`: rama `feat/HL-15-siguiente` con este estado sin push. `git fetch && git merge origin/main` si avanzó.
-2. Siguiente de la cola: **SCH-01** (F3 en `flujos.md`: Horarios abre en el horario vigente por sección, docente o aula,
-   con conflictos; el generador como acción secundaria). Diseño primero en `docs/design/`.
+1. `git status` y `git fetch && git merge origin/main` si avanzó. Confirmar que #111 (1.6.8) está fusionado.
+2. Siguiente de la cola: **AIG-4** (aceptación de lo propuesto por la IA) y **AIG-5** (rediseño de Uso de IA), luego
+   IA-04, PERF-03 y HRS-02.
 3. Por cada hito: `rm -rf build && npm run build`, E2E afectadas, `./scripts/verify`, versión y CHANGELOG, push, PR,
-   CI verde → `gh pr merge <n> --merge` (autorizado) → vigilar `verify`, `deploy`, `critical-flows` en `main`.
+   **todos** los checks verdes (también `code`/Semgrep; correr `uvx semgrep scan --config .semgrep` antes) →
+   `gh pr merge <n> --merge` (autorizado) → vigilar `verify`, `deploy`, `critical-flows` en `main`.
 4. **13-nov:** SEC-04, escáneres obligatorios en `main` (protección de rama con `secrets`, `dependencies`, `code`),
    revisando antes que no hubo falsos positivos.
 
 ## Lecciones de esta sesión
+
+- Un PR creado desde una base vieja puede quedar en conflicto y **sin ningún check**: el vigilante debe comprobar
+  `mergeable` y que existan las ejecuciones antes de esperar (con un id vacío `gh run view` falla en bucle).
 
 - Un `aria-label` que contiene la etiqueta de otro campo rompe `getByLabel` (substring sin distinguir mayúsculas):
   pasó con «Personas» y con «Incorporación». Regla en `docs/design/fluent.md`.

@@ -4,6 +4,10 @@
 
 - Documentos sin plantillas ofrece empezar en un paso desde el formato de siempre de cada documento (boleta, constancia, acta de tribunal, reporte de avance): crea la plantilla con su nombre y abre el diseñador; nada cambia hasta publicarla.
 
+## 1.6.7 — 2026-11-03
+
+- Accesibilidad (AUD-02): en modo oscuro la insignia de peligro sobre las tarjetas de sección no alcanzaba el contraste AA (3,97:1); ahora usa el rojo de primer plano de Fluent para el modo oscuro (≥ 4,9:1). La prueba de accesibilidad recorre también las páginas del docente en oscuro. Segunda pasada de la auditoría y puntajes nuevos en `docs/transformacion/auditoria.md` §7.
+
 ## 1.6.6 — 2026-11-02
 
 - Menos lecturas en Horas efectivas (PERF-02): el periodo se aplica en la consulta (con un día de margen por la zona horaria) y solo se unen las clases cercanas a él. Vista por defecto (30 días): −51 % en administración (590 → 291 filas) y −46 % para un docente (540 → 292), con respuestas idénticas. Las listas de los filtros ofrecen los cursos, secciones y personas con clases en el periodo.
