@@ -29,7 +29,7 @@ exporta un componente que no está en esta tabla, y la Guía de estilo muestra l
 | Nivel | Componentes | Para qué |
 | --- | --- | --- |
 | Átomos | `Icon`, `Button`, `PrimaryAction`, `StatusBadge`, `Field`, `Progress`, `Skeleton`, `Updated`, `Avatar`, `SortHandle`, `InlineName`, `LessonBadge`, `FreedomChip` | Una sola cosa: un control, un dato o un estado |
-| Moléculas | `Breadcrumbs`, `Menu`, `Tabs`, `EmptyState`, `ErrorState`, `Loading`, `StatTiles`, `StatusSteps`, `TimeFit`, `TeamLine`, `AiWrite`, `FreedomPolicyField`, `FreedomMarks`, `CourseCard`, `ResourceCard`, `Bell` | Un grupo de átomos con un propósito (elegir, avisar, resumir) |
+| Moléculas | `Breadcrumbs`, `Menu`, `Tabs`, `EmptyState`, `ErrorState`, `Loading`, `StatTiles`, `FoldOnPhones`, `StatusSteps`, `TimeFit`, `TeamLine`, `AiWrite`, `FreedomPolicyField`, `FreedomMarks`, `CourseCard`, `ResourceCard`, `Bell` | Un grupo de átomos con un propósito (elegir, avisar, resumir) |
 | Patrones | `PageHeader`, `Section`, `AppShell`, `Brand`, `NewSection`, `Modal`, `Drawer`, `ConfirmDialog`, `FeedbackProvider`, `LessonOutline`, `ActivityFeed`, `CourseProgressList`, `FreedomChangeDialog` | Estructura de pantalla, capas y flujos que se repiten |
 
 Al tocar una pantalla que arma a mano algo que ya es un componente de esta tabla, se migra a él en el mismo cambio.
@@ -128,3 +128,8 @@ Al tocar una pantalla que arma a mano algo que ya es un componente de esta tabla
 3. `./scripts/verify` y las pruebas E2E. Si un token cambió de nombre, la prueba de tokens semánticos lo señala.
 
 El tema oscuro y el de alto contraste se agregan generando `webDarkTheme` o `createDarkTheme(brand)` en el mismo script, dentro de `@media (prefers-color-scheme: dark)`. Los componentes no cambian, porque solo leen tokens.
+
+## Listas en teléfonos (HOME-02/03)
+
+En pantallas angostas, una lista secundaria muestra sus primeras entradas y «Mostrar N más» (`FoldOnPhones`, o
+`compactOnPhones` en `ActivityFeed`): nada se oculta para siempre y las pantallas anchas la ven completa.
