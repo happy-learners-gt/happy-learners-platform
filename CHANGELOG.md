@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.14 — 2026-11-03
+
+- Seguridad (SEC-07): el escaneo semanal con OWASP ZAP suma una pasada con sesión de administración y reglas activas
+  (inyección, XSS, recorrido de rutas) contra el Worker local de CI. Primera corrida: ningún error 500 ni hallazgo
+  nuevo. El monitor externo de disponibilidad está operativo (AP-03).
+
 ## 1.6.13 — 2026-11-03
 
 - Presupuesto mensual de IA por organización (AIG-6, recomendación AP-07): USD 2 por persona activa, mínimo USD 20,
