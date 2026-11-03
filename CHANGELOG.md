@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.12 — 2026-11-03
+
+- Horas efectivas lee las horas con el contrato vigente (HRS-03, decisión AP-08). Quien tiene un contrato por hora que
+  no es de empleo, voluntariado ni servicios profesionales ve en «Mis horas» el monto de sus horas registradas.
+  Administración ve en el resumen por educador la columna «Según contrato»: ese monto, una referencia para los demás
+  contratos por hora y por clase, y un monto fijo mensual convertido a costo por hora efectiva cuando el filtro es un
+  mes completo. Los montos se calculan en centavos enteros y se rotulan como referencia, no como nómina.
+
 ## 1.6.11 — 2026-11-03
 
 - Configuración académica se divide en pestañas (ACA-01): Programas, Evaluación, Etiquetas y Estándares, en lugar de

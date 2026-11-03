@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
-import type { HoursReport, HoursRow, HoursState, HoursTotal } from "@happy-learners/contracts";
-import type { HoursPeriod } from "@happy-learners/domain";
-import { formatMinutes, hoursPeriodRange as periodRange, hoursStateLabels, maxAdjustedMinutes, maxAdjustmentReason, maxBatchAdjustments, minAdjustmentReason } from "@happy-learners/domain";
+import type { FormEvent, ReactNode } from "react";
+import type { Contract, HoursReport, HoursRow, HoursState, HoursTotal } from "@happy-learners/contracts";
+import type { HoursPay, HoursPeriod } from "@happy-learners/domain";
+import { engagementLabels, formatCents, formatMinutes, hoursPay, hoursPayable, hoursPeriodRange as periodRange, periodLabels, personContract, hoursStateLabels, maxAdjustedMinutes, maxAdjustmentReason, maxBatchAdjustments, minAdjustmentReason } from "@happy-learners/domain";
 import { api, message } from "../api";
 import { useNavigation } from "../navigation";
 import { useSession } from "../session";
@@ -32,6 +32,26 @@ const pageSize = 25;
 type Show = "todas" | "revisar";
 type Totalled = "people" | "courses" | "sections";
 
+/** Whether the report covers exactly one calendar month: a monthly amount can then be read per effective hour. */
+function wholeMonth(filter: HoursReport["filter"]) {
+  if (!filter.from || !filter.to || !filter.from.endsWith("-01") || filter.from.slice(0, 7) !== filter.to.slice(0, 7)) return false;
+  const [year, month] = filter.from.split("-").map(Number);
+  return Number(filter.to.slice(8)) === new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+/** HRS-03 (AP-08): the contract's reading of the hours, as administration sees it; a reference, not payroll. */
+function PayCell({ pay, engagement }: { pay: HoursPay; engagement?: string }) {
+  switch (pay.kind) {
+    case "no-contract": return <span className="muted">Sin contrato vigente</span>;
+    case "none": return <span>Ad honorem</span>;
+    case "hourly": return <span className="stack-tight"><span>{pay.payable ? formatCents(pay.cents, pay.currency) : `Referencia: ${formatCents(pay.cents, pay.currency)}`}</span>
+      <span className="muted small">{formatMinutes(pay.minutes)} × {formatCents(pay.rateCents, pay.currency)} por hora{pay.payable ? "" : ` (${engagement || "contrato"})`}</span></span>;
+    case "per-session": return <span className="stack-tight"><span>Referencia: {formatCents(pay.cents, pay.currency)}</span>
+      <span className="muted small">{pay.classes === 1 ? "1 clase" : `${pay.classes} clases`} × {formatCents(pay.rateCents, pay.currency)}</span></span>;
+    case "fixed": return <span className="stack-tight"><span>{formatCents(pay.amountCents, pay.currency)} {periodLabels[pay.period]}</span>
+      <span className="muted small">{pay.perHourCents !== null ? `≈ ${formatCents(pay.perHourCents, pay.currency)} por hora efectiva en el mes` : pay.period === "month" ? "Elige un mes completo para verlo por hora" : "Monto fijo"}</span></span>;
+  }
+}
+
 /**
  * ST-152: «Horas efectivas» (administration: every person) and «Mis horas» (anyone else: their own classes). The
  * hours of each completed class run from its start to its completion; filters by period, course, section and person,
@@ -45,6 +65,9 @@ export function HoursPage() {
   const requested = url.searchParams.get("periodo") as Period | null;
   const period: Period = custom ? "personalizado" : periods.some(item => item.value === requested) && requested !== "personalizado" ? requested! : "30-dias";
   const range = custom ? null : periodRange(period, personalToday());
+  // HRS-03: administration reads every contract; anyone else only theirs.
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  useEffect(() => { api<{ contracts: Contract[] }>(admin ? "/contracts" : "/me/contracts").then(result => setContracts(result.contracts), () => setContracts([])); }, [admin]);
   const [show, setShow] = useState<Show>("todas"), [shown, setShown] = useState(pageSize), [totalled, setTotalled] = useState<Totalled>(admin ? "people" : "courses");
   const query = new URLSearchParams([
     ...(range ? [["from", range.from], ["to", range.to]] : []),
@@ -80,6 +103,12 @@ export function HoursPage() {
   // HRS-02: the classes «por revisar» that a batch can correct with their planned duration.
   const batchable = admin ? report.rows.filter(row => toReview(row) && !!row.plannedMinutes && !!row.educatorId).slice(0, maxBatchAdjustments) : [];
   const totals = { people: report.totals.people, courses: report.totals.courses, sections: report.totals.sections };
+  const month = wholeMonth(report.filter);
+  const payOf = (userId: string) => {
+    const contract = personContract(contracts, userId), own = report.rows.filter(row => row.educatorId === userId);
+    return { contract, pay: hoursPay(contract, { minutes: own.reduce((sum, row) => sum + row.minutes, 0), classes: own.filter(row => row.minutes > 0).length }, month) };
+  };
+  const mine = !admin ? payOf(member.id) : null, minePay = mine?.contract && hoursPayable(mine.contract) && mine.pay.kind === "hourly" ? mine.pay : null;
   return <>
     {header}
     <div className="class-filters" role="group" aria-label="Filtrar horas">
@@ -103,7 +132,9 @@ export function HoursPage() {
       { label: "Horas efectivas", value: formatMinutes(report.minutes), icon: "clock", hue: "violet" },
       { label: "Clases que suman", value: counted, icon: "check", hue: "green" },
       { label: "Por revisar", value: pending, icon: "alert", hue: "amber" },
+      ...(minePay ? [{ label: "Según tu contrato", value: formatCents(minePay.cents, minePay.currency), icon: "file" as const, hue: "teal" as const }] : []),
     ]}/>
+    {minePay && <p className="muted small">{formatMinutes(minePay.minutes)} × {formatCents(minePay.rateCents, minePay.currency)} por hora, con tu contrato vigente. Es una referencia: el pago lo confirma administración.</p>}
     {report.truncated && <p className="message-bar warning" role="status"><Icon name="alert" size={18}/>
       <span>Hay más clases de las que se suman de una vez: se muestran las más recientes y los totales son parciales. Elige un periodo para ver sumas completas.</span></p>}
     {range && <p className="muted small">Del {sessionDay(range.from, "short")} al {sessionDay(range.to, "short")}.</p>}
@@ -116,7 +147,9 @@ export function HoursPage() {
         <Tabs label="Totales por" value={totalled} onChange={setTotalled} items={[
           ...(admin ? [{ value: "people" as const, label: "Por educador" }] : []), { value: "courses" as const, label: "Por curso" }, { value: "sections" as const, label: "Por sección" },
         ]}>
-          <Totals label={totalled === "people" ? "Educador" : totalled === "courses" ? "Curso" : "Sección"} items={totals[totalled]}/>
+          <Totals label={totalled === "people" ? "Educador" : totalled === "courses" ? "Curso" : "Sección"} items={totals[totalled]}
+            pay={admin && totalled === "people" ? id => { const { contract, pay } = payOf(id); return <PayCell pay={pay} engagement={contract ? engagementLabels[contract.engagement].toLowerCase() : undefined}/>; } : undefined}/>
+          {admin && totalled === "people" && <p className="muted small">«Según contrato» lee las horas de este filtro con el contrato vigente de cada persona. Solo los contratos por hora que no son de empleo, voluntariado ni servicios profesionales dan un monto por horas registradas; el resto es una referencia. No es un cálculo de nómina.</p>}
         </Tabs>
       </Section>
       <Section title="Clases impartidas" action={pending > 0 ? <div className="chips" role="group" aria-label="Mostrar">
@@ -146,10 +179,10 @@ export function HoursPage() {
   </>;
 }
 
-function Totals({ label, items }: { label: string; items: HoursTotal[] }) {
+function Totals({ label, items, pay }: { label: string; items: HoursTotal[]; pay?: (id: string) => ReactNode }) {
   return <div className="table-card" role="region" aria-label={`Horas por ${label.toLowerCase()}`} tabIndex={0}><table className="members-table" aria-label={`Horas por ${label.toLowerCase()}`}>
-    <thead><tr><th scope="col">{label}</th><th scope="col">Clases</th><th scope="col">Horas</th></tr></thead>
-    <tbody>{items.map(item => <tr key={item.id}><th scope="row">{item.name}</th><td>{item.classes}</td><td>{formatMinutes(item.minutes)}</td></tr>)}</tbody>
+    <thead><tr><th scope="col">{label}</th><th scope="col">Clases</th><th scope="col">Horas</th>{pay && <th scope="col">Según contrato</th>}</tr></thead>
+    <tbody>{items.map(item => <tr key={item.id}><th scope="row">{item.name}</th><td>{item.classes}</td><td>{formatMinutes(item.minutes)}</td>{pay && <td>{pay(item.id)}</td>}</tr>)}</tbody>
   </table></div>;
 }
 
