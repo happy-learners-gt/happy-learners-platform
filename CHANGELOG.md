@@ -9,6 +9,8 @@
 - Seguridad (SEC-06): escaneo semanal gratuito con OWASP ZAP contra un Worker local en CI. Por su primer informe, la
   política de contenido ya no permite websockets a otros dominios (`connect-src 'self'`) y las respuestas llevan
   `Cross-Origin-Opener-Policy` y `Cross-Origin-Resource-Policy`.
+- La actividad conserva el orden en que ocurrieron las cosas aunque el reloj del Worker retroceda unos milisegundos
+  entre peticiones (QA-04).
 
 ## 1.6.12 — 2026-11-03
 
