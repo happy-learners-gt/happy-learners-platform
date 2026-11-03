@@ -3,11 +3,12 @@ import type { ChangeEvent, FormEvent } from "react";
 import type { CompensationKind, Contract, ContractEngagement, ContractPhase, ContractTemplate, ContractTemplateVersion, ContractTermField, ContractTerms, ContractVerification, Member, RichTextDocument, WorkLocation } from "@happy-learners/contracts";
 import {
   compensationAllowed, compensationKinds, compensationLabels, compensationPeriods, compensationSummary, contractEngagements,
-  contractPhaseLabels, contractTermFields, contractVariables, contractValues, engagementLabels, locationLabels, mergeContract,
+  contractAttentionLabels, contractAttentionPhases, contractPhaseLabels, contractsByAttention, contractTermFields, contractVariables, contractValues, engagementLabels, locationLabels, mergeContract,
   periodLabels, workLocations,
 } from "@happy-learners/domain";
 import type { Editor } from "@tiptap/react";
 import { api, message } from "../api";
+import { sessionDay } from "../model";
 import { Link, useNavigation, useUnsavedChanges } from "../navigation";
 import { useSession } from "../session";
 import { RichText } from "../RichText";
@@ -20,14 +21,15 @@ import type { StatusStep } from "../ui/StatusSteps";
 import { LegalSettings } from "./legal";
 import { ReceiptLink } from "./my-contracts";
 
+// CON-01: the page opens on the team's contracts, the recurring work; templates are prepared once.
 const tabs = [
-  { id: "plantillas", label: "Plantillas", href: "/contratos" },
-  { id: "contratos", label: "Contratos", href: "/contratos#contratos" },
+  { id: "contratos", label: "Contratos", href: "/contratos" },
+  { id: "plantillas", label: "Plantillas", href: "/contratos#plantillas" },
   { id: "politicas", label: "Políticas", href: "/contratos#politicas" },
   { id: "ajustes", label: "Ajustes", href: "/contratos#ajustes" },
 ] as const;
 type Tab = (typeof tabs)[number]["id"];
-const tabOf = (hash: string): Tab => ({ "": "plantillas", "#plantillas": "plantillas", "#contratos": "contratos", "#politicas": "politicas", "#ajustes": "ajustes" } as const)[hash] || "plantillas";
+const tabOf = (hash: string): Tab => ({ "": "contratos", "#plantillas": "plantillas", "#contratos": "contratos", "#politicas": "politicas", "#ajustes": "ajustes" } as const)[hash] || "contratos";
 
 const phaseTone: Record<ContractPhase, Tone> = {
   draft: "neutral", "awaiting-signature": "warning", scheduled: "info", "in-force": "success", ending: "warning",
@@ -262,16 +264,22 @@ function ContractsTab({ creating, onCreating, preferred }: { creating: boolean; 
       .catch(cause => setError(message(cause)));
   };
   useEffect(load, []);
-  const rows = (contracts || []).filter(item => (!phase || item.phase === phase) && (!person || item.userId === person) && (!template || item.templateId === template));
+  const rows = contractsByAttention((contracts || []).filter(item => (!phase || item.phase === phase) && (!person || item.userId === person) && (!template || item.templateId === template)));
+  const waiting = contractAttentionPhases.map(value => ({ value, count: (contracts || []).filter(item => item.phase === value).length })).filter(item => item.count > 0);
+  const published = templates.some(item => item.status === "active" && !!item.current);
   if (error) return <ErrorState error={error} retry={load}/>;
   if (!contracts) return <Loading label="Cargando contratos…" lines={4}/>;
   return <>
+    {waiting.length > 0 && <div className="chips" role="group" aria-label="Esperan acción">
+      {waiting.map(item => <button key={item.value} type="button" className="chip-button" aria-pressed={phase === item.value} onClick={() => setPhase(phase === item.value ? "" : item.value)}>
+        {`${contractAttentionLabels[item.value]} (${item.count})`}</button>)}
+    </div>}
     <div className="table-toolbar contract-filters">
       <label className="onboarding-filter"><span>Fase</span><select value={phase} onChange={event => setPhase(event.target.value)}><option value="">Todas</option>{filterPhases.map(item => <option key={item} value={item}>{contractPhaseLabels[item]}</option>)}</select></label>
       <label className="onboarding-filter"><span>Persona</span><select value={person} onChange={event => setPerson(event.target.value)}><option value="">Todas</option>{people.map(item => <option key={item.id} value={item.id}>{item.displayName || item.username}</option>)}</select></label>
       <label className="onboarding-filter"><span>Plantilla</span><select value={template} onChange={event => setTemplate(event.target.value)}><option value="">Todas</option>{templates.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
     </div>
-    {!rows.length ? <EmptyState compact icon="file" title="Ningún contrato coincide">{contracts.length ? "Prueba otro filtro." : "Prepara un contrato desde una plantilla publicada."}</EmptyState>
+    {!rows.length ? <EmptyState compact icon="file" title="Ningún contrato coincide">{contracts.length ? "Prueba otro filtro." : published ? "Prepara un contrato desde una plantilla publicada." : <>Primero publica una plantilla en <Link href="/contratos#plantillas">Plantillas</Link>; luego prepara aquí cada contrato.</>}</EmptyState>
       : <div className="table-card" role="region" aria-label="Contratos" tabIndex={0}><table className="members-table">
         <caption className="sr-only">Contratos del equipo, su fase y sus fechas</caption>
         <thead><tr><th scope="col">Persona</th><th scope="col">Documento</th><th scope="col">Fase</th><th scope="col">Inicio</th><th scope="col">Fin</th><th scope="col"><span className="sr-only">Abrir</span></th></tr></thead>
@@ -279,8 +287,8 @@ function ContractsTab({ creating, onCreating, preferred }: { creating: boolean; 
           <th scope="row">{item.partyName}</th>
           <td>{item.title}</td>
           <td><StatusBadge tone={phaseTone[item.phase]}>{contractPhaseLabels[item.phase]}</StatusBadge></td>
-          <td>{item.startDate}</td>
-          <td>{item.endDate || "Indefinido"}</td>
+          <td>{sessionDay(item.startDate, "short")}</td>
+          <td>{item.endDate ? sessionDay(item.endDate, "short") : "Indefinido"}</td>
           <td className="cell-actions"><button type="button" className="button ghost small" onClick={() => setSelected(item)}>Ver</button></td>
         </tr>)}</tbody>
       </table></div>}

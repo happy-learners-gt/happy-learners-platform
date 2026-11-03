@@ -156,6 +156,7 @@ export { accountMessage, accountNoticeReason, countryCode, deviceLabel, emailCha
 export type { AccountNotice, AccountNoticeDetails, AccountNoticeKind, EmailChangeStatus } from "./account-settings";
 export { closureLabels, closureOpen, closureReasonInput, closureStatuses, closureTransition, maxClosureReason, personalDataFile, personalDataFormat, personalDataSections } from "./closures";
 export type { ClosureAction, ClosureStatus, PersonalDataSection } from "./closures";
+export { contractAttentionLabels, contractAttentionPhases, contractsByAttention } from "./contracts";
 export { closeReasonInput, compensationAllowed, compensationKinds, compensationLabels, compensationPeriods, compensationSummary, contractCanonical, contractDatesInput, contractEngagements, contractInForce, contractPhase, contractPhaseLabels, contractSignatureCanonical, contractSignedNameInput, contractStatusLabels, contractTemplateInput, contractTermFields, contractTermsFor, contractTermsInput, contractTextLimits, contractValues, contractVariables, contractVersionInput, engagementLabels, isEngagement, locationLabels, maxCloseReason, mergeContract, periodLabels, richPlainText, workLocations } from "./contracts";
 export type { ContractVariable } from "./contracts";
 export { academicYearEditable, academicYearInput, academicYearLabels, academicYearStatuses, academicYearTransition, activationBlocker, isPeriodKind, maxPeriods, nextAcademicYear, nextYearDay, maxGapDays, periodGaps, periodKindOf, periodKinds, periodName, scheduleSuggestion, splitPeriods } from "./academic-years";
