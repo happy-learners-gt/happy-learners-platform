@@ -14,7 +14,7 @@
 - **En curso:** nada a medias
 - **Requieren al usuario:** AP-05 pentest manual de pago (SEC-06 gratuito en curso); AP-06 marca
   («Acervum» en discusión); AP-07 y AP-08 decididos el 03-nov
-- **Siguiente acción:** AUD-03 y los incrementos de M8 (módulos sin tocar), luego M9; el 13-nov SEC-04. El programa
+- **Siguiente acción:** M8 en el orden de `auditoria.md` §8: CUR-01, ACC-01, DOC-02, NOT-01, LIB-01, TEAM-01; luego M9; el 13-nov SEC-04. El programa
   no está completo: 1 de 18 módulos en su meta (ver MILESTONES)
 - **Incidente 03-nov:** #108 se fusionó con el escáner `code` (Semgrep) en rojo porque la automatización solo miraba
   `verify`. Corregido en 1.6.6 (#109, todos los checks verdes);
