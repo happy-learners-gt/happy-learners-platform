@@ -24,7 +24,7 @@ import { AcceptInvitation } from "./pages/invitations";
 import { AccessPage } from "./pages/access";
 import { NotificationsAdmin } from "./pages/notifications";
 import { ConsentGate, PrivacyPage } from "./pages/legal";
-import { ProfileReviewsPage, TeamDirectory, TeamProfilePage } from "./pages/professional";
+import { TeamDirectory, TeamProfilePage } from "./pages/professional";
 import { HoursPage } from "./pages/hours";
 import { OnboardingWizard } from "./pages/onboarding";
 import { InstitutionalCalendarPage } from "./pages/institutional-calendar";
@@ -189,7 +189,8 @@ function page(first: string, second: string | undefined, url: URL) {
     case "mi-cuenta": return isAccountSection(second) ? <MyAccountPage section={second}/> : <Redirect to="/mi-cuenta/perfil"/>;
     case "perfil": return <Redirect to={url.hash === "#notificaciones" ? "/mi-cuenta/notificaciones" : "/mi-cuenta/perfil"}/>;
     case "equipo": return second ? <TeamProfilePage key={second} id={second}/> : <TeamDirectory/>;
-    case "perfiles": return <ProfileReviewsPage/>;
+    // IA-04: profile review is a tab of Educadores.
+    case "perfiles": return <Redirect to="/educadores#perfiles"/>;
     case "cuenta": return <Redirect to={`/mi-cuenta/cuenta${url.hash}`}/>;
     case "preferencias": return <Redirect to={url.hash === "#notificaciones" ? "/mi-cuenta/notificaciones" : `/mi-cuenta/preferencias${url.hash}`}/>;
     case "horas": return <HoursPage/>;

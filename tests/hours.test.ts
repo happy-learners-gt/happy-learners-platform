@@ -8,7 +8,7 @@ import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { HoursReport, HoursRow } from "@happy-learners/contracts";
-import { csvCell, effectiveDuration, hoursAdjustmentInput, hoursCsv, hoursDay, hoursFilterInput, hoursPeriodRange, hoursTotals, inHoursFilter, localDateTime } from "@happy-learners/domain";
+import { csvCell, effectiveDuration, hoursAdjustmentInput, hoursBatchInput, hoursCsv, hoursDay, hoursFilterInput, hoursPeriodRange, hoursTotals, inHoursFilter, localDateTime } from "@happy-learners/domain";
 import { nextClassDays } from "./class-days";
 
 // ST-152 (DEC-043): effective hours teaching classes. Domain rules first, then the built Worker in a store of its own.
@@ -49,6 +49,14 @@ describe("ST-152 period in the organization's time zone", () => {
 });
 
 describe("ST-152 corrections and export", () => {
+  it("HRS-02: a batch names 1 to 100 classes and one reason", () => {
+    expect(hoursBatchInput({ sessionIds: ["s-1", "s-1", "s-2"], reason: "  Sin   registro " })).toEqual({ sessionIds: ["s-1", "s-2"], reason: "Sin registro" });
+    expect(hoursBatchInput({ sessionIds: [], reason: "Sin registro" })).toEqual({ error: "Elige de 1 a 100 clases para corregir." });
+    expect(hoursBatchInput({ sessionIds: Array.from({ length: 101 }, (_, index) => `s-${index}`), reason: "Sin registro" })).toHaveProperty("error");
+    expect(hoursBatchInput({ sessionIds: ["S 1"], reason: "Sin registro" })).toHaveProperty("error");
+    expect(hoursBatchInput({ sessionIds: ["s-1"], reason: "no" })).toHaveProperty("error");
+  });
+
   it("a correction needs whole minutes and a reason", () => {
     expect(hoursAdjustmentInput({ minutes: 90, reason: "  Olvidó   comenzar la clase " })).toEqual({ minutes: 90, educatorId: null, reason: "Olvidó comenzar la clase" });
     expect(hoursAdjustmentInput({ minutes: 0, educatorId: "user-1", reason: "No la impartió" })).toEqual({ minutes: 0, educatorId: "user-1", reason: "No la impartió" });
@@ -265,6 +273,32 @@ describe("ST-152 Controlar las horas efectivas impartiendo clases", () => {
     const backup = await read<{ tables: Record<string, { columns: string[]; rows: unknown[][] }> }>(await call(admin, "/organization/backup"));
     expect(backup.tables.class_hour_adjustments.rows).toHaveLength(3);
     expect(backup.tables.class_hour_adjustments.columns).toEqual(["id", "organization_id", "session_id", "minutes_before", "minutes_after", "educator_before", "educator_after", "reason", "adjusted_by", "adjusted_at"]);
+  });
+
+  it("HRS-02: administration corrects the classes por revisar at once with their planned duration and one reason", async () => {
+    const [a, b, pendingMine] = mine.classes, [, , pendingTheirs] = theirs.classes;
+    // Completed straight from planned: no start, so they count 0 until reviewed.
+    await read(await call(educator, `${mine.path}/sessions/${pendingMine}/complete`, "POST"));
+    await read(await call(other, `${theirs.path}/sessions/${pendingTheirs}/complete`, "POST"));
+    const before = await report(admin);
+    expect(row(before, pendingMine)).toMatchObject({ state: "no_start", minutes: 0, plannedMinutes: 45, educatorId: "user-educator" });
+
+    const batch = { sessionIds: [pendingMine, pendingTheirs, a, b], reason: "Clases dadas sin registrar el inicio" };
+    expect((await call(educator, "/hours/adjustments", "POST", batch)).status).toBe(403);
+    expect((await call(admin, "/hours/adjustments", "POST", { ...batch, reason: "x" })).status).toBe(400);
+    expect((await call(admin, "/hours/adjustments", "POST", { ...batch, sessionIds: [] })).status).toBe(400);
+    // The counted class and the one already corrected are left as they are.
+    expect(await read(await call(admin, "/hours/adjustments", "POST", batch))).toEqual({ corrected: 2, skipped: 2, minutes: 90 });
+    const after = await report(admin);
+    expect(row(after, pendingMine)).toMatchObject({ state: "adjusted", minutes: 45, educatorId: "user-educator", adjustment: { minutesBefore: 0, minutesAfter: 45, reason: "Clases dadas sin registrar el inicio" } });
+    expect(row(after, pendingTheirs)).toMatchObject({ state: "adjusted", minutes: 45, educatorId: "user-1" });
+    expect(row(after, a)).toMatchObject({ state: "counted", minutes: 95 });
+    expect(row(after, b)).toMatchObject({ minutes: 110, adjustments: 2 });
+    expect(after.minutes).toBe(before.minutes + 90);
+    // Nothing left to correct among them.
+    expect((await call(admin, "/hours/adjustments", "POST", batch)).status).toBe(409);
+    const { events } = await read<{ events: { summary: string }[] }>(await call(admin, "/activity?limit=20"));
+    expect(events.map(item => item.summary)).toContain("Corrigió en lote 2 clases por revisar con su duración planificada (1 h 30 min en total). Motivo: Clases dadas sin registrar el inicio");
   });
 });
 

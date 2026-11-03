@@ -747,14 +747,18 @@ export function TeamProfilePage({ id }: { id: string }) {
   </>;
 }
 
-/** Administration: «Perfiles por revisar» and «Credenciales por verificar», with the organization's review setting. */
-export function ProfileReviewsPage() {
+/**
+ * Administration: «Perfiles por revisar» and «Credenciales por verificar», with the organization's review setting.
+ * IA-04: a tab of Educadores (`/educadores#perfiles`); `onChanged` lets the page refresh what depends on it.
+ */
+export function ProfileReviews({ onChanged }: { onChanged?: () => void }) {
   const { member } = useSession();
   const { toast } = useFeedback();
   const [queue, setQueue] = useState<ProfileReviewQueue | null>(null), [error, setError] = useState(""), [open, setOpen] = useState<ProfileReviewItem | null>(null);
   const [rejecting, setRejecting] = useState<{ userId: string; credential: Credential } | null>(null);
-  const load = () => { setError(""); api<ProfileReviewQueue>("/profile-reviews").then(setQueue).catch(cause => setError(message(cause))); };
-  useEffect(load, []);
+  const fetchQueue = () => { setError(""); api<ProfileReviewQueue>("/profile-reviews").then(setQueue).catch(cause => setError(message(cause))); };
+  useEffect(fetchQueue, []);
+  const load = () => { fetchQueue(); onChanged?.(); };
   async function setting(required: boolean) {
     try { await api("/organization/profile-review", "PUT", { required }); toast({ message: required ? "Los perfiles se revisan antes de publicarse." : "Los perfiles se publican al enviarlos." }); load(); }
     catch (cause) { toast({ tone: "error", message: message(cause) }); }
@@ -764,8 +768,8 @@ export function ProfileReviewsPage() {
     catch (cause) { toast({ tone: "error", message: message(cause) }); }
   }
   return <>
-    <PageHeader title="Revisión de perfiles" description="Aprueba los perfiles profesionales antes de que el equipo y los estudiantes los vean, y verifica las credenciales que las personas envían."/>
-    {error ? <ErrorState error={error} retry={load}/> : !queue ? <Loading label="Cargando la revisión…"/> : <div className="stack-lg">
+    <p className="muted">Aprueba los perfiles profesionales antes de que el equipo y los estudiantes los vean, y verifica las credenciales que las personas envían.</p>
+    {error ? <ErrorState error={error} retry={fetchQueue}/> : !queue ? <Loading label="Cargando la revisión…"/> : <div className="stack-lg">
       {member.role === "admin" && <section className="panel" aria-labelledby="review-setting"><div className="panel-header"><h2 id="review-setting">Publicación de perfiles</h2></div>
         <label className="switch"><input type="checkbox" checked={queue.reviewRequired} onChange={event => void setting(event.target.checked)}/>Los perfiles requieren aprobación de administración antes de publicarse</label>
         <p className="muted small">{queue.reviewRequired ? "Cada nueva versión espera tu aprobación; mientras tanto se sigue viendo la versión publicada." : "Al enviarlo, cada perfil se publica de inmediato. Puedes ocultar cualquier perfil desde su revisión."}</p>

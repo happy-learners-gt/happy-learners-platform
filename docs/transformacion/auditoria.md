@@ -143,6 +143,8 @@ vacíos); capturas solo donde las métricas lo pidieron.
 | Agenda | 2.75 | **3.50** | 4 3 3 3 4 4 4 4 |
 | Horas efectivas | 2.65 | **3.40** | 3 3 4 3 4 4 4 4 |
 | Uso de IA | 2.95 | **3.00** | 2 4 2 3 3 4 4 5 (límite de uso, H4) |
+| Contratos y políticas (1.6.10) | 3.10 | **3.60** | 4 3 3 4 4 4 4 4 (abre en lo que espera acción; falta: contratos también en Educadores, T3) |
+| Revisión de perfiles (1.6.10, pestaña de Educadores) | 3.10 | **3.65** | 4 3 4 3 4 4 4 4 (en contexto y con lo pendiente contado; falta: revisar desde la fila de la persona) |
 | Inteligencia artificial (1.6.9) | 3.00 | **3.85** | 4 3 4 4 4 4 4 5 (capacidades, quién decide y propuestas usadas; falta: tabla ancha en móvil, AIG-4b) |
 
 Lo que más pesa ahora en la meta (≥ 4.0): Ayuda (2.60), Uso de IA (3.00), Documentos (2.90), Contratos y Revisión de

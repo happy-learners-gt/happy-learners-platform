@@ -1,5 +1,5 @@
 import type { HoursReport, HoursRow, Member } from "@happy-learners/contracts";
-import { effectiveDuration, formatMinutes, hoursAdjustmentInput, hoursCsv, hoursDay, hoursFilterInput, hoursTotals, inHoursFilter } from "@happy-learners/domain";
+import { effectiveDuration, formatMinutes, hoursAdjustmentInput, hoursBatchInput, hoursCsv, hoursDay, hoursFilterInput, hoursTotals, inHoursFilter } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { personalZone } from "./preferences";
 import { event } from "./activity";
@@ -7,7 +7,7 @@ import { event } from "./activity";
 const reply = (data: unknown, status = 200, headers: Record<string, string> = {}) => Response.json(data, { status, headers });
 
 type Stored = {
-  sessionId: string; courseId: string; courseTitle: string; sectionId: string; sectionName: string; sessionDate: string; startedAt: string | null; completedAt: string;
+  sessionId: string; courseId: string; courseTitle: string; sectionId: string; sectionName: string; sessionDate: string; startedAt: string | null; completedAt: string; plannedMinutes: number | null;
   taughtBy: string | null; taughtByName: string | null; adjustments: number;
   minutesBefore: number | null; minutesAfter: number | null; educatorBefore: string | null; educatorAfter: string | null; educatorAfterName: string | null; reason: string | null; adjustedBy: string | null; adjustedAt: string | null;
 };
@@ -17,12 +17,17 @@ type Stored = {
  */
 /** One day before or after, so the time zone never leaves a class of the period out; the exact cut is `inHoursFilter`. */
 const shiftDay = (day: string, days: number) => { const date = new Date(`${day}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
+/**
+ * PERF-03: the classes one report reads, the most recent first. One more is read to know whether there were more: a
+ * report or export over the limit says so instead of adding up only part of the history.
+ */
+export const hoursRowLimit = 5000;
 async function storedRows(db: Database, organizationId: string, own: string | null, sessionId?: string, period?: { from: string | null; to: string | null }) {
   // PERF-02: a class's day is when it started (or its date, if it never started); only classes near the period are joined.
   const from = period?.from ? shiftDay(period.from, -1) : null, to = period?.to ? shiftDay(period.to, 1) : null;
   // nosemgrep: sql-interpolated-text -- own, sessionId, from y to agregan fragmentos constantes; los valores van como parámetros
   return (await db.prepare(`SELECT s.id AS sessionId,s.course_id AS courseId,c.title AS courseTitle,s.group_id AS sectionId,g.name AS sectionName,s.session_date AS sessionDate,
-      s.started_at AS startedAt,s.completed_at AS completedAt,s.taught_by AS taughtBy,COALESCE(u.display_name,u.username) AS taughtByName,
+      s.started_at AS startedAt,s.completed_at AS completedAt,s.duration_minutes AS plannedMinutes,s.taught_by AS taughtBy,COALESCE(u.display_name,u.username) AS taughtByName,
       (SELECT count(*) FROM class_hour_adjustments x WHERE x.session_id=s.id) AS adjustments,
       a.minutes_before AS minutesBefore,a.minutes_after AS minutesAfter,a.educator_before AS educatorBefore,a.educator_after AS educatorAfter,COALESCE(ae.display_name,ae.username) AS educatorAfterName,
       a.reason,COALESCE(ab.display_name,ab.username) AS adjustedBy,a.adjusted_at AS adjustedAt
@@ -30,7 +35,7 @@ async function storedRows(db: Database, organizationId: string, own: string | nu
     LEFT JOIN class_hour_adjustments a ON a.id=(SELECT x.id FROM class_hour_adjustments x WHERE x.session_id=s.id ORDER BY x.adjusted_at DESC,x.rowid DESC LIMIT 1)
     LEFT JOIN users ae ON ae.id=a.educator_after LEFT JOIN users ab ON ab.id=a.adjusted_by
     WHERE s.organization_id=? AND s.status='completed' AND s.completed_at IS NOT NULL${own ? " AND COALESCE(a.educator_after,s.taught_by)=?" : ""}${sessionId ? " AND s.id=?" : ""}${from ? " AND COALESCE(substr(s.started_at,1,10),s.session_date)>=?" : ""}${to ? " AND COALESCE(substr(s.started_at,1,10),s.session_date)<=?" : ""}
-    ORDER BY s.completed_at DESC,s.id LIMIT 5000`).bind(organizationId, ...(own ? [own] : []), ...(sessionId ? [sessionId] : []), ...(from ? [from] : []), ...(to ? [to] : [])).all<Stored>()).results;
+    ORDER BY s.completed_at DESC,s.id LIMIT ?`).bind(organizationId, ...(own ? [own] : []), ...(sessionId ? [sessionId] : []), ...(from ? [from] : []), ...(to ? [to] : []), hoursRowLimit + 1).all<Stored>()).results;
 }
 function hoursRow(row: Stored, timezone: string): HoursRow {
   const computed = effectiveDuration(row.startedAt, row.completedAt);
@@ -41,7 +46,7 @@ function hoursRow(row: Stored, timezone: string): HoursRow {
     educatorId: adjusted ? row.educatorAfter : row.taughtBy, educatorName: adjusted ? row.educatorAfterName : row.taughtByName,
     computedMinutes: computed.computed, minutes: adjusted ? Number(row.minutesAfter) : computed.minutes, state: adjusted ? "adjusted" : computed.state,
     adjustment: adjusted ? { minutesBefore: Number(row.minutesBefore), minutesAfter: Number(row.minutesAfter), educatorBefore: row.educatorBefore, educatorAfter: row.educatorAfter!, reason: row.reason || "", adjustedBy: row.adjustedBy || "", adjustedAt: row.adjustedAt || "" } : null,
-    adjustments: Number(row.adjustments) || 0,
+    adjustments: Number(row.adjustments) || 0, plannedMinutes: row.plannedMinutes === null ? null : Number(row.plannedMinutes),
   };
 }
 const byName = <T extends { name: string }>(a: T, b: T) => a.name.localeCompare(b.name, "es", { numeric: true });
@@ -51,7 +56,8 @@ async function report(url: URL, current: Member, db: Database): Promise<HoursRep
   const filter = hoursFilterInput(url.searchParams);
   if ("error" in filter) return filter;
   const timezone = await personalZone(db, current), admin = current.role === "admin";
-  const visible = (await storedRows(db, current.organizationId, admin ? null : current.id, undefined, filter)).map(row => hoursRow(row, timezone));
+  const stored = await storedRows(db, current.organizationId, admin ? null : current.id, undefined, filter), truncated = stored.length > hoursRowLimit;
+  const visible = stored.slice(0, hoursRowLimit).map(row => hoursRow(row, timezone));
   const rows = visible.filter(row => inHoursFilter(row, filter)).sort((a, b) => b.day.localeCompare(a.day) || (b.startedAt || b.completedAt).localeCompare(a.startedAt || a.completedAt));
   const unique = <T extends { id: string }>(items: T[]) => [...new Map(items.map(item => [item.id, item])).values()];
   return {
@@ -61,6 +67,7 @@ async function report(url: URL, current: Member, db: Database): Promise<HoursRep
       sections: unique(visible.map(row => ({ id: row.sectionId, name: row.sectionName, courseId: row.courseId }))).sort(byName),
       people: unique(visible.flatMap(row => row.educatorId ? [{ id: row.educatorId, name: row.educatorName || row.educatorId }] : [])).sort(byName),
     },
+    ...(truncated ? { truncated } : {}),
   };
 }
 
@@ -73,9 +80,12 @@ export async function hours(path: string, method: string, input: unknown, url: U
     const result = await report(url, current, db);
     if ("error" in result) return reply(result, 400);
     if (path === "/api/hours") return reply(result);
+    // A file is taken as complete: rather than one with part of the history, the period is asked for.
+    if (result.truncated) return reply({ error: `El historial tiene más de ${hoursRowLimit.toLocaleString("es")} clases: elige un periodo para exportarlo.` }, 400);
     const period = [result.filter.from, result.filter.to].filter(Boolean).join("_a_") || "todo";
     return new Response(hoursCsv(result.rows, result.timezone), { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="horas-efectivas-${period}.csv"` } });
   }
+  if (path === "/api/hours/adjustments" && method === "POST") return batchAdjustment(input, current, db);
   const sessionId = /^\/api\/hours\/([a-z0-9-]+)\/adjustment$/.exec(path)?.[1];
   if (!sessionId || method !== "POST") return reply({ error: "Ruta no disponible." }, 404);
   if (current.role !== "admin") return reply({ error: "Solo administración corrige las horas efectivas." }, 403);
@@ -106,9 +116,34 @@ export async function hours(path: string, method: string, input: unknown, url: U
   return reply({ row: hoursRow(after, timezone) });
 }
 
+/**
+ * HRS-02: POST /api/hours/adjustments {sessionIds, reason}: each class «por revisar» (no start, or longer than allowed)
+ * gets its planned duration, keeping its person; each correction stays in the history and one event sums them up.
+ * A class already counted, corrected or without a planned duration is left as it is and reported as skipped.
+ */
+async function batchAdjustment(input: unknown, current: Member, db: Database) {
+  if (current.role !== "admin") return reply({ error: "Solo administración corrige las horas efectivas." }, 403);
+  const value = hoursBatchInput(input);
+  if ("error" in value) return reply(value, 400);
+  const timezone = await personalZone(db, current), now = new Date().toISOString();
+  const rows = (await Promise.all(value.sessionIds.map(id => storedRows(db, current.organizationId, null, id)))).flatMap(found => found.slice(0, 1));
+  const fixable = rows.map(row => ({ row, before: hoursRow(row, timezone) }))
+    .filter(({ before }) => (before.state === "no_start" || before.state === "review") && !!before.plannedMinutes && !!before.educatorId);
+  if (!fixable.length) return reply({ error: "Ninguna de las clases elegidas está por revisar con una duración planificada." }, 409);
+  const minutes = fixable.reduce((sum, item) => sum + item.before.plannedMinutes!, 0);
+  await db.batch([
+    ...fixable.map(({ row, before }) => db.prepare(`INSERT INTO class_hour_adjustments(id,organization_id,session_id,minutes_before,minutes_after,educator_before,educator_after,reason,adjusted_by,adjusted_at)
+      VALUES (?,?,?,?,?,?,?,?,?,max(?,COALESCE((SELECT max(adjusted_at) FROM class_hour_adjustments WHERE session_id=?),'')))`)
+      .bind(`hours-${crypto.randomUUID()}`, current.organizationId, row.sessionId, before.minutes, before.plannedMinutes!, before.educatorId, before.educatorId, value.reason, current.id, now, row.sessionId)),
+    event(db, current, { action: "updated", targetType: "session", targetId: fixable[0].row.sessionId, courseId: null, groupId: null,
+      summary: `Corrigió en lote ${fixable.length === 1 ? "1 clase" : `${fixable.length} clases`} por revisar con su duración planificada (${formatMinutes(minutes)} en total). Motivo: ${value.reason}` }),
+  ]);
+  return reply({ corrected: fixable.length, skipped: value.sessionIds.length - fixable.length, minutes });
+}
+
 /** ST-159: the classes attributed to the person, with their effective hours, for «Exportar mis datos». */
 export async function ownHours(db: Database, current: Member): Promise<{ timezone: string; rows: HoursRow[] }> {
   // ST-160: in the person's own zone, like «Horas».
   const timezone = await personalZone(db, current);
-  return { timezone, rows: (await storedRows(db, current.organizationId, current.id)).map(row => hoursRow(row, timezone)) };
+  return { timezone, rows: (await storedRows(db, current.organizationId, current.id)).slice(0, hoursRowLimit).map(row => hoursRow(row, timezone)) };
 }
