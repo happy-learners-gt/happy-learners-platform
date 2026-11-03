@@ -2223,5 +2223,6 @@ section.panel[id^="profile-"] { scroll-margin-top: calc(var(--topbar-h) + var(--
 .phones-only { display: none; }
 @media (max-width: 720px) {
   .activity-feed.folded-on-phones > li:nth-child(n+4) { display: none; }
+  .fold-on-phones.fold-2 > :first-child > li:nth-child(n+3), .fold-on-phones.fold-3 > :first-child > li:nth-child(n+4) { display: none; }
   .phones-only { display: inline-flex; }
 }

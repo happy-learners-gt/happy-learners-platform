@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.19 — 2026-11-03
+
+- Inicio en el teléfono (HOME-03): «Tus secciones» muestra dos y «Mis cursos» tres, cada lista con «Mostrar N más»
+  para el resto, así la página no crece con cada sección o curso del educador.
+
 ## 1.6.18 — 2026-11-03
 
 - Inicio en el teléfono (HOME-02): la actividad reciente muestra las tres últimas entradas y un botón «Mostrar N más»
