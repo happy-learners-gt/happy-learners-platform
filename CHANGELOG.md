@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.4 — 2026-11-02
+
+- Horarios abre en el horario vigente (SCH-01): las clases de cada día de la semana, de todas las secciones o de un docente o un aula, con los choques (un docente o un aula con dos clases a la vez) arriba; el generador queda debajo como «Generar un horario nuevo». La API de horarios agrega las reuniones de cada sección, que ya leía. El aviso sin jornada apunta al calendario institucional.
+
 ## 1.6.3 — 2026-11-02
 
 - Calendario institucional unificado (CAL-01, `docs/design/calendario-unificado.md`): el año escolar se prepara en un solo lugar, en orden: año, ciclo lectivo y periodos, jornadas, asuetos y otros eventos, y preparar el año siguiente. Cada asueto aparece una vez, con su fecha del año tal como quedó (movida u omitida) y sus acciones («Mover/Saltar la fecha de 2026»); la lista de eventos guarda solo los que no salen de una regla. Organización queda en identidad, región y respaldo, con un resumen que enlaza al calendario.
