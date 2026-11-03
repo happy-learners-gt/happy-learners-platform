@@ -5,6 +5,9 @@
 - Uso de IA muestra «Propuestas usadas» (AIG-4): de lo que la IA propone al redactar, al mejorar una lección, al
   sugerir campos de documentos y al interpretar reglas de horario, cuánto acepta la persona, en total y por tarea,
   curso y persona. Se guardan solo dos conteos por ejecución, nunca qué se aceptó ni el texto (migración 0076).
+- «Uso de IA» pasa a llamarse «Inteligencia artificial» (AIG-5) y abre con qué hace la IA en la institución: cada
+  capacidad, dónde aparece, quién decide sobre lo que propone, su uso del mes y las propuestas usadas. El consumo y el
+  costo por tarea, curso y persona quedan debajo; avisa si la IA no está configurada.
 
 ## 1.6.8 — 2026-11-03
 
