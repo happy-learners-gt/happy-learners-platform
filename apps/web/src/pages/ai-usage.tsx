@@ -15,7 +15,8 @@ import type { Tone } from "../ui/primitives";
  * the institution, where, who decides and how much of what it proposes is used this month; then what it consumed and
  * cost at the prices administration sets, by task, course and person, and the latest runs. No text is kept.
  */
-type Usage = { engine: "openai" | "fixture" | null; budget: AiBudget; month: string; previousMonth: string; summary: AiUsageSummary; previous: AiTotals; prices: AiPrice[]; unpriced: string[]; recent: (AiRun & { cost: number | null })[] };
+type Later = { proposals: { proposed: number; used: number; discarded: number }; bookMap: { reviewed: number; kept: number; changed: number } };
+type Usage = { engine: "openai" | "fixture" | null; budget: AiBudget; later: Later; month: string; previousMonth: string; summary: AiUsageSummary; previous: AiTotals; prices: AiPrice[]; unpriced: string[]; recent: (AiRun & { cost: number | null })[] };
 
 const monthName = (month: string) => new Intl.DateTimeFormat("es", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${month}-01T00:00:00Z`));
 const capitalized = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
@@ -41,7 +42,7 @@ function Breakdown({ title, rows }: { title: string; rows: (AiTotals & { label: 
 }
 
 /** «Qué hace la IA»: every capability, also those not used this month, with its use and how much of it was used. */
-function Capabilities({ summary }: { summary: AiUsageSummary }) {
+function Capabilities({ summary, later }: { summary: AiUsageSummary; later: Later }) {
   return <div className="table-card" role="region" aria-label="Qué hace la IA" tabIndex={0}><table className="ai-usage-table ai-capabilities">
     <caption className="sr-only">Qué hace la IA</caption>
     <thead><tr><th scope="col">Capacidad</th><th scope="col">Dónde</th><th scope="col">Quién decide</th><th scope="col">Ejecuciones</th><th scope="col">Propuestas usadas</th></tr></thead>
@@ -51,7 +52,10 @@ function Capabilities({ summary }: { summary: AiUsageSummary }) {
         <th scope="row"><strong>{aiTaskLabels[task]}</strong><span className="muted small">{capability.does}</span></th>
         <td>{capability.where}</td><td>{capability.decides}</td>
         <td>{row ? number(row.runs) : "—"}</td>
-        <td>{task === "lesson-review-explain" ? <span className="muted">No aplica</span> : !aiDecidedTasks.includes(task) ? <span className="muted">No se mide aún</span> : row ? used(row) : "—"}</td>
+        <td>{task === "lesson-review-explain" ? <span className="muted">No aplica</span>
+          : task === "lesson-proposal" ? (later.proposals.proposed ? <>{`${number(later.proposals.used)} de ${number(later.proposals.proposed)} publicadas`}{later.proposals.discarded > 0 && <span className="muted small">{` · ${number(later.proposals.discarded)} descartadas`}</span>}</> : "—")
+          : task === "book-map" ? (later.bookMap.reviewed ? <>{`${number(later.bookMap.kept)} de ${number(later.bookMap.reviewed)} confirmadas tal cual`}{later.bookMap.changed > 0 && <span className="muted small">{` · ${number(later.bookMap.changed)} corregidas`}</span>}</> : "—")
+          : !aiDecidedTasks.includes(task) ? <span className="muted">No se mide aún</span> : row ? used(row) : "—"}</td>
       </tr>;
     })}</tbody>
   </table></div>;
@@ -124,8 +128,8 @@ export function AiUsagePage() {
     ]}/>
     <p className="muted">{change === null ? `En ${monthName(usage.previousMonth)} no hubo ejecuciones.` : `${change >= 0 ? `${change} % más` : `${-change} % menos`} ejecuciones que en ${monthName(usage.previousMonth)} (${number(previous.runs)}, ${usd(previous.cost)}).`}</p>
     <Section title="Qué hace la IA">
-      <p className="muted">«Propuestas usadas» cuenta, de lo que la IA propuso, cuánto aceptó la persona que lo pidió. Las propuestas de lecciones y el mapa al plan se deciden más tarde, en la lección y en el mapa, y aún no se miden.</p>
-      <Capabilities summary={summary}/>
+      <p className="muted">«Propuestas usadas» cuenta, de lo que la IA propuso, cuánto aceptó la persona que lo pidió. Las propuestas de lecciones se cuentan como usadas al publicarse y el mapa al plan cuando el equipo confirma las páginas que la IA propuso.</p>
+      <Capabilities summary={summary} later={usage.later}/>
     </Section>
     {summary.total.runs === 0 ? <EmptyState icon="sparkles" title="Sin uso de IA este mes">Aquí aparecerán el consumo y el costo de cada tarea, curso y persona.</EmptyState> : <>
       <Section title="Consumo y costo por tarea"><Breakdown title="Tarea" rows={summary.byTask}/></Section>
