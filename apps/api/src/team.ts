@@ -25,7 +25,7 @@ export async function activity(url: URL, current: Member, db: Database) {
   const scoped = educator ? JSON.stringify(await scopedCourses(db, current, ["activity.view"])) : "[]";
   const rows = (await db.prepare(`SELECT e.id,e.action,e.target_type AS targetType,e.target_id AS targetId,e.course_id AS courseId,e.summary,e.occurred_at AS occurredAt,e.actor_id AS actorId,COALESCE(u.display_name,u.username) AS actorName
     FROM activity_events e JOIN users u ON u.id=e.actor_id WHERE e.organization_id=?${course ? " AND e.course_id=?" : ""}${section ? " AND e.group_id=?" : ""}${actor ? " AND e.actor_id=?" : ""}${mine ? " AND (e.course_id IN (SELECT course_id FROM course_members WHERE user_id=?) OR e.course_id IN (SELECT value FROM json_each(?)))" : ""}
-    ${educator ? " AND (e.target_type NOT IN ('group','session') OR e.group_id IN (SELECT group_id FROM section_educators WHERE user_id=?) OR e.course_id IN (SELECT value FROM json_each(?)))" : ""} ORDER BY e.occurred_at DESC,e.id LIMIT ?`)
+    ${educator ? " AND (e.target_type NOT IN ('group','session') OR e.group_id IN (SELECT group_id FROM section_educators WHERE user_id=?) OR e.course_id IN (SELECT value FROM json_each(?)))" : ""} ORDER BY e.occurred_at DESC,e.rowid DESC LIMIT ?`)
     .bind(current.organizationId, ...(course ? [course] : []), ...(section ? [section] : []), ...(actor ? [actor] : []), ...(mine ? [current.id, scoped] : []), ...(educator ? [current.id, scoped] : []), limit).all<ActivityEvent>()).results;
   return reply({ events: rows });
 }

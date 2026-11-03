@@ -5,7 +5,7 @@ import type { ContractPhase, OnboardingPerson } from "@happy-learners/contracts"
  * from what Educadores already loads. Administration's own accounts only go through the welcome and the profile.
  */
 export type IncorporationStepId = "welcome" | "profile" | "contract" | "team" | "sections";
-export type IncorporationAction = "review-profile" | "create-contract" | "open-courses";
+export type IncorporationAction = "review-profile" | "create-contract" | "add-to-course" | "open-courses";
 export interface IncorporationStep { id: IncorporationStepId; label: string; done: boolean; detail: string; action: IncorporationAction | null }
 export interface IncorporationInput {
   role: "admin" | "educator"; onboarding: OnboardingPerson | undefined; profilePending: boolean;
@@ -29,7 +29,7 @@ export function incorporationSteps(input: IncorporationInput): IncorporationStep
   steps.push(
     { id: "contract", label: "Contrato", done: contract, action: contract || awaiting ? null : "create-contract",
       detail: contract ? input.contract === "scheduled" ? "Firmado, empieza después" : "Vigente" : awaiting ? "Esperando su firma" : input.contract === "draft" ? "En borrador" : "Sin contrato vigente" },
-    { id: "team", label: "Equipo de un curso", done: courses > 0, action: courses > 0 ? null : "open-courses",
+    { id: "team", label: "Equipo de un curso", done: courses > 0, action: courses > 0 ? null : "add-to-course",
       detail: courses ? [input.leads ? `responsable de ${plural(input.leads, "curso", "cursos")}` : "", input.coTeaches ? `colabora en ${plural(input.coTeaches, "curso", "cursos")}` : ""].filter(Boolean).join(" · ") : "En ningún equipo" },
     { id: "sections", label: "Secciones", done: input.sections > 0, action: input.sections > 0 ? null : "open-courses",
       detail: input.sections ? `Imparte ${plural(input.sections, "sección", "secciones")}` : "No imparte secciones" },

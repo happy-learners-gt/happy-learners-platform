@@ -216,7 +216,7 @@ function MemberList() {
     {adding && <AccountDialog onClose={() => setAdding(false)} onCreated={async result => { setAdding(false); setIssued(result); await load(); }}/>}
     {coordinating && <CoordinationDialog person={{ id: coordinating.id, name: coordinating.displayName || coordinating.username }} current={coordinating.coordination || null} onClose={() => setCoordinating(null)} onDone={async text => { setCoordinating(null); await load(); toast({ message: text }); }}/>}
     {issued && <TemporaryPassword issued={issued} onClose={() => setIssued(null)}/>}
-    {detail && <PersonDetail person={detail} incorporation={incorporationOf(detail.id)} initialTab={detail.tab} onClose={() => { setDetail(null); void load(); }}/>}
+    {detail && <PersonDetail person={detail} incorporation={incorporationOf(detail.id)} initialTab={detail.tab} onChanged={() => void load()} onClose={() => { setDetail(null); void load(); }}/>}
     {leaving && <DepartureDialog person={leaving} onClose={() => setLeaving(null)} onDone={async date => { const name = leaving.name; setLeaving(null); await load(); toast({ message: `Salida de ${name} registrada el ${departureDay(date)}. Ya no puede entrar.` }); }}/>}
   </>;
 }

@@ -13,14 +13,14 @@
 - **En curso:** nada a medias
 - **Requieren al usuario:** AP-03 cuenta del monitor; AP-05 proveedor y presupuesto del pentest; AP-06 marca y empresa;
   AP-07 tope de IA por organización
-- **Siguiente acción:** PPL-02, AUD-02, PERF-02; el 13-nov, SEC-04
+- **Siguiente acción:** fusionar 1.6.5; luego AUD-02, PERF-02, HRS-02; el 13-nov, SEC-04
 
 | Carril | Estado |
 | --- | --- |
 | Navegación | M1 en producción (1.6.0) |
 | Inicio | HOME-01 en producción (1.6.1) |
-| Personas | PPL-01 en producción (1.6.2); PPL-02 listo |
-| Operación | HRS-01, CAL-01, SCH-01 (1.6.4, en PR); HRS-02 listo |
+| Personas | PPL-01 (1.6.2) en producción; PPL-02 en PR (1.6.5) |
+| Operación | HRS-01, CAL-01, SCH-01 en producción (1.6.4, `d1efeb6`); HRS-02 listo |
 | IA | AI-01 y AIG-1 en producción; AIG-2 P2 |
 | Seguridad | H4 y R1 en producción; SEC-02/03 hechos; SEC-04 el 13-nov |
 | Rendimiento | Agenda −42/−72 % en producción; PERF-02 listo |
