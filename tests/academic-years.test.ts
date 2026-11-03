@@ -119,6 +119,8 @@ async function as(cookie: string | null, path: string, method = "GET", data?: un
 }
 const read = async <T = Record<string, unknown>>(response: Response, status = 200) => { const text = await response.text(); expect(response.status, text).toBe(status); return JSON.parse(text) as T; };
 const errorOf = async (response: Response, status: number) => (await read<{ error: string }>(response, status)).error;
+/** A Monday after today, plus `offset` days: classes are only planned from today on, so fixed dates expire. */
+const day = (offset: number) => { const base = new Date(); base.setUTCHours(0, 0, 0, 0); base.setUTCDate(base.getUTCDate() + ((8 - base.getUTCDay()) % 7 || 7) + offset); return base.toISOString().slice(0, 10); };
 
 describe("school year on the built Worker", () => {
   it("administration creates «Ciclo 2027» with four bimestres, activates, closes and opens the next one; others only read", async () => {
@@ -168,7 +170,7 @@ describe("school year on the built Worker", () => {
     // Section schedules keep working with their own dates, apart from the year.
     const course = (await read<{ id: string }>(await as(admin, "/courses", "POST", { title: "Curso del ciclo", objective: "El horario conserva sus fechas.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", area: "011", settings: { attendance: true }, programId: null, leadId: "user-educator" }), 201)).id;
     const group = (await read<{ id: string }>(await as(admin, `/courses/${course}/groups`, "POST", { name: "Primero A" }), 201)).id;
-    const schedule = { weekdays: [1, 3], startsAt: "08:00", durationMinutes: 45, from: "2026-11-02", until: "2026-11-27" };
+    const schedule = { weekdays: [1, 3], startsAt: "08:00", durationMinutes: 45, from: day(0), until: day(25) };
     expect((await read<{ classes: number }>(await as(admin, `/courses/${course}/groups/${group}/schedule`, "PUT", schedule))).classes).toBe(8);
     const sectionsBefore = await read(await as(admin, "/sections"));
 
