@@ -10,7 +10,7 @@ día y limitaciones registradas. Fusionado a `main` ≠ resultado de producto lo
 | M2 | Flujos y arquitectura de IA especificados (Fase 1 restante) | AUD-02, WF-01, AI-01 | WF-01, AI-01 (+ AIG-1, H4) hechos en rama 1.6.1; AUD-02 pendiente | `flujos.md`, `ia.md`, prueba del límite de IA |
 | M3 | Inicio institucional por excepciones | HOME-01 | DONE · en producción 02-nov (1.6.1, `126fb0b`) | `homeCourses` con pruebas; E2E team sin depender de fechas; 25 → 6 tarjetas |
 | M4 | Operación: horas, calendario, horarios, agenda (Fase 3) | HRS-01, CAL-01, SCH-01 | DONE: HRS-01 (1.6.1), CAL-01 (1.6.3), SCH-01 (1.6.4); HRS-02 queda como mejora | E2E institutional-calendar y hours |
-| M5 | Personas: incorporación de punta a punta (Fase 4) | PPL-01, PPL-02 | PPL-01 en producción (1.6.2); PPL-02 listo | E2E PPL-01 en contracts.spec con axe |
+| M5 | Personas: incorporación de punta a punta (Fase 4) | PPL-01, PPL-02 | DONE: PPL-01 (1.6.2), PPL-02 (1.6.5) | E2E PPL-01 en contracts.spec con axe |
 | M6 | IA como plataforma (Fase 8) | según AI-01 | BACKLOG | — |
 | M7 | Preparación empresarial (Fase 7/10) | SEC-01…04, pentest | BLOCKED en parte (AP-01, AP-03–05) | — |
 
