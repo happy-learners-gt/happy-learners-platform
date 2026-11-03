@@ -2218,3 +2218,10 @@ section.panel[id^="profile-"] { scroll-margin-top: calc(var(--topbar-h) + var(--
 .timetable-time { font-size: var(--text-xs); font-weight: var(--weight-bold); color: var(--color-primary-ink); }
 .timetable-conflicts { margin: var(--space-1) 0 0; padding-left: var(--space-4); }
 .timetable-generate-title { margin: var(--space-6) 0 var(--space-3); font-size: var(--text-md); }
+
+/* HOME-02: on phones, long feeds show their first entries and a button for the rest. */
+.phones-only { display: none; }
+@media (max-width: 720px) {
+  .activity-feed.folded-on-phones > li:nth-child(n+4) { display: none; }
+  .phones-only { display: inline-flex; }
+}
