@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { OnboardingFacts } from "../packages/domain/src/index";
 import { declareStep, nextStep, onboardingStatus, onboardingStepStates, profileComplete, profileGaps } from "../packages/domain/src/index";
 import { acceptPending } from "./accept-pending";
+import { listenOnTestPort } from "./test-port";
 
 // ST-122 (HL-168): guided onboarding on the first sign-in. Domain rules first, then the built Worker on a fresh local store.
 const base: OnboardingFacts = { role: "educator", temporaryPassword: false, legalPending: false, profile: { phone: "+502 5555-0122", contactEmail: null, specialties: ["Ciencias"] }, agreementPublished: false, agreementSigned: false, teaches: false, welcomeAt: "2026-10-15T10:00:00.000Z", agreementSkippedAt: null, tourAt: null };
@@ -60,8 +61,7 @@ let logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-onboarding-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

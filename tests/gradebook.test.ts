@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Gradebook } from "../packages/contracts/src/index";
 import { assessmentTemplates, averageOf, csvFile, gradeResult, gradeStatistics, letterOf, pastedCells, pdfFile, periodFromPlan, planTotal, pointsInput, scoreInput, settingChoices, settingsInput, settingValue, splitPeriods } from "../packages/domain/src/index";
 import type { GradingPolicy } from "../packages/domain/src/index";
+import { listenOnTestPort } from "./test-port";
 
 // The minimal gradebook (libreta): one optional score per student of the section's roster and period of the school
 // year. A missing score is never a zero; the course's settings (or its program's) decide scale, passing score,
@@ -64,8 +65,7 @@ let logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-gradebook-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

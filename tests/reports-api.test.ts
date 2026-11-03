@@ -7,6 +7,7 @@ import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { defaultTemplate, pdfString } from "../packages/domain/src/index";
+import { listenOnTestPort } from "./test-port";
 
 // 1.5.0 (docs/design/constructor-de-reportes.md) on the built Worker: templates, images, preview, report card, certificate.
 let worker: ChildProcess;
@@ -14,8 +15,7 @@ let origin = "", logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-reports-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

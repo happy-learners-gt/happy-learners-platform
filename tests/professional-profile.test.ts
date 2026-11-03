@@ -12,6 +12,7 @@ import {
   profileChanges, profileCompleteness, profileLinkInput, profileTransition, submissionGaps, validOrcid, videoUrlInput, visibilityInput,
 } from "../packages/domain/src/index";
 import { acceptPending } from "./accept-pending";
+import { listenOnTestPort } from "./test-port";
 
 // ST-154 to ST-157 (HL-15, DEC-045): the professional profile, its credentials, its publication and who sees it.
 const complete: ProfessionalProfile = {
@@ -112,8 +113,7 @@ let logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-professional-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

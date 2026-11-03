@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { HoursReport, HoursRow } from "@happy-learners/contracts";
 import { csvCell, effectiveDuration, hoursAdjustmentInput, hoursBatchInput, hoursCsv, hoursDay, hoursFilterInput, hoursPeriodRange, hoursTotals, inHoursFilter, localDateTime } from "@happy-learners/domain";
 import { nextClassDays } from "./class-days";
+import { listenOnTestPort } from "./test-port";
 
 // ST-152 (DEC-043): effective hours teaching classes. Domain rules first, then the built Worker in a store of its own.
 
@@ -96,8 +97,7 @@ let logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-hours-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
