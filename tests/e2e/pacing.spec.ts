@@ -38,7 +38,8 @@ test("HL-142 ST-110: a self-paced section has no schedule or classes; each stude
     expect((await student.post("/api/student/login", { data: { code: accessCode } })).status()).toBe(200);
     let space = await (await student.get("/api/student/space")).json() as Space;
     expect(space).toMatchObject({ pacing: "self-paced", learner: null });
-    expect(space.roster.map(person => person.name)).toEqual([ana, beto]);
+    // R1: the code shows short names (first word and an initial), never the full ones.
+    expect(space.roster.map(person => person.name)).toEqual(["E2E A.", "E2E B."]);
     expect(space.path.map(unit => [unit.name, unit.lessons.map(lesson => lesson.title)])).toEqual([[`${E2E_PREFIX} Saludos`, [lessons[0].title, lessons[1].title]], [`${E2E_PREFIX} Números`, [lessons[2].title]]]);
     expect((await student.post("/api/student/progress", { data: { shareCode: lessons[0].shareCode } })).status()).toBe(409);
     expect((await student.post("/api/student/identity", { data: { learnerId: "learner-elsewhere" } })).status()).toBe(400);
@@ -46,10 +47,10 @@ test("HL-142 ST-110: a self-paced section has no schedule or classes; each stude
     // Opening a lesson records it; finishing it in the player counts it in the student's progress.
     expect((await student.post("/api/student/progress", { data: { shareCode: "NOT-IN-COURSE" } })).status()).toBe(404);
     expect((await student.post("/api/student/progress", { data: { shareCode: lessons[0].shareCode } })).status()).toBe(200);
-    expect(await (await student.post(`/api/share/${lessons[0].shareCode}/complete`)).json()).toMatchObject({ ok: true, learner: ana });
+    expect(await (await student.post(`/api/share/${lessons[0].shareCode}/complete`)).json()).toMatchObject({ ok: true, learner: "E2E A." });
     expect((await student.post("/api/student/progress", { data: { shareCode: lessons[1].shareCode } })).status()).toBe(200);
     space = await (await student.get("/api/student/space")).json() as Space;
-    expect(space.learner).toEqual({ id: anaId, name: ana });
+    expect(space.learner).toEqual({ id: anaId, name: "E2E A." });
     expect(space.roster).toEqual([]);
     expect(space.path[0].lessons.map(lesson => [lesson.opened, lesson.completed])).toEqual([[true, true], [true, false]]);
 
@@ -67,8 +68,10 @@ test("HL-142 ST-110: a self-paced section has no schedule or classes; each stude
     await entry.getByRole("button", { name: "Abrir" }).click();
     await expect(page).toHaveURL(/\/estudiante$/);
     await expect(page.getByRole("heading", { name: "¿Quién eres?" })).toBeVisible();
-    await page.getByRole("button", { name: beto, exact: true }).click();
-    await expect(page.locator(".student-next")).toContainText(`Hola, ${beto}`);
+    // R1: the student finds themselves by their short name; the section's own pages keep the full one.
+    const short = "E2E B.";
+    await page.getByRole("button", { name: short, exact: true }).click();
+    await expect(page.locator(".student-next")).toContainText(`Hola, ${short}`);
     await expect(page.locator(".student-next")).toContainText("Empieza el curso");
     await page.getByRole("button", { name: `Abrir lección: ${lessons[0].title}` }).click();
     await expect(page).toHaveURL(new RegExp(`/aprender/${lessons[0].shareCode}`));
@@ -76,7 +79,7 @@ test("HL-142 ST-110: a self-paced section has no schedule or classes; each stude
     const nextStep = page.getByRole("button", { name: "Siguiente", exact: true });
     while (await nextStep.isVisible()) await nextStep.click();
     await page.getByRole("button", { name: "Terminar lección" }).click();
-    await expect(page.getByRole("status").filter({ hasText: "¡Bien hecho" })).toContainText(beto);
+    await expect(page.getByRole("status").filter({ hasText: "¡Bien hecho" })).toContainText(short);
     await page.getByRole("link", { name: "Volver a mi sección" }).click();
     await expect(page.locator(".student-next")).toContainText("Continúa donde te quedaste");
     await expect(page.locator(".student-path li.is-done")).toHaveCount(1);

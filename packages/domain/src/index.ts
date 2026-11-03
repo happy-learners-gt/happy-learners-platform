@@ -140,7 +140,8 @@ export { allNotificationTypes, channelLabels, defaultDeliverySettings, digestMes
 export type { ChannelPreferences, ConfigurableNotificationType, DeliverySettings, DigestDetails, DigestItem, EmailFrequency, EmailPlan, NotificationChannel, NotificationDefinition, NotificationDetails, NotificationFacts, NotificationPreferencesChange, NotificationStatus, NotificationType, SystemNotificationType } from "./notifications";
 export { agendaKinds, agendaViews, canonicalLocale, defaultPreferences, densities, effectivePreferences, homePages, hourCycles, interfaceLanguages, localeHourCycle, localeWeekStart, maxTextScale, minTextScale, motions, orderedWeekdays, organizationLocaleInput, suggestedLocales, textScaleStep, themes, userPreferencesInput, wallClock, wallTimeIn } from "./preferences";
 export type { AgendaKind, AgendaView, EffectivePreferences, HomePage, HourCycle, InterfaceLanguage, Theme, UserPreferences } from "./preferences";
-export { csvCell, decimalHours, effectiveDuration, hoursAdjustmentInput, hoursCsv, hoursCsvHeader, hoursDay, hoursFilterInput, hoursStateLabels, hoursTotals, inHoursFilter, localDateTime, maxAdjustedMinutes, maxAdjustmentReason, minAdjustmentReason, reviewAfterMinutes } from "./hours";
+export { csvCell, decimalHours, effectiveDuration, hoursAdjustmentInput, hoursCsv, hoursCsvHeader, hoursDay, hoursFilterInput, hoursPeriodRange, hoursStateLabels, hoursTotals, inHoursFilter, localDateTime, maxAdjustedMinutes, maxAdjustmentReason, minAdjustmentReason, reviewAfterMinutes } from "./hours";
+export type { HoursPeriod } from "./hours";
 export { declaredSteps, declareStep, missingSteps, nextStep, onboardingStatus, onboardingStatusLabels, onboardingStepLabels, onboardingSteps, onboardingStepStates, profileComplete, profileGaps } from "./onboarding";
 export type { OnboardingFacts, ProfileFacts, StepRefusal } from "./onboarding";
 export {
@@ -195,5 +196,8 @@ export { combineLabels, minuteCanonical, minuteClosed, minuteSignatureCanonical,
 export type { MinuteContent, MinuteEvaluator, MinuteSignature } from "./panel-minutes";
 export { progressRecord, progressSummary } from "./progress-report";
 export type { LearnerProgress, ProgressInput, ProgressSummary } from "./progress-report";
+export { attentionLabels, courseAttention, homeCourses, lowAttendance } from "./home";
+export type { AttentionReason } from "./home";
+export { shortLearnerNames } from "./short-names";
 export { applySuggestion, checkedSuggestions, exampleSuggestions, fixtureSuggester, suggestInput, suggestPrompt, suggestPromptVersion, suggestSchema } from "./field-suggestions";
 export type { FieldSuggester, FieldSuggestion, SuggestField, SuggestInput, SuggestOutput } from "./field-suggestions";

@@ -5,7 +5,7 @@ import {
 import type { AiWriter, LessonImprover } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { accessTo } from "./access";
-import { tracked } from "./ai-runs";
+import { aiAllowed, aiLimited, tracked } from "./ai-runs";
 import { openAiImprover, openAiSettings, openAiWriter } from "./openai";
 
 /**
@@ -70,6 +70,7 @@ export async function aiAssist(path: string, method: string, input: unknown, cur
     const review = lessonReview(lessonDraft, { ...basis, sequence });
     const request = improveInput(lessonDraft, review, { course: lesson.courseTitle, grade: educationLevels.find(level => level.value === lesson.level)?.label || lesson.level, classMinutes: basis.classMinutes });
     if (!request.failing.length) return reply({ review, changes: [] });
+    if (!await aiAllowed(db, current.id)) return aiLimited();
     try {
       const output = await tracked(db, {
         organizationId: current.organizationId, userId: current.id, courseId: lesson.courseId, task: "lesson-improve", promptVersion: improvePromptVersion,
@@ -84,6 +85,7 @@ export async function aiAssist(path: string, method: string, input: unknown, cur
   // A course named for the record must be one this person works with.
   if (courseId && !(await accessTo(db, current, courseId))) return reply({ error: "Este curso no está asignado a tu cuenta." }, 403);
   if (!engines) return notConfigured();
+  if (!await aiAllowed(db, current.id)) return aiLimited();
   try {
     const output = await tracked(db, {
       organizationId: current.organizationId, userId: current.id, courseId, task: "write", promptVersion: writePromptVersion,

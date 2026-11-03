@@ -307,6 +307,9 @@ fieldset:disabled input, fieldset:disabled select, fieldset:disabled textarea { 
 .chip-button { color: var(--color-ink); }
 .chip-button:hover { background: var(--violet-soft); border-color: var(--color-primary-line); }
 .chip-button.is-archived { color: var(--color-muted); border-style: dashed; }
+/* A chip that toggles a filter shows it is on the same way everywhere. */
+.chip-button[aria-pressed="true"] { border-color: var(--color-primary); background: var(--violet-soft); color: var(--violet-ink); font-weight: var(--weight-bold); }
+.chip-button[aria-pressed] { cursor: pointer; }
 .chip input:checked + span { border-color: var(--color-primary); background: var(--violet-soft); color: var(--violet-ink); font-weight: var(--weight-bold); }
 .chip input:focus-visible + span { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .segmented { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-muted); }
@@ -1143,6 +1146,8 @@ dialog.modal.viewer .modal-body > .usage, dialog.modal.viewer .modal-body > p { 
 .progress-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
 .progress-list > li { display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-4); border: 1px solid var(--color-border); border-left: 3px solid var(--tone-solid); border-radius: var(--radius-md); background: var(--color-surface); }
 .progress-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); flex-wrap: wrap; }
+/* HOME-01: why a course needs attention, under its name. */
+.attention-reasons { gap: var(--space-1); margin: var(--space-1) 0 var(--space-2); }
 .progress-title { font-weight: var(--weight-bold); color: var(--color-ink); text-decoration: none; }
 .progress-title:hover { color: var(--color-primary-ink); text-decoration: underline; }
 .section-course { display: block; }

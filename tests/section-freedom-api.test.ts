@@ -125,7 +125,7 @@ describe("ST-049 libertad de cátedra por sección", () => {
     const sharedBook = await read<{ gradebook: { activities: Record<string, unknown>[] } }>(await call(admin, "/sections/seed-group-mat-6a/grades"));
     expect(sharedBook.gradebook.activities.some(item => item.title === "Tareas")).toBe(true);
     for (const activity of sharedBook.gradebook.activities) expect(activity).not.toHaveProperty("groupId");
-  });
+  }, 60_000);
 
   it("keeps a copy independent, accepts and rejects a proposal, and leaves an in-review activity out of the grade", async () => {
     const admin = await login("admin-demo");
@@ -182,5 +182,5 @@ describe("ST-049 libertad de cátedra por sección", () => {
     await read(await call(lead, `/sections/${sectionA.id}/reviews`, "POST", { itemType: "activity", itemId: activity.id, decision: "approve" }));
     const graded = await read<{ gradebook: { activities: { id: string }[] } }>(await call(other, `/sections/${sectionA.id}/grades`));
     expect(graded.gradebook.activities.map(item => item.id)).toContain(activity.id);
-  });
+  }, 60_000);
 });

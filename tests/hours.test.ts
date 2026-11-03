@@ -8,7 +8,7 @@ import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { HoursReport, HoursRow } from "@happy-learners/contracts";
-import { csvCell, effectiveDuration, hoursAdjustmentInput, hoursCsv, hoursDay, hoursFilterInput, hoursTotals, inHoursFilter, localDateTime } from "@happy-learners/domain";
+import { csvCell, effectiveDuration, hoursAdjustmentInput, hoursCsv, hoursDay, hoursFilterInput, hoursPeriodRange, hoursTotals, inHoursFilter, localDateTime } from "@happy-learners/domain";
 import { nextClassDays } from "./class-days";
 
 // ST-152 (DEC-043): effective hours teaching classes. Domain rules first, then the built Worker in a store of its own.
@@ -266,4 +266,13 @@ describe("ST-152 Controlar las horas efectivas impartiendo clases", () => {
     expect(backup.tables.class_hour_adjustments.rows).toHaveLength(3);
     expect(backup.tables.class_hour_adjustments.columns).toEqual(["id", "organization_id", "session_id", "minutes_before", "minutes_after", "educator_before", "educator_after", "reason", "adjusted_by", "adjusted_at"]);
   });
+});
+
+it("HRS-01 presets cover whole days from the person's today, across month and year ends", () => {
+  expect(hoursPeriodRange("30-dias", "2026-11-02")).toEqual({ from: "2026-10-04", to: "2026-11-02" });
+  expect(hoursPeriodRange("mes", "2026-11-02")).toEqual({ from: "2026-11-01", to: "2026-11-02" });
+  expect(hoursPeriodRange("mes-anterior", "2026-11-02")).toEqual({ from: "2026-10-01", to: "2026-10-31" });
+  expect(hoursPeriodRange("mes-anterior", "2027-01-15")).toEqual({ from: "2026-12-01", to: "2026-12-31" });
+  expect(hoursPeriodRange("mes-anterior", "2028-03-31")).toEqual({ from: "2028-02-01", to: "2028-02-29" });
+  expect(hoursPeriodRange("todo", "2026-11-02")).toBeNull();
 });

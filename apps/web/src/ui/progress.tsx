@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ActivityEvent, CourseMember, CourseProgress } from "@happy-learners/contracts";
+import { attentionLabels } from "@happy-learners/domain";
+import type { AttentionReason } from "@happy-learners/domain";
 import { api, message } from "../api";
 import { Link } from "../navigation";
 import { hueFor, plural, timeAgo } from "../model";
@@ -49,7 +51,8 @@ function Bar({ label, value, max, text }: { label: string; value: number; max: n
 }
 
 /** One row per course: content published, outcomes evaluated, attendance and last activity. */
-export function CourseProgressList({ courses, userId, compact }: { courses: CourseProgress[]; userId?: string; compact?: boolean }) {
+/** `reasons` (HOME-01) names, under each course, why it needs attention. */
+export function CourseProgressList({ courses, userId, compact, reasons }: { courses: CourseProgress[]; userId?: string; compact?: boolean; reasons?: ReadonlyMap<string, AttentionReason[]> }) {
   if (!courses.length) return <EmptyState compact icon="courses" title="Sin cursos asignados">Cuando formes parte del equipo de un curso, su avance aparecerá aquí.</EmptyState>;
   return <ul className={`progress-list${compact ? " compact" : ""}`}>{courses.map(item => {
     const role = userId ? item.team.find(member => member.userId === userId)?.role : undefined;
@@ -58,6 +61,10 @@ export function CourseProgressList({ courses, userId, compact }: { courses: Cour
         <Link href={`/cursos/${item.courseId}`} className="progress-title">{item.title}</Link>
         {role ? <StatusBadge tone={role === "lead" ? "info" : "neutral"}>{roleLabel[role]}</StatusBadge> : <TeamLine team={item.team}/>}
       </div>
+      {!!reasons?.get(item.courseId)?.length && <ul className="chips attention-reasons" aria-label={`Por qué ${item.title} necesita atención`}>
+        {/* The two heaviest reasons: more badges than that read as noise. */}
+        {reasons.get(item.courseId)!.slice(0, 2).map(reason => <li key={reason}><StatusBadge tone="warning">{attentionLabels[reason]}</StatusBadge></li>)}
+      </ul>}
       <div className="progress-bars">
         <Bar label="Lecciones publicadas" value={item.published} max={item.lessons} text={`${item.published} de ${item.lessons}`}/>
         <Bar label="Resultados evaluados" value={item.assessed} max={item.outcomes} text={item.outcomes ? `${item.assessed} de ${item.outcomes}` : "Sin plan"}/>

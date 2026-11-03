@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.1 — 2026-11-02
+
+- Privacidad (R1, decisión del dueño): quien tiene el código de una sección ve, para elegirse, la primera palabra del nombre de cada estudiante y una inicial («Ana L.»); si dos coinciden, más iniciales o un número. El nombre completo ya no sale de la sección hacia el código. El personal no cambia.
+- Inicio por excepciones (HOME-01): «Avance de los cursos» muestra hasta seis, primero los que necesitan atención (asistencia baja, sin plan, resultados sin evaluar, cambios sin publicar, sin actividad en 30 días, lecciones sin publicar), cada uno con sus dos motivos principales, y «Ver todos (n)». En la demo, Inicio de administración pasa de 25 tarjetas (~4 200 px) a 6 (~2 200 px). Sin lecturas nuevas.
+- Horas efectivas (HRS-01): abre en los últimos 30 días con periodos de un clic (este mes, mes anterior, todo, personalizado); los totales por educador, curso y sección van en pestañas; «Por revisar» filtra las clases que necesitan corrección; la lista muestra 25 clases a la vez; si el periodo está vacío pero hay historial, un botón lo abre.
+- Seguridad (H4): las tareas de IA que la persona espera (redactar, mejorar, sugerir campos, interpretar reglas) tienen un límite de 60 por persona y hora; al pasarlo responden 429 con un mensaje claro y «Sugerir campos» sigue ofreciendo los campos de los ejemplos.
+- Arquitectura de IA del programa (`docs/transformacion/ia.md`): inventario de las 7 capacidades, brechas priorizadas y decisión de no introducir agentes por ahora.
+
 ## 1.6.0 — 2026-11-02
 
 - Programa de transformación del producto (`docs/transformacion/`): auditoría con puntajes por módulo, arquitectura de información objetivo, decisiones, cola de aprobaciones, riesgos y presupuesto, y estado retomable entre sesiones.
