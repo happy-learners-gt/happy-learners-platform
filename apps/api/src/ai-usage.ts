@@ -29,6 +29,23 @@ async function runsOf(db: Database, organizationId: string, from: string, until:
     WHERE r.organization_id=? AND r.created_at>=? AND r.created_at<? ORDER BY r.created_at DESC`).bind(organizationId, `${from}-01`, `${until}-01`).all<AiRun>()).results;
 }
 
+/**
+ * AIG-4b: lesson proposals and the book map are decided later, where they live, so their acceptance is read from the
+ * data instead of being reported: a proposed lesson is used once published and discarded if archived unpublished; a
+ * map the AI reviewed is kept when the team confirmed the AI's pages, changed when the team edited them.
+ */
+async function laterDecisions(db: Database, organizationId: string, from: string, until: string) {
+  const [proposals, maps] = await db.batch([
+    db.prepare(`SELECT count(*) AS proposed,COALESCE(sum(l.revision>0),0) AS used,COALESCE(sum(l.revision=0 AND l.archived=1),0) AS discarded
+      FROM proposal_items i JOIN proposal_jobs j ON j.id=i.job_id LEFT JOIN lessons l ON l.id=i.lesson_id
+      WHERE j.organization_id=? AND i.status='done' AND i.finished_at>=? AND i.finished_at<?`).bind(organizationId, `${from}-01`, `${until}-01`),
+    db.prepare(`SELECT count(*) AS reviewed,COALESCE(sum(status='confirmed' AND source='ai'),0) AS kept,COALESCE(sum(status='confirmed' AND source<>'ai'),0) AS changed
+      FROM book_maps WHERE organization_id=? AND ai_status='done' AND updated_at>=? AND updated_at<?`).bind(organizationId, `${from}-01`, `${until}-01`),
+  ]) as unknown as [{ proposed: number; used: number; discarded: number }[], { reviewed: number; kept: number; changed: number }[]];
+  const counts = <T extends object>(row: T | undefined) => Object.fromEntries(Object.entries(row || {}).map(([key, value]) => [key, Number(value) || 0])) as { [K in keyof T]: number };
+  return { proposals: counts(proposals[0]), bookMap: counts(maps[0]) };
+}
+
 export async function aiUsage(path: string, method: string, input: unknown, url: URL, current: Member, db: Database, env: Env): Promise<Response> {
   if (current.role !== "admin") return reply({ error: "Solo administración ve el uso de IA de la organización." }, 403);
   if (path === "/api/organization/ai-prices") {
@@ -47,6 +64,7 @@ export async function aiUsage(path: string, method: string, input: unknown, url:
     engine: openAiSettings(env) ? "openai" : env.LESSON_GENERATOR === "fixture" ? "fixture" : null,
     // AIG-6: the budget is always this month's, whatever month is being read.
     budget: await aiBudgetOf(db, current.organizationId, env),
+    later: await laterDecisions(db, current.organizationId, month, next(month)),
     month, previousMonth: before, summary: aiUsageSummary(runs, prices), previous: aiUsageSummary(earlier, prices).total, prices,
     unpriced: models.filter(model => !prices.some(price => price.model === model)),
     recent: runs.slice(0, 50).map(run => ({ ...run, cost: runCost(run, prices) })),
