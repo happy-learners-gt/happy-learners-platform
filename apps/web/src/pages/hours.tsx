@@ -102,6 +102,8 @@ export function HoursPage() {
       { label: "Clases que suman", value: counted, icon: "check", hue: "green" },
       { label: "Por revisar", value: pending, icon: "alert", hue: "amber" },
     ]}/>
+    {report.truncated && <p className="message-bar warning" role="status"><Icon name="alert" size={18}/>
+      <span>Hay más clases de las que se suman de una vez: se muestran las más recientes y los totales son parciales. Elige un periodo para ver sumas completas.</span></p>}
     {range && <p className="muted small">Del {sessionDay(range.from, "short")} al {sessionDay(range.to, "short")}.</p>}
     <p className="muted small">Solo suman las clases finalizadas. Una clase cancelada o sin finalizar no suma horas; una sin registro de inicio o de más de 8 h suma 0 hasta que administración la corrige. Fechas y horas en {report.timezone}.</p>
     {!report.rows.length ? <EmptyState icon="clock" title="No hay clases finalizadas en este filtro"

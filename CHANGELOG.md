@@ -5,6 +5,8 @@
 - Revisión de perfiles pasa a ser una pestaña de Educadores (IA-04), con lo que espera revisión contado en la
   pestaña; `/perfiles` lleva ahí y el menú de administración pierde una entrada. El paso «Revisar perfil» de la
   incorporación abre la pestaña.
+- Horas efectivas ya no suma en silencio solo parte del historial (PERF-03): si «Todo el historial» pasa de 5 000
+  clases, la página avisa que los totales son parciales y la exportación pide elegir un periodo.
 
 ## 1.6.9 — 2026-11-03
 

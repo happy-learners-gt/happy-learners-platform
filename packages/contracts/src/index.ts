@@ -752,6 +752,8 @@ export interface HoursReport {
   totals: { people: HoursTotal[]; courses: HoursTotal[]; sections: HoursTotal[] };
   /** What the filters can choose from: the courses, sections and people of the classes the person may see in the period (1.6.6). */
   options: { courses: { id: string; name: string }[]; sections: { id: string; name: string; courseId: string }[]; people: { id: string; name: string }[] };
+  /** PERF-03: more classes than one report reads; it has the most recent ones and its sums are partial. */
+  truncated?: boolean;
 }
 export interface HoursAdjustmentInput { minutes: number; educatorId?: string; reason: string }
 /**
