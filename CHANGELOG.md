@@ -4,6 +4,7 @@
 
 - Inicio en el teléfono (HOME-02): la actividad reciente muestra las tres últimas entradas y un botón «Mostrar N más»
   para el resto; la página del educador baja de 3 849 a 3 412 px de alto sin ocultar nada para siempre.
+- Pruebas (QA-03): la prueba de archivar lecciones usa un título único por corrida y ya no falla al repetirse.
 
 ## 1.6.17 — 2026-11-03
 
