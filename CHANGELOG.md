@@ -6,6 +6,9 @@
   con lo gastado calculado con los precios registrados. «Inteligencia artificial» lo muestra y avisa desde el 80 %; al
   100 % la IA responde que se usó el presupuesto del mes y las propuestas y revisiones en cola esperan al mes próximo.
   El límite de 60 peticiones por persona y hora sigue igual.
+- Seguridad (SEC-06): escaneo semanal gratuito con OWASP ZAP contra un Worker local en CI. Por su primer informe, la
+  política de contenido ya no permite websockets a otros dominios (`connect-src 'self'`) y las respuestas llevan
+  `Cross-Origin-Opener-Policy` y `Cross-Origin-Resource-Policy`.
 
 ## 1.6.12 — 2026-11-03
 

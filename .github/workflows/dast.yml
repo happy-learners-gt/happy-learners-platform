@@ -1,0 +1,58 @@
+name: DAST (ZAP baseline)
+
+# SEC-06 (AP-05, docs/transformacion/aprobaciones.md): a free, passive web scan with OWASP ZAP. It scans a Worker
+# started on the runner itself with the demo data, never production nor the preview: both share the Cloudflare
+# account's Durable Object quota (docs/operations/slo.md). Findings are triaged by hand (docs/security/dast.md); the
+# run reports them in its summary and never fails on them.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 13 * * 1'
+
+permissions:
+  contents: read
+
+env:
+  WRANGLER_SEND_METRICS: 'false'
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Start the Worker locally
+        run: |
+          node_modules/.bin/wrangler dev --local --config build/wrangler.json --ip 127.0.0.1 --port 8787 --inspector-port 0 --persist-to "$RUNNER_TEMP/db" > "$RUNNER_TEMP/worker.log" 2>&1 &
+          for attempt in $(seq 1 90); do curl -sf http://127.0.0.1:8787/api/health && exit 0; sleep 1; done
+          cat "$RUNNER_TEMP/worker.log"; exit 1
+      - name: ZAP baseline
+        run: |
+          mkdir -p zap && chmod 777 zap
+          docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t http://127.0.0.1:8787 -m 3 -r zap.html -J zap.json -I
+      - name: Summary
+        if: always()
+        run: |
+          [ -f zap/zap.json ] || { echo "ZAP no produjo informe." >> "$GITHUB_STEP_SUMMARY"; exit 0; }
+          {
+            echo "## ZAP baseline"
+            echo "| Riesgo | Hallazgo | Instancias |"
+            echo "| --- | --- | --- |"
+            jq -r '.site[].alerts[] | "| \(.riskdesc) | \(.name) | \(.count) |"' zap/zap.json
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-baseline-${{ github.sha }}
+          path: zap/
+          if-no-files-found: warn
