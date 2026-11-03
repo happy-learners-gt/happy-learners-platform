@@ -1,26 +1,27 @@
 # Estado actual
 
 - **Fecha:** 02-nov-2026
-- **Fase:** 2–3 · **Hitos:** M1 en producción (1.6.0, `54fd626`); 1.6.1 en PR (M2 casi completo, M3, R1, H4)
-- **Producción:** `126fb0b` (1.6.1, PR #104; antes 1.6.0 `54fd626`, #103). `main` verificó, desplegó y pasó
-  `critical-flows` el 02-nov en ambos.
-- **Rama:** `feat/HL-15-incorporacion` → PR 1.6.2 (PPL-01; integra `main`)
-- **Últimas verificaciones (02-nov):** `./scripts/verify` verde (74 archivos, 518 pruebas); E2E locales de horas, Inicio
-  (team), ritmo propio (pacing), clases, estudio, IA, documentos, horarios, layout y axe en escritorio y móvil.
+- **Fase:** 3–4 · Hitos M0, M1, M3 hechos; M2 casi (falta AUD-02); M4 en curso (HRS-01 y CAL-01 hechos); M5 en curso
+  (PPL-01 hecho)
+- **Producción:** 1.6.3 (PR #106). En el día: 1.6.0 #103 `54fd626`, 1.6.1 #104 `126fb0b`, 1.6.2 #105 `216af3a`,
+  1.6.3 #106. Cada uno con `verify`, `deploy` y `critical-flows` verdes en `main`.
+- **Rama:** `feat/HL-15-siguiente` (desde `main`), solo este estado, sin push: se publica con el próximo PR.
+- **Últimas verificaciones:** `./scripts/verify` verde (75 archivos, 521 pruebas); E2E afectadas con build limpia en
+  escritorio y móvil en cada PR; CI verde en cada PR.
 - **Autorización vigente (02-nov, del usuario):** «sigue adelante con el merge y también todo lo demás»: fusionar y
-  desplegar los PR de cada hito cuando su CI esté verde; aplicar las recomendaciones de la cola que no requieren cuentas
-  ni gasto (R1 hecho; escáneres obligatorios el 13-nov).
-- **En curso:** PR 1.6.2: fusionar cuando su CI esté verde (autorizado) y vigilar el despliegue
-- **Bloqueos (requieren al usuario):** AP-03 crear la cuenta del monitor; AP-05 proveedor y presupuesto del pentest;
-  AP-06 marca y empresa; AP-07 tope de IA por organización
-- **Siguiente acción:** fusionar 1.6.2; seguir con CAL-01 (diseño primero) o PPL-02; el 13-nov, SEC-04
+  desplegar los PR de cada hito con CI verde; aplicar las recomendaciones de la cola que no requieren cuentas ni gasto.
+- **En curso:** nada a medias
+- **Requieren al usuario:** AP-03 cuenta del monitor; AP-05 proveedor y presupuesto del pentest; AP-06 marca y empresa;
+  AP-07 tope de IA por organización
+- **Siguiente acción:** SCH-01 (horarios: horario vigente, conflictos, vistas por docente y aula) o PPL-02; AUD-02;
+  el 13-nov, SEC-04
 
 | Carril | Estado |
 | --- | --- |
-| Navegación | M1 en producción |
-| Inicio | HOME-01 (1.6.1) |
-| Personas | PPL-01 (1.6.2); PPL-02 listo |
-| Operación | HRS-01 (1.6.1); HRS-02, CAL-01, SCH-01 listos |
-| IA | AI-01 y AIG-1 (1.6.1); AIG-2 P2 |
-| Seguridad | H4 y R1 (1.6.1); SEC-02/03 hechos; SEC-04 el 13-nov |
+| Navegación | M1 en producción (1.6.0) |
+| Inicio | HOME-01 en producción (1.6.1) |
+| Personas | PPL-01 en producción (1.6.2); PPL-02 listo |
+| Operación | HRS-01 (1.6.1) y CAL-01 (1.6.3) en producción; HRS-02, SCH-01 listos |
+| IA | AI-01 y AIG-1 en producción; AIG-2 P2 |
+| Seguridad | H4 y R1 en producción; SEC-02/03 hechos; SEC-04 el 13-nov |
 | Rendimiento | Agenda −42/−72 % en producción; PERF-02 listo |

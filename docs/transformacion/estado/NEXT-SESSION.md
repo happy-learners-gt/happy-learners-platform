@@ -9,20 +9,18 @@
 
 ## Hecho
 
-- M0 y M1 (PR #103: menú, Agenda por rol y lecturas, migas; corrección `2a12450`).
-- En `feat/HL-15-flujos-e-ia` (1.6.1, sin push): `ia.md` + límite de IA (H4), `flujos.md`, Horas efectivas (HRS-01),
-  Inicio por excepciones (HOME-01), monitor documentado (SEC-02), alcance del pentest (SEC-03).
+- 1.6.0–1.6.3 en producción el 02-nov (#103–#106): menú y Agenda por rol, Inicio por excepciones, Horas por periodo,
+  R1, límite de IA (H4), incorporación de educadores, calendario unificado. Documentación del programa al día.
 
 ## Siguiente acción
 
-1. `gh pr checks <PR 1.6.2>` (ver `gh pr list`). Verde → `gh pr merge <n> --merge` (autorizado por el usuario el 02-nov) y vigilar `verify`,
-   `deploy` y `critical-flows` en `main` (`gh run list --branch main -L 2`). Rojo → leer el log y corregir en
-   `feat/HL-15-incorporacion`.
-2. Antes de cada push: `rm -rf build && npm run build` y las E2E afectadas (una build vieja ocultó un fallo en #104).
-3. Siguiente de la cola: **CAL-01** (calendario institucional unificado, F2 en `flujos.md`; diseño primero en
-   `docs/design/`) o **PPL-02**. Al cerrar un hito: versión, verify, push, PR, CI verde, fusionar.
-4. **13-nov:** SEC-04, escáneres obligatorios en `main` (`gh api repos/happy-learners-gt/happy-learners-platform/branches/main/protection`,
-   checks `secrets`, `dependencies`, `code`), revisando antes que no hubo falsos positivos.
+1. `git status`: rama `feat/HL-15-siguiente` con este estado sin push. `git fetch && git merge origin/main` si avanzó.
+2. Siguiente de la cola: **SCH-01** (F3 en `flujos.md`: Horarios abre en el horario vigente por sección, docente o aula,
+   con conflictos; el generador como acción secundaria). Diseño primero en `docs/design/`.
+3. Por cada hito: `rm -rf build && npm run build`, E2E afectadas, `./scripts/verify`, versión y CHANGELOG, push, PR,
+   CI verde → `gh pr merge <n> --merge` (autorizado) → vigilar `verify`, `deploy`, `critical-flows` en `main`.
+4. **13-nov:** SEC-04, escáneres obligatorios en `main` (protección de rama con `secrets`, `dependencies`, `code`),
+   revisando antes que no hubo falsos positivos.
 
 ## Lecciones de esta sesión
 
