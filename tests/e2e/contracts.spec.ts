@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { test, expect } from "./local-test";
-import { completeOnboarding, e2eName, origin, sessionToken, signIn, toast } from "./helpers";
+import { completeOnboarding, E2E_PREFIX, e2eName, origin, sessionToken, signIn, toast } from "./helpers";
 
 const wcag = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 async function audit(page: Page, label: string) {
@@ -126,7 +126,18 @@ test("PPL-01: a new educator's incorporation says what is missing and «Crear co
     await expect(dialog.getByRole("tab", { name: "Incorporación" })).toHaveAttribute("aria-selected", "true");
     await expect(dialog).toContainText("le falta: bienvenida, contrato, equipo de un curso, secciones");
     await expect(dialog).toContainText("Pendiente · Esperando a la persona");
-    await expect(dialog.getByRole("link", { name: `Ver cursos para ${name}` })).toHaveCount(2);
+    // PPL-02: the team step adds the person to a course from here; the sections are still assigned in the course.
+    const courseTitle = `${E2E_PREFIX} Curso de incorporación ${info.project.name}`;
+    const newCourse = await admin.post("/api/courses", { data: { title: courseTitle, objective: "Probar la incorporación.", status: "active", educationType: "non-formal", level: "unspecified", format: "workshop", modality: "in-person", pacing: "scheduled", area: "011", settings: { attendance: true }, programId: null, leadId: "user-educator" } });
+    expect(newCourse.status(), await newCourse.text()).toBe(201);
+    await dialog.getByRole("button", { name: `Agregar a ${name} a un curso` }).click();
+    const adding = page.getByRole("dialog", { name: `Agregar a ${name} a un curso` });
+    await adding.getByLabel("Curso").selectOption({ label: courseTitle });
+    await expect(adding.getByLabel("Rol en el equipo")).toHaveValue("co-teacher");
+    await adding.getByRole("button", { name: "Agregar al curso" }).click();
+    await expect(toast(page)).toContainText(`se sumó al equipo de ${courseTitle}`);
+    await expect(dialog).toContainText("Hecho · colabora en 1 curso");
+    await expect(dialog.getByRole("link", { name: `Ver cursos para ${name}` })).toHaveCount(1);
     await dialog.getByRole("link", { name: `Crear contrato para ${name}` }).click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Contratos y políticas");
     const created = page.getByRole("dialog", { name: "Nuevo contrato" });

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.5 — 2026-11-02
+
+- Incorporación (PPL-02): el paso «Equipo de un curso» agrega a la persona a un curso desde su lista, con su rol (responsable o colabora); usa la misma ruta y la misma guardia de versión que Curso › Configuración. Las secciones se siguen asignando en el curso, donde se resuelven los choques de horario.
+
 ## 1.6.4 — 2026-11-02
 
 - Horarios abre en el horario vigente (SCH-01): las clases de cada día de la semana, de todas las secciones o de un docente o un aula, con los choques (un docente o un aula con dos clases a la vez) arriba; el generador queda debajo como «Generar un horario nuevo». La API de horarios agrega las reuniones de cada sección, que ya leía. El aviso sin jornada apunta al calendario institucional.
