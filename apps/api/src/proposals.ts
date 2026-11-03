@@ -10,7 +10,7 @@ import { configurationOf } from "./courses";
 import { referencesOf } from "./bibliography";
 import { digest } from "./auth";
 import { openAiGenerator, openAiSettings, TransientError } from "./openai";
-import { tracked } from "./ai-runs";
+import { aiBudgetOf, aiBudgetSpent, tracked } from "./ai-runs";
 import { confirmedMap } from "./book-map";
 
 declare global { interface Env { LESSON_GENERATOR?: string } }
@@ -85,6 +85,8 @@ export async function proposals(path: string, method: string, input: unknown, cu
   const view = async () => { const { book, sequenceId: _, ...rest } = state; return { ...rest, book: book && { fileId: book.fileId, title: book.title, pages: book.pages, sha256: book.sha256 }, jobs: await jobsOf(db, courseId), canPropose }; };
   if (method === "GET") return reply(await view());
   if (!canPropose) return reply({ error: course.status !== "active" ? "Restaura el curso antes de proponer lecciones." : "Solo el equipo docente del curso propone sus lecciones." }, 403);
+  // AIG-6: no new proposals once the month's AI budget is used; saving the book's text is not AI.
+  if (!textPath.test(path) && (await aiBudgetOf(db, current.organizationId, env)).level === "exhausted") return aiBudgetSpent();
   const now = new Date().toISOString();
 
   if (textPath.test(path)) {
@@ -176,6 +178,8 @@ type Item = { id: string; jobId: string; courseId: string; outcomeId: string; pa
  * turn the answer into a lesson and, in one transaction, create the draft and mark the item done. True when work remains.
  */
 export async function processProposals(db: Database, env: Env, scope: string): Promise<boolean> {
+  // AIG-6: with the month's budget used, the queue waits; asking again next month wakes it.
+  if ((await aiBudgetOf(db, scope, env)).level === "exhausted") return false;
   const now = () => new Date().toISOString();
   // An item left running by an interrupted wake goes back to the queue; its lesson was never written.
   await db.prepare("UPDATE proposal_items SET status='queued' WHERE status='running' AND started_at<?").bind(new Date(Date.now() - 10 * 60_000).toISOString()).run();

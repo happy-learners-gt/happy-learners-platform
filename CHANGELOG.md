@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.13 — 2026-11-03
+
+- Presupuesto mensual de IA por organización (AIG-6, recomendación AP-07): USD 2 por persona activa, mínimo USD 20,
+  con lo gastado calculado con los precios registrados. «Inteligencia artificial» lo muestra y avisa desde el 80 %; al
+  100 % la IA responde que se usó el presupuesto del mes y las propuestas y revisiones en cola esperan al mes próximo.
+  El límite de 60 peticiones por persona y hora sigue igual.
+
 ## 1.6.12 — 2026-11-03
 
 - Horas efectivas lee las horas con el contrato vigente (HRS-03, decisión AP-08). Quien tiene un contrato por hora que

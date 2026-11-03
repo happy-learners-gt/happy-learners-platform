@@ -2,7 +2,7 @@ import type { Member, SectionSchedule, StaffAvailabilitySlot } from "@happy-lear
 import { fixtureRulesTranslator, ruleText, rulesPromptVersion, solveTimetable, solverRule } from "@happy-learners/domain";
 import type { FixedMeeting, RuleContext, RulesTranslator, SolverBlock, SolverRule } from "@happy-learners/domain";
 import type { Database } from "./storage";
-import { aiAllowed, aiLimited, aiRunId, tracked } from "./ai-runs";
+import { aiGate, aiRunId, tracked } from "./ai-runs";
 import { saveSchedule, scheduleOf } from "./classes";
 import { openAiRulesTranslator, openAiSettings } from "./openai";
 
@@ -92,7 +92,8 @@ export async function timetables(path: string, method: string, input: unknown, c
     const settings = openAiSettings(env);
     const translator: RulesTranslator | null = settings ? openAiRulesTranslator(settings) : env.LESSON_GENERATOR === "fixture" ? fixtureRulesTranslator : null;
     if (!translator) return reply({ error: "La IA no está configurada en esta organización." }, 503);
-    if (!await aiAllowed(db, current.id)) return aiLimited();
+    const gate = await aiGate(db, current, env);
+    if (gate) return gate;
     try {
       const request = { text, context }, runId = aiRunId();
       const output = await tracked(db, { id: runId, organizationId: current.organizationId, userId: current.id, courseId: null, task: "rules-to-constraints", promptVersion: rulesPromptVersion, generator: translator.kind, model: settings ? settings.model : "fixture", inputChars: JSON.stringify(request).length },
