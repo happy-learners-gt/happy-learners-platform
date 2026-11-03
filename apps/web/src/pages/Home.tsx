@@ -118,7 +118,7 @@ export function Home() {
           {!recentCourses.length && <EmptyState compact icon="courses" title="Sin cursos activos" action={educator ? undefined : <PrimaryAction href="/cursos/nuevo" icon="plus">Crear curso</PrimaryAction>}/>}
         </Section>
         <Section title={educator && mine?.length ? "Actividad en mis cursos" : "Actividad reciente"} className="order-6">
-          <ActivityFeed limit={8} mine={!!(educator && mine?.length)} courseTitles={Object.fromEntries(data.courses.map(course => [course.id, course.title]))}/>
+          <ActivityFeed limit={8} compactOnPhones mine={!!(educator && mine?.length)} courseTitles={Object.fromEntries(data.courses.map(course => [course.id, course.title]))}/>
         </Section>
       </div>
       <div className="dashboard-side">
