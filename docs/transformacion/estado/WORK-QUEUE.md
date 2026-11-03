@@ -23,7 +23,8 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | CAL-01 | Operación | Calendario institucional unificado (IA-06): ciclo, jornadas, asuetos y eventos en una página; cada asueto una vez | P2 | WF-01 | DONE | `docs/design/calendario-unificado.md`; E2E institutional-calendar sin duplicados |
 | SCH-01 | Operación | Horarios: horario vigente por día, filtro por docente o aula, choques; generador debajo | P2 | WF-01 | DONE | `timetableConflicts` con pruebas; E2E timetables |
 | PPL-01 | Personas | Incorporación de educadores de punta a punta; Revisión de perfiles en Educadores (IA-04) | P2 | WF-01 | DONE | — |
-| PPL-02 | Personas | Asignar cursos y secciones desde la incorporación (ruta que agrega una persona al equipo sin reenviar el equipo completo) | P2 | PPL-01 | READY | Diálogo con curso y rol; E2E |
+| PPL-02 | Personas | Agregar a un curso desde la incorporación (las secciones siguen en el curso por los choques de horario) | P2 | PPL-01 | DONE | Diálogo con curso y rol; E2E en contracts.spec |
+| QA-01 | Calidad | `profiles.test.ts` CA3 falla a veces bajo carga (orden de la actividad); pasa solo | P3 | — | READY | Orden determinista o espera explícita; 5 corridas de verify sin fallo |
 | SEC-01 | Seguridad | R1 paso 1: nombre e inicial con el código de sección | P1 | AP-01 | DONE | `shortLearnerNames` con pruebas; E2E `pacing` |
 | SEC-05 | Seguridad | R1 paso 2 (opcional): código personal por estudiante como ajuste de la sección | P3 | SEC-01 | BACKLOG | Diseño primero; tarjetas imprimibles |
 | SEC-02 | Seguridad | Verificar que `/api/health` no lea el DO; documentar configuración del monitor (AP-03) | P2 | — | DONE | Prueba que lo garantiza; guía en `docs/operations/slo.md` |

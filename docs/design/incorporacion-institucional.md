@@ -45,7 +45,9 @@ Ana López                                    Perfil  Expediente  [Incorporació
 - Accesible: lista con el estado en texto (no solo el ícono), botones con nombre propio («Crear contrato para Ana
   López»).
 
-## Fuera de este incremento
+## Agregar a un curso (PPL-02, 1.6.5)
 
-Asignar cursos y secciones desde el mismo diálogo (necesita una ruta que agregue a una persona al equipo sin reenviar el
-equipo completo): PPL-02.
+El paso «Equipo de un curso» abre «Agregar a <persona> a un curso»: curso activo donde aún no está y rol (responsable si
+el curso no tiene; si lo tiene y se elige responsable, la anterior pasa a colaborar). Lee el curso y envía su equipo con
+la persona agregada y la versión del curso, como Configuración › Equipo docente. Las secciones se asignan en el curso:
+ahí se resuelven los choques de horario, que piden un motivo.

@@ -13,7 +13,7 @@ it("PPL-01 an educator ready to teach has every step done and nothing to act on"
 
 it("PPL-01 offers the next action for what administration can do, and waits on the person otherwise", () => {
   const steps = incorporationSteps({ ...base, onboarding: onboarding("in_progress"), profilePending: true, contract: null, leads: 0, coTeaches: 0, sections: 0 });
-  expect(steps.map(step => [step.id, step.done, step.action])).toEqual([["welcome", false, null], ["profile", false, "review-profile"], ["contract", false, "create-contract"], ["team", false, "open-courses"], ["sections", false, "open-courses"]]);
+  expect(steps.map(step => [step.id, step.done, step.action])).toEqual([["welcome", false, null], ["profile", false, "review-profile"], ["contract", false, "create-contract"], ["team", false, "add-to-course"], ["sections", false, "open-courses"]]);
   // A contract sent and not signed yet waits on the person: no second contract is offered.
   expect(incorporationSteps({ ...base, contract: "awaiting-signature" }).find(step => step.id === "contract")).toMatchObject({ done: false, action: null, detail: "Esperando su firma" });
   // An expired contract counts as none.

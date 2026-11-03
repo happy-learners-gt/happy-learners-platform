@@ -11,6 +11,7 @@ import { Avatar } from "../ui/progress";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, Section, StatusBadge } from "../ui/primitives";
 import type { Tone } from "../ui/primitives";
 import { departureDay } from "./departure";
+import { AddToCourseDialog } from "./add-to-course";
 import { formatInstantDate } from "../regional";
 
 /**
@@ -221,7 +222,7 @@ function DocumentDialog({ userId, today, onClose, onDone }: { userId: string; to
 
 /** Administration's view of one person: profile and staff file, as tabs. */
 /** `incorporation` (PPL-01): what administration still has to do for this person, in its own tab; `initialTab` opens it. */
-export function PersonDetail({ person, incorporation, initialTab, onClose }: { person: { id: string; name: string }; incorporation?: IncorporationStep[]; initialTab?: "incorporation"; onClose: () => void }) {
+export function PersonDetail({ person, incorporation, initialTab, onChanged, onClose }: { person: { id: string; name: string }; incorporation?: IncorporationStep[]; initialTab?: "incorporation"; onChanged?: () => void; onClose: () => void }) {
   const [tab, setTab] = useState<"incorporation" | "profile" | "file">(initialTab && incorporation ? initialTab : "profile");
   const base = useId(), tabs: [typeof tab, string][] = [["profile", "Perfil"], ["file", "Expediente"], ...incorporation ? [["incorporation", "Incorporación"] as [typeof tab, string]] : []];
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -232,7 +233,7 @@ export function PersonDetail({ person, incorporation, initialTab, onClose }: { p
     setTab(tabs[next][0]); refs.current[next]?.focus();
   }
   let panel: ReactNode = null;
-  if (tab === "incorporation" && incorporation) panel = <IncorporationList person={person} steps={incorporation}/>;
+  if (tab === "incorporation" && incorporation) panel = <IncorporationList person={person} steps={incorporation} onChanged={onChanged}/>;
   else if (tab === "profile") panel = <ProfileSummary userId={person.id}/>;
   else panel = <StaffFileSection userId={person.id} title="Expediente" admin/>;
   return <Modal title={person.name} onClose={onClose} wide>
@@ -243,21 +244,23 @@ export function PersonDetail({ person, incorporation, initialTab, onClose }: { p
   </Modal>;
 }
 
-const incorporationAction: Record<IncorporationAction, { label: string; href: (id: string) => string }> = {
+const incorporationAction: Record<Exclude<IncorporationAction, "add-to-course">, { label: string; href: (id: string) => string }> = {
   "review-profile": { label: "Revisar perfil", href: () => "/perfiles" },
   "create-contract": { label: "Crear contrato", href: id => `/contratos?persona=${encodeURIComponent(id)}#contratos` },
   "open-courses": { label: "Ver cursos", href: () => "/cursos" },
 };
 /** PPL-01: the steps, in order, each with its state in words and the action that completes it, where administration has one. */
-function IncorporationList({ person, steps }: { person: { id: string; name: string }; steps: IncorporationStep[] }) {
-  const missing = steps.filter(step => !step.done);
+function IncorporationList({ person, steps, onChanged }: { person: { id: string; name: string }; steps: IncorporationStep[]; onChanged?: () => void }) {
+  const missing = steps.filter(step => !step.done), [adding, setAdding] = useState(false);
   return <div className="stack">
     <p className="muted">{missing.length ? `${steps.length - missing.length} de ${steps.length} pasos · le falta: ${missing.map(step => step.label.toLowerCase()).join(", ")}` : "Lista para impartir: todos los pasos completos."}</p>
     <ol className="incorporation-steps">{steps.map(step => <li key={step.id} className={step.done ? "is-done" : undefined}>
       <Icon name={step.done ? "check" : "clock"} size={18}/>
       <span><strong>{step.label}</strong><span className="muted small">{step.done ? "Hecho · " : "Pendiente · "}{step.detail}</span></span>
-      {step.action && <Link className="button secondary small" href={incorporationAction[step.action].href(person.id)} aria-label={`${incorporationAction[step.action].label} para ${person.name}`}>{incorporationAction[step.action].label}</Link>}
+      {step.action === "add-to-course" ? <button type="button" className="button secondary small" aria-label={`Agregar a ${person.name} a un curso`} onClick={() => setAdding(true)}>Agregar a un curso</button>
+        : step.action && <Link className="button secondary small" href={incorporationAction[step.action].href(person.id)} aria-label={`${incorporationAction[step.action].label} para ${person.name}`}>{incorporationAction[step.action].label}</Link>}
     </li>)}</ol>
+    {adding && <AddToCourseDialog person={person} onClose={() => setAdding(false)} onAdded={() => { setAdding(false); onChanged?.(); }}/>}
   </div>;
 }
 
