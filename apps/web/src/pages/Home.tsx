@@ -11,7 +11,7 @@ import { CourseCard } from "../ui/cards";
 import { Icon } from "../ui/icons";
 import type { IconName } from "../ui/icons";
 import { LessonBadge } from "../ui/LessonOutline";
-import { EmptyState, ErrorState, Loading, PrimaryAction, Section, StatTiles, StatusBadge, Updated } from "../ui/primitives";
+import { EmptyState, ErrorState, FoldOnPhones, Loading, PrimaryAction, Section, StatTiles, StatusBadge, Updated } from "../ui/primitives";
 import { ActivityFeed, CourseProgressList, useProgress } from "../ui/progress";
 import { PendingContractHomeCard } from "./my-contracts";
 import { SectionCards } from "./sections/SectionCard";
@@ -108,13 +108,13 @@ export function Home() {
         </Section>
         {educator && data.sections.length > 0 && <Section title="Tus secciones" className="order-2" action={<Link href="/agenda" className="section-link">Ver la agenda</Link>}>
           <p className="muted small">Indicadores de las secciones que impartes: avance del cronograma, clases dadas y asistencia.</p>
-          <SectionCards sections={data.sections.slice(0, 4)} today={data.today} showCourse/>
+          <FoldOnPhones count={Math.min(data.sections.length, 4)} show={2}><SectionCards sections={data.sections.slice(0, 4)} today={data.today} showCourse/></FoldOnPhones>
         </Section>}
         <Section title={educator && mine?.length ? "Mis cursos" : "Avance de los cursos"} className="order-4" action={<Link href="/cursos" className="section-link">{home?.hidden ? `Ver todos (${home.listed.length + home.hidden})` : "Ver todos"}</Link>}>
           {/* An educator sees the courses they teach; administration (or someone without courses) sees all, those that need attention first (HOME-01). */}
           {home?.attention && <p className="muted small">Primero los cursos que necesitan atención.</p>}
           {progress.error ? <p className="form-alert" role="alert">{progress.error}</p> : !home ? <Loading label="Calculando avance…" lines={3}/>
-            : <CourseProgressList courses={home.listed.map(item => item.course)} reasons={new Map(home.listed.map(item => [item.course.courseId, item.reasons]))} userId={educator && mine?.length ? member.id : undefined}/>}
+            : <FoldOnPhones count={home.listed.length} show={3}><CourseProgressList courses={home.listed.map(item => item.course)} reasons={new Map(home.listed.map(item => [item.course.courseId, item.reasons]))} userId={educator && mine?.length ? member.id : undefined}/></FoldOnPhones>}
           {!recentCourses.length && <EmptyState compact icon="courses" title="Sin cursos activos" action={educator ? undefined : <PrimaryAction href="/cursos/nuevo" icon="plus">Crear curso</PrimaryAction>}/>}
         </Section>
         <Section title={educator && mine?.length ? "Actividad en mis cursos" : "Actividad reciente"} className="order-6">
