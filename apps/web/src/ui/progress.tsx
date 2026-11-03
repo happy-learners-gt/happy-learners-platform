@@ -29,20 +29,23 @@ export function TeamLine({ team }: { team?: CourseMember[] }) {
 /**
  * Who did what, newest first: from the activity log. Filter by course or person.
  */
-export function ActivityFeed({ course, section, actor, mine, limit = 8, courseTitles, empty = "Todavía no hay actividad registrada." }: { course?: string; section?: string; actor?: string; mine?: boolean; limit?: number; courseTitles?: Record<string, string>; empty?: string }) {
-  const [events, setEvents] = useState<ActivityEvent[] | null>(null), [error, setError] = useState("");
+/** `compactOnPhones` (HOME-02): on a narrow screen only the first three entries show, with a button for the rest. */
+export function ActivityFeed({ course, section, actor, mine, limit = 8, courseTitles, compactOnPhones, empty = "Todavía no hay actividad registrada." }: { course?: string; section?: string; actor?: string; mine?: boolean; limit?: number; compactOnPhones?: boolean; courseTitles?: Record<string, string>; empty?: string }) {
+  const [events, setEvents] = useState<ActivityEvent[] | null>(null), [error, setError] = useState(""), [expanded, setExpanded] = useState(false);
   const query = new URLSearchParams({ limit: String(limit), ...(course ? { course } : {}), ...(section ? { section } : {}), ...(actor ? { actor } : {}), ...(mine ? { mine: "1" } : {}) });
   const load = () => api<{ events: ActivityEvent[] }>(`/activity?${query}`).then(result => setEvents(result.events)).catch(cause => setError(message(cause)));
   useEffect(() => { void load(); }, [course, section, actor, mine, limit]);
   if (error) return <ErrorState error={error} retry={() => void load()}/>;
   if (!events) return <Skeleton lines={4}/>;
   if (!events.length) return <p className="muted">{empty}</p>;
-  return <ol className="activity-feed people">{events.map(entry => <li key={entry.id}>
+  const folded = !!compactOnPhones && !expanded && events.length > 3;
+  return <><ol className={`activity-feed people${folded ? " folded-on-phones" : ""}`}>{events.map(entry => <li key={entry.id}>
     <Avatar name={entry.actorName}/>
     <div><span><strong>{entry.actorName}</strong> <span className="feed-summary">{entry.summary.charAt(0).toLowerCase() + entry.summary.slice(1)}</span></span>
       <span className="muted small"><Icon name={targetIcon[entry.targetType]} size={12}/>{targetLabel[entry.targetType]}{entry.courseId && courseTitles?.[entry.courseId] && !course ? <>{" · "}<Link href={`/cursos/${entry.courseId}`}>{courseTitles[entry.courseId]}</Link></> : null}</span></div>
     <time className="muted small" dateTime={entry.occurredAt} title={formatInstant(entry.occurredAt, "long")}>{timeAgo(entry.occurredAt)}</time>
-  </li>)}</ol>;
+  </li>)}</ol>
+    {folded && <button type="button" className="button ghost small phones-only" onClick={() => setExpanded(true)}>{`Mostrar ${events.length - 3} más`}</button>}</>;
 }
 
 function Bar({ label, value, max, text }: { label: string; value: number; max: number; text: string }) {
