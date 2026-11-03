@@ -59,6 +59,17 @@ alternativas, consecuencias.
 - **Alternativas:** tope mensual por organización (decisión de negocio); límite dentro de `tracked()` (descartado:
   también cortaría trabajo en cola que la persona no está esperando).
 
+## TD-009 · La aceptación de la IA se mide con conteos que manda quien decide (03-nov-2026)
+
+- **Decisión:** cada respuesta síncrona de IA (redactar, mejorar lección, sugerir campos, reglas de horario) devuelve
+  su `runId`; cuando la persona termina de decidir, el navegador manda una vez `{proposed, accepted}` a
+  `POST /api/ai/runs/:id/outcome`. Solo la persona que pidió, solo ejecuciones correctas, una vez y dentro de un día.
+  No se guarda qué se aceptó ni su texto (0076).
+- **Alternativas:** inferir la aceptación comparando el borrador guardado con la propuesta (descartado: exige guardar
+  texto de la IA); un evento por elemento (descartado: más escrituras sin más información).
+- **Límite conocido:** quien cierra la página sin decidir no cuenta; las propuestas de lecciones y el mapa al plan se
+  deciden en otro momento y quedan para AIG-4b.
+
 ## TD-004 · Un PR por hito y nada se fusiona sin autorización (31-oct-2026)
 
 - Fusionar a `main` despliega producción. Cada hito llega como un PR coherente, con `main` integrado antes del último

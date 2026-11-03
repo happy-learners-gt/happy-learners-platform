@@ -9,16 +9,17 @@
 
 ## Hecho
 
-- 1.6.0–1.6.7 en producción (#103–#110, 02 y 03-nov): menú y Agenda por rol, Inicio por excepciones, Horas por
+- 1.6.0–1.6.8 en producción (#103–#111, 02 y 03-nov): menú y Agenda por rol, Inicio por excepciones, Horas por
   periodo y con la mitad de lecturas, R1, límite de IA (H4), incorporación de educadores (con agregar a un curso),
   calendario unificado, horario vigente con choques, orden estable de la actividad, contraste AA en oscuro y
-  segunda pasada de la auditoría (AUD-02). 1.6.8 (DOC-01, #111): empezar una plantilla de documento en un paso.
+  segunda pasada de la auditoría (AUD-02). 1.6.8 (DOC-01, #111): empezar una plantilla de documento en un paso. 1.6.9 (AIG-4/5): propuestas usadas e
+  «Inteligencia artificial».
 
 ## Siguiente acción
 
-1. `git status` y `git fetch && git merge origin/main` si avanzó. Confirmar que #111 (1.6.8) está fusionado.
-2. Siguiente de la cola: **AIG-4** (aceptación de lo propuesto por la IA) y **AIG-5** (rediseño de Uso de IA), luego
-   IA-04, PERF-03 y HRS-02.
+1. `git status` y `git fetch && git merge origin/main` si avanzó. Confirmar que el PR de 1.6.9 está fusionado.
+2. Siguiente de la cola: **IA-04** (Revisión de perfiles dentro de Educadores; Contratos 3.10), luego PERF-03,
+   HRS-02 y AIG-4b.
 3. Por cada hito: `rm -rf build && npm run build`, E2E afectadas, `./scripts/verify`, versión y CHANGELOG, push, PR,
    **todos** los checks verdes (también `code`/Semgrep; correr `uvx semgrep scan --config .semgrep` antes) →
    `gh pr merge <n> --merge` (autorizado) → vigilar `verify`, `deploy`, `critical-flows` en `main`.
@@ -26,6 +27,9 @@
    revisando antes que no hubo falsos positivos.
 
 ## Lecciones de esta sesión
+
+- Las pruebas sobre el Worker no deben usar fechas fijas cercanas: el Worker solo planifica clases desde hoy y
+  `academic-years`/`availability` vencieron el 03-nov. Usar «el lunes siguiente a hoy».
 
 - Un PR creado desde una base vieja puede quedar en conflicto y **sin ningún check**: el vigilante debe comprobar
   `mergeable` y que existan las ejecuciones antes de esperar (con un id vacío `gh run view` falla en bucle).

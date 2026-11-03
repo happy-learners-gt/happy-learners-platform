@@ -34,12 +34,24 @@ describe("1.4.0 AI usage and cost", () => {
       run({ id: "3", userId: null, userName: null, courseId: null, courseTitle: null, generator: "fixture", model: "fixture", inputTokens: null, outputTokens: null, durationMs: 2000 }),
     ];
     const summary = aiUsageSummary(runs, prices);
-    expect(summary.total).toEqual({ runs: 3, errors: 1, inputTokens: 1_500_000, outputTokens: 100_000, cost: 1.9, averageMs: 2000 });
+    expect(summary.total).toEqual({ runs: 3, errors: 1, inputTokens: 1_500_000, outputTokens: 100_000, cost: 1.9, averageMs: 2000, decided: 0, proposedItems: 0, acceptedItems: 0, acceptance: null });
     expect(summary.byTask.map(item => [item.label, item.runs, item.cost])).toEqual([["Propuestas de lecciones", 2, 1.4], ["Mapa al plan", 1, 0.5]]);
     expect(summary.byCourse.map(item => [item.label, item.runs])).toEqual([["Matemáticas", 2], ["Sin curso", 1]]);
     expect(summary.byPerson.map(item => [item.label, item.runs])).toEqual([["Lucía", 2], ["Proceso automático", 1]]);
     expect(aiUsageSummary([...runs, run({ id: "4", model: "modelo-sin-precio" })], prices).total.cost).toBeNull();
-    expect(aiUsageSummary([], prices).total).toEqual({ runs: 0, errors: 0, inputTokens: 0, outputTokens: 0, cost: 0, averageMs: 0 });
+    expect(aiUsageSummary([], prices).total).toEqual({ runs: 0, errors: 0, inputTokens: 0, outputTokens: 0, cost: 0, averageMs: 0, decided: 0, proposedItems: 0, acceptedItems: 0, acceptance: null });
+  });
+
+  it("AIG-4: acceptance is what was used of what was proposed, only over the runs someone decided on", () => {
+    const runs = [
+      run({ id: "1", task: "write", proposedItems: 1, acceptedItems: 1 }),
+      run({ id: "2", task: "write", proposedItems: 1, acceptedItems: 0 }),
+      run({ id: "3", task: "lesson-improve", proposedItems: 4, acceptedItems: 3 }),
+      run({ id: "4", task: "lesson-improve" }),
+    ];
+    const summary = aiUsageSummary(runs, prices);
+    expect(summary.total).toMatchObject({ runs: 4, decided: 3, proposedItems: 6, acceptedItems: 4, acceptance: 0.67 });
+    expect(summary.byTask.map(item => [item.task, item.decided, item.acceptance])).toEqual([["lesson-improve", 1, 0.75], ["write", 2, 0.5]]);
   });
 
   it("validates a price as administration writes it", () => {

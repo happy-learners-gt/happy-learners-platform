@@ -8,6 +8,7 @@ import { Modal, useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section, StatusBadge } from "../ui/primitives";
 import { AiWrite } from "../ui/AiWrite";
+import { reportAiOutcome } from "../ui/ai-outcome";
 
 /**
  * Organización › Documentos (1.5.0, docs/design/constructor-de-reportes.md): templates of the organization's documents
@@ -76,16 +77,26 @@ function FieldPicker({ spec, onPick }: { spec: ReportKindSpec; onPick: (key: str
 /** «Sugerir campos» (1.5.2): parts of the text that are data, each proposed with its field and accepted one by one. */
 function SuggestFields({ templateId, sectionId, text, onApply }: { templateId: string; sectionId: string; text: string; onApply: (text: string) => void }) {
   const [suggestions, setSuggestions] = useState<FieldSuggestion[] | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState("");
+  // AIG-4: the answer being decided; reported when every suggestion is used or discarded, or replaced by a new answer.
+  const round = useRef<{ runId?: string; proposed: number; accepted: number } | null>(null);
+  const close = () => { if (round.current) reportAiOutcome(round.current.runId, round.current.proposed, round.current.accepted); round.current = null; };
   async function ask() {
+    close();
     setBusy(true); setError(""); setNotice(""); setSuggestions(null);
     try {
-      const answer = await api<{ suggestions: FieldSuggestion[]; notice?: string }>(`/report-templates/${templateId}/suggest-fields`, "POST", { text, ...(sectionId ? { sectionId } : {}) });
+      const answer = await api<{ suggestions: FieldSuggestion[]; notice?: string; runId?: string }>(`/report-templates/${templateId}/suggest-fields`, "POST", { text, ...(sectionId ? { sectionId } : {}) });
+      round.current = answer.runId && answer.suggestions.length ? { runId: answer.runId, proposed: answer.suggestions.length, accepted: 0 } : null;
       setSuggestions(answer.suggestions); setNotice(answer.notice || "");
     }
     catch (cause) { setError(message(cause)); }
     finally { setBusy(false); }
   }
-  const drop = (item: FieldSuggestion) => setSuggestions(current => current && current.filter(other => other !== item));
+  const drop = (item: FieldSuggestion, used = false) => {
+    const left = (suggestions || []).filter(other => other !== item);
+    if (used && round.current) round.current.accepted++;
+    if (!left.length) close();
+    setSuggestions(left);
+  };
   return <div className="ai-write">
     <div className="ai-write-actions"><Icon name="sparkles" size={16}/>
       <button type="button" className="button ghost small" disabled={busy || !text.trim()} onClick={() => void ask()}>{busy ? "Buscando datos…" : "Sugerir campos"}</button>
@@ -97,7 +108,7 @@ function SuggestFields({ templateId, sectionId, text, onApply }: { templateId: s
       {!suggestions.length ? <p>No hay datos del texto para convertir en campos.</p> : <ul className="suggested-fields">{suggestions.map(item => <li key={`${item.original}-${item.field}`}>
         <span>«{item.original}» → <strong>{item.label}</strong> <code>{`{{${item.field}}}`}</code></span>
         <span className="ai-write-actions">
-          <button type="button" className="button primary small" aria-label={`Usar ${item.label} en lugar de «${item.original}»`} onClick={() => { onApply(applySuggestion(text, item)); drop(item); }}>Usar</button>
+          <button type="button" className="button primary small" aria-label={`Usar ${item.label} en lugar de «${item.original}»`} onClick={() => { onApply(applySuggestion(text, item)); drop(item, true); }}>Usar</button>
           <button type="button" className="button ghost small" aria-label={`Descartar ${item.label}`} onClick={() => drop(item)}>Descartar</button>
         </span>
       </li>)}</ul>}

@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ClassGroup, Lesson, SequenceTemplate } from "@happy-learners/contracts";
 import { classMinutesOf, lessonReview } from "@happy-learners/domain";
 import type { ImproveChange, LessonReview as Review, ReviewContext, ReviewStatus } from "@happy-learners/domain";
 import { api, message } from "../../api";
+import { reportAiOutcome } from "../../ui/ai-outcome";
 import { Drawer, useFeedback } from "../../ui/feedback";
 import { Icon } from "../../ui/icons";
 import type { CourseResource } from "./course-resource";
@@ -55,16 +56,31 @@ function changeTitle(change: ImproveChange) {
 }
 
 /** The improvement as a draft: each change with what it replaces, accepted or discarded one by one (1.4.1). */
-function ImproveDraft({ load, apply }: { load: () => Promise<ImproveChange[]>; apply: (changes: ImproveChange[]) => void }) {
+type ImproveLoad = () => Promise<{ changes: ImproveChange[]; runId?: string }>;
+function ImproveDraft({ load, apply }: { load: ImproveLoad; apply: (changes: ImproveChange[]) => void }) {
   const { toast } = useFeedback();
   const [changes, setChanges] = useState<ImproveChange[] | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  // AIG-4: the answer being decided; reported once every change it proposed is accepted or discarded.
+  const round = useRef<{ runId?: string; proposed: number; accepted: number } | null>(null);
+  function decide(picked: ImproveChange[], accepted: boolean) {
+    const left = (changes || []).filter(change => !picked.includes(change));
+    if (round.current) {
+      if (accepted) round.current.accepted += picked.length;
+      if (!left.length) { reportAiOutcome(round.current.runId, round.current.proposed, round.current.accepted); round.current = null; }
+    }
+    setChanges(left);
+  }
   async function ask() {
     setBusy(true); setError("");
-    try { const proposed = await load(); setChanges(proposed); if (!proposed.length) toast({ message: "La IA no encontró cambios que proponer." }); }
+    try {
+      const { changes: proposed, runId } = await load();
+      round.current = proposed.length ? { runId, proposed: proposed.length, accepted: 0 } : null;
+      setChanges(proposed); if (!proposed.length) toast({ message: "La IA no encontró cambios que proponer." });
+    }
     catch (cause) { setError(message(cause)); }
     finally { setBusy(false); }
   }
-  const accept = (picked: ImproveChange[]) => { apply(picked); setChanges(current => current && current.filter(change => !picked.includes(change))); toast({ message: picked.length === 1 ? "Cambio aplicado al borrador." : `${picked.length} cambios aplicados al borrador.` }); };
+  const accept = (picked: ImproveChange[]) => { apply(picked); decide(picked, true); toast({ message: picked.length === 1 ? "Cambio aplicado al borrador." : `${picked.length} cambios aplicados al borrador.` }); };
   return <section className="improve-draft" aria-label="Mejora con IA">
     <header>
       <div><strong>Mejorar con IA</strong><p className="muted small">Propone cambios para lo que falla. Nada cambia hasta que aceptas; lo aceptado entra en el borrador.</p></div>
@@ -79,7 +95,7 @@ function ImproveDraft({ load, apply }: { load: () => Promise<ImproveChange[]>; a
         {change.reason && <p className="muted small">{change.reason}</p>}
         <div className="improve-actions">
           <button type="button" className="button primary small" onClick={() => accept([change])}>Aceptar<span className="sr-only"> {changeTitle(change)}</span></button>
-          <button type="button" className="button ghost small" onClick={() => setChanges(current => current && current.filter(item => item !== change))}>Descartar<span className="sr-only"> {changeTitle(change)}</span></button>
+          <button type="button" className="button ghost small" onClick={() => decide([change], false)}>Descartar<span className="sr-only"> {changeTitle(change)}</span></button>
         </div>
       </li>)}</ol>
       <div className="improve-all"><button type="button" className="button secondary" onClick={() => accept(changes)}>Aceptar todo ({changes.length})</button></div>
@@ -87,7 +103,7 @@ function ImproveDraft({ load, apply }: { load: () => Promise<ImproveChange[]>; a
   </section>;
 }
 
-export function ReviewPanel({ review, onClose, onGoTo, improve }: { review: Review; onClose: () => void; onGoTo: (activityId: string) => void; improve?: { load: () => Promise<ImproveChange[]>; apply: (changes: ImproveChange[]) => void } }) {
+export function ReviewPanel({ review, onClose, onGoTo, improve }: { review: Review; onClose: () => void; onGoTo: (activityId: string) => void; improve?: { load: ImproveLoad; apply: (changes: ImproveChange[]) => void } }) {
   const failing = review.checks.filter(item => item.status === "fail" || item.status === "partial");
   return <Drawer title="Revisión de la lección" onClose={onClose} wide={!!improve}>
     <div className={`review-score is-${review.level}`}>

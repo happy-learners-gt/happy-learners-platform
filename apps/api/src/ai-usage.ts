@@ -2,6 +2,7 @@ import type { Member } from "@happy-learners/contracts";
 import { aiPriceInput, aiUsageSummary, runCost } from "@happy-learners/domain";
 import type { AiPrice, AiRun } from "@happy-learners/domain";
 import type { Database } from "./storage";
+import { openAiSettings } from "./openai";
 
 /**
  * Organización › Uso de IA (1.4.0): GET /api/organization/ai-usage?mes=YYYY-MM gives the month's and the previous
@@ -21,12 +22,13 @@ async function pricesOf(db: Database, organizationId: string) {
 }
 async function runsOf(db: Database, organizationId: string, from: string, until: string) {
   return (await db.prepare(`SELECT r.id,r.user_id AS userId,u.display_name AS userName,r.course_id AS courseId,c.title AS courseTitle,r.task,r.prompt_version AS promptVersion,
-      r.generator,r.model,r.input_chars AS inputChars,r.input_tokens AS inputTokens,r.output_tokens AS outputTokens,r.duration_ms AS durationMs,r.status,r.created_at AS createdAt
+      r.generator,r.model,r.input_chars AS inputChars,r.input_tokens AS inputTokens,r.output_tokens AS outputTokens,r.duration_ms AS durationMs,r.status,r.created_at AS createdAt,
+      r.proposed_items AS proposedItems,r.accepted_items AS acceptedItems
     FROM ai_runs r LEFT JOIN users u ON u.id=r.user_id LEFT JOIN courses c ON c.id=r.course_id AND c.organization_id=r.organization_id
     WHERE r.organization_id=? AND r.created_at>=? AND r.created_at<? ORDER BY r.created_at DESC`).bind(organizationId, `${from}-01`, `${until}-01`).all<AiRun>()).results;
 }
 
-export async function aiUsage(path: string, method: string, input: unknown, url: URL, current: Member, db: Database): Promise<Response> {
+export async function aiUsage(path: string, method: string, input: unknown, url: URL, current: Member, db: Database, env: Env): Promise<Response> {
   if (current.role !== "admin") return reply({ error: "Solo administración ve el uso de IA de la organización." }, 403);
   if (path === "/api/organization/ai-prices") {
     const price = aiPriceInput(input);
@@ -40,6 +42,8 @@ export async function aiUsage(path: string, method: string, input: unknown, url:
   const [prices, runs, earlier] = await Promise.all([pricesOf(db, current.organizationId), runsOf(db, current.organizationId, month, next(month)), runsOf(db, current.organizationId, before, month)]);
   const models = [...new Set([...runs, ...earlier].filter(run => run.generator === "openai").map(run => run.model))];
   return reply({
+    // AIG-5: whether the AI answers here at all; the local generator is for tests and demos.
+    engine: openAiSettings(env) ? "openai" : env.LESSON_GENERATOR === "fixture" ? "fixture" : null,
     month, previousMonth: before, summary: aiUsageSummary(runs, prices), previous: aiUsageSummary(earlier, prices).total, prices,
     unpriced: models.filter(model => !prices.some(price => price.model === model)),
     recent: runs.slice(0, 50).map(run => ({ ...run, cost: runCost(run, prices) })),

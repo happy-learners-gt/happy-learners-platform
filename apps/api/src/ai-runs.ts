@@ -10,7 +10,10 @@ import { digest } from "./auth";
 export interface AiRunContext {
   organizationId: string; userId: string | null; courseId: string | null;
   task: AiTask; promptVersion: string; generator: "openai" | "fixture"; model: string; inputChars: number;
+  /** Given when the answer goes back to a person, so they can later say how much of it they used (AIG-4). */
+  id?: string;
 }
+export const aiRunId = () => `ai-run-${crypto.randomUUID()}`;
 
 /** Runs `call`, records it, and returns its result or throws its error unchanged. */
 export async function tracked<T>(db: Database, context: AiRunContext, call: (observe: (usage: AiTokenUsage) => void) => Promise<T>): Promise<T> {
@@ -22,7 +25,7 @@ export async function tracked<T>(db: Database, context: AiRunContext, call: (obs
     const tokens = usage as AiTokenUsage | null;
     // Recording never breaks the work it records.
     await db.prepare("INSERT INTO ai_runs(id,organization_id,user_id,course_id,task,prompt_version,generator,model,input_chars,input_tokens,output_tokens,duration_ms,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-      .bind(`ai-run-${crypto.randomUUID()}`, context.organizationId, context.userId, context.courseId, context.task, context.promptVersion, context.generator, context.model,
+      .bind(context.id || aiRunId(), context.organizationId, context.userId, context.courseId, context.task, context.promptVersion, context.generator, context.model,
         context.inputChars, tokens?.inputTokens ?? null, tokens?.outputTokens ?? null, Date.now() - started, status, new Date().toISOString())
       .run().catch(error => console.error(JSON.stringify({ event: "ai_run_not_recorded", task: context.task, cause: error instanceof Error ? error.message.slice(0, 120) : "unknown" })));
   }
@@ -42,3 +45,20 @@ export async function aiAllowed(db: Database, userId: string) {
   return !!limit && limit.attempts <= aiHourlyLimit;
 }
 export const aiLimited = () => Response.json({ error: "Usaste la IA muchas veces en la última hora. Vuelve a intentar más tarde." }, { status: 429 });
+
+/**
+ * AIG-4: how much of an answer the person who asked for it used, said once when they have decided on every item it
+ * proposed. Counts only. A run of someone else, failed, already decided or older than a day is left as it is.
+ */
+export function aiOutcomeInput(value: unknown): { proposed: number; accepted: number } | null {
+  const input = value && typeof value === "object" ? value as { proposed?: unknown; accepted?: unknown } : {};
+  const { proposed, accepted } = input;
+  return Number.isInteger(proposed) && Number.isInteger(accepted) && (proposed as number) >= 1 && (proposed as number) <= 100 && (accepted as number) >= 0 && (accepted as number) <= (proposed as number)
+    ? { proposed: proposed as number, accepted: accepted as number } : null;
+}
+export async function recordOutcome(db: Database, organizationId: string, userId: string, runId: string, outcome: { proposed: number; accepted: number }) {
+  const now = new Date();
+  const decided = await db.prepare("UPDATE ai_runs SET proposed_items=?,accepted_items=?,decided_at=? WHERE id=? AND organization_id=? AND user_id=? AND status='ok' AND decided_at IS NULL AND created_at>=? RETURNING id")
+    .bind(outcome.proposed, outcome.accepted, now.toISOString(), runId, organizationId, userId, new Date(now.getTime() - 86400000).toISOString()).first<{ id: string }>();
+  return !!decided;
+}

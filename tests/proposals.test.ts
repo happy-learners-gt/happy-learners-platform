@@ -309,7 +309,7 @@ describe("book map on the built Worker (rebanada 5b)", () => {
 
 // 1.4.0 (docs/design/asistente-ia.md §6a): the proposals and map checks above went through the harness.
 type AiUsageView = {
-  month: string; summary: { total: { runs: number; errors: number; cost: number | null }; byTask: { task: string; runs: number }[]; byPerson: { userId: string | null; runs: number }[] };
+  month: string; summary: { total: { runs: number; errors: number; cost: number | null }; byTask: { task: string; runs: number; decided?: number; proposedItems?: number; acceptedItems?: number }[]; byPerson: { userId: string | null; runs: number }[] };
   prices: { model: string; effectiveFrom: string; inputPerMillion: number; outputPerMillion: number }[]; unpriced: string[]; recent: Record<string, unknown>[];
 };
 describe("AI harness on the built Worker (1.4.0)", () => {
@@ -326,7 +326,7 @@ describe("AI harness on the built Worker (1.4.0)", () => {
     expect(usage.unpriced).toEqual([]);
     for (const run of usage.recent) {
       // What a run keeps: never the input, the prompt or the answer.
-      expect(Object.keys(run).sort()).toEqual(["cost", "courseId", "courseTitle", "createdAt", "durationMs", "generator", "id", "inputChars", "inputTokens", "model", "outputTokens", "promptVersion", "status", "task", "userId", "userName"]);
+      expect(Object.keys(run).sort()).toEqual(["acceptedItems", "cost", "courseId", "courseTitle", "createdAt", "durationMs", "generator", "id", "inputChars", "inputTokens", "model", "outputTokens", "promptVersion", "proposedItems", "status", "task", "userId", "userName"]);
       expect(run).toMatchObject({ generator: "fixture", model: "fixture", status: "ok", cost: 0, inputTokens: null });
       expect(run.userId).toEqual(expect.stringMatching(/\S/));
       expect(run.inputChars).toBeGreaterThan(100);
@@ -362,13 +362,39 @@ describe("assisted improvement and writing on the built Worker (1.4.1)", () => {
     expect(await errorOf(await as(educator, improve, "POST", { objective: 1 }), 400)).toBe("Envía el borrador de la lección: objetivo y actividades.");
     expect((await as(educator, "/lessons/lesson-que-no-existe/improve", "POST", weak)).status).toBe(404);
 
-    expect(await read(await as(educator, "/ai/write", "POST", { field: "lesson-objective", action: "shorten", text: "Saludar en inglés. Presentarse con su nombre.", courseId: "course-exploradores" }))).toEqual({ text: "Saludar en inglés." });
+    expect(await read(await as(educator, "/ai/write", "POST", { field: "lesson-objective", action: "shorten", text: "Saludar en inglés. Presentarse con su nombre.", courseId: "course-exploradores" }))).toEqual({ text: "Saludar en inglés.", runId: expect.stringMatching(/^ai-run-/) });
     expect(await errorOf(await as(educator, "/ai/write", "POST", { field: "contraseña", action: "draft", text: "" }), 400)).toBe("Ese campo no admite redacción con IA.");
     expect(await errorOf(await as(other, "/ai/write", "POST", { field: "lesson-objective", action: "draft", text: "", courseId: "course-exploradores" }), 403)).toBe("Este curso no está asignado a tu cuenta.");
 
     const usage = await read<AiUsageView>(await as(admin, "/organization/ai-usage"));
     expect(usage.summary.byTask.map(item => item.task)).toEqual(expect.arrayContaining(["lesson-improve", "write"]));
     expect(usage.recent.find(run => run.task === "lesson-improve")).toMatchObject({ generator: "fixture", status: "ok", courseId: "course-exploradores" });
+  }, 60_000);
+});
+
+describe("acceptance of AI answers on the built Worker (AIG-4)", () => {
+  it("records once, for the person who asked, how much of an answer was used, and sums it by task", async () => {
+    const admin = await signIn("admin-demo"), educator = await signIn("educador-demo"), other = await signIn("carlos.mejia");
+    const write = { field: "lesson-objective", action: "shorten", text: "Saludar en inglés. Presentarse con su nombre." };
+    const used = (await read<{ runId: string }>(await as(educator, "/ai/write", "POST", write))).runId;
+    const dropped = (await read<{ runId: string }>(await as(educator, "/ai/write", "POST", write))).runId;
+    const outcome = (runId: string) => `/ai/runs/${runId}/outcome`;
+    // Someone else cannot decide on it, and counts must make sense.
+    expect(await read(await as(other, outcome(used), "POST", { proposed: 1, accepted: 1 }))).toEqual({ recorded: false });
+    expect(await errorOf(await as(educator, outcome(used), "POST", { proposed: 1, accepted: 2 }), 400)).toBe("Indica cuántas propuestas hubo y cuántas se usaron.");
+    expect(await errorOf(await as(educator, outcome(used), "POST", { proposed: 0, accepted: 0 }), 400)).toBe("Indica cuántas propuestas hubo y cuántas se usaron.");
+    expect(await read(await as(educator, outcome(used), "POST", { proposed: 1, accepted: 1 }))).toEqual({ recorded: true });
+    // Said once: a second answer does not change it.
+    expect(await read(await as(educator, outcome(used), "POST", { proposed: 1, accepted: 0 }))).toEqual({ recorded: false });
+    expect(await read(await as(educator, outcome(dropped), "POST", { proposed: 1, accepted: 0 }))).toEqual({ recorded: true });
+    expect((await as(educator, "/ai/runs/no-es-una-ejecucion/outcome", "POST", { proposed: 1, accepted: 1 })).status).toBe(404);
+
+    const usage = await read<AiUsageView>(await as(admin, "/organization/ai-usage"));
+    expect(usage.recent.find(run => run.id === used)).toMatchObject({ proposedItems: 1, acceptedItems: 1 });
+    expect(usage.recent.find(run => run.id === dropped)).toMatchObject({ proposedItems: 1, acceptedItems: 0 });
+    const writing = usage.summary.byTask.find(item => item.task === "write")!;
+    expect(writing.decided).toBeGreaterThanOrEqual(2);
+    expect(writing.acceptedItems!).toBeLessThan(writing.proposedItems!);
   }, 60_000);
 });
 

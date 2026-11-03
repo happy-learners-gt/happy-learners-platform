@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { AiPrice, AiRun, AiTotals, AiUsageSummary } from "@happy-learners/domain";
-import { aiTaskLabels } from "@happy-learners/domain";
+import { aiCapabilities, aiDecidedTasks, aiTaskLabels, aiTasks } from "@happy-learners/domain";
 import { api, message } from "../api";
 import { useNavigation } from "../navigation";
 import { formatInstant } from "../regional";
@@ -11,27 +11,49 @@ import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, Section, St
 import type { Tone } from "../ui/primitives";
 
 /**
- * Organización › Uso de IA (1.4.0, docs/design/asistente-ia.md §6a): what the organization's AI did this month, by
- * task, course and person, what it cost at the prices administration sets, and the latest runs. No text is kept.
+ * Organización › Inteligencia artificial (1.4.0, docs/design/asistente-ia.md §6a; AIG-5): first what the AI does for
+ * the institution, where, who decides and how much of what it proposes is used this month; then what it consumed and
+ * cost at the prices administration sets, by task, course and person, and the latest runs. No text is kept.
  */
-type Usage = { month: string; previousMonth: string; summary: AiUsageSummary; previous: AiTotals; prices: AiPrice[]; unpriced: string[]; recent: (AiRun & { cost: number | null })[] };
+type Usage = { engine: "openai" | "fixture" | null; month: string; previousMonth: string; summary: AiUsageSummary; previous: AiTotals; prices: AiPrice[]; unpriced: string[]; recent: (AiRun & { cost: number | null })[] };
 
 const monthName = (month: string) => new Intl.DateTimeFormat("es", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${month}-01T00:00:00Z`));
 const capitalized = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 const shift = (month: string, by: number) => { const date = new Date(`${month}-01T00:00:00Z`); date.setUTCMonth(date.getUTCMonth() + by); return date.toISOString().slice(0, 7); };
 const number = (value: number) => new Intl.NumberFormat("es").format(value);
 export const usd = (value: number | null) => value === null ? "No disponible" : new Intl.NumberFormat("es", { style: "currency", currency: "USD", minimumFractionDigits: value > 0 && value < 0.01 ? 4 : 2 }).format(value);
+/** AIG-4: share of what the AI proposed that people used, over the answers they decided on. */
+const acceptance = (totals: AiTotals) => totals.acceptance === null ? "—" : `${Math.round(totals.acceptance * 100)} %`;
+const used = (totals: AiTotals) => totals.acceptance === null ? "—" : `${acceptance(totals)} (${number(totals.acceptedItems)} de ${number(totals.proposedItems)})`;
 const seconds = (ms: number) => `${new Intl.NumberFormat("es", { maximumFractionDigits: 1 }).format(ms / 1000)} s`;
 const statusOf: Record<AiRun["status"], [string, Tone]> = { ok: ["Correcta", "success"], error: ["Error", "danger"], transient: ["Se reintenta", "warning"], refused: ["Rechazada", "warning"], incomplete: ["Incompleta", "warning"] };
 
 function Breakdown({ title, rows }: { title: string; rows: (AiTotals & { label: string })[] }) {
   return <div className="table-card" role="region" aria-label={title} tabIndex={0}><table className="ai-usage-table">
     <caption className="sr-only">{title}</caption>
-    <thead><tr><th scope="col">{title}</th><th scope="col">Ejecuciones</th><th scope="col">Errores</th><th scope="col">Tokens</th><th scope="col">Costo estimado</th><th scope="col">Duración media</th></tr></thead>
+    <thead><tr><th scope="col">{title}</th><th scope="col">Ejecuciones</th><th scope="col">Errores</th><th scope="col">Propuestas usadas</th><th scope="col">Tokens</th><th scope="col">Costo estimado</th><th scope="col">Duración media</th></tr></thead>
     <tbody>{rows.map(row => <tr key={row.label}>
       <th scope="row">{row.label}</th><td>{number(row.runs)}</td><td>{row.errors ? number(row.errors) : "—"}</td>
+      <td>{used(row)}</td>
       <td>{number(row.inputTokens + row.outputTokens)}</td><td>{usd(row.cost)}</td><td>{seconds(row.averageMs)}</td>
     </tr>)}</tbody>
+  </table></div>;
+}
+
+/** «Qué hace la IA»: every capability, also those not used this month, with its use and how much of it was used. */
+function Capabilities({ summary }: { summary: AiUsageSummary }) {
+  return <div className="table-card" role="region" aria-label="Qué hace la IA" tabIndex={0}><table className="ai-usage-table ai-capabilities">
+    <caption className="sr-only">Qué hace la IA</caption>
+    <thead><tr><th scope="col">Capacidad</th><th scope="col">Dónde</th><th scope="col">Quién decide</th><th scope="col">Ejecuciones</th><th scope="col">Propuestas usadas</th></tr></thead>
+    <tbody>{aiTasks.map(task => {
+      const row = summary.byTask.find(item => item.task === task), capability = aiCapabilities[task];
+      return <tr key={task}>
+        <th scope="row"><strong>{aiTaskLabels[task]}</strong><span className="muted small">{capability.does}</span></th>
+        <td>{capability.where}</td><td>{capability.decides}</td>
+        <td>{row ? number(row.runs) : "—"}</td>
+        <td>{task === "lesson-review-explain" ? <span className="muted">No aplica</span> : !aiDecidedTasks.includes(task) ? <span className="muted">No se mide aún</span> : row ? used(row) : "—"}</td>
+      </tr>;
+    })}</tbody>
   </table></div>;
 }
 
@@ -69,8 +91,8 @@ export function AiUsagePage() {
   const [usage, setUsage] = useState<Usage | null>(null), [error, setError] = useState(""), [pricing, setPricing] = useState<string | null>(null);
   useEffect(() => { setUsage(null); void api<Usage>(`/organization/ai-usage?mes=${month}`).then(setUsage, cause => setError(message(cause))); }, [month]);
   const go = (to: string) => navigate(`/organizacion/ia?mes=${to}`, true);
-  const header = <PageHeader title="Uso de IA"
-    description="Qué hizo la IA de la organización, para quién y cuánto costó. Nunca se guarda el texto que se le envía ni lo que responde."
+  const header = <PageHeader title="Inteligencia artificial"
+    description="Qué hace la IA en la organización, cuánto de lo que propone se usa y cuánto cuesta. La IA propone y una persona decide; nunca se guarda el texto que se le envía ni lo que responde."
     actions={<Button icon="plus" onClick={() => setPricing("")}>Registrar precio</Button>}/>;
   if (error) return <>{header}<ErrorState error={error}/></>;
   if (!usage) return <>{header}<Loading label="Sumando el uso del mes…" cards={4}/></>;
@@ -83,18 +105,24 @@ export function AiUsagePage() {
       <h2>{capitalized(monthName(usage.month))}</h2>
       <button type="button" className="button ghost small" aria-label="Mes siguiente" onClick={() => go(shift(month, 1))}><Icon name="arrowRight" size={16}/></button>
     </nav>
+    {!usage.engine && <p className="message-bar warning" role="status"><Icon name="alert" size={18}/>
+      <span>La IA no está configurada en esta organización: sus funciones aparecen, pero responden que no está disponible.</span></p>}
     {usage.unpriced.length > 0 && <p className="message-bar warning" role="status"><Icon name="alert" size={18}/>
       <span>Sin precio registrado: {usage.unpriced.join(", ")}. Su costo aparece como «No disponible».</span>
       <Button variant="ghost" onClick={() => setPricing(usage.unpriced[0])}>Registrar precio</Button></p>}
     <StatTiles items={[
       { label: "Ejecuciones", value: number(summary.total.runs), icon: "sparkles", hue: "violet" },
+      { label: "Propuestas usadas", value: acceptance(summary.total), icon: "check", hue: "teal" },
       { label: "Costo estimado", value: usd(summary.total.cost), icon: "spark", hue: "green" },
-      { label: "Tokens", value: number(summary.total.inputTokens + summary.total.outputTokens), icon: "text", hue: "sky" },
       { label: "Con error", value: number(summary.total.errors), icon: "alert", hue: "coral" },
     ]}/>
     <p className="muted">{change === null ? `En ${monthName(usage.previousMonth)} no hubo ejecuciones.` : `${change >= 0 ? `${change} % más` : `${-change} % menos`} ejecuciones que en ${monthName(usage.previousMonth)} (${number(previous.runs)}, ${usd(previous.cost)}).`}</p>
-    {summary.total.runs === 0 ? <EmptyState icon="sparkles" title="Sin uso de IA este mes">Aquí aparecerán las propuestas de lecciones, las revisiones del mapa al plan y las demás tareas de IA.</EmptyState> : <>
-      <Section title="Por tarea"><Breakdown title="Tarea" rows={summary.byTask}/></Section>
+    <Section title="Qué hace la IA">
+      <p className="muted">«Propuestas usadas» cuenta, de lo que la IA propuso, cuánto aceptó la persona que lo pidió. Las propuestas de lecciones y el mapa al plan se deciden más tarde, en la lección y en el mapa, y aún no se miden.</p>
+      <Capabilities summary={summary}/>
+    </Section>
+    {summary.total.runs === 0 ? <EmptyState icon="sparkles" title="Sin uso de IA este mes">Aquí aparecerán el consumo y el costo de cada tarea, curso y persona.</EmptyState> : <>
+      <Section title="Consumo y costo por tarea"><Breakdown title="Tarea" rows={summary.byTask}/></Section>
       <Section title="Por curso"><Breakdown title="Curso" rows={summary.byCourse}/></Section>
       <Section title="Por persona"><Breakdown title="Persona" rows={summary.byPerson}/></Section>
       <Section title="Últimas ejecuciones">

@@ -177,7 +177,7 @@ export { fixtureMapper, mapCandidatePages, mapCandidates, mapPrompt, mapPromptVe
 export type { BookMapper, MapEvidence, MapInput, MapOutput, MapSource } from "./book-map";
 export { classMinutesOf, lessonReview } from "./lesson-review";
 export type { LessonReview, ReviewCheck, ReviewCheckId, ReviewContext, ReviewEvidence, ReviewLesson, ReviewStatus } from "./lesson-review";
-export { aiPriceInput, aiTaskLabels, aiTasks, aiUsageSummary, priceOn, runCost } from "./ai-usage";
+export { aiCapabilities, aiDecidedTasks, aiPriceInput, aiTaskLabels, aiTasks, aiUsageSummary, priceOn, runCost } from "./ai-usage";
 export type { AiPrice, AiRun, AiRunStatus, AiTask, AiTokenUsage, AiTotals, AiUsageSummary } from "./ai-usage";
 export { applyChanges, checkedChanges, fixtureImprover, improveInput, improvePrompt, improvePromptVersion, improveSchema } from "./lesson-improve";
 export type { ImproveChange, ImproveField, ImproveInput, ImproveOutput, LessonImprover, NewActivity } from "./lesson-improve";
