@@ -55,11 +55,14 @@ it("shows the school year with its periods in Organización and divides a new on
     if (input === "/api/session") return Response.json({ member, pending: [] });
     if (input === "/api/organization") return Response.json({ organization: { id: "org-demo", name: "Escuela", timezone: "America/Guatemala", configured: true } });
     if (input === "/api/academic-years") return Response.json({ years: [year], today: "2026-10-26" });
+    // CAL-01: the school year lives in Calendario institucional, next to the calendar's own blocks.
+    if (input === "/api/calendars") return Response.json({ calendars: [], categories: [] });
+    if (input.startsWith("/api/calendars/view")) return Response.json({ events: [] });
     if (input.startsWith("/api/calendar")) return Response.json({ breaks: [], today: "2026-10-26" });
     if (input === "/api/bell-schedules") return Response.json({ schedules: [] });
     return Response.json({});
   }));
-  history.replaceState(null, "", "/organizacion");
+  history.replaceState(null, "", "/organizacion/calendario");
   render(<App/>);
   expect(await screen.findByRole("heading", { name: "Ciclo lectivo" })).toBeTruthy();
   expect(await screen.findByText("Ciclo 2027")).toBeTruthy();
@@ -101,6 +104,10 @@ it("previews recurring calendar rules and confirms year generation only after it
     if (input === "/api/organization") return Response.json({ organization: { id: "org-demo", name: "Escuela", timezone: "America/Guatemala", configured: true } });
     if (input === "/api/sections") return Response.json({ sections: [] });
     if (input === "/api/courses") return Response.json({ courses: [] });
+    // CAL-01: the organization's calendar also shows its school years and class schedules.
+    if (input === "/api/academic-years") return Response.json({ years: [], today: "2026-10-26" });
+    if (input === "/api/calendar") return Response.json({ breaks: [], today: "2026-10-26" });
+    if (input === "/api/bell-schedules") return Response.json({ schedules: [] });
     if (input === "/api/programs") return Response.json({ programs: [] });
     if (input === "/api/calendars") return Response.json({ calendars: [{ id: "calendar-org", scope: "organization", scopeId: null, name: "Calendario institucional", rules: [rule] }], categories: [category] });
     if (input.startsWith("/api/calendars/view")) return Response.json({ events: [] });
