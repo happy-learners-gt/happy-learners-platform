@@ -81,12 +81,18 @@ test("HOME-02: the educator's home on a phone stays short and the folded activit
   await settle(page);
   // The whole page grows with what other specs add to this educator (courses, sections, classes), so the check is on
   // the block this change folds; on the demonstration data the page went from 3 849 to 3 412 px.
-  const feed = page.locator(".activity-feed").first(), more = page.getByRole("button", { name: /^Mostrar \d+ más$/ });
+  const feed = page.locator(".activity-feed").first(), more = page.locator(".activity-feed + button.phones-only");
   if (await more.count()) {
     await expect(feed.locator("li:visible")).toHaveCount(3);
     expect((await feed.boundingBox())!.height).toBeLessThanOrEqual(400);
     const total = await feed.locator("li").count();
     await more.click();
     await expect(feed.locator("li:visible")).toHaveCount(total);
+  }
+  // HOME-03: sections and courses fold the same way; every button opens its list in full.
+  for (const folded of await page.locator(".fold-on-phones").all()) {
+    const list = folded.locator(":scope > :first-child > li"), total = await list.count();
+    await folded.getByRole("button", { name: /^Mostrar \d+ más$/ }).click();
+    await expect(list.filter({ visible: true })).toHaveCount(total);
   }
 });

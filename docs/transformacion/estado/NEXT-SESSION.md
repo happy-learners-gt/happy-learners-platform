@@ -17,8 +17,8 @@
 
 ## Siguiente acción
 
-1. `git status` y `git fetch && git merge origin/main` si avanzó. Rama `feat/HL-15-estado-1618` con este estado sin push.
-2. Siguiente de la cola: HOME-03 (P3); el 13-nov SEC-04 (escáneres obligatorios); PERF-04 (P3); HLP-01 espera AP-06.
+1. `git status` y `git fetch && git merge origin/main` si avanzó. Confirmar que el PR de 1.6.19 está fusionado.
+2. Siguiente de la cola: el 13-nov SEC-04 (escáneres obligatorios); PERF-04 (P3); HLP-01 espera AP-06.
    Decisiones del dueño del 03-nov en `aprobaciones.md` (AP-03…AP-08).
 3. Por cada hito: `rm -rf build && npm run build`, E2E afectadas, `./scripts/verify`, versión y CHANGELOG, push, PR,
    **todos** los checks verdes (también `code`/Semgrep; correr `uvx semgrep scan --config .semgrep` antes) →

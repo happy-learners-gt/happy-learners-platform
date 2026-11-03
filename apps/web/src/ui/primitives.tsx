@@ -1,4 +1,4 @@
-import { cloneElement, useId } from "react";
+import { cloneElement, useId, useState } from "react";
 import type { ButtonHTMLAttributes, ReactElement, ReactNode } from "react";
 import { Link } from "../navigation";
 import { Icon } from "./icons";
@@ -92,4 +92,15 @@ export function StatTiles({ items, className = "" }: { items: Stat[]; className?
 export function Section({ title, action, children, className = "" }: { title: string; action?: ReactNode; children: ReactNode; className?: string }) {
   const id = useId();
   return <section className={`panel ${className}`} aria-labelledby={id}><div className="panel-header"><h2 id={id}>{title}</h2>{action}</div>{children}</section>;
+}
+
+/**
+ * HOME-03: on a narrow screen, a list shows its first `show` entries and a button for the rest; wider screens see it
+ * whole. CSS decides what is hidden, so nothing depends on measuring the screen. The list is the first child.
+ */
+export function FoldOnPhones({ count, show, children }: { count: number; show: 2 | 3; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const folded = !open && count > show;
+  return <div className={folded ? `fold-on-phones fold-${show}` : undefined}>{children}
+    {folded && <button type="button" className="button ghost small phones-only" onClick={() => setOpen(true)}>{`Mostrar ${count - show} más`}</button>}</div>;
 }
