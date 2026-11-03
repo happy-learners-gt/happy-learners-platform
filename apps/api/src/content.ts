@@ -1,5 +1,5 @@
 import type { Activity, Lesson, LessonReview, Member, Resource, ReviewItem } from "@happy-learners/contracts";
-import { assesses, lessonMinutes, moduleNavigation, sharePrefix, lessonOutcomes, outcomeCodes, resourceIdsOf, sequenceTemplates, studentActivities, validActivities, validOutcomeIds } from "@happy-learners/domain";
+import { assesses, lessonMinutes, moduleNavigation, shortLearnerNames, sharePrefix, lessonOutcomes, outcomeCodes, resourceIdsOf, sequenceTemplates, studentActivities, validActivities, validOutcomeIds } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { configurationOf, curriculumFor, materialsFor } from "./courses";
 import { event, recordEvent } from "./activity";
@@ -314,5 +314,5 @@ export async function shared(path: string, method: string, request: Request, db:
       WHERE a.token_hash=? AND a.expires_at>? AND EXISTS(SELECT 1 FROM class_sessions s JOIN class_session_lessons p ON p.session_id=s.id WHERE s.group_id=a.group_id AND s.status<>'cancelled' AND p.lesson_id=?))))`)
       .bind(crypto.randomUUID(), row.id, now, inPath ? access.groupId : null, tokenHash, now, row.id).run();
   }
-  return Response.json({ ok: true, learner: inPath && access.learnerName ? access.learnerName : null }, { headers: { "Set-Cookie": `${name}=1; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000${new URL(request.url).protocol === "https:" ? "; Secure" : ""}` } });
+  return Response.json({ ok: true, learner: inPath && access.learnerName ? shortLearnerNames([{ id: "me", name: access.learnerName }]).get("me")! : null }, { headers: { "Set-Cookie": `${name}=1; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000${new URL(request.url).protocol === "https:" ? "; Secure" : ""}` } });
 }

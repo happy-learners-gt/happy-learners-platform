@@ -1,6 +1,6 @@
 import type { CalendarBreak, ClassLesson, ClassLessonPlan, ClassResource, ClassSession, ClassStatus, CourseAccess, InstitutionalCalendarEvent, Lesson, Material, Member, Pacing, Resource, ScheduleMeeting, SectionSchedule, StudentClass, StudentPathModule, StudentSpace } from "@happy-learners/contracts";
 import { acceptsAttendance, breakInput, cancelPlanInput, carryOver, classActions, classPlanInput, classStatusLabels, completionInput, groupCodePattern, inSessionFilter, lessonsInOrder, meetingOn, maxClassLessons, localDay, nextClassStatus, noClassDays, normalizeGroupCode, resourceIdsOf, scheduleDates, scheduleInput, scheduleSummary, seesSection, sessionFilterAllowed, sessionFilterInput, teachesSection, upcomingClasses } from "@happy-learners/domain";
-import { proposeTimetable, tokenPattern, tokenPrefix } from "@happy-learners/domain";
+import { proposeTimetable, shortLearnerNames, tokenPattern, tokenPrefix } from "@happy-learners/domain";
 import type { ClassAction } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
 import { studentReadings } from "./resources";
@@ -603,7 +603,7 @@ export async function student(path: string, method: string, input: unknown, requ
   // ST-157: «Tu educador», the published profiles of the section's educators.
   const educators = await learnerEducators(db, access.groupId, access.organizationId);
   const today = localDay(access.timezone || "America/Guatemala");
-  const base = { group: { name: access.groupName }, course: { title: access.courseTitle }, organization: access.organizationName, today, pacing: access.pacing, learner: access.learnerId ? { id: access.learnerId, name: access.learnerName! } : null };
+  const base = { group: { name: access.groupName }, course: { title: access.courseTitle }, organization: access.organizationName, today, pacing: access.pacing, learner: access.learnerId ? { id: access.learnerId, name: shortLearnerNames([{ id: access.learnerId, name: access.learnerName! }]).get(access.learnerId)! } : null };
   if (selfPaced) {
     const [lessons, done, roster] = await db.batch([
       db.prepare(`${pathLessons} ORDER BY u.position,l.position,l.id`).bind(access.courseId, access.groupId), // nosemgrep: sql-interpolated-text -- pathLessons es una consulta constante
@@ -619,7 +619,10 @@ export async function student(path: string, method: string, input: unknown, requ
       if (!unit) path.push(unit = { id: lesson.unitId, name: lesson.unitName, lessons: [] });
       unit.lessons.push({ title: lesson.title || "Lección", shareCode: lesson.shareCode, opened: !!mark, completed: !!mark?.completed, ...(allowed ? { ...(lesson.groupId ? { own: true } : {}), ...(lesson.core && !lesson.groupId ? { core: true } : {}) } : {}) });
     }
-    const space: StudentSpace = { ...base, next: null, upcoming: [], recent: [], lessons: [], roster: access.learnerId ? [] : roster, path, educators };
+    // R1: whoever has the code sees short names only, never the list of full names.
+    const short = shortLearnerNames(roster);
+    const listed = roster.map(item => ({ id: item.id, name: short.get(item.id)! })).sort((a, b) => a.name.localeCompare(b.name, "es"));
+    const space: StudentSpace = { ...base, next: null, upcoming: [], recent: [], lessons: [], roster: access.learnerId ? [] : listed, path, educators };
     return reply(space);
   }
   const rows = (await db.prepare("SELECT s.id,s.session_date AS sessionDate,s.starts_at AS startsAt,s.duration_minutes AS durationMinutes,s.status FROM class_sessions s WHERE s.group_id=? AND s.status<>'cancelled' ORDER BY s.session_date,s.starts_at").bind(access.groupId).all<{ id: string; sessionDate: string; startsAt: string | null; durationMinutes: number | null; status: ClassStatus }>()).results;

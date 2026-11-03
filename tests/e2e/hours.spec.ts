@@ -53,7 +53,8 @@ test("ST-152: an educator starts and completes a class and sees its hours; admin
     const download = page.waitForEvent("download");
     await page.getByRole("link", { name: "Exportar CSV" }).click();
     const file = await download;
-    expect(file.suggestedFilename()).toBe("horas-efectivas-todo.csv");
+    // HRS-01: the page opens on the last 30 days, so the file is named after that period.
+    expect(file.suggestedFilename()).toMatch(/^horas-efectivas-\d{4}-\d{2}-\d{2}_a_\d{4}-\d{2}-\d{2}\.csv$/);
     const csv = readFileSync((await file.path())!, "utf8");
     expect(csv.charCodeAt(0)).toBe(0xfeff);
     expect(csv).toContain("Fecha,Curso,Sección,Educador,Inicio,Finalización,Minutos calculados,Minutos efectivos,Horas efectivas,Estado,Motivo de la corrección");

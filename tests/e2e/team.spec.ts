@@ -46,8 +46,15 @@ test("administration reviews each educator's contributions and every course's pr
   await expect(row).toContainText("responsable de 5");
   await expect(page.getByRole("navigation", { name: "Secciones de educadores" }).getByRole("link", { name: "Personas" })).toHaveAttribute("aria-current", "page");
   await page.goto("/inicio");
+  // HOME-01: administration sees at most six courses, those that need attention first, each saying why, and a link to all.
+  // Which ones depends on today's date against the seed's activity, so the test checks the shape, not the names.
   const progress = page.locator("section").filter({ has: page.getByRole("heading", { name: "Avance de los cursos" }) });
-  for (const title of ["Matemáticas 3.º primaria", "Ciencias Naturales 4.º primaria", "English Explorers A1", "Taller de robótica educativa", "Arte y expresión creativa"]) await expect(progress.getByRole("link", { name: title })).toBeVisible();
+  await expect(progress.getByRole("link", { name: /^Ver todos \(\d+\)$/ })).toHaveAttribute("href", "/cursos");
+  const cards = progress.locator(".progress-list > li");
+  expect(await cards.count()).toBeGreaterThan(0);
+  expect(await cards.count()).toBeLessThanOrEqual(6);
+  await expect(progress.getByText("Primero los cursos que necesitan atención.")).toBeVisible();
+  await expect(cards.first().getByRole("list", { name: /^Por qué .+ necesita atención$/ })).toBeVisible();
   // The feed names who did each thing; which person is newest depends on the specs that ran before.
   await expect(page.locator(".activity-feed.people").first()).toContainText(/Administración de la demostración|Marta Ruiz|Diego Ramírez|Ana López|Educador de la demostración|Lucía Herrera|Sofía Castillo|Tomás Aguilar|Carlos Mejía/);
   await page.goto("/configuracion-academica");

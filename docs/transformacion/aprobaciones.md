@@ -5,12 +5,13 @@ y qué sigue avanzando mientras tanto.
 
 | Id | Decisión | Estado |
 | --- | --- | --- |
-| AP-01 | R1: nombres de estudiantes visibles con el código de sección | Pendiente |
-| AP-02 | Fusionar y desplegar el PR de cada hito | Pendiente: PR 1.6.0 (M1) |
+| AP-01 | R1: nombres de estudiantes visibles con el código de sección | **Resuelto 02-nov:** el dueño autorizó la recomendación; paso 1 hecho en 1.6.1 |
+| AP-02 | Fusionar y desplegar el PR de cada hito | **Autorizado 02-nov** («sigue adelante con el merge y también todo lo demás»): #103 en producción (`54fd626`) |
 | AP-03 | Monitor externo de `/api/health` | Pendiente |
-| AP-04 | Escáneres obligatorios en `main` desde el 13-nov | Pendiente (fecha) |
+| AP-04 | Escáneres obligatorios en `main` desde el 13-nov | Autorizado 02-nov; se aplica el 13-nov (SEC-04) |
 | AP-05 | Prueba de penetración externa | Pendiente (antes de instituciones de pago) |
 | AP-06 | Nombre, marca, empresa y mesa de ayuda (carril D) | Pendiente |
+| AP-07 | Tope mensual de IA por organización y plan | Pendiente (sin urgencia; hay guarda por persona) |
 
 ## AP-01 · R1: qué ve un estudiante al entrar con el código de su sección
 
@@ -33,8 +34,8 @@ y qué sigue avanzando mientras tanto.
 ## AP-03 · Monitor externo de `/api/health`
 
 - **Recomendación:** un servicio con plan gratuito (por ejemplo UptimeRobot, comprobación cada 5 min, alerta por
-  correo al dueño). Costo 0; ~288 peticiones al día. Antes de activarlo, Claude Code verifica que `/api/health` no lea
-  filas del Durable Object (para no gastar cuota). **Requiere al usuario:** crear la cuenta (credenciales propias).
+  correo al dueño). Costo 0; ~288 peticiones al día. Verificado (SEC-02): `/api/health` lee una fila del Durable Object,
+  288 al día de 5 M, y así detecta también la cuota agotada. Configuración en `docs/operations/slo.md`. **Requiere al usuario:** crear la cuenta (credenciales propias).
   **Alternativa:** el cron diario de GitHub Actions ya existente (detecta caídas tarde: hasta 24 h).
 
 ## AP-04 · Escáneres obligatorios en `main`
@@ -45,8 +46,8 @@ y qué sigue avanzando mientras tanto.
 
 ## AP-05 · Prueba de penetración externa
 
-- Requisito antes de incorporar instituciones de pago. Implica contratar un tercero (gasto). Claude Code prepara el
-  alcance (cola SEC-03): superficies (web, API, códigos públicos, archivos, IA, respaldo), cuentas de prueba en una
+- Requisito antes de incorporar instituciones de pago. Implica contratar un tercero (gasto). Alcance listo en
+  `docs/security/alcance-pentest.md` (SEC-03): superficies (web, API, códigos públicos, archivos, IA, respaldo), cuentas de prueba en una
   organización aislada, reglas de enfrentamiento y criterio de cierre. **Bloquea:** la preparación comercial, no el
   desarrollo.
 
@@ -54,3 +55,10 @@ y qué sigue avanzando mientras tanto.
 
 - Material listo en `docs/empresa/marca-y-soporte.md`. Claude Code no inventa identidad ni políticas. Mientras tanto se
   usa «Happy Learners» y la Ayuda actual.
+
+## AP-07 · Tope de IA por organización
+
+- **Hoy:** desde 1.6.1, 60 peticiones síncronas por persona y hora (guarda de seguridad). No hay tope mensual por
+  organización ni por plan: el uso de OpenAI se paga con la clave de HL.
+- **Recomendación:** decidirlo junto con los planes comerciales; técnicamente cuesta poco (sumar `ai_runs` del mes).
+- **Bloquea:** nada hoy.

@@ -6,6 +6,7 @@ import { useSession } from "../session";
 import { courseStats, lessonNames, lessonState, newest, plural, sessionDay, timeAgo } from "../model";
 import type { CourseStats } from "../model";
 import { classMoment, formatDay, personalToday } from "../regional";
+import { homeCourses } from "@happy-learners/domain";
 import { CourseCard } from "../ui/cards";
 import { Icon } from "../ui/icons";
 import type { IconName } from "../ui/icons";
@@ -25,6 +26,8 @@ export function Home() {
   const educator = member.role !== "admin";
   const progress = useProgress();
   const mine = progress.courses?.filter(item => item.team.some(person => person.userId === member.id));
+  const listedProgress = educator && mine?.length ? mine : progress.courses;
+  const home = listedProgress ? homeCourses(listedProgress, personalToday()) : null;
   const [data, setData] = useState<Data | null>(null), [error, setError] = useState("");
   async function load() {
     setError("");
@@ -107,10 +110,11 @@ export function Home() {
           <p className="muted small">Indicadores de las secciones que impartes: avance del cronograma, clases dadas y asistencia.</p>
           <SectionCards sections={data.sections.slice(0, 4)} today={data.today} showCourse/>
         </Section>}
-        <Section title={educator && mine?.length ? "Mis cursos" : "Avance de los cursos"} className="order-4" action={<Link href="/cursos" className="section-link">Ver todos</Link>}>
-          {/* An educator sees the courses they teach; administration (or someone without courses) sees all. */}
-          {progress.error ? <p className="form-alert" role="alert">{progress.error}</p> : !progress.courses ? <Loading label="Calculando avance…" lines={3}/>
-            : <CourseProgressList courses={educator && mine?.length ? mine : progress.courses} userId={educator && mine?.length ? member.id : undefined}/>}
+        <Section title={educator && mine?.length ? "Mis cursos" : "Avance de los cursos"} className="order-4" action={<Link href="/cursos" className="section-link">{home?.hidden ? `Ver todos (${home.listed.length + home.hidden})` : "Ver todos"}</Link>}>
+          {/* An educator sees the courses they teach; administration (or someone without courses) sees all, those that need attention first (HOME-01). */}
+          {home?.attention && <p className="muted small">Primero los cursos que necesitan atención.</p>}
+          {progress.error ? <p className="form-alert" role="alert">{progress.error}</p> : !home ? <Loading label="Calculando avance…" lines={3}/>
+            : <CourseProgressList courses={home.listed.map(item => item.course)} reasons={new Map(home.listed.map(item => [item.course.courseId, item.reasons]))} userId={educator && mine?.length ? member.id : undefined}/>}
           {!recentCourses.length && <EmptyState compact icon="courses" title="Sin cursos activos" action={educator ? undefined : <PrimaryAction href="/cursos/nuevo" icon="plus">Crear curso</PrimaryAction>}/>}
         </Section>
         <Section title={educator && mine?.length ? "Actividad en mis cursos" : "Actividad reciente"} className="order-6">

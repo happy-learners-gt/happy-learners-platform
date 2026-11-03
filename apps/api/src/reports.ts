@@ -2,7 +2,7 @@ import type { Member } from "@happy-learners/contracts";
 import { checkedSuggestions, defaultTemplate, exampleSuggestions, fixtureSuggester, jpegImage, pdfFile, renderReport, reportKinds, suggestInput, suggestPromptVersion, templateInput } from "@happy-learners/domain";
 import type { PdfImage, ReportKind, ReportRecord, ReportTemplate, SuggestOutput } from "@happy-learners/domain";
 import type { Database } from "./storage";
-import { tracked } from "./ai-runs";
+import { aiAllowed, tracked } from "./ai-runs";
 import { openAiSettings, openAiSuggester } from "./openai";
 
 /**
@@ -139,7 +139,8 @@ export async function reports(path: string, method: string, input: unknown, requ
     const settings = env ? openAiSettings(env) : null;
     const suggester = settings ? openAiSuggester(settings) : env?.LESSON_GENERATOR === "fixture" ? fixtureSuggester : null;
     let proposed: SuggestOutput = { suggestions: [] };
-    if (suggester) {
+    // Over the hourly AI limit, the fields found in the examples are still offered.
+    if (suggester && await aiAllowed(db, current.id)) {
       try {
         proposed = await tracked(db, { organizationId: current.organizationId, userId: current.id, courseId: null, task: "suggest-fields", promptVersion: suggestPromptVersion, generator: suggester.kind, model: settings ? settings.model : "fixture", inputChars: asked.text.length },
           observe => suggester.suggest(asked, observe));

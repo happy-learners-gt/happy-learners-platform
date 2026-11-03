@@ -1,6 +1,7 @@
 import type { AiRunStatus, AiTask, AiTokenUsage } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { failureOf } from "./openai";
+import { digest } from "./auth";
 
 /**
  * The AI harness (1.4.0, docs/design/asistente-ia.md §6a): every call to a model, or to the local fixture, goes
@@ -26,3 +27,18 @@ export async function tracked<T>(db: Database, context: AiRunContext, call: (obs
       .run().catch(error => console.error(JSON.stringify({ event: "ai_run_not_recorded", task: context.task, cause: error instanceof Error ? error.message.slice(0, 120) : "unknown" })));
   }
 }
+
+/**
+ * AIG-1 (docs/transformacion/ia.md): requests a person makes to the AI while they wait, per hour. Far above real use
+ * (a few per lesson or document) and enough to stop a script or a taken account from spending without limit.
+ * Queued work (proposals, the book map) is bounded by its own batches and attempts.
+ */
+export const aiHourlyLimit = 60;
+/** Counts one request in the person's bucket for this hour; false once they are over the limit. */
+export async function aiAllowed(db: Database, userId: string) {
+  const now = Date.now(), bucket = await digest(`ai:${userId}:${new Date(now).toISOString().slice(0, 13)}`);
+  const limit = await db.prepare("INSERT INTO login_limits (bucket, attempts, expires_at) VALUES (?,1,?) ON CONFLICT(bucket) DO UPDATE SET attempts=CASE WHEN expires_at<? THEN 1 ELSE attempts+1 END, expires_at=CASE WHEN expires_at<? THEN excluded.expires_at ELSE expires_at END RETURNING attempts")
+    .bind(bucket, now + 3600000, now, now).first<{ attempts: number }>();
+  return !!limit && limit.attempts <= aiHourlyLimit;
+}
+export const aiLimited = () => Response.json({ error: "Usaste la IA muchas veces en la última hora. Vuelve a intentar más tarde." }, { status: 429 });

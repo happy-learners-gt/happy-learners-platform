@@ -25,6 +25,8 @@ No repetir el descubrimiento: la auditoría está en [auditoria.md](auditoria.md
 | [arquitectura-de-informacion.md](arquitectura-de-informacion.md) | Árbol de navegación objetivo, reubicación de módulos y su migración por incrementos |
 | [decisiones.md](decisiones.md) | Decisiones del programa (TD-###) con razón y alternativas |
 | [aprobaciones.md](aprobaciones.md) | Lo que necesita al dueño del producto: recomendación, alternativas, qué bloquea |
+| [flujos.md](flujos.md) | Flujos críticos de punta a punta (F1–F5) con fricción y oportunidad |
+| [ia.md](ia.md) | IA como plataforma: capacidades actuales, brechas AIG-1..7 y arquitectura objetivo |
 | [riesgos-y-presupuesto.md](riesgos-y-presupuesto.md) | Registro de riesgos; Cloudflare, GitHub Actions e IA: límites, consumo y reglas |
 | [estado/](estado/) | `CURRENT-STATE`, `NEXT-SESSION`, `WORK-QUEUE`, `MILESTONES` |
 

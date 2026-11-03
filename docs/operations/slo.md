@@ -88,3 +88,21 @@ El plan gratuito de Workers no envía alertas por errores. Mientras tanto:
    curso de Inicio (§4).
 2. Configurar el monitor externo y su página de estado (usuario).
 3. Al pasar al plan de pago: objetivo 99,9 %, alertas de Cloudflare y Analytics Engine para métricas sin muestreo.
+
+## 8. Monitor externo de `/api/health` (SEC-02, pendiente de cuenta: AP-03)
+
+`GET /api/health` responde `{"status":"ok"}` solo si el Durable Object de la organización responde: lee **una** fila
+(`index.ts`, `SELECT id FROM organizations LIMIT 1`). Por eso detecta también la cuota de lecturas agotada (el 503 del
+30-oct), cosa que un chequeo sin base no vería.
+
+| Parámetro | Valor |
+| --- | --- |
+| URL | `https://happy-learners-demo.lfmendoza-alvarez.workers.dev/api/health` |
+| Método | `GET` (o `HEAD`, mismo efecto) |
+| Éxito | estado 200 y el cuerpo contiene `"status":"ok"` |
+| Intervalo | 5 min (288 comprobaciones al día: 288 filas de 5 M y 288 peticiones de 100 000; despreciable) |
+| Alerta | tras 2 fallos seguidos (10 min), por correo al dueño; aviso de recuperación |
+| Servicio | uno con plan gratuito (por ejemplo UptimeRobot); la cuenta la crea el dueño con sus credenciales |
+
+**No está activo.** Se marca como operativo en este documento solo cuando exista la cuenta y se haya visto una alerta
+de prueba (por ejemplo, apuntando unos minutos a una URL que devuelva 404).
