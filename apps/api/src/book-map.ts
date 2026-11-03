@@ -5,7 +5,7 @@ import type { Database } from "./storage";
 import { accessTo } from "./access";
 import { contentsOf, generatorKind, readiness } from "./proposals";
 import { openAiMapper, openAiSettings, TransientError } from "./openai";
-import { tracked } from "./ai-runs";
+import { aiBudgetOf, aiBudgetSpent, tracked } from "./ai-runs";
 
 /**
  * The book map (rebanada 5b): GET /api/courses/:id/book-map shows, for the main book and each indicator of the plan,
@@ -99,6 +99,7 @@ export async function bookMap(path: string, method: string, input: unknown, curr
   }
   if (action === "check") {
     if (!generatorKind(env)) return reply({ error: "La revisión con IA no está configurada en este entorno." }, 409);
+    if ((await aiBudgetOf(db, current.organizationId, env)).level === "exhausted") return aiBudgetSpent();
     const queued = await db.prepare("UPDATE book_maps SET ai_status='queued',ai_error=NULL,ai_attempts=0 WHERE course_id=? AND sha256=? AND status='proposed' AND candidates<>'[]' AND ai_status IN ('none','error') RETURNING outcome_id").bind(courseId, book.sha256).all();
     if (!queued.results.length) return reply({ error: "No hay indicadores por revisar: busca primero en el libro o ya están confirmados." }, 409);
     await wake();
@@ -123,6 +124,8 @@ export async function bookMap(path: string, method: string, input: unknown, curr
 
 /** One batch of the organization's queued map checks, run by its Durable Object alarm. True when work remains. */
 export async function processBookMaps(db: Database, env: Env, scope: string): Promise<boolean> {
+  // AIG-6: with the month's budget used, the queue waits; asking again next month wakes it.
+  if ((await aiBudgetOf(db, scope, env)).level === "exhausted") return false;
   await db.prepare("UPDATE book_maps SET ai_status='queued' WHERE ai_status='running' AND ai_started_at<? AND organization_id=?").bind(new Date(Date.now() - 10 * 60_000).toISOString(), scope).run();
   const settings = openAiSettings(env), mapper = settings ? openAiMapper(settings) : env.LESSON_GENERATOR === "fixture" ? fixtureMapper : null;
   const queued = (await db.prepare("SELECT course_id AS courseId,sha256,outcome_id AS outcomeId,file_id AS fileId,candidates,ai_attempts AS attempts,updated_by AS userId FROM book_maps WHERE ai_status='queued' AND organization_id=? LIMIT 3").bind(scope)

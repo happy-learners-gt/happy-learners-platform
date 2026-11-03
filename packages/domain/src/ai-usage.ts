@@ -99,3 +99,15 @@ export function aiPriceInput(value: unknown): AiPrice | { error: string } {
   if (![inputPerMillion, outputPerMillion].every(price => Number.isFinite(price) && price >= 0 && price <= 1000)) return { error: "Los precios son montos en USD por millón de tokens, de 0 a 1000." };
   return { model, effectiveFrom, inputPerMillion, outputPerMillion };
 }
+
+/**
+ * AIG-6 (AP-07, docs/transformacion/aprobaciones.md): the organization's AI budget for a month, in USD: so much per
+ * active person, never less than a minimum. Past 80 % administration is warned; at 100 % the AI waits for next month.
+ * Runs whose cost cannot be known (a model without a price) do not count, and the page says so.
+ */
+export const aiBudgetPerPersonUsd = 2, aiBudgetMinimumUsd = 20, aiBudgetWarningShare = 0.8;
+export interface AiBudget { budget: number; spent: number; unpriced: boolean; level: "ok" | "warning" | "exhausted" }
+export function aiBudget(activePeople: number, spent: number, unpriced: boolean, perPerson = aiBudgetPerPersonUsd, minimum = aiBudgetMinimumUsd): AiBudget {
+  const budget = Math.max(minimum, perPerson * activePeople);
+  return { budget, spent, unpriced, level: spent >= budget ? "exhausted" : spent >= budget * aiBudgetWarningShare ? "warning" : "ok" };
+}
