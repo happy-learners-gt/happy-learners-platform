@@ -20,6 +20,7 @@ const shiftDay = (day: string, days: number) => { const date = new Date(`${day}T
 async function storedRows(db: Database, organizationId: string, own: string | null, sessionId?: string, period?: { from: string | null; to: string | null }) {
   // PERF-02: a class's day is when it started (or its date, if it never started); only classes near the period are joined.
   const from = period?.from ? shiftDay(period.from, -1) : null, to = period?.to ? shiftDay(period.to, 1) : null;
+  // nosemgrep: sql-interpolated-text -- own, sessionId, from y to agregan fragmentos constantes; los valores van como parámetros
   return (await db.prepare(`SELECT s.id AS sessionId,s.course_id AS courseId,c.title AS courseTitle,s.group_id AS sectionId,g.name AS sectionName,s.session_date AS sessionDate,
       s.started_at AS startedAt,s.completed_at AS completedAt,s.taught_by AS taughtBy,COALESCE(u.display_name,u.username) AS taughtByName,
       (SELECT count(*) FROM class_hour_adjustments x WHERE x.session_id=s.id) AS adjustments,
