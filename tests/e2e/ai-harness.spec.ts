@@ -41,8 +41,10 @@ test("a lesson shows its review score, explains each check and leads to the acti
 
   await signIn(page, "admin-demo", "/organizacion/ia");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Inteligencia artificial");
-  await expect(page.locator(".stat-tile")).toHaveCount(4);
+  await expect(page.locator(".stat-tile")).toHaveCount(5);
   await expect(page.locator(".stat-tile", { hasText: "Propuestas usadas" })).toBeVisible();
+  // AIG-6: the month's budget, from the deployment's amounts.
+  await expect(page.locator(".stat-tile", { hasText: "Presupuesto de este mes" })).toContainText("de");
   // AIG-5: every capability, with where it appears and who decides, also those not used this month.
   const capabilities = page.getByRole("region", { name: "Qué hace la IA" });
   await expect(capabilities.locator("tbody tr")).toHaveCount(7);

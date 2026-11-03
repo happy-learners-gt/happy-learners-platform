@@ -3,6 +3,7 @@ import { aiPriceInput, aiUsageSummary, runCost } from "@happy-learners/domain";
 import type { AiPrice, AiRun } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { openAiSettings } from "./openai";
+import { aiBudgetOf } from "./ai-runs";
 
 /**
  * Organización › Uso de IA (1.4.0): GET /api/organization/ai-usage?mes=YYYY-MM gives the month's and the previous
@@ -44,6 +45,8 @@ export async function aiUsage(path: string, method: string, input: unknown, url:
   return reply({
     // AIG-5: whether the AI answers here at all; the local generator is for tests and demos.
     engine: openAiSettings(env) ? "openai" : env.LESSON_GENERATOR === "fixture" ? "fixture" : null,
+    // AIG-6: the budget is always this month's, whatever month is being read.
+    budget: await aiBudgetOf(db, current.organizationId, env),
     month, previousMonth: before, summary: aiUsageSummary(runs, prices), previous: aiUsageSummary(earlier, prices).total, prices,
     unpriced: models.filter(model => !prices.some(price => price.model === model)),
     recent: runs.slice(0, 50).map(run => ({ ...run, cost: runCost(run, prices) })),

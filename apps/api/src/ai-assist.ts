@@ -5,7 +5,7 @@ import {
 import type { AiWriter, LessonImprover } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { accessTo } from "./access";
-import { aiAllowed, aiLimited, aiOutcomeInput, aiRunId, recordOutcome, tracked } from "./ai-runs";
+import { aiGate, aiOutcomeInput, aiRunId, recordOutcome, tracked } from "./ai-runs";
 import { openAiImprover, openAiSettings, openAiWriter } from "./openai";
 
 /**
@@ -77,7 +77,8 @@ export async function aiAssist(path: string, method: string, input: unknown, cur
     const review = lessonReview(lessonDraft, { ...basis, sequence });
     const request = improveInput(lessonDraft, review, { course: lesson.courseTitle, grade: educationLevels.find(level => level.value === lesson.level)?.label || lesson.level, classMinutes: basis.classMinutes });
     if (!request.failing.length) return reply({ review, changes: [] });
-    if (!await aiAllowed(db, current.id)) return aiLimited();
+    const gate = await aiGate(db, current, env);
+    if (gate) return gate;
     try {
       const runId = aiRunId();
       const output = await tracked(db, {
@@ -93,7 +94,8 @@ export async function aiAssist(path: string, method: string, input: unknown, cur
   // A course named for the record must be one this person works with.
   if (courseId && !(await accessTo(db, current, courseId))) return reply({ error: "Este curso no está asignado a tu cuenta." }, 403);
   if (!engines) return notConfigured();
-  if (!await aiAllowed(db, current.id)) return aiLimited();
+  const gate = await aiGate(db, current, env);
+  if (gate) return gate;
   try {
     const runId = aiRunId();
     const output = await tracked(db, {
