@@ -29,6 +29,20 @@ export const aiTaskLabels: Record<AiTask, string> = {
   "lesson-improve": "Mejora de lecciones", write: "Redacción", "rules-to-constraints": "Reglas de horario", "suggest-fields": "Campos de documentos",
 };
 
+/**
+ * AIG-5 (docs/transformacion/ia.md): what each capability does for the institution, where it appears and who decides
+ * on what it proposes. The AI proposes; a person decides; nothing is written on its own.
+ */
+export const aiCapabilities: Record<AiTask, { does: string; where: string; decides: string }> = {
+  "lesson-proposal": { does: "Propone borradores de lecciones a partir de los indicadores y del libro confirmado.", where: "Curso › Planificar con IA", decides: "El equipo del curso revisa y publica cada lección." },
+  "book-map": { does: "Ubica en el libro las páginas de cada indicador, con la cita que lo respalda.", where: "Curso › Mapa del libro", decides: "El equipo confirma el mapa." },
+  "lesson-review-explain": { does: "Explica en palabras la revisión de una lección.", where: "Editor de lecciones › Revisar", decides: "Solo informa: no cambia nada." },
+  "lesson-improve": { does: "Propone cambios para lo que la revisión marca como pendiente.", where: "Editor de lecciones › Mejorar con IA", decides: "Quien edita acepta o descarta cada cambio." },
+  write: { does: "Redacta, mejora o acorta un texto largo.", where: "«Redactar con IA» bajo los campos de texto", decides: "Quien escribe usa o descarta la propuesta." },
+  "rules-to-constraints": { does: "Convierte una regla escrita en una restricción del horario.", where: "Organización › Horarios", decides: "Administración confirma cada regla." },
+  "suggest-fields": { does: "Reconoce en un texto los datos que deben ser campos del documento.", where: "Organización › Documentos", decides: "Administración usa o descarta cada campo." },
+};
+
 /** The price in force for a model on a day: the latest one that started on or before it. */
 export function priceOn(prices: AiPrice[], model: string, day: string): AiPrice | null {
   return prices.filter(price => price.model === model && price.effectiveFrom <= day).sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0] || null;

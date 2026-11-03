@@ -42,7 +42,7 @@ multi-paso no mejora ninguna hoy (TD-007).
 | AIG-2 | Evaluaciones solo de `lesson-proposal` (3 casos) | Un cambio de prompt o de modelo en las otras 6 tareas no tiene regresión | P1 |
 | AIG-3 | Un solo modelo para todas las tareas (`OPENAI_MODEL`) | Tareas cortas (`write`, `suggest-fields`) pagan el modelo de las largas | P2 (costo) |
 | AIG-4 | Hecho en 1.6.9 (TD-009) para las tareas síncronas; AIG-4b para propuestas y mapa. No se medía la aceptación (cuánto de lo propuesto se usa) | «Respuesta 200» ≠ tarea lograda; sin esto no hay calidad medible | P1 |
-| AIG-5 | Uso de IA es un panel técnico (contadores y precios) | No responde «qué puede hacer la IA aquí, quién la usa, cuánto sirve» | P1 (UX) |
+| AIG-5 | Hecho en 1.6.9: «Inteligencia artificial» abre con qué hace la IA, dónde, quién decide, uso y propuestas usadas; consumo y costo debajo. Antes: Uso de IA era un panel técnico (contadores y precios) | No responde «qué puede hacer la IA aquí, quién la usa, cuánto sirve» | P1 (UX) |
 | AIG-6 | Sin tope mensual por organización | Base del plan comercial; es decisión de negocio | P2, requiere aprobación (AP-07) |
 | AIG-7 | Inyección de instrucciones desde el libro o la plantilla | Mitigado: salidas con esquema estricto, validación determinista y aceptación humana; la IA no tiene herramientas que escriban. Falta un caso de prueba con texto hostil por tarea | P2 (en AIG-2) |
 

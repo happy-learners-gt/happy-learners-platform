@@ -2098,11 +2098,14 @@ section.panel[id^="profile-"] { scroll-margin-top: calc(var(--topbar-h) + var(--
   .assessment-summary { flex: 1 1 100%; }
   .assessment-panel-actions { margin-left: auto; }
 }
-/* Organización › Uso de IA (1.4.0). */
+/* Organización › Inteligencia artificial (1.4.0, AIG-5). */
 .ai-usage-month { display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-3); }
 .ai-usage-month h2 { margin: 0; min-width: 12rem; text-align: center; font-size: var(--text-lg); }
 .ai-usage-table { width: 100%; }
 .ai-usage-table td, .ai-usage-table th[scope=row] { white-space: nowrap; }
+.ai-capabilities td, .ai-capabilities th[scope=row] { white-space: normal; vertical-align: top; min-width: 10rem; }
+.ai-capabilities th[scope=row] { display: grid; gap: 2px; font-weight: var(--weight-regular); min-width: 14rem; }
+.ai-capabilities td:nth-child(4), .ai-capabilities td:nth-child(5) { white-space: nowrap; min-width: 0; }
 .ai-price-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .ai-price-list { margin: 0; padding-left: 1.2rem; display: grid; gap: var(--space-1); }
 @media (max-width: 720px) { .ai-price-fields { grid-template-columns: 1fr; } }

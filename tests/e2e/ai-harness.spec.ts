@@ -40,9 +40,13 @@ test("a lesson shows its review score, explains each check and leads to the acti
   await expect(page.getByRole("region", { name: new RegExp(`^Actividad \\d+: ${target}$`) })).toBeInViewport();
 
   await signIn(page, "admin-demo", "/organizacion/ia");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Uso de IA");
-  await expect(page.locator(".stat-tile")).toHaveCount(5);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Inteligencia artificial");
+  await expect(page.locator(".stat-tile")).toHaveCount(4);
   await expect(page.locator(".stat-tile", { hasText: "Propuestas usadas" })).toBeVisible();
+  // AIG-5: every capability, with where it appears and who decides, also those not used this month.
+  const capabilities = page.getByRole("region", { name: "Qué hace la IA" });
+  await expect(capabilities.locator("tbody tr")).toHaveCount(7);
+  await expect(capabilities.getByRole("row", { name: /Redacción/ })).toContainText("Quien escribe usa o descarta la propuesta.");
   await page.getByRole("button", { name: "Registrar precio" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Precio de un modelo" });
   await dialog.getByLabel("Modelo").fill("modelo-e2e");
