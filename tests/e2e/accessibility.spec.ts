@@ -54,16 +54,17 @@ test("main routes have no WCAG 2.2 A/AA violations detectable by axe", async ({ 
     await expect(page.getByRole("heading", { level: 1 }).first()).toBeAttached();
     await audit(page, label);
   }
-  await page.goto("/configuracion-academica");
+  await page.goto("/configuracion-academica#estandares");
   for (const summary of ["Niveles educativos · CINE 2011", "Áreas de conocimiento · CINE-F 2013"]) await page.getByText(summary).click();
   await audit(page, "configuración académica");
+  await page.goto("/configuracion-academica");
   await page.getByRole("button", { name: "Crear programa", exact: true }).click();
   await audit(page, "diálogo de programa");
   await page.keyboard.press("Escape");
   await page.goto("/tribunales");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Mis tribunales");
   await audit(page, "tribunales");
-  await page.goto("/configuracion-academica");
+  await page.goto("/configuracion-academica#evaluacion");
   await page.getByLabel("Agregar desde plantilla").selectOption("universidad");
   const schemeMenu = page.getByRole("button", { name: "Acciones de Universidad: categorías y GPA" });
   await expect(schemeMenu).toBeVisible();

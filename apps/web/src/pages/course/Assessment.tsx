@@ -346,7 +346,7 @@ function SchemeDialog({ courseId, current, admin, onClose, onSaved }: { courseId
         <label className="assessment-scheme-option"><input type="radio" name="scheme" checked={chosen === ""} onChange={() => setChosen("")}/><span><strong>Puntos acumulados</strong>{schemeExplanation({ id: "points", name: "Puntos acumulados", method: "points", categories: [{ id: "general", label: "Actividades" }], display: { kind: "numeric", max: 100, decimals: 1 }, passing: { min: 60 }, periods: "simple", retakes: "replace" }).map(line => <span key={line} className="muted small">{line}</span>)}</span></label>
         {schemes.map(scheme => <label key={scheme.id} className="assessment-scheme-option"><input type="radio" name="scheme" checked={chosen === scheme.id} onChange={() => setChosen(scheme.id)}/><span><strong>{scheme.name}</strong>{schemeExplanation(scheme).map(line => <span key={line} className="muted small">{line}</span>)}</span></label>)}
       </div>}
-      {admin && <Link href="/configuracion-academica">Administrar esquemas</Link>}
+      {admin && <Link href="/configuracion-academica#evaluacion">Administrar esquemas</Link>}
       <div className="modal-actions"><button type="button" className="button ghost" onClick={onClose}>Cancelar</button><PrimaryAction type="submit" busy={busy} disabled={busy || !schemes}>Guardar</PrimaryAction></div>
     </form>
   </Modal>;
