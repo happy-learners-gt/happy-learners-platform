@@ -105,5 +105,5 @@ El plan gratuito de Workers no envía alertas por errores. Mientras tanto:
 | Alerta | tras 2 fallos seguidos (10 min), por correo al dueño; aviso de recuperación |
 | Servicio | uno con plan gratuito (por ejemplo UptimeRobot); la cuenta la crea el dueño con sus credenciales |
 
-**No está activo.** Se marca como operativo en este documento solo cuando exista la cuenta y se haya visto una alerta
-de prueba (por ejemplo, apuntando unos minutos a una URL que devuelva 404).
+**Operativo desde el 03-nov-2026:** el dueño creó el monitor en UptimeRobot (plan gratuito, a su nombre) e hizo la
+prueba de alerta apuntando a una URL inexistente. La cuenta y sus credenciales son del dueño.
