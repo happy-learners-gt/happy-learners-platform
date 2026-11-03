@@ -1805,3 +1805,21 @@ class AttendanceCountsMigrationTests(unittest.TestCase):
         db.execute("DELETE FROM attendance_marks WHERE session_id=? AND learner_id=?", (session, learner))
         self.assertEqual(db.execute("SELECT marked_count, attended_count FROM class_sessions WHERE id=?", (session,)).fetchone(), before)
         self.assertEqual(db.execute(recount).fetchone()[0], 0)
+
+
+class AiOutcomesMigrationTests(unittest.TestCase):
+    def test_a_run_keeps_how_much_was_used_and_never_more_than_proposed(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            db.executescript(path.read_text())
+        user = db.execute("SELECT id FROM users LIMIT 1").fetchone()[0]
+        db.execute("INSERT INTO ai_runs(id,organization_id,user_id,course_id,task,prompt_version,generator,model,input_chars,input_tokens,output_tokens,duration_ms,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                   ("run-1", "org-demo", user, None, "write", "v1", "fixture", "fixture", 10, None, None, 5, "ok", "2026-11-03T00:00:00Z"))
+        self.assertEqual(db.execute("SELECT proposed_items, accepted_items, decided_at FROM ai_runs").fetchone(), (None, None, None))
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE ai_runs SET proposed_items=2, accepted_items=3 WHERE id='run-1'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("UPDATE ai_runs SET proposed_items=0, accepted_items=0 WHERE id='run-1'")
+        db.execute("UPDATE ai_runs SET proposed_items=3, accepted_items=2, decided_at='t' WHERE id='run-1'")
+        self.assertEqual(db.execute("SELECT proposed_items, accepted_items FROM ai_runs").fetchone(), (3, 2))

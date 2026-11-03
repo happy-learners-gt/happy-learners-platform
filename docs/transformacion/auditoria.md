@@ -129,7 +129,7 @@ vacíos); capturas solo donde las métricas lo pidieron.
 | A2-3 | Objetivos de menos de 24 px: enlaces en línea de las tarjetas (nombres de sección, fechas). Separados entre sí: cumplen la excepción de espaciado de WCAG 2.5.8 y axe (`target-size`) no los marca. | Aceptado |
 | A2-4 | **Ayuda mide ~23 700 px en móvil** (27 temas en una página). | Abierto: HLP-01 (ayuda contextual) |
 | A2-5 | Inicio del docente mide ~5 900 px en móvil (siete bloques). | Abierto, baja: plegar «Acciones rápidas» y «Estado de las lecciones» en móvil (HOME-02) |
-| A2-6 | Uso de IA sigue siendo un panel técnico (AIG-5). | Abierto (M6) |
+| A2-6 | Uso de IA sigue siendo un panel técnico (AIG-5). | Corregido en 1.6.9: «Inteligencia artificial» abre con las capacidades y la aceptación (AIG-4/5) |
 
 **Puntajes después de 1.6.x** (mismos pesos; solo los módulos que cambiaron)
 
@@ -143,6 +143,7 @@ vacíos); capturas solo donde las métricas lo pidieron.
 | Agenda | 2.75 | **3.50** | 4 3 3 3 4 4 4 4 |
 | Horas efectivas | 2.65 | **3.40** | 3 3 4 3 4 4 4 4 |
 | Uso de IA | 2.95 | **3.00** | 2 4 2 3 3 4 4 5 (límite de uso, H4) |
+| Inteligencia artificial (1.6.9) | 3.00 | **3.85** | 4 3 4 4 4 4 4 5 (capacidades, quién decide y propuestas usadas; falta: tabla ancha en móvil, AIG-4b) |
 
 Lo que más pesa ahora en la meta (≥ 4.0): Ayuda (2.60), Uso de IA (3.00), Documentos (2.90), Contratos y Revisión de
 perfiles (3.10), y lo visual de Agenda, Horas y Calendario (tarjetas y listas largas sin jerarquía).

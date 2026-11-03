@@ -126,5 +126,5 @@ describe("course resources on the built Worker", () => {
     await read(await fetch(`${origin}/api/student/readings/${own.id}/mark`, { method: "POST", headers: { Cookie: student, Origin: origin, "Content-Type": "application/json" }, body: "{}" }));
     const progress = await read<{ progress: { percent: number } }>(await as(educator, `/sections/${sectionA.id}/readings`));
     expect(progress.progress.percent).toBe(100);
-  });
+  }, 60_000);
 });

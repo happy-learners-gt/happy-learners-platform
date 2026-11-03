@@ -5,18 +5,19 @@ import {
 import type { AiWriter, LessonImprover } from "@happy-learners/domain";
 import type { Database } from "./storage";
 import { accessTo } from "./access";
-import { aiAllowed, aiLimited, tracked } from "./ai-runs";
+import { aiAllowed, aiLimited, aiOutcomeInput, aiRunId, recordOutcome, tracked } from "./ai-runs";
 import { openAiImprover, openAiSettings, openAiWriter } from "./openai";
 
 /**
  * Assisted improvement and writing (1.4.1, docs/design/asistente-ia.md §6c and §6e). POST /api/lessons/:id/improve takes
  * the editor's draft, reviews it here with the same rules as the browser, asks for changes and returns the ones that
  * make sense; nothing is saved (the editor applies what the person accepts to the draft). POST /api/ai/write proposes
- * a text for a field. Both go through the harness.
+ * a text for a field. Both go through the harness. POST /api/ai/runs/:id/outcome records how much of an answer the
+ * person used (AIG-4).
  */
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
-const improvePath = /^\/api\/lessons\/([a-z0-9-]+)\/improve$/;
-export const aiAssistMethods = (path: string) => improvePath.test(path) || path === "/api/ai/write" ? ["POST"] : null;
+const improvePath = /^\/api\/lessons\/([a-z0-9-]+)\/improve$/, outcomePath = /^\/api\/ai\/runs\/(ai-run-[a-f0-9-]{36})\/outcome$/;
+export const aiAssistMethods = (path: string) => improvePath.test(path) || outcomePath.test(path) || path === "/api/ai/write" ? ["POST"] : null;
 /**
  * The editor's draft as it is now: unlike saving, an activity may still be empty (that is what improving is for).
  * Only the shape is checked, and the sizes the prompt can take.
@@ -51,6 +52,12 @@ async function reviewBasis(db: Database, organizationId: string, courseId: strin
 }
 
 export async function aiAssist(path: string, method: string, input: unknown, current: Member, db: Database, env: Env): Promise<Response> {
+  const outcome = outcomePath.exec(path);
+  if (outcome) {
+    const counts = aiOutcomeInput(input);
+    if (!counts) return reply({ error: "Indica cuántas propuestas hubo y cuántas se usaron." }, 400);
+    return reply({ recorded: await recordOutcome(db, current.organizationId, current.id, outcome[1], counts) });
+  }
   const engines = generators(env);
   const improve = improvePath.exec(path);
   if (improve) {
@@ -72,11 +79,12 @@ export async function aiAssist(path: string, method: string, input: unknown, cur
     if (!request.failing.length) return reply({ review, changes: [] });
     if (!await aiAllowed(db, current.id)) return aiLimited();
     try {
+      const runId = aiRunId();
       const output = await tracked(db, {
-        organizationId: current.organizationId, userId: current.id, courseId: lesson.courseId, task: "lesson-improve", promptVersion: improvePromptVersion,
+        id: runId, organizationId: current.organizationId, userId: current.id, courseId: lesson.courseId, task: "lesson-improve", promptVersion: improvePromptVersion,
         generator: engines.improver.kind, model: engines.model, inputChars: JSON.stringify(request).length,
       }, observe => engines.improver.improve(request, observe));
-      return reply({ review, changes: checkedChanges(output, request) });
+      return reply({ review, changes: checkedChanges(output, request), runId });
     } catch { return unavailable(); }
   }
   const request = writeInput(input);
@@ -87,11 +95,12 @@ export async function aiAssist(path: string, method: string, input: unknown, cur
   if (!engines) return notConfigured();
   if (!await aiAllowed(db, current.id)) return aiLimited();
   try {
+    const runId = aiRunId();
     const output = await tracked(db, {
-      organizationId: current.organizationId, userId: current.id, courseId, task: "write", promptVersion: writePromptVersion,
+      id: runId, organizationId: current.organizationId, userId: current.id, courseId, task: "write", promptVersion: writePromptVersion,
       generator: engines.writer.kind, model: engines.model, inputChars: JSON.stringify(request).length,
     }, observe => engines.writer.write(request, observe));
     const result = writtenText(output, request);
-    return "error" in result ? reply(result, 422) : reply(result);
+    return "error" in result ? reply(result, 422) : reply({ ...result, runId });
   } catch { return unavailable(); }
 }

@@ -452,7 +452,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (staffAllowed) return staff(path, method, request, current, db, env.COURSE_FILES);
   if (path.startsWith("/api/access/")) return accessMatrix(path, method, input, current, db);
   if (path.startsWith("/api/members")) return roles(path, method, input, current, db, username => usernameTaken(env, username), notifier);
-  if (aiUsageAllowed) return aiUsage(path, method, input, url, current, db);
+  if (aiUsageAllowed) return aiUsage(path, method, input, url, current, db, env);
   if (aiAssistAllowed) return aiAssist(path, method, input, current, db, env);
   if (timetableAllowed) return timetables(path, method, input, current, db, env);
   if (minuteAllowed) return panelMinutes(path, method, input, current, db);
