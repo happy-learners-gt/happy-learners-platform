@@ -9,15 +9,16 @@
 
 ## Hecho
 
-- 1.6.0–1.6.6 en producción (#103–#109, 02 y 03-nov): menú y Agenda por rol, Inicio por excepciones, Horas por
+- 1.6.0–1.6.7 en producción (#103–#110, 02 y 03-nov): menú y Agenda por rol, Inicio por excepciones, Horas por
   periodo y con la mitad de lecturas, R1, límite de IA (H4), incorporación de educadores (con agregar a un curso),
-  calendario unificado, horario vigente con choques, orden estable de la actividad.
+  calendario unificado, horario vigente con choques, orden estable de la actividad, contraste AA en oscuro y
+  segunda pasada de la auditoría (AUD-02). 1.6.8 (DOC-01, #111): empezar una plantilla de documento en un paso.
 
 ## Siguiente acción
 
-1. `git status`: rama `feat/HL-15-siguiente` con este estado sin push. `git fetch && git merge origin/main` si avanzó.
-2. Siguiente de la cola: **AUD-02** (completar la matriz de `auditoria.md` con la vista docente, móvil y oscuro y
-   puntajes nuevos tras 1.6.x), luego PERF-03 y HRS-02.
+1. `git status` y `git fetch && git merge origin/main` si avanzó. Confirmar que #111 (1.6.8) está fusionado.
+2. Siguiente de la cola: **AIG-4** (aceptación de lo propuesto por la IA) y **AIG-5** (rediseño de Uso de IA), luego
+   IA-04, PERF-03 y HRS-02.
 3. Por cada hito: `rm -rf build && npm run build`, E2E afectadas, `./scripts/verify`, versión y CHANGELOG, push, PR,
    **todos** los checks verdes (también `code`/Semgrep; correr `uvx semgrep scan --config .semgrep` antes) →
    `gh pr merge <n> --merge` (autorizado) → vigilar `verify`, `deploy`, `critical-flows` en `main`.
@@ -25,6 +26,9 @@
    revisando antes que no hubo falsos positivos.
 
 ## Lecciones de esta sesión
+
+- Un PR creado desde una base vieja puede quedar en conflicto y **sin ningún check**: el vigilante debe comprobar
+  `mergeable` y que existan las ejecuciones antes de esperar (con un id vacío `gh run view` falla en bucle).
 
 - Un `aria-label` que contiene la etiqueta de otro campo rompe `getByLabel` (substring sin distinguir mayúsculas):
   pasó con «Personas» y con «Incorporación». Regla en `docs/design/fluent.md`.

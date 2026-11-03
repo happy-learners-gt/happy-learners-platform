@@ -32,4 +32,5 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | SEC-02 | Seguridad | Verificar que `/api/health` no lea el DO; documentar configuración del monitor (AP-03) | P2 | — | DONE | Prueba que lo garantiza; guía en `docs/operations/slo.md` |
 | SEC-03 | Seguridad | Alcance del pentest externo (AP-05) | P2 | — | DONE | `docs/security/alcance-pentest.md` |
 | SEC-04 | Seguridad | Escáneres obligatorios el 13-nov (AP-04) | P2 | AP-04 | READY (13-nov) | Protección de rama con los tres checks |
+| DOC-01 | Documentos | Empezar una plantilla en un paso desde el formato de siempre de cada documento | P2 | — | DONE | Estado vacío con un botón por tipo; `documents-start.test.tsx` |
 | HLP-01 | Ayuda | Ayuda contextual por página (IA-05) | P3 | AP-06 | BACKLOG | — |

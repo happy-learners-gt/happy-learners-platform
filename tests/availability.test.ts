@@ -61,7 +61,8 @@ async function as(cookie: string | null, path: string, method = "GET", data?: un
   return fetch(`${origin}/api${path}`, { method, headers: { Cookie: cookie || "", Origin: origin, ...(data !== undefined ? { "Content-Type": "application/json" } : {}) }, ...(data !== undefined ? { body: JSON.stringify(data) } : {}) });
 }
 const read = async <T = Record<string, unknown>>(response: Response, status = 200) => { const text = await response.text(); expect(response.status, text).toBe(status); return JSON.parse(text) as T; };
-const day = (offset: number) => { const base = new Date(Date.UTC(2026, 10, 2)); base.setUTCDate(base.getUTCDate() + offset); return base.toISOString().slice(0, 10); }; // Monday 2 November 2026
+/** A Monday after today, plus `offset` days: classes are only planned from today on, so fixed dates expire. */
+const day = (offset: number) => { const base = new Date(); base.setUTCHours(0, 0, 0, 0); base.setUTCDate(base.getUTCDate() + ((8 - base.getUTCDay()) % 7 || 7) + offset); return base.toISOString().slice(0, 10); };
 
 describe("DEC-047 availability on the built Worker", () => {
   it("assigning outside the declared availability asks for a reason and keeps the confirmation", async () => {
