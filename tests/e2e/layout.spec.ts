@@ -79,11 +79,12 @@ test("HOME-02: the educator's home on a phone stays short and the folded activit
   test.skip(info.project.name !== "mobile", "the fold is for narrow screens");
   await signIn(page, "educador-demo", "/inicio");
   await settle(page);
-  // Other specs add classes and activity: the bound leaves room for them while catching a return to ~5 900 px.
-  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(3800);
+  // The whole page grows with what other specs add to this educator (courses, sections, classes), so the check is on
+  // the block this change folds; on the demonstration data the page went from 3 849 to 3 412 px.
   const feed = page.locator(".activity-feed").first(), more = page.getByRole("button", { name: /^Mostrar \d+ más$/ });
   if (await more.count()) {
     await expect(feed.locator("li:visible")).toHaveCount(3);
+    expect((await feed.boundingBox())!.height).toBeLessThanOrEqual(400);
     const total = await feed.locator("li").count();
     await more.click();
     await expect(feed.locator("li:visible")).toHaveCount(total);
