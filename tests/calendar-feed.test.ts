@@ -8,6 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { calendarFeed, escapeText, feedWindow, foldLine, zonedInstant, type FeedClass } from "../packages/domain/src/index";
 import { nextClassDays, type NoClassSpan } from "./class-days";
+import { listenOnTestPort } from "./test-port";
 
 /** Splits a feed into content lines (unfolded) after checking its physical form: CRLF, ≤ 75 octets per line. */
 function parse(ics: string) {
@@ -101,8 +102,7 @@ let worker: ChildProcess, origin: string, logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-calendar-feed-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

@@ -14,6 +14,7 @@ import {
 import type { MailSender } from "../packages/domain/src/index";
 import { deliver, type OutboxStore } from "../apps/api/src/mail";
 import { acceptPending } from "./accept-pending";
+import { listenOnTestPort } from "./test-port";
 
 // ST-158 (account settings) and ST-159 (my data and closing the account). Domain rules first, then the outbox on a
 // real SQLite store with every migration, then the built Worker on a fresh local store (no mail provider).
@@ -135,8 +136,7 @@ let logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-account-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

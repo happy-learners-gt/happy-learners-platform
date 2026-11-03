@@ -14,6 +14,7 @@ import {
   mergeContract, richPlainText,
 } from "../packages/domain/src/index";
 import { contractsByAttention } from "../packages/domain/src/index";
+import { listenOnTestPort } from "./test-port";
 
 const sha256 = (text: string) => createHash("sha256").update(text, "utf8").digest("hex");
 
@@ -104,8 +105,7 @@ let logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-contracts-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

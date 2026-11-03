@@ -8,6 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { DateRule, InstitutionalCalendarEvent, InstitutionalCalendarRule } from "../packages/contracts/src/index";
 import { effectiveCalendar, generateYear, noClassDays } from "../packages/domain/src/index";
+import { listenOnTestPort } from "./test-port";
 
 const event = (patch: Partial<InstitutionalCalendarEvent> = {}): InstitutionalCalendarEvent => ({
   id: "event-1", calendarId: "calendar-1", categoryId: "category-no-class", title: "Sin clase",
@@ -57,8 +58,7 @@ let logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-institutional-calendar-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

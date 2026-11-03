@@ -14,6 +14,7 @@ import {
 import type { MailMessage, MailSender, NotificationType } from "../packages/domain/src/index";
 import { deliverScheduled, notify, scheduleIntervalMs } from "../apps/api/src/notify";
 import type { NotifyStore } from "../apps/api/src/notify";
+import { listenOnTestPort } from "./test-port";
 
 // ST-160 and ST-161 (DEC-045): regional, appearance and notification preferences. Domain rules first, then the outbox
 // queue on a real SQLite store with every migration, then the built Worker on a fresh store (no Brevo key).
@@ -221,8 +222,7 @@ let logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-preferences-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

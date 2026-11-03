@@ -38,8 +38,8 @@
   pasó con «Personas» y con «Incorporación». Regla en `docs/design/fluent.md`.
 - Comprobar que un archivo no existe antes de crearlo (se sobrescribió `tests/roster.test.ts`) y que el conteo de
   pruebas sube lo esperado.
-- `./scripts/verify` tiene fallos intermitentes por carga en pruebas sobre el Worker; se confirman corriendo esos
-  archivos solos.
+- Los «fallos por carga» al arrancar Workers de prueba eran choques de puertos (QA-05, corregido en 1.6.17): leer
+  siempre el error real del registro antes de atribuirlo a la carga.
 
 ## Cómo verificar en local
 

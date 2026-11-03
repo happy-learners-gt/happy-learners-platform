@@ -8,6 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { acceptablePassword, accountInput, temporaryAlphabet, temporaryPassword } from "../packages/domain/src/index";
 import { acceptPending } from "./accept-pending";
+import { listenOnTestPort } from "./test-port";
 
 // ST-093 (HL-137): team accounts. Domain rules first, then the built Worker on a fresh local store.
 const temporary = /^[A-HJ-NP-Za-km-z2-9]{4}(-[A-HJ-NP-Za-km-z2-9]{4}){3}$/;
@@ -41,8 +42,7 @@ let logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-accounts-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

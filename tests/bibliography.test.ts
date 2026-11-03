@@ -9,6 +9,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { BibliographyReference } from "../packages/contracts/src/index";
 import { primaryBlocker, referenceInput } from "../packages/domain/src/index";
+import { listenOnTestPort } from "./test-port";
 
 // The course's bibliography: references to items of the course's library (materials or files in R2), each with a
 // role, and at most one main book, a published text.
@@ -33,8 +34,7 @@ let logs = "";
 const storage = mkdtempSync(join(tmpdir(), "hl-platform-bibliography-"));
 beforeAll(async () => {
   const server = createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  await listenOnTestPort(server);
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing local port");
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
