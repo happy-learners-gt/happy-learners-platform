@@ -2,7 +2,7 @@ import type { Member, SectionSchedule, StaffAvailabilitySlot } from "@happy-lear
 import { fixtureRulesTranslator, ruleText, rulesPromptVersion, solveTimetable, solverRule } from "@happy-learners/domain";
 import type { FixedMeeting, RuleContext, RulesTranslator, SolverBlock, SolverRule } from "@happy-learners/domain";
 import type { Database } from "./storage";
-import { aiAllowed, aiLimited, tracked } from "./ai-runs";
+import { aiAllowed, aiLimited, aiRunId, tracked } from "./ai-runs";
 import { saveSchedule, scheduleOf } from "./classes";
 import { openAiRulesTranslator, openAiSettings } from "./openai";
 
@@ -94,11 +94,11 @@ export async function timetables(path: string, method: string, input: unknown, c
     if (!translator) return reply({ error: "La IA no está configurada en esta organización." }, 503);
     if (!await aiAllowed(db, current.id)) return aiLimited();
     try {
-      const request = { text, context };
-      const output = await tracked(db, { organizationId: current.organizationId, userId: current.id, courseId: null, task: "rules-to-constraints", promptVersion: rulesPromptVersion, generator: translator.kind, model: settings ? settings.model : "fixture", inputChars: JSON.stringify(request).length },
+      const request = { text, context }, runId = aiRunId();
+      const output = await tracked(db, { id: runId, organizationId: current.organizationId, userId: current.id, courseId: null, task: "rules-to-constraints", promptVersion: rulesPromptVersion, generator: translator.kind, model: settings ? settings.model : "fixture", inputChars: JSON.stringify(request).length },
         observe => translator.translate(request, observe));
       const rules = output.rules.map(rule => solverRule(rule, context)).filter((rule): rule is SolverRule => !!rule);
-      return reply({ rules: rules.map(rule => ({ rule, text: ruleText(rule, context) })), dropped: output.rules.length - rules.length });
+      return reply({ rules: rules.map(rule => ({ rule, text: ruleText(rule, context) })), dropped: output.rules.length - rules.length, runId });
     } catch { return reply({ error: "La IA no respondió. Vuelve a intentar en unos minutos." }, 502); }
   }
 

@@ -10,12 +10,20 @@ export interface AiRun {
   id: string; userId: string | null; userName?: string | null; courseId: string | null; courseTitle?: string | null;
   task: AiTask; promptVersion: string; generator: "openai" | "fixture"; model: string;
   inputChars: number; inputTokens: number | null; outputTokens: number | null; durationMs: number; status: AiRunStatus; createdAt: string;
+  /** AIG-4: how many items the answer proposed and how many the person used; null until they decide. */
+  proposedItems?: number | null; acceptedItems?: number | null;
 }
 export interface AiPrice { model: string; effectiveFrom: string; inputPerMillion: number; outputPerMillion: number }
-export interface AiTotals { runs: number; errors: number; inputTokens: number; outputTokens: number; cost: number | null; averageMs: number }
+/** `decided` runs proposed `proposedItems` in all, of which `acceptedItems` were used; acceptance is null with none decided. */
+export interface AiTotals { runs: number; errors: number; inputTokens: number; outputTokens: number; cost: number | null; averageMs: number; decided: number; proposedItems: number; acceptedItems: number; acceptance: number | null }
 export interface AiUsageSummary { total: AiTotals; byTask: (AiTotals & { task: AiTask; label: string })[]; byCourse: (AiTotals & { courseId: string | null; label: string })[]; byPerson: (AiTotals & { userId: string | null; label: string })[] }
 
 export const aiTasks: AiTask[] = ["lesson-proposal", "book-map", "lesson-review-explain", "lesson-improve", "write", "rules-to-constraints", "suggest-fields"];
+/**
+ * AIG-4: the tasks whose answer the person decides on item by item where it is shown. Lesson proposals and the book
+ * map are decided later, in the lesson and the map themselves, and are not measured yet.
+ */
+export const aiDecidedTasks: AiTask[] = ["lesson-improve", "write", "rules-to-constraints", "suggest-fields"];
 export const aiTaskLabels: Record<AiTask, string> = {
   "lesson-proposal": "Propuestas de lecciones", "book-map": "Mapa al plan", "lesson-review-explain": "Explicación de la revisión",
   "lesson-improve": "Mejora de lecciones", write: "Redacción", "rules-to-constraints": "Reglas de horario", "suggest-fields": "Campos de documentos",
@@ -36,6 +44,8 @@ export function runCost(run: AiRun, prices: AiPrice[]): number | null {
 
 function totals(runs: AiRun[], prices: AiPrice[]): AiTotals {
   const costs = runs.map(run => runCost(run, prices));
+  const decided = runs.filter(run => !!run.proposedItems);
+  const proposedItems = decided.reduce((sum, run) => sum + (run.proposedItems || 0), 0), acceptedItems = decided.reduce((sum, run) => sum + (run.acceptedItems || 0), 0);
   return {
     runs: runs.length,
     errors: runs.filter(run => run.status !== "ok").length,
@@ -44,6 +54,7 @@ function totals(runs: AiRun[], prices: AiPrice[]): AiTotals {
     // A cost that cannot be known makes the total unknown too, rather than silently smaller.
     cost: costs.some(cost => cost === null) ? null : Math.round(costs.reduce<number>((sum, cost) => sum + (cost || 0), 0) * 1_000_000) / 1_000_000,
     averageMs: runs.length ? Math.round(runs.reduce((sum, run) => sum + run.durationMs, 0) / runs.length) : 0,
+    decided: decided.length, proposedItems, acceptedItems, acceptance: proposedItems ? Math.round(acceptedItems / proposedItems * 100) / 100 : null,
   };
 }
 function grouped<K extends string | null>(runs: AiRun[], key: (run: AiRun) => K, label: (run: AiRun) => string, prices: AiPrice[]) {
