@@ -17,8 +17,6 @@ import { EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Sect
 import { FreedomChangeDialog, FreedomPolicyField } from "../ui/freedom";
 import type { Tone } from "../ui/primitives";
 import { CalendarSummary } from "./institutional-calendar";
-import { AcademicYears } from "./academic-years";
-import { BellSchedules } from "./bell-schedules";
 import { CurriculumPackages } from "./curriculum-packages";
 import { ProgramPathDialog } from "./programPath";
 import { DepartureDialog, departureDay } from "./departure";
@@ -60,7 +58,7 @@ function OrganizationForm() {
     finally { setBusy(false); }
   }
   return <>
-    <PageHeader title="Organización" description="Nombre, zona, formato regional, ciclo lectivo, días sin clase y respaldo."/>
+    <PageHeader title="Organización" description="Nombre, zona, formato regional y respaldo. El año escolar se prepara en Calendario institucional."/>
     <div className="form-sheet account-cards">
     <form className="panel" onSubmit={save} onChange={() => setDirty(true)}>
       {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
@@ -81,8 +79,7 @@ function OrganizationForm() {
         <div className="form-actions"><button className="button primary">{busy ? "Guardando…" : "Guardar organización"}</button></div>
       </fieldset>
     </form>
-    <AcademicYears/>
-    <BellSchedules/>
+    {/* CAL-01: the school year, its periods and the class schedules moved to Calendario institucional. */}
     <CalendarSummary/>
     <Section title="Respaldo" action={<a className="button secondary small" href="/api/organization/backup" download><Icon name="download" size={16}/>Descargar respaldo</a>}>
       <p className="muted">Una copia en JSON de los cursos, las lecciones, las secciones, el calendario y los registros de la organización. No incluye contraseñas, sesiones ni el contenido de los documentos subidos. Guárdala en un lugar privado: contiene los nombres de los estudiantes.</p>

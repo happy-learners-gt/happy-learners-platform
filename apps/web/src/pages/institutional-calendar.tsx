@@ -14,6 +14,8 @@ import { Drawer, useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import { Menu } from "../ui/Menu";
 import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, PrimaryAction, Section } from "../ui/primitives";
+import { AcademicYears } from "./academic-years";
+import { BellSchedules } from "./bell-schedules";
 
 type Catalog = { calendars: InstitutionalCalendar[]; categories: CalendarCategory[] };
 type Plan = { create: InstitutionalCalendarEvent[]; update: InstitutionalCalendarEvent[]; keep: InstitutionalCalendarEvent[] };
@@ -86,7 +88,10 @@ export function InstitutionalCalendarPage() {
       await loadEvents();
     } catch (cause) { toast({ tone: "error", message: message(cause) }); }
   }
-  const grouped = ownEvents.reduce<Record<string, InstitutionalCalendarEvent[]>>((groups, event) => {
+  // CAL-01 (docs/design/calendario-unificado.md): a rule's occurrence is shown and managed in its rule; this list keeps the rest.
+  const oneOff = ownEvents.filter(event => !event.ruleId), organization = !programId && !sectionId;
+  const yearSelect = <select value={year} onChange={event => setYear(Number(event.target.value))}>{[...new Set([year, ...Array.from({ length: 7 }, (_, index) => todayYear() - 2 + index)])].sort((a, b) => a - b).map(value => <option key={value}>{value}</option>)}</select>;
+  const grouped = oneOff.reduce<Record<string, InstitutionalCalendarEvent[]>>((groups, event) => {
     const key = event.categoryLabel || "Evento";
     return { ...groups, [key]: [...(groups[key] || []), event] };
   }, {});
@@ -100,15 +105,19 @@ export function InstitutionalCalendarPage() {
         "separator",
         { label: "Aplicar plantilla de Guatemala", icon: "copy", onSelect: () => void template() },
       ]}/>}/>
+    <div className="calendar-year"><Field label="Año">{yearSelect}</Field></div>
+    {/* CAL-01: the organization's school year and class schedules come first; they load on their own. */}
+    {organization && member.role === "admin" && <><AcademicYears/><BellSchedules/></>}
     {error ? <ErrorState error={error} retry={() => void refresh()}/> : !catalog || !events ? <Loading label="Cargando calendario…" cards={3}/>
       : <div className="agenda-config">
         <Section title="Asuetos y fechas recurrentes" action={writable ? <div className="agenda-section-actions"><button type="button" className="button secondary small" onClick={() => setRuleDialog("new")}><Icon name="plus" size={16}/>Agregar</button><Menu label="Más acciones de los asuetos" items={[{ label: "Usar plantilla", icon: "copy", onSelect: () => void template() }]}/></div> : undefined}>
           <p className="muted small">Cada regla dice, en palabras, cuándo cae. Las fechas son las de {year}. La plantilla de Guatemala es una referencia y no afirma la ley vigente.</p>
-          <RulesPanel rules={rules} titles={titles} writable={writable} year={year} onEdit={setRuleDialog}/>
+          <RulesPanel rules={rules} titles={titles} writable={writable} year={year} onEdit={setRuleDialog}
+            stored={ownEvents.filter(event => event.ruleId)} onMove={setEventDialog} onSkip={event => void updateOccurrence(event, event.status === "skipped" ? "active" : "skipped")}/>
         </Section>
-        <Section title="Eventos de este año" action={writable ? <button type="button" className="button secondary small" onClick={() => setEventDialog("new")}><Icon name="plus" size={16}/>Agregar</button> : undefined}>
-          <Field label="Año"><select value={year} onChange={event => setYear(Number(event.target.value))}>{[...new Set([year, ...Array.from({ length: 7 }, (_, index) => todayYear() - 2 + index)])].sort((a, b) => a - b).map(value => <option key={value}>{value}</option>)}</select></Field>
-          {ownEvents.length ? Object.entries(grouped).map(([category, list]) => <div key={category} className="agenda-event-group"><h3>{category}</h3><ul>{list.map(event => <li key={event.id} className={`agenda-event${event.status === "skipped" ? " is-skipped" : ""}`}>
+        <Section title="Otros eventos del año" action={writable ? <button type="button" className="button secondary small" onClick={() => setEventDialog("new")}><Icon name="plus" size={16}/>Agregar</button> : undefined}>
+          
+          {oneOff.length ? Object.entries(grouped).map(([category, list]) => <div key={category} className="agenda-event-group"><h3>{category}</h3><ul>{list.map(event => <li key={event.id} className={`agenda-event${event.status === "skipped" ? " is-skipped" : ""}`}>
             <div><strong>{event.title}</strong><span>{event.from === event.until ? sessionDay(event.from, "short") : `${sessionDay(event.from, "short")} – ${sessionDay(event.until, "short")}`}{event.part !== "full" ? ` · ${parts[event.part]}` : ""}{event.noClass ? " · Sin clase" : ""}{event.status === "skipped" ? " · Omitido" : ""}</span></div>
             {writable && <Menu label={`Acciones de ${event.title}`} items={[
               { label: event.ruleId ? "Mover esta ocurrencia" : "Editar", icon: "edit", onSelect: () => setEventDialog(event) },
@@ -131,15 +140,30 @@ export function InstitutionalCalendarPage() {
   </>;
 }
 
-function RulesPanel({ rules, titles, writable, year, onEdit }: { rules: InstitutionalCalendarRule[]; titles: Record<string, string>; writable: boolean; year: number; onEdit: (rule: InstitutionalCalendarRule | "new") => void }) {
+function RulesPanel({ rules, titles, writable, year, onEdit, stored, onMove, onSkip }: {
+  rules: InstitutionalCalendarRule[]; titles: Record<string, string>; writable: boolean; year: number; onEdit: (rule: InstitutionalCalendarRule | "new") => void;
+  stored: InstitutionalCalendarEvent[]; onMove: (event: InstitutionalCalendarEvent) => void; onSkip: (event: InstitutionalCalendarEvent) => void;
+}) {
   // Rules read in the order of the year: by their first date in it; the ones that do not apply go last.
-  let resolved: { ruleId: string; from: string }[] = [];
+  let resolved: { ruleId: string; from: string; until: string }[] = [];
   try { resolved = occurrences(rules.map(rule => rule.rule), year); } catch { resolved = []; }
-  const firstDate = (item: InstitutionalCalendarRule) => resolved.find(date => date.ruleId === item.id)?.from;
+  const range = (from: string, until: string) => from === until ? sessionDay(from, "short") : `${sessionDay(from, "short")} – ${sessionDay(until, "short")}`;
+  const firstDate = (item: InstitutionalCalendarRule) => stored.find(event => event.ruleId === item.id)?.from || resolved.find(date => date.ruleId === item.id)?.from;
   return rules.length ? <ul className="agenda-rule-list">{[...rules].sort((a, b) => (firstDate(a) || "9999").localeCompare(firstDate(b) || "9999") || a.rule.title.localeCompare(b.rule.title, "es")).map(item => {
-      let dates = "";
-      try { dates = occurrences(rules.map(rule => rule.rule), year).filter(date => date.ruleId === item.id).map(date => date.from === date.until ? sessionDay(date.from, "short") : `${sessionDay(date.from, "short")} – ${sessionDay(date.until, "short")}`).join(", "); } catch { dates = "Revisa la referencia de esta regla"; }
-      return <li key={item.id}><div><strong>{item.rule.title}</strong><span>{ruleSummary(item.rule, titles)}</span><span className="muted small">{dates || `No aplica en ${year}`}{item.noClass ? " · sin clase" : ""}</span></div>{writable && <button type="button" className="icon-button" aria-label={`Editar ${item.rule.title}`} onClick={() => onEdit(item)}><Icon name="edit" size={16}/></button>}</li>;
+      // CAL-01: the year's occurrence as it was saved (moved or skipped), or the computed one until the year is generated.
+      const saved = stored.filter(event => event.ruleId === item.id), computed = resolved.filter(date => date.ruleId === item.id);
+      const dates = saved.length
+        ? saved.map(event => `${range(event.from, event.until)}${event.status === "skipped" ? " · omitida" : computed.some(date => date.from === event.from && date.until === event.until) ? "" : " · movida"}`).join(", ")
+        : computed.length ? `${computed.map(date => range(date.from, date.until)).join(", ")} · se crea al generar el año` : "";
+      const occurrence = saved[0];
+      return <li key={item.id}><div><strong>{item.rule.title}</strong><span>{ruleSummary(item.rule, titles)}</span><span className="muted small">{dates || `No aplica en ${year}`}{item.noClass ? " · sin clase" : ""}</span></div>
+        {writable && <div className="agenda-rule-actions">
+          <button type="button" className="icon-button" aria-label={`Editar ${item.rule.title}`} onClick={() => onEdit(item)}><Icon name="edit" size={16}/></button>
+          {occurrence && <Menu label={`Acciones de ${item.rule.title}`} items={[
+            { label: `Mover la fecha de ${year}`, icon: "calendar", onSelect: () => onMove(occurrence) },
+            { label: occurrence.status === "skipped" ? `Restaurar la fecha de ${year}` : `Saltar la fecha de ${year}`, icon: "undo", onSelect: () => onSkip(occurrence) },
+          ]}/>}
+        </div>}</li>;
     })}</ul> : <EmptyState compact icon="calendar" title="Sin reglas">Agrega una regla o usa la plantilla de Guatemala.</EmptyState>;
 }
 
@@ -245,9 +269,9 @@ function GenerateDialog({ calendar, year, onClose, onGenerated }: { calendar: In
 export function CalendarSummary() {
   const [items, setItems] = useState<InstitutionalCalendarEvent[] | null>(null);
   const now = new Date(), from = now.toISOString().slice(0, 10), until = new Date(Date.UTC(now.getUTCFullYear() + 1, now.getUTCMonth(), now.getUTCDate())).toISOString().slice(0, 10);
-  useEffect(() => { api<{ events?: InstitutionalCalendarEvent[] }>(`/calendars/view?from=${from}&until=${until}`).then(result => setItems((result.events || []).filter(item => item.noClass && item.status === "active").slice(0, 5)), () => setItems([])); }, []);
+  useEffect(() => { api<{ events?: InstitutionalCalendarEvent[] }>(`/calendars/view?from=${from}&until=${until}`).then(result => setItems((result.events || []).filter(item => item.noClass && item.status === "active").slice(0, 3)), () => setItems([])); }, []);
   return <Section title="Calendario institucional" action={<Link href="/organizacion/calendario" className="section-link">Abrir calendario</Link>}>
-    <p className="muted small">Próximos eventos sin clase de toda la organización.</p>
+    <p className="muted small">El ciclo lectivo, las jornadas, los asuetos y los eventos del año se preparan en el calendario institucional. Próximos días sin clase:</p>
     {!items ? <Loading label="Cargando calendario…" lines={2}/> : items.length ? <ul className="calendar-summary">{items.map(item => <li key={item.id}><Icon name="calendar" size={18}/><div><strong>{item.title}</strong><span>{item.from === item.until ? sessionDay(item.from, "short") : `${sessionDay(item.from, "short")} – ${sessionDay(item.until, "short")}`}</span></div></li>)}</ul> : <p className="muted small">No hay eventos sin clase próximos.</p>}
   </Section>;
 }
