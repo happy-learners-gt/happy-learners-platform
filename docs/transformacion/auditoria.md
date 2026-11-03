@@ -113,3 +113,36 @@ y nunca escribe sola. Oportunidades con mejor relación valor/costo:
 2. **Horario + calendario + agenda como una sola operación** (planificar el ciclo): el solver ya existe.
 3. **Incorporación de educadores de punta a punta** (contrato → firma → asignación → horas → pago).
 4. **IA como capacidades institucionales** expuestas en contexto, con aceptación medida (ver cola AI-01).
+
+## 7. Segunda pasada (AUD-02, 03-nov-2026, tras 1.6.0–1.6.6)
+
+Vista docente (`lucia.herrera`) en móvil (390 px) y modo oscuro, y axe en oscuro en 15 rutas de administración y 6 del
+docente. Métricas por ruta con `scratchpad/tools/audit.mjs` (alto, desborde horizontal, objetivos pequeños, estados
+vacíos); capturas solo donde las métricas lo pidieron.
+
+**Hallazgos**
+
+| Id | Hallazgo | Estado |
+| --- | --- | --- |
+| A2-1 | **Contraste en modo oscuro:** la insignia de peligro sobre las tarjetas de sección (Inicio del docente, Resumen del curso) medía 3,97:1 (pide 4,5:1). La prueba de axe solo recorría el modo claro. | Corregido en 1.6.7: en oscuro `--color-danger` usa el rojo de primer plano de Fluent (≥ 4,9:1); prueba nueva en `accessibility.spec.ts` (oscuro, docente) |
+| A2-2 | Sin desborde horizontal en ninguna ruta del docente en móvil. | Bien |
+| A2-3 | Objetivos de menos de 24 px: enlaces en línea de las tarjetas (nombres de sección, fechas). Separados entre sí: cumplen la excepción de espaciado de WCAG 2.5.8 y axe (`target-size`) no los marca. | Aceptado |
+| A2-4 | **Ayuda mide ~23 700 px en móvil** (27 temas en una página). | Abierto: HLP-01 (ayuda contextual) |
+| A2-5 | Inicio del docente mide ~5 900 px en móvil (siete bloques). | Abierto, baja: plegar «Acciones rápidas» y «Estado de las lecciones» en móvil (HOME-02) |
+| A2-6 | Uso de IA sigue siendo un panel técnico (AIG-5). | Abierto (M6) |
+
+**Puntajes después de 1.6.x** (mismos pesos; solo los módulos que cambiaron)
+
+| Módulo | Antes | Ahora | UX Vis AI Func Coh A11y Conf Seg |
+| --- | --- | --- | --- |
+| Inicio | 4.20 | **4.60** | 5 5 5 4 4 4 4 4 |
+| Educadores | 3.50 | **4.00** | 4 4 4 4 4 4 4 4 |
+| Horarios | 2.90 | **3.65** | 4 3 3 4 4 4 4 4 |
+| Organización | 2.80 | **3.55** | 3 3 4 4 4 4 4 4 |
+| Calendario institucional | 2.65 | **3.55** | 3 3 4 4 4 4 4 4 |
+| Agenda | 2.75 | **3.50** | 4 3 3 3 4 4 4 4 |
+| Horas efectivas | 2.65 | **3.40** | 3 3 4 3 4 4 4 4 |
+| Uso de IA | 2.95 | **3.00** | 2 4 2 3 3 4 4 5 (límite de uso, H4) |
+
+Lo que más pesa ahora en la meta (≥ 4.0): Ayuda (2.60), Uso de IA (3.00), Documentos (2.90), Contratos y Revisión de
+perfiles (3.10), y lo visual de Agenda, Horas y Calendario (tarjetas y listas largas sin jerarquía).
