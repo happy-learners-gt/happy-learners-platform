@@ -41,5 +41,7 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | SEC-04 | Seguridad | Escáneres obligatorios el 13-nov (AP-04) | P2 | AP-04 | READY (13-nov) | Protección de rama con los tres checks |
 | DOC-01 | Documentos | Empezar una plantilla en un paso desde el formato de siempre de cada documento | P2 | — | DONE | Estado vacío con un botón por tipo; `documents-start.test.tsx` |
 | AIG-6 | IA | Presupuesto mensual de IA por organización (AP-07): USD 2 por persona activa, mínimo 20; aviso al 80 %, pausa al 100 % | P1 | AIG-4 | DONE | 1.6.13: `aiBudgetOf` (suma del mes por modelo y día con los precios), `aiGate` en las tareas síncronas, colas en pausa, 429 claro; montos por despliegue (`AI_BUDGET_PER_PERSON_USD`, `AI_BUDGET_MIN_USD`); `ai-budget.test.ts` con presupuesto 0 |
-| SEC-06 | Seguridad | DAST gratuito: OWASP ZAP baseline (y luego autenticado) contra la vista previa en GitHub Actions; Observatory y SSL Labs | P1 | AP-05 | READY | Informe triado; nunca contra producción |
+| SEC-06 | Seguridad | DAST gratuito: OWASP ZAP baseline contra un Worker local en el runner (nunca producción ni vista previa) | P1 | AP-05 | DONE | 1.6.13: `dast.yml` semanal; triaje en `docs/security/dast.md`; CSP sin comodín en `connect-src`, COOP y CORP |
+| SEC-07 | Seguridad | ZAP autenticado (cuentas de prueba) y reglas activas contra el Worker local | P2 | SEC-06 | READY | Informe triado en `dast.md` |
+| QA-03 | Calidad | `studio.spec.ts` «archiving…» (móvil) falla al repetirse contra el mismo servidor (también en `main`); en CI pasa por servidor nuevo | P3 | — | BACKLOG | Pasa con `--repeat-each=3` |
 | HLP-01 | Ayuda | Ayuda contextual por página (IA-05) | P3 | AP-06 | BACKLOG | — |
