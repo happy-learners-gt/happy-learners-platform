@@ -108,3 +108,14 @@ test("keyboard: skip link, visible focus, menus and dialogs work without a point
   await expect(dialog).toHaveCount(0);
   await expect(page.locator("article.course-card").filter({ hasText: "Exploradores" })).toBeVisible();
 });
+
+test("AUD-02: an educator's own pages keep WCAG 2.2 AA contrast in dark mode", async ({ page }) => {
+  // Status badges over toned cards failed only in dark mode (danger text at 3.97:1), which the light tour never sees.
+  await page.emulateMedia({ colorScheme: "dark" });
+  await signIn(page, "lucia.herrera", "/inicio");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Inicio");
+  for (const path of ["/inicio", "/cursos/seed-course-matematicas", "/secciones/seed-group-mat-3a/notas"]) {
+    await page.goto(path);
+    await audit(page, `oscuro ${path}`);
+  }
+});

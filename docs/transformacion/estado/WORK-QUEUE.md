@@ -9,7 +9,8 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | IA-01 | Navegación | Menú: cursos más relevantes (8) + «Todos los cursos (n)»; Administración en 4 grupos; Horas efectivas de administración en Personas | P0 | PRG-01 | DONE | Con 25 cursos el menú muestra 8 + enlace; el curso abierto siempre aparece; grupos con encabezado; Vitest y E2E de navegación verdes; capturas claro/oscuro, escritorio/móvil |
 | IA-02 | Navegación | Migas coherentes con el menú en administración (TD-006) | P1 | IA-01 | DONE | Ninguna página de administración muestra un padre que el menú no tiene |
 | IA-03 | Navegación | Agenda por rol: administración abre en la vista institucional | P1 | IA-01 | DONE | `admin-demo` abre `/agenda` con clases visibles; docentes sin cambios |
-| AUD-02 | Auditoría | Vista docente, móvil y oscuro de todos los módulos; Biblioteca y Equipo en detalle; puntajes actualizados | P1 | PRG-01 | READY | Matriz sin «preliminar» |
+| AUD-02 | Auditoría | Vista docente, móvil y oscuro; puntajes tras 1.6.x | P1 | PRG-01 | DONE | `auditoria.md` §7; contraste en oscuro corregido (A2-1) con prueba |
+| HOME-02 | Inicio | Inicio del docente en móvil (~5 900 px): plegar bloques secundarios | P3 | — | BACKLOG | Alto en móvil ≤ 3 500 px sin perder información |
 | WF-01 | Flujos | Especificar 5 flujos críticos: incorporar educador, configurar ciclo, armar horario, registrar horas, emitir boleta | P1 | PRG-01 | DONE | Documento con persona, pasos, reglas, excepciones y fricciones medidas en la app |
 | AI-01 | IA | Arquitectura de IA: inventario de capacidades actuales (`openai.ts`, `ai-runs.ts`, puertos del dominio), modelo de skills, permisos, evaluación; rediseño de «Uso de IA» | P1 | PRG-01 | DONE | `docs/transformacion/ia.md` basado en el código, con brechas priorizadas |
 | AIG-1 | IA / Seguridad | Límite de uso en tareas de IA síncronas (H4) | P0 | AI-01 | DONE | 429 tras 60 por persona y hora; prueba en `proposals.test.ts` |
