@@ -31,9 +31,24 @@ Confirma las correcciones: ya no aparecen el comodín de CSP ni la falta de COOP
 falsos positivos de la tabla anterior (`style-src 'unsafe-inline'`, COEP, IP privada y marcas de tiempo en JS,
 informativos). Sin hallazgos altos.
 
+## Escaneo con sesión (SEC-07, 03-nov-2026)
+
+- Plan `.zap/authenticated.yaml`, segundo trabajo de `dast.yml`: administración de la demostración con sesión, 24 rutas
+  GET de la API sembradas (la SPA no tiene enlaces que la araña siga), araña, reglas pasivas y **activas** (inyección,
+  XSS, recorrido de rutas…), solo contra el Worker local del runner. Quedan fuera cierre de sesión, contraseña, login,
+  respaldo y restauración.
+- **Trampa encontrada:** ZAP no expande variables de entorno en el `replacer`; la primera corrida mandó la cookie
+  literal `${COOKIE}` y todo respondió 401 (resultado inválido, descartado). El flujo escribe la cookie sobre
+  `__SESSION_COOKIE__` en una copia del plan y la borra antes de subir el informe. **Comprobar siempre** en el registro
+  del Worker que hubo respuestas 200 y no solo 401.
+- **Resultado válido:** 198 respuestas 200 con sesión, 199 respuestas 400 (los intentos de inyección los rechaza la
+  validación), 114 404, 20 405, 2 403 y **ningún 500**. Hallazgos: solo los ya aceptados (`style-src 'unsafe-inline'`) y
+  falsos positivos (IP privada y marcas de tiempo en el JS). Sin inyección, XSS ni fuga de datos detectadas.
+- **Límite:** las reglas activas atacan parámetros de URL de rutas GET; los cuerpos JSON de POST/PUT no se fuzzean.
+  Siguiente paso posible: una lista de peticiones POST de ejemplo, o dejarlo al pentest manual (AP-05).
+
 ## Siguiente
 
-- Escaneo autenticado (contexto de ZAP con inicio de sesión de las cuentas de prueba) para las páginas internas y la
-  API; reglas activas solo contra el Worker local.
+- Fuzzing de cuerpos JSON de POST/PUT contra el Worker local (o en el pentest manual).
 - Cabeceras de producción y TLS: Mozilla Observatory y SSL Labs a mano, una vez por versión mayor (una petición cada
   uno, sin carga).
