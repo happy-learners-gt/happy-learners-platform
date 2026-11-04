@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.33 — 2026-11-03
+
+- Configuración académica (ACA-02): Paquetes curriculares explica en tres pasos qué hacer con un paquete (activarlo,
+  agregar sus indicadores desde el plan de cada curso, y qué pasa al desactivarlo); Estándares de referencia aclara
+  que no se configuran: son las listas detrás de Nivel educativo y Área.
+
 ## 1.6.32 — 2026-11-03
 
 - Inteligencia artificial (AIC-01): en el teléfono, «Qué hace la IA» se lee como una tarjeta por capacidad, sin
