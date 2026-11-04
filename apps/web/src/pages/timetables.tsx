@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { SolverBlock, SolverResult, SolverRule } from "@happy-learners/domain";
 import { ruleText, timetableConflicts, weekdayNames } from "@happy-learners/domain";
-import { Link } from "../navigation";
+import { Link, useNavigation } from "../navigation";
 import { api, message } from "../api";
 import { reportAiOutcome } from "../ui/ai-outcome";
 import { useFeedback } from "../ui/feedback";
@@ -140,7 +140,15 @@ function WeekGrid({ result, bell, names, rooms, educatorFilter, sectionsOf }: { 
 }
 const endOf = (item: { startsAt: string; durationMinutes: number }) => { const total = Number(item.startsAt.slice(0, 2)) * 60 + Number(item.startsAt.slice(3)) + item.durationMinutes; return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`; };
 
+/** SCH-02 (docs/transformacion/auditoria.md §9): the timetable in force first; generating and classrooms apart. */
+const timetableTabs = [
+  { id: "vigente", label: "Horario vigente", href: "/organizacion/horarios" },
+  { id: "generar", label: "Generar", href: "/organizacion/horarios#generar" },
+  { id: "aulas", label: "Aulas", href: "/organizacion/horarios#aulas" },
+] as const;
 export function TimetablesPage() {
+  const { url } = useNavigation();
+  const tab = timetableTabs.find(item => `#${item.id}` === url.hash)?.id || "vigente";
   const { toast } = useFeedback();
   const [setup, setSetup] = useState<Setup | null>(null), [error, setError] = useState("");
   const [bellId, setBellId] = useState(""), [choices, setChoices] = useState<Record<string, Choice>>({}), [rules, setRules] = useState<SolverRule[]>([]);
@@ -185,7 +193,11 @@ export function TimetablesPage() {
   }
   return <>
     {header}
-    <CurrentTimetable setup={setup}/>
+    <nav className="tabs scrollable-tabs" aria-label="Secciones de horarios">
+      {timetableTabs.map(item => <Link key={item.id} href={item.href} className="tab" aria-current={tab === item.id ? "page" : undefined}>{item.label}</Link>)}
+    </nav>
+    {tab === "vigente" && <CurrentTimetable setup={setup}/>}
+    {tab === "generar" && <>
     <h2 className="timetable-generate-title">Generar un horario nuevo</h2>
     <Section title="Jornada y secciones">
       <Field label="Jornada"><select value={bellId} onChange={event => { setBellId(event.target.value); setResult(null); }}>{setup.bellSchedules.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
@@ -202,7 +214,6 @@ export function TimetablesPage() {
         </tr>; })}</tbody>
       </table></div>
     </Section>
-    <Classrooms setup={setup} onChange={next => { setSetup(next); setResult(null); }}/>
     <Section title="Reglas">
       <p className="muted">Siempre se cumplen: ningún docente da dos clases a la vez, cada sección tiene a lo sumo una clase por día y se respeta la disponibilidad declarada en el perfil. Agrega las demás.</p>
       {rules.length ? <ul className="timetable-rules">{rules.map((rule, index) => <li key={index}><span>{ruleText(rule, context)}</span><button type="button" className="button ghost small" onClick={() => { setRules(rules.filter((_, at) => at !== index)); setResult(null); }}>Quitar<span className="sr-only"> la regla: {ruleText(rule, context)}</span></button></li>)}</ul> : <p className="muted">Sin reglas adicionales.</p>}
@@ -228,6 +239,8 @@ export function TimetablesPage() {
       </div>}
       {applied && <ul className="timetable-applied">{applied.map(item => <li key={item.name}><StatusBadge tone={item.ok ? "success" : "danger"}>{item.ok ? "Aplicado" : "No se aplicó"}</StatusBadge> {item.name}{item.ok ? ` · ${item.classes} clases pendientes` : ` · ${item.error}`}</li>)}</ul>}
     </Section>}
+    </>}
+    {tab === "aulas" && <Classrooms setup={setup} onChange={next => { setSetup(next); setResult(null); }}/>}
   </>;
 }
 

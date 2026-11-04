@@ -118,6 +118,8 @@ it("previews recurring calendar rules and confirms year generation only after it
   history.replaceState(null, "", "/organizacion/calendario?año=2026");
   render(<App/>);
   expect(await screen.findByRole("heading", { level: 1, name: "Calendario institucional" })).toBeTruthy();
+  // CAL-02: the rules are in the «Asuetos» tab.
+  fireEvent.click(await screen.findByRole("link", { name: "Asuetos" }));
   fireEvent.click(await screen.findByRole("button", { name: "Editar Encuentro anual" }));
   const editor = await screen.findByRole("dialog", { name: "Editar regla" });
   expect(within(editor).getByText("Segundo jueves de noviembre")).toBeTruthy();

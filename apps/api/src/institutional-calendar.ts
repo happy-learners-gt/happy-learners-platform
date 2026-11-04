@@ -38,7 +38,8 @@ async function ensureCalendars(db: Database, organizationId: string) {
   ];
   const existing = (await db.prepare("SELECT scope,scope_id AS scopeId FROM calendars WHERE organization_id=?").bind(organizationId).all<{ scope: CalendarScope; scopeId: string | null }>()).results;
   const missing = wanted.filter(item => !existing.some(row => row.scope === item.scope && row.scopeId === item.scopeId));
-  if (missing.length) await db.batch(missing.map(item => db.prepare("INSERT INTO calendars(id,organization_id,scope,scope_id,name,created_at,updated_at) VALUES (?,?,?,?,?,?,?)")
+  // Two first visits at once both find a calendar missing: the second insert is a no-op, not an error.
+  if (missing.length) await db.batch(missing.map(item => db.prepare("INSERT INTO calendars(id,organization_id,scope,scope_id,name,created_at,updated_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT DO NOTHING")
     .bind(`calendar-${crypto.randomUUID()}`, organizationId, item.scope, item.scopeId, item.name, now, now)));
 }
 

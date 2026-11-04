@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.6.29 — 2026-11-03
+
+- Calendario institucional (CAL-02): pestañas **Ciclo y jornadas** (solo el de la organización), **Asuetos** (con
+  preparar el año siguiente) y **Eventos**; el año elegido vale para todas y la pestaña se conserva al cambiarlo. Al
+  guardar un evento o una regla se abre su pestaña. En el teléfono pasa de 3 814 px a 2 014 px como máximo.
+- Corrección: dos primeras visitas a la vez al calendario de una organización nueva ya no fallan al crearlo.
+
+## 1.6.28 — 2026-11-03
+
+- Horarios (SCH-02): pestañas **Horario vigente**, **Generar** (secciones, reglas y horario propuesto) y **Aulas**. La
+  página abre en el horario vigente; en el teléfono pasa de 5 941 a 2 383 px.
+
+## 1.6.27 — 2026-11-03
+
+- Horas efectivas (HRS-04): si los últimos 30 días no tienen clases finalizadas, la página abre en el último mes con
+  clases y lo dice; un periodo elegido que queda vacío ofrece ir a ese mes. Nunca abre vacía cuando hay historial.
+
 ## 1.6.26 — 2026-11-03
 
 - Equipo (TEAM-01): cada persona muestra los cursos que imparte («Imparte: …»), solo si su sección «Enseñanza» es
