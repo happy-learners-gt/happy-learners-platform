@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.30 — 2026-11-03
+
+- Agenda (AGE-01): en la semana, cuando varias clases coinciden, se ve una completa y un chip «+N» que abre el día con
+  todas; antes se dividían en columnas angostas e ilegibles.
+
 ## 1.6.29 — 2026-11-03
 
 - Calendario institucional (CAL-02): pestañas **Ciclo y jornadas** (solo el de la organización), **Asuetos** (con

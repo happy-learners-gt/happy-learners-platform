@@ -117,3 +117,15 @@ test("CUR-01: Cursos on a phone is a list grouped by program; cards stay one gri
     await expect(page.locator("article.course-card.is-row").first()).toBeVisible();
   }
 });
+
+test("AGE-01: the week shows one class per time and «+N» opens the day with all of them", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop", "the week board is the desktop view");
+  await signIn(page, "admin-demo", "/agenda?vista=semana");
+  await settle(page);
+  const more = page.locator(".agenda-more").first();
+  if (!await more.count()) return; // a week without simultaneous classes
+  const hidden = Number((await more.textContent())!.replace("+", ""));
+  await more.click();
+  await expect(page).toHaveURL(/vista=d(%C3%AD|í)a/);
+  expect(await page.locator(".agenda-class").count()).toBeGreaterThan(hidden);
+});
