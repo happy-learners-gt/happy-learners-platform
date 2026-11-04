@@ -28,6 +28,12 @@ export function CurriculumPackages() {
   return <section className="panel admin-section" aria-labelledby="packages-title">
     <div className="panel-header"><h2 id="packages-title">Paquetes curriculares</h2></div>
     <p className="muted">Referencias curriculares oficiales incluidas en la plataforma, con su fuente. Al activar una, la persona responsable de cada curso puede elegir sus indicadores de logro y agregarlos a su plan curricular.</p>
+    {/* ACA-02: what to do with a package, step by step. */}
+    <ol className="muted small">
+      <li>Activa el paquete que sigue tu institución (por ejemplo, el CNB para primaria en Guatemala).</li>
+      <li>En cada curso, <strong>Plan curricular › Agregar indicadores del CNB</strong> muestra sus indicadores; los elegidos entran como resultados de aprendizaje.</li>
+      <li>Desactivarlo no quita lo que ya está en los planes: solo deja de ofrecerlo.</li>
+    </ol>
     {error ? <ErrorState error={error} retry={() => void load()}/> : !packages ? <Loading label="Cargando paquetes…" lines={2}/>
       : <ul className="package-list">{packages.map(item => <li key={item.id}>
         <div>
