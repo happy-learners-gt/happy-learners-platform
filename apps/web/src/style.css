@@ -2240,3 +2240,8 @@ section.panel[id^="profile-"] { scroll-margin-top: calc(var(--topbar-h) + var(--
 
 /* AGE-01: «+N» for the overlapping classes that do not fit in the week. */
 .agenda-more { position: absolute; right: 4px; z-index: 2; min-width: 28px; min-height: 24px; padding: 0 6px; border: 1px solid var(--color-border-control); border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-ink); font-size: var(--text-xs); font-weight: var(--weight-bold); box-shadow: var(--shadow-sm); }
+/* AIC-01: the capabilities table as cards on phones; name and description on their own lines, labels with room. */
+@media (max-width: 720px) {
+  .ai-capabilities th[scope=row] > span { display: block; }
+  .members-table.ai-capabilities:not(.notification-matrix) td[data-label]:not(:first-child):not(.cell-person):not(.cell-actions) { padding-left: 46%; }
+}

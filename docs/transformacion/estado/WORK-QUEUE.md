@@ -66,7 +66,7 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | ACA-02 | Académico | Configuración académica: qué es cada paquete y estándar y cuándo se usa | P2 | AUD-04 | READY | Puntaje ≥ 4.2 |
 | CON-02 | Personas | Contratos: verificar una constancia en Ajustes, con un enlace desde Contratos | P2 | AUD-04 | DONE | 1.6.31: puntaje 3.60 → 3.85; los contratos siguen en dos lugares (Educadores y Contratos y políticas, T3) |
 | SCH-02 | Operación | Horarios en pestañas: Horario vigente, Generar (secciones, reglas y propuesta) y Aulas | P1 | AUD-04 | DONE | 1.6.28: móvil 5 941 → 2 383 (vigente), 3 541 (generar) y 844 px (aulas); la meta de ≤ 2 500 por pestaña no se cumple en Generar por la tabla de secciones; puntaje 3.65 → 4.00 |
-| AIC-01 | IA | Inteligencia artificial: una tarjeta por capacidad en teléfonos | P2 | AUD-04 | READY | Sin tabla ancha en móvil; puntaje ≥ 4.2 |
+| AIC-01 | IA | Inteligencia artificial: una tarjeta por capacidad en teléfonos | P2 | AUD-04 | DONE | 1.6.32: la tabla usa el patrón de tablas de lista (`members-table`), sin desplazamiento lateral; puntaje 3.85 → 4.05 |
 | MOAT-01 | Producto | Plan de la ventaja difícil de copiar (datos curriculares, flujos institucionales, IA con evidencia) en incrementos | P2 | — | BACKLOG | Documento con incrementos priorizados |
 | OBS-01 | Operación | Tablero de SLO desde los registros `event=api` (disponibilidad, latencia, filas leídas por ruta) | P2 | — | BACKLOG | Tablero o informe semanal reproducible sin costo |
 | BRAND-01 | Marca | Cambio de nombre y marca cuando se decida (AP-06) | P2 | AP-06 | BLOCKED | Textos, metadatos y correos con la marca nueva |

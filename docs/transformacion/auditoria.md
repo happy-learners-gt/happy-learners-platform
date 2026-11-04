@@ -187,6 +187,6 @@ Sobre la rama de 1.6.26 con los datos de demostración, administración, escrito
 | Calendario institucional | 3.55 | 2 809 / 3 814 | Cinco bloques apilados (ciclo, jornadas, asuetos, eventos, año siguiente) | CAL-02: pestañas por bloque. **Hecho en 1.6.29:** Ciclo y jornadas, Asuetos, Eventos; móvil 2 014 / 1 794 / 844 px; 4.00 |
 | Agenda | 3.50 | 900 / 1 227 | En la semana, las clases simultáneas se vuelven ilegibles («0… I…») | AGE-01: a lo sumo dos lado a lado y «+N» que abre el día. **Hecho en 1.6.30:** una por horario (dos seguían truncadas) y «+N» que abre el día; 4.00 |
 | Contratos y políticas | 3.60 | 1 367 / 2 931 | «Verificar una constancia» ocupa el final de la lista de contratos | CON-02: verificar en Ajustes, y en Contratos un enlace. **Hecho en 1.6.31:** 3.85 (contratos aún en dos lugares) |
-| Inteligencia artificial | 3.85 | 1 600 / 2 136 | La tabla de capacidades es ancha en el teléfono | AIC-01: una tarjeta por capacidad en teléfonos |
+| Inteligencia artificial | 3.85 | 1 600 / 2 136 | La tabla de capacidades es ancha en el teléfono | AIC-01: una tarjeta por capacidad en teléfonos. **Hecho en 1.6.32:** 4.05 |
 | Configuración académica | 3.55 | 1 192 / 2 016 | Paquetes y estándares sin explicar qué hacer con ellos | ACA-02: qué es cada uno y cuándo se usa, con un ejemplo |
 | Organización | 3.55 | 943 / 1 190 | Claro y corto; lo que falta para su meta es la identidad (logotipo y marca) | ORG-01: espera la marca (AP-06) |
