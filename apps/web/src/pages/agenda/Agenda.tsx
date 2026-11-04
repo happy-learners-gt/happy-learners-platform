@@ -322,9 +322,10 @@ function YearView({ year, items, weekStart, onMonth }: { year: string; items: Ag
 
 function Rail({ next, breaks, onOpen }: { next: ClassItem | null; breaks: { date: string; title: string; origin: string }[]; onOpen: (item: AgendaItem) => void }) {
   const when = next ? classMoment(next.date, next.startsAt) : null;
-  const action = next?.actions[0];
+  // AGE-02: the rail says «Hoy» only when the next class is today, and starts only today's class.
+  const today = !!when && when.day === personalToday(), action = today ? next?.actions[0] : undefined;
   return <aside className="agenda-rail">
-    <section aria-label="Hoy"><h2>Hoy</h2>
+    <section aria-label={today ? "Hoy" : "Próxima clase"}><h2>{today ? "Hoy" : "Próxima clase"}</h2>
       {next && when ? <ol className="agenda-list"><li><Link href={next.link}>
         <span className="agenda-when"><strong>{when.day === personalToday() ? "Hoy" : sessionDay(when.day, "short")}</strong><span>{when.time}</span></span>
         <span className="agenda-what"><strong>{next.courseTitle}</strong><span className="muted small">{next.sectionName}</span></span>
