@@ -98,3 +98,21 @@ test("HOME-02: the educator's home on a phone stays short and the folded activit
     await expect.poll(() => wrapper.evaluate(element => [...element.firstElementChild!.children].filter(item => (item as HTMLElement).offsetParent !== null).length)).toBe(total);
   }
 });
+
+test("CUR-01: Cursos on a phone is a list grouped by program; cards stay one grid on wide screens", async ({ page }, info) => {
+  await signIn(page, "admin-demo", "/cursos");
+  await settle(page);
+  const phone = info.project.name === "mobile";
+  await expect(page.getByRole("radio", { name: phone ? "Lista" : "Tarjetas" })).toBeChecked();
+  if (phone) {
+    await expect(page.locator("article.course-card.is-row").first()).toBeVisible();
+    expect(await page.locator(".course-group").count()).toBeGreaterThan(1);
+    // Every course keeps its link and its menu in the list.
+    await expect(page.locator("article.course-card.is-row").filter({ hasText: "Exploradores" }).getByRole("link", { name: "Exploradores", exact: true })).toBeVisible();
+  } else {
+    await expect(page.locator(".course-group")).toHaveCount(0);
+    await page.getByRole("radio", { name: "Lista" }).check();
+    await expect(page).toHaveURL(/vista=lista/);
+    await expect(page.locator("article.course-card.is-row").first()).toBeVisible();
+  }
+});
