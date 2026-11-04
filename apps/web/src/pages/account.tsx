@@ -2,11 +2,8 @@ import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { AccountNoticeDelivery, AccountOverview, AccountSession, ClosureRequest, EmailChangeIssued, EmailChangePreview, MyClosure, SignInRecord } from "@happy-learners/contracts";
 import { acceptablePassword, closureLabels, emailChangeHours, maxClosureReason, maxPasswordLength, minPasswordLength, normalizeEmail, personalDataSections, securityMethods } from "@happy-learners/domain";
-import { MfaSettings } from "./mfa";
-import { PasskeySettings } from "./passkeys";
-import { MyTokens } from "./tokens";
-import { LinkedAccounts } from "./providers";
 import { api, ApiError, message } from "../api";
+import { Link, useNavigation } from "../navigation";
 import { fullDate, timeAgo } from "../model";
 import { useSession } from "../session";
 import { Modal, useFeedback } from "../ui/feedback";
@@ -34,21 +31,18 @@ const historyPageSize = 10;
 
 export function AccountPage() {
   const { member } = useSession();
+  const { url, navigate } = useNavigation();
+  // The sign-in methods and sessions moved to Seguridad; old links to them land there.
+  useEffect(() => { if (["#contrasena", "#sesiones", "#accesos", "#dos-pasos", "#passkeys", "#tokens", "#cuentas-vinculadas"].includes(url.hash)) navigate("/mi-cuenta/seguridad", true); }, [url.hash]);
   const [overview, setOverview] = useState<AccountOverview | null>(null), [error, setError] = useState(""), [revision, setRevision] = useState(0);
   const load = () => { setError(""); api<{ account: AccountOverview }>("/me/account").then(result => setOverview(result.account)).catch(cause => setError(message(cause))); };
   useEffect(load, [revision]);
   const refresh = () => setRevision(value => value + 1);
   return <>
-    <PageHeader title="Cuenta" description="Tu correo, tu contraseña, la verificación en dos pasos, las sesiones abiertas y una copia de tus datos."/>
+    <PageHeader title="Cuenta" description="Tu correo de acceso, una copia de tus datos y el cierre de la cuenta."/>
     <div className="form-sheet account-cards">
       {error ? <ErrorState error={error} retry={load}/> : !overview ? <Loading label="Cargando tu cuenta…" lines={3}/> : <EmailSection overview={overview} onChanged={refresh}/>}
-      <PasswordSection username={member.username} onChanged={refresh}/>
-      <Anchored id="dos-pasos" title="Verificación en dos pasos"><MfaSettings/></Anchored>
-      <Anchored id="passkeys" title="Passkeys"><PasskeySettings/></Anchored>
-      <Anchored id="cuentas-vinculadas" title="Cuentas vinculadas"><LinkedAccounts/></Anchored>
-      <Anchored id="tokens" title="Tokens de integración"><MyTokens/></Anchored>
-      <SessionsSection revision={revision} onChanged={refresh}/>
-      <SignInHistory revision={revision}/>
+      <Section title="Contraseña, métodos y sesiones"><p className="muted">Tu contraseña, passkeys, verificación en dos pasos, cuentas vinculadas, sesiones abiertas y actividad están en <Link href="/mi-cuenta/seguridad">Seguridad</Link>.</p></Section>
       <MyData/>
       <CloseAccount/>
     </div>
@@ -127,15 +121,7 @@ function EmailIssued({ issued, onClose }: { issued: EmailChangeIssued; onClose: 
   </Modal>;
 }
 
-function PasswordSection({ username, onChanged }: { username: string; onChanged: () => void }) {
-  const [open, setOpen] = useState(false);
-  return <Anchored id="contrasena" title="Contraseña" action={<button type="button" className="button secondary small" onClick={() => setOpen(true)}><Icon name="edit" size={16}/>Cambiar contraseña</button>}>
-    <p className="muted small">Al cambiarla se cierran tus sesiones en otros dispositivos; esta sigue abierta. Si tienes correo de acceso, te avisamos del cambio.</p>
-    {open && <PasswordDialog username={username} onClose={() => setOpen(false)} onChanged={() => { setOpen(false); onChanged(); }}/>}
-  </Anchored>;
-}
-
-function PasswordDialog({ username, onClose, onChanged }: { username: string; onClose: () => void; onChanged: () => void }) {
+export function PasswordDialog({ username, onClose, onChanged }: { username: string; onClose: () => void; onChanged: () => void }) {
   const { toast } = useFeedback();
   const [current, setCurrent] = useState(""), [next, setNext] = useState(""), [repeat, setRepeat] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
   async function submit(event: FormEvent) {
@@ -157,7 +143,7 @@ function PasswordDialog({ username, onClose, onChanged }: { username: string; on
   </Modal>;
 }
 
-function SessionsSection({ revision, onChanged }: { revision: number; onChanged: () => void }) {
+export function SessionsSection({ revision, onChanged }: { revision: number; onChanged: () => void }) {
   const { toast, confirm } = useFeedback();
   const [sessions, setSessions] = useState<AccountSession[] | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState("");
   const load = () => { setError(""); api<{ sessions: AccountSession[] }>("/me/account/sessions").then(result => setSessions(result.sessions)).catch(cause => setError(message(cause))); };
@@ -195,7 +181,7 @@ function SessionsSection({ revision, onChanged }: { revision: number; onChanged:
 }
 
 const outcomeLabel: Record<SignInRecord["outcome"], [string, Tone]> = { succeeded: ["Correcto", "success"], failed: ["Contraseña incorrecta", "danger"] };
-function SignInHistory({ revision }: { revision: number }) {
+export function SignInHistory({ revision }: { revision: number }) {
   const [logins, setLogins] = useState<SignInRecord[] | null>(null), [limit, setLimit] = useState(30), [page, setPage] = useState(0), [error, setError] = useState("");
   const load = () => { setError(""); api<{ logins: SignInRecord[]; limit: number }>("/me/account/logins").then(result => { setLogins(result.logins); setLimit(result.limit); setPage(0); }).catch(cause => setError(message(cause))); };
   useEffect(load, [revision]);

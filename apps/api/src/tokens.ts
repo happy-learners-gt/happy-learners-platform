@@ -5,6 +5,7 @@ import { digest, newToken } from "./auth";
 import type { Client } from "./account";
 import { event } from "./activity";
 import { securityEvent } from "./security-log";
+import { requireConfirmation } from "./step-up";
 
 /**
  * ST-136: integration tokens. A person creates one with a name and an expiry of 1 to 90 days; it reads (GET only) what
@@ -66,7 +67,7 @@ async function revoke(id: string, current: Member, db: Database, client: Client,
 }
 
 /** /api/me/tokens… and /api/security/tokens…: the person's tokens, and all of the organization for administration. */
-export async function tokens(path: string, method: string, input: unknown, current: Member, db: Database, client: Client): Promise<Response> {
+export async function tokens(path: string, method: string, input: unknown, current: Member, db: Database, client: Client, session = ""): Promise<Response> {
   const now = new Date().toISOString();
   if (path.startsWith("/api/security/")) {
     if (current.role !== "admin") return reply({ error: "Solo administración consulta los tokens de la organización." }, 403);
@@ -82,6 +83,8 @@ export async function tokens(path: string, method: string, input: unknown, curre
     return reply({ tokens: rows.map(row => shape(row, now)) });
   }
   const value = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  const confirmation = await requireConfirmation(db, current, session, value);
+  if (confirmation) return confirmation;
   const name = typeof value.name === "string" ? value.name.trim().replace(/\s+/g, " ") : "", days = value.days;
   if (name.length < 2 || name.length > 60 || /[<>\x00-\x1f]/.test(name)) return reply({ error: "Ponle al token un nombre de 2 a 60 caracteres que diga dónde se usa." }, 400);
   if (!Number.isInteger(days) || (days as number) < 1 || (days as number) > 90) return reply({ error: "Elige una caducidad de 1 a 90 días." }, 400);

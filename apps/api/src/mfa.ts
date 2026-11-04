@@ -1,10 +1,11 @@
 import type { Member, SignInMethod } from "@happy-learners/contracts";
 import { base32, groupedKey, matchTotp, mfaAttempts, mfaChallengeMs, otpauthUri, recoveryCode, recoveryCodeCount, recoveryCodeInput, tokenPattern, tokenPrefix } from "@happy-learners/domain";
 import type { Database } from "./storage";
-import { digest, newToken, verifyPassword } from "./auth";
+import { digest, newToken } from "./auth";
 import type { Client } from "./account";
 import { event } from "./activity";
 import { securityEvent } from "./security-log";
+import { requireConfirmation } from "./step-up";
 
 /**
  * ST-133: the second factor. The TOTP secret is encrypted (AES-GCM) with the organization's key, which lives in the
@@ -95,11 +96,6 @@ export async function answerChallenge(input: unknown, scope: string, db: Databas
   return { userId: found.userId, method, how };
 }
 
-async function passwordOk(db: Database, current: Member, password: unknown) {
-  if (typeof password !== "string" || password.length > 128) return false;
-  const user = await db.prepare("SELECT password_salt AS salt,password_hash AS hash FROM users WHERE id=?").bind(current.id).first<{ salt: string; hash: string }>();
-  return !!user && await verifyPassword(password, user.salt, user.hash);
-}
 export function mfaMethods(path: string): string[] | null {
   if (path === "/api/me/mfa") return ["GET", "DELETE"];
   if (path === "/api/me/mfa/setup" || path === "/api/me/mfa/enable" || path === "/api/me/mfa/recovery-codes") return ["POST"];
@@ -115,7 +111,8 @@ export async function myMfa(path: string, method: string, input: unknown, curren
   }
   if (path === "/api/me/mfa/setup") {
     if (factor?.status === "active") return reply({ error: "Ya tienes la verificación en dos pasos activa." }, 409);
-    if (!await passwordOk(db, current, value?.currentPassword)) return reply({ error: "La contraseña actual no es correcta." }, 400);
+    const confirmation = await requireConfirmation(db, current, token, value);
+    if (confirmation) return confirmation;
     const secret = crypto.getRandomValues(new Uint8Array(20)), key = base32(secret);
     await db.batch([db.prepare("INSERT INTO totp_factors(user_id,secret,status,created_at) VALUES (?,?,'pending',?) ON CONFLICT(user_id) DO UPDATE SET secret=excluded.secret,status='pending',last_step=0,created_at=excluded.created_at,enabled_at=NULL")
       .bind(current.id, await seal(db, secret), new Date().toISOString())]);
@@ -138,8 +135,10 @@ export async function myMfa(path: string, method: string, input: unknown, curren
     return reply({ recoveryCodes: codes });
   }
   if (factor?.status !== "active") return reply({ error: "No tienes la verificación en dos pasos activa." }, 409);
-  if (!await passwordOk(db, current, value?.currentPassword)) return reply({ error: "La contraseña actual no es correcta." }, 400);
-  if (!await check(db, current.id, factor, value)) return reply({ error: "Ese código no es correcto o ya se usó.", code: "MFA_CODE_INVALID" }, 400);
+  // Within the confirmation window nothing else is asked; a code, when sent, must still be right.
+  const confirmation = await requireConfirmation(db, current, token, value);
+  if (confirmation) return confirmation;
+  if ((value?.code || value?.recoveryCode) && !await check(db, current.id, factor, value)) return reply({ error: "Ese código no es correcto o ya se usó.", code: "MFA_CODE_INVALID" }, 400);
   if (path === "/api/me/mfa/recovery-codes") {
     const { codes, statements } = await newRecoveryCodes(db, current.id);
     await db.batch([...statements, securityEvent(db, { organizationId: org, type: "recovery_codes_renewed", actorId: current.id, subjectId: current.id, detail: "Los códigos anteriores dejaron de funcionar", client })]);
@@ -169,3 +168,9 @@ export async function resetMfa(target: string, current: Member, db: Database, cl
   return reply({ ok: true });
 }
 export const mfaResetPath = /^\/api\/security\/people\/([a-z0-9-]{1,100})\/mfa$/;
+
+/** ST-133 for the confirmation window: a code of the person's app, used once. */
+export async function confirmWithCode(db: Database, userId: string, code: unknown) {
+  const factor = await factorOf(db, userId);
+  return factor?.status === "active" && !!await check(db, userId, factor, { code });
+}

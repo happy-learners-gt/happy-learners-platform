@@ -97,7 +97,9 @@ describe("ST-133 on the built Worker", () => {
   it("CA1 a person activates TOTP, receives 10 recovery codes once, and the password then asks for a code", async () => {
     const ana = await person(admin, "mfa-ana");
     const other = cookieOf(await login("mfa-ana", password));
-    expect((await as(ana.cookie, "/me/mfa/setup", "POST", { currentPassword: "otra" })).status).toBe(400);
+    // Right after signing in the session is in its confirmation window: no password is asked again; a wrong one
+    // sent anyway is still refused by the confirmation itself.
+    expect((await read<{ code: string }>(await as(ana.cookie, "/me/confirm", "POST", { password: "otra" }), 400)).code).toBe("REAUTH_FAILED");
     const { setup } = await read<{ setup: { key: string; uri: string } }>(await as(ana.cookie, "/me/mfa/setup", "POST", { currentPassword: password }));
     expect(setup.uri).toMatch(/^otpauth:\/\/totp\/Happy%20Learners%3Amfa-ana\?secret=[A-Z2-7]{32}&/);
     expect((await read<{ code: string }>(await as(ana.cookie, "/me/mfa/enable", "POST", { code: "000000" }), 400)).code).toBe("MFA_CODE_INVALID");
@@ -175,7 +177,7 @@ describe("ST-133 on the built Worker", () => {
     expect(cookieOf(await login("mfa-leo", password))).toBeTruthy();
     expect((await as(admin, `/security/people/${leo.id}/mfa`, "DELETE")).status).toBe(409);
     expect((await log(admin, `&persona=${leo.id}&tipo=mfa_reset`))).toHaveLength(1);
-    // Turning it off needs the password and a code.
+    // Turning it off happens within the confirmation window; a code sent with it must still be right.
     const zoe = await person(admin, "mfa-zoe");
     const { secret } = await enroll(zoe.cookie);
     expect((await as(zoe.cookie, "/me/mfa", "DELETE", { currentPassword: password, code: "000000" })).status).toBe(400);

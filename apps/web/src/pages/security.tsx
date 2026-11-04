@@ -57,7 +57,7 @@ function Security() {
 }
 
 function PeopleField({ people, value }: { people: Person[]; value: string }) {
-  return <Field label="Persona"><select name="persona" defaultValue={value}>
+  return <Field label="Persona"><select key={people.length} name="persona" defaultValue={value}>
     <option value="">Todas</option>
     {people.map(person => <option key={person.id} value={person.id}>{person.displayName} (@{person.username})</option>)}
   </select></Field>;
@@ -68,8 +68,15 @@ function DateFields({ filters }: { filters: Filters }) {
 const readForm = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); return Object.fromEntries(new FormData(event.currentTarget)) as unknown as Filters; };
 const empty: Filters = { persona: "", tipo: "", desde: "", hasta: "", objeto: "" };
 
-function SecurityLog({ people }: { people: Person[] }) {
-  const [filters, setFilters] = useState<Filters>(empty), [events, setEvents] = useState<Event[] | null>(null), [more, setMore] = useState(false);
+/** The people to filter by; loaded here when the page does not pass them. */
+function usePeople(given: Person[]) {
+  const [loaded, setLoaded] = useState<Person[]>(given);
+  useEffect(() => { if (!given.length) api<{ members: Person[] }>("/members").then(result => setLoaded(result.members), () => setLoaded([])); }, []);
+  return given.length ? given : loaded;
+}
+export function SecurityLog({ people: given, initialPerson = "" }: { people: Person[]; initialPerson?: string }) {
+  const people = usePeople(given), start = { ...empty, persona: initialPerson };
+  const [filters, setFilters] = useState<Filters>(start), [events, setEvents] = useState<Event[] | null>(null), [more, setMore] = useState(false);
   const [error, setError] = useState(""), [chain, setChain] = useState<Chain | null>(null), [checking, setChecking] = useState(false);
   const load = async (next: Filters, before?: string) => {
     setError("");
@@ -78,7 +85,7 @@ function SecurityLog({ people }: { people: Person[] }) {
       setEvents(current => before && current ? [...current, ...result.events] : result.events); setMore(result.more);
     } catch (cause) { setError(message(cause)); }
   };
-  useEffect(() => { void load(empty); }, []);
+  useEffect(() => { void load(start); }, []);
   async function verify() {
     setChecking(true);
     try { setChain((await api<{ chain: Chain }>("/security/chain")).chain); } catch (cause) { setError(message(cause)); }
@@ -122,7 +129,8 @@ function SecurityLog({ people }: { people: Person[] }) {
   </>;
 }
 
-function Audit({ people }: { people: Person[] }) {
+export function Audit({ people: given }: { people: Person[] }) {
+  const people = usePeople(given);
   const [filters, setFilters] = useState<Filters>(empty), [error, setError] = useState("");
   const [data, setData] = useState<{ events: AuditEvent[]; more: boolean; roleChanges: RoleChange[]; objects: Record<string, string> } | null>(null);
   const load = async (next: Filters, before?: string) => {
@@ -159,7 +167,7 @@ function Audit({ people }: { people: Person[] }) {
 }
 
 /** ST-134, ST-130, ST-136: what every password, link and session of the organization follows. */
-function Policy() {
+export function Policy() {
   const { toast } = useFeedback();
   const [policy, setPolicy] = useState<AccessPolicy | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const load = async () => { setError(""); try { setPolicy((await api<{ policy: AccessPolicy }>("/security/policy")).policy); } catch (cause) { setError(message(cause)); } };

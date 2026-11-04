@@ -55,7 +55,10 @@ import { account, accountBody, accountMethods, clientOf, confirmEmail, emailConf
 import { isSecurityPath, security, securityEvent, securityMethodsOf } from "./security-log";
 import { availableProviders, callback, callbackPath, identityPath, myIdentities, organizationOfDomain, personIdentityPath, providerStartPath, sso, ssoMethods, startSignIn, unlinkByAdmin } from "./oidc";
 import { bearerToken, closedToTokens, tokenMember, tokenMethods, tokens, tokenScopeKey } from "./tokens";
-import { myPasskeys, passkeyMethods, passkeySignIn, passkeySignInPaths, passkeyTicket } from "./passkeys";
+import { confirmWithPasskey, myPasskeys, passkeyHandleScope, passkeyMethods, passkeySignIn, passkeySignInPaths, passkeyTicket } from "./passkeys";
+import { configureConfirmWindow, confirm, confirmPaths } from "./step-up";
+import { identity, identityMethods } from "./identity";
+import { confirmWithCode } from "./mfa";
 import { answerChallenge, mfaMethods, mfaPath, mfaResetPath, myMfa, resetMfa } from "./mfa";
 import { accessPolicy, breachRange, finishSignIn, linkConfirmPath, passwordChecker, recoverPassword, recoveryConfirmPath, requestLink, signInWithLink } from "./sign-in";
 import { institutionalCalendarMethods, institutionalCalendars } from "./institutional-calendar";
@@ -185,7 +188,9 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   // REL-007: a new password from a recovery link (ST-134) and the access policy.
   if ((method === "POST" && recoveryConfirmPath.test(path)) || (method === "PUT" && path === "/api/security/policy")) input = await body(request);
   if (["POST", "DELETE"].includes(method) && mfaMethods(path) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
-  if (method === "POST" && (path === "/api/me/passkeys" || path === "/api/me/tokens")) input = await body(request);
+  if (((method === "POST" || method === "PUT") && /^\/api\/identity\/reviews(\/|$)/.test(path) && request.headers.get("content-type")?.startsWith("application/json"))
+    || (method === "POST" && (path === "/api/me/passkeys" || path === "/api/me/tokens" || path === "/api/me/confirm")) || (method === "PUT" && /^\/api\/me\/passkeys\//.test(path))
+    || (method === "DELETE" && /^\/api\/me\/passkeys\//.test(path) && request.headers.get("content-type")?.startsWith("application/json"))) input = await body(request);
   if (ssoMethods(path) && ["PUT", "POST"].includes(method) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   // ST-160, ST-161: the person's own preferences and the bell; marking every notice as read needs no body.
   if (["PUT", "POST"].includes(method) && meMethods(path) && (method === "PUT" || request.headers.get("content-type")?.startsWith("application/json"))) input = await body(request);
@@ -223,11 +228,12 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
       : typed.includes("@") ? await organizationOfEmail(env, typed) : await organizationOf(env, typed);
   }
   // ST-132: a passkey sign-in names its organization by the ticket its client data signed.
-  if (path === "/api/login/passkey" && method === "POST") scope = scopeOfToken(passkeyTicket(input));
+  if (path === "/api/login/passkey" && method === "POST") scope = scopeOfToken(passkeyHandleScope(input) || passkeyTicket(input));
   if ((path === "/api/login/link" || path === "/api/account/recovery" || path === "/api/login/passkey/options") && method === "POST") {
     const typed = String((input as Record<string, unknown> | null)?.identifier || "").trim().toLowerCase();
     if (typed.length >= 3 && typed.length <= 254) scope = typed.includes("@") ? await organizationOfEmail(env, typed) : await organizationOf(env, typed);
   }
+  configureConfirmWindow(env, url.origin);
   const db = database(env, scope, usage);
   if (usage) usage.organization = scope;
   if (["/api/health", "/api/version"].includes(path)) {
@@ -356,6 +362,9 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (ssoAllowed) methods[path] = ssoAllowed;
   const tokenAllowed = tokenMethods(path);
   if (tokenAllowed) methods[path] = tokenAllowed;
+  if (confirmPaths.includes(path)) methods[path] = ["POST"];
+  const identityAllowed = identityMethods(path);
+  if (identityAllowed) methods[path] = identityAllowed;
   const passkeyAllowed = passkeyMethods(path);
   if (passkeyAllowed) methods[path] = passkeyAllowed;
   if (passkeySignInPaths.includes(path)) methods[path] = ["POST"];
@@ -417,7 +426,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (startKey) return startSignIn(startKey as never, input, request, scope, db, env);
   if (path === "/api/login/providers") return json({ providers: availableProviders(env, url.origin), sso: true });
   if (passkeySignInPaths.includes(path)) {
-    const signedIn = await passkeySignIn(path, input, request, scope, db);
+    const signedIn = await passkeySignIn(path, input, request, scope, db, () => organizationIds.map(id => database(env, id)));
     return json(await signedIn.json(), signedIn.status, cookieOf(signedIn));
   }
   if (path === mfaPath) {
@@ -479,7 +488,9 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   // force come with the session, so the screen applies the theme, size and formats before showing anything.
   if (path === "/api/session") {
     deliverDue();
-    return json({ member: current, pending, preferences: await preferencesFor(db, current.id, current.organizationId), ...(await onboardingPending(db, current) ? { onboarding: true } : {}) });
+    // Identidad y acceso: how this session signed in and whether the person has a passkey, to suggest creating one.
+    const security = viaToken ? null : await db.prepare("SELECT s.method,(SELECT count(*) FROM passkeys p WHERE p.user_id=s.user_id) AS passkeys FROM sessions s WHERE s.token_hash=?").bind(await digest(sessionToken(request) || "")).first<{ method: string; passkeys: number }>();
+    return json({ member: current, pending, preferences: await preferencesFor(db, current.id, current.organizationId), ...(security ? { security } : {}), ...(await onboardingPending(db, current) ? { onboarding: true } : {}) });
   }
   if (path === "/api/account/password") return changePassword(input, current, sessionToken(request)!, db, notifier, passwordChecker(db, current.organizationId, breachRange(env, url.origin)));
   // A temporary password opens nothing else until the person chooses their own (ST-093); the terms come after it.
@@ -490,7 +501,9 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (ssoAllowed && !current.mfaSetupRequired) return sso(path, method, input, current, db, request);
   const unlinkTarget = personIdentityPath.exec(path);
   if (unlinkTarget && !current.mfaSetupRequired) return current.role === "admin" ? unlinkByAdmin(unlinkTarget[1], unlinkTarget[2] as never, current, db, clientOf(request)) : json({ error: "Solo administración desvincula cuentas de otras personas." }, 403);
-  if (tokenAllowed && !current.mfaSetupRequired) return tokens(path, method, input, current, db, clientOf(request));
+  if (tokenAllowed && !current.mfaSetupRequired) return tokens(path, method, input, current, db, clientOf(request), sessionToken(request) || "");
+  if (confirmPaths.includes(path)) return confirm(path, input, current, db, sessionToken(request) || "", request, clientOf(request), {
+    totp: code => confirmWithCode(db, current.id, code), passkey: value => confirmWithPasskey(value, current.id, db, request) });
   if (passkeyAllowed && !current.mfaSetupRequired) return myPasskeys(path, method, input, current, db, request);
   if (current.mfaSetupRequired) return json({ error: "Tu organización exige la verificación en dos pasos. Actívala para continuar.", code: "MFA_SETUP_REQUIRED" }, 403);
   if (path.startsWith("/api/legal")) return legal(path, method, input, current, db, notifier);
@@ -543,6 +556,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (/^\/api\/courses\/[a-z0-9-]+\/(core|sections\/differences|section-proposals(\/[a-z0-9-]+)?)$/.test(path) || /^\/api\/sections\/[a-z0-9-]+\/(plan|lessons|activities|content-overrides|units|copies|proposals|reviews)$/.test(path)) return sectionFreedom(path, method, input, current, db, notifier);
   if (/^\/api\/courses(\/|$)/.test(path)) return courses(path, method, input, current, db, notifier);
   if (/^\/api\/programs(\/|$)/.test(path)) return programs(path, method, input, current, db);
+  if (identityAllowed) return identity(path, method, input, current, db, clientOf(request));
   if (path === "/api/security/policy") return accessPolicy(method, input, current, db, clientOf(request));
   const mfaTarget = mfaResetPath.exec(path)?.[1];
   if (mfaTarget) return current.role === "admin" ? resetMfa(mfaTarget, current, db, clientOf(request)) : json({ error: "Solo administración restablece la verificación en dos pasos." }, 403);

@@ -21,10 +21,11 @@ import { StyleGuide } from "./pages/StyleGuide";
 import { Members, OrganizationSettings, AcademicSettings } from "./pages/admin";
 import { ContractsPage } from "./pages/contracts";
 import { AcceptInvitation } from "./pages/invitations";
-import { AccessPage } from "./pages/access";
-import { SecurityPage } from "./pages/security";
+import { IdentityHub, isIdentitySection } from "./pages/identity";
 import { EnterWithLink, RecoverPassword } from "./pages/sign-in-links";
 import { MfaRequired } from "./pages/mfa";
+import { PasskeyNudge } from "./pages/my-security";
+import { ConfirmationHost } from "./ui/identity-kit";
 import { NotificationsAdmin } from "./pages/notifications";
 import { ConsentGate, PrivacyPage } from "./pages/legal";
 import { TeamDirectory, TeamProfilePage } from "./pages/professional";
@@ -104,14 +105,16 @@ function AuthenticatedApp() {
   const landed = useRef(false);
   // ST-122: a new account goes through the welcome after its password and the terms.
   const [onboarding, setOnboarding] = useState(false);
+  const [security, setSecurity] = useState<{ method: string; passkeys: number } | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "offline">("loading");
   const [expired, setExpired] = useState(false);
   const refresh = useCallback(async () => {
     // Sequential on purpose: a 401 from the session check means "show the login", not "offline".
-    const session = await api<{ member: Member; pending?: PendingDocument[]; onboarding?: true; preferences?: EffectivePreferences }>("/session");
+    const session = await api<{ member: Member; pending?: PendingDocument[]; onboarding?: true; preferences?: EffectivePreferences; security?: { method: string; passkeys: number } }>("/session");
     if (session.preferences) applyPreferences(session.preferences);
     // With a temporary password, nothing else opens until the person chooses their own (ST-093).
     const org = session.member.mustChangePassword || session.member.mfaSetupRequired ? null : await api<{ organization: Organization }>("/organization");
+    setSecurity(session.security || null);
     setMember(session.member); setOrganization(org?.organization || null); setPending(session.pending || []); setOnboarding(!!session.onboarding);
   }, []);
   const start = useCallback(() => {
@@ -153,6 +156,8 @@ function AuthenticatedApp() {
     },
   };
   return <SessionContext.Provider value={session}>
+    <ConfirmationHost/>
+    {!onboarding && <PasskeyNudge userId={member.id} security={security}/>}
     {onboarding ? <OnboardingWizard onDone={async href => { await refresh(); navigate(href, true); toast({ message: "Bienvenida completada. Ya puedes empezar." }); }} onLogout={() => void logout()}/> : <Routes/>}
     {expired && <SessionExpiredDialog username={member.username} onRestored={async () => {
       try { await refresh(); setExpired(false); dispatchEvent(new CustomEvent(sessionRestored)); toast({ message: "Sesión renovada. Puedes continuar donde estabas." }); }
@@ -201,13 +206,15 @@ function page(first: string, second: string | undefined, url: URL) {
     case "equipo": return second ? <TeamProfilePage key={second} id={second}/> : <TeamDirectory/>;
     // IA-04: profile review is a tab of Educadores.
     case "perfiles": return <Redirect to="/educadores#perfiles"/>;
-    case "cuenta": return <Redirect to={`/mi-cuenta/cuenta${url.hash}`}/>;
+    case "cuenta": return <Redirect to={["#contrasena", "#sesiones", "#accesos", "#dos-pasos", "#passkeys", "#tokens", "#cuentas-vinculadas"].includes(url.hash) ? "/mi-cuenta/seguridad" : `/mi-cuenta/cuenta${url.hash}`}/>;
     case "preferencias": return <Redirect to={url.hash === "#notificaciones" ? "/mi-cuenta/notificaciones" : `/mi-cuenta/preferencias${url.hash}`}/>;
     case "horas": return <HoursPage/>;
     case "configuracion-academica": return second === "calendario" ? <InstitutionalCalendarPage/> : <AcademicSettings/>;
     case "tribunales": return <MyPanelsPage/>;
-    case "roles-y-accesos": return <AccessPage/>;
-    case "seguridad": return <SecurityPage/>;
+    // Identidad y acceso (docs/design/identidad-y-acceso.md) replaces Roles y accesos and Seguridad; their addresses redirect.
+    case "identidad": return isIdentitySection(second) ? <IdentityHub section={second}/> : <Redirect to="/identidad/resumen"/>;
+    case "roles-y-accesos": return <Redirect to={`/identidad/roles${url.hash}`}/>;
+    case "seguridad": return <Redirect to={({ "#politicas": "/identidad/politicas", "#tokens": "/identidad/integraciones", "#proveedor": `/identidad/inicio-de-sesion${url.search}`, "#auditoria": "/identidad/registros#auditoria" } as Record<string, string>)[url.hash] || "/identidad/registros"}/>;
     case "notificaciones": return <NotificationsAdmin/>;
     case "clasificaciones": return <Redirect to="/configuracion-academica"/>;
     case "contenido": return null;

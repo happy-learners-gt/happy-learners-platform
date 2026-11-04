@@ -8,6 +8,7 @@ import { event } from "./activity";
 import { closureMethods, closures } from "./closures";
 import { exportMyData } from "./personal-data";
 import { securityEvent } from "./security-log";
+import { confirmWindow } from "./step-up";
 
 /**
  * ST-158: account settings under /api/me/account. The sign-in e-mail changes only after the link sent to the new
@@ -40,8 +41,9 @@ export const newSessionId = () => `session-${crypto.randomUUID().replaceAll("-",
 /** The statements that open a session (8 hours) and record the successful sign-in; older history is pruned. */
 export function openSession(db: Database, tokenHash: string, userId: string, organizationId: string, method: SignInMethod, client: Client, now: number, options: { hours?: number; verified?: boolean; detail?: string } = {}) {
   return [
-    db.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,id,created_at,last_used_at,method,device,country,verified) VALUES (?,?,?,?,?,?,?,?,?,?)")
-      .bind(tokenHash, userId, now + (options.hours || 8) * 3600000, newSessionId(), now, now, method, client.device, client.country, options.verified ? 1 : 0),
+    // Signing in opens the confirmation window (step-up.ts) for 10 minutes.
+    db.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,id,created_at,last_used_at,method,device,country,verified,elevated_until) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
+      .bind(tokenHash, userId, now + (options.hours || 8) * 3600000, newSessionId(), now, now, method, client.device, client.country, options.verified ? 1 : 0, now + confirmWindow()),
     // ST-137: every sign-in joins the security log too.
     securityEvent(db, { organizationId, type: "sign_in", outcome: "succeeded", actorId: userId, subjectId: userId, method, detail: options.detail || (options.verified && method !== "passkey" ? "Con verificación en dos pasos" : undefined), client }),
     db.prepare("INSERT INTO sign_in_events(id,organization_id,user_id,outcome,method,device,country,occurred_at) VALUES (?,?,?,'succeeded',?,?,?,?)")
