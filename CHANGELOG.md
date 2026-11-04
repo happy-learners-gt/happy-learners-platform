@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.32 — 2026-11-03
+
+- Inteligencia artificial (AIC-01): en el teléfono, «Qué hace la IA» se lee como una tarjeta por capacidad, sin
+  desplazarse de lado.
+
 ## 1.6.31 — 2026-11-03
 
 - Contratos y políticas (CON-02): «Verificar una constancia» pasa a la pestaña Ajustes; la lista de contratos termina
