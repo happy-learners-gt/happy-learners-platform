@@ -78,7 +78,8 @@ describe("delivery gate", () => {
     });
   });
   it("reports deployment status with the repository token and maps demo to Jira testing", () => {
-    expect(workflow.jobs.deploy.permissions).toEqual({ contents: "read", deployments: "write" });
+    // ST-189: the security gate reads the scanner runs and the pull request of the commit; nothing else is added.
+    expect(workflow.jobs.deploy.permissions).toEqual({ contents: "read", deployments: "write", actions: "read", "pull-requests": "read" });
     const steps = workflow.jobs.deploy.steps;
     const start = steps.findIndex((step: { id?: string }) => step.id === "deployment");
     const delivery = steps.findIndex((step: { id?: string }) => step.id === "cloudflare");
