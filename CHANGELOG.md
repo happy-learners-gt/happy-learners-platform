@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.7.0 — 2026-11-03
+
+REL-007, seguridad, identidad y accesos (SPR-004, DEC-058), primer incremento.
+
+- Gobierno › Seguridad (ST-137, ST-186): registro de seguridad de la organización con inicios de sesión correctos y
+  fallidos (también con usuarios desconocidos, sin el nombre), bloqueos temporales, cierres de sesión, cambios de
+  contraseña, de correo, de rol, de acceso y de permisos. Se filtra por persona, tipo y fecha y se exporta en CSV.
+  Cada evento queda sellado con la huella del anterior en la misma transacción, y «Verificar la cadena» detecta si
+  alguno se cambió, se borró o se agregó por fuera. Retención de 365 días con ancla.
+- Auditoría (ST-068): acciones críticas de toda la organización e historial de cambios de rol y de acceso, por persona,
+  objeto y fecha, solo para administración.
+- Educadores (ST-136): «Cerrar sus sesiones» cierra todas las sesiones abiertas de una persona; queda en el registro.
+- Privacidad (ST-187): el registro no guarda contraseñas, códigos, tokens, direcciones IP ni el agente de usuario; la
+  copia de mis datos incluye mis eventos de seguridad con sus sellos; la copia de la organización no lleva el registro
+  ni credenciales.
+- Migración 0078 (no destructiva): sesiones e historial de accesos aceptan los métodos nuevos; tablas del registro, la
+  política de acceso, el segundo factor, passkeys, cuentas vinculadas, el proveedor institucional y los tokens.
+
 ## 1.6.36 — 2026-11-03
 
 - Diseñador de documentos (DOC-04): en la lista de bloques y en el encabezado, los campos se leen por su nombre

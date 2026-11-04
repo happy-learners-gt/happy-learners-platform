@@ -2,6 +2,7 @@ import type { AccessEvent, GrantablePermission, Member, PermissionKey, ProgramSc
 import { builtInRoles, grantedIn, grantsInput, permissionAreas, permissionCatalog, permissionsOf, reachLabels, scopeInput, scopeLabel, securityGroupInput } from "@happy-learners/domain";
 import type { Database, Prepared } from "./storage";
 import { event } from "./activity";
+import { securityEvent } from "./security-log";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
 const now = () => new Date().toISOString();
@@ -38,9 +39,14 @@ async function programNames(db: Database, organizationId: string) {
 }
 const knownPrograms = (scope: ProgramScope, names: Record<string, string>) => "all" in scope || scope.programs.every(id => names[id]);
 
+/** The access history (ST-135) and, for ST-137, the security log: every change of permissions is in both. */
 function audit(db: Database, current: Member, action: string, subjectType: "group" | "coordination", subjectId: string, summary: string) {
-  return db.prepare("INSERT INTO access_events(id,organization_id,actor_id,action,subject_type,subject_id,summary,occurred_at) VALUES (?,?,?,?,?,?,?,?)")
-    .bind(`access-${crypto.randomUUID()}`, current.organizationId, current.id, action, subjectType, subjectId, summary.slice(0, 400), now());
+  return [
+    // Never before the latest entry, as the activity (QA-04): the Worker's clock may read a few milliseconds behind.
+    db.prepare("INSERT INTO access_events(id,organization_id,actor_id,action,subject_type,subject_id,summary,occurred_at) VALUES (?,?,?,?,?,?,?,max(?,COALESCE((SELECT max(occurred_at) FROM access_events WHERE organization_id=?),'')))")
+      .bind(`access-${crypto.randomUUID()}`, current.organizationId, current.id, action, subjectType, subjectId, summary.slice(0, 400), now(), current.organizationId),
+    securityEvent(db, { organizationId: current.organizationId, type: "permissions_changed", actorId: current.id, subjectId: subjectType === "coordination" ? subjectId : null, detail: summary }),
+  ];
 }
 
 /** Coordination profiles of the organization, by person. */
@@ -77,7 +83,7 @@ export async function setCoordination(id: string, input: unknown, current: Membe
     // A change of profile closes the person's sessions: they sign in again with what they can do now.
     db.prepare("DELETE FROM sessions WHERE user_id=?").bind(id),
     event(db, current, { action: action as "assigned" | "updated" | "revoked", targetType: "account", targetId: id, summary }),
-    audit(db, current, action, "coordination", id, summary),
+    ...audit(db, current, action, "coordination", id, summary),
   ]);
   return reply({ coordination: scope, changed: true });
 }
@@ -124,7 +130,7 @@ export async function accessMatrix(path: string, method: string, input: unknown,
     const groupId = `security-group-${crypto.randomUUID()}`, at = now();
     const created = await db.guardedBatch(db.prepare("SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM security_groups WHERE organization_id=? AND name_key=?)").bind(current.organizationId, data.name.toLocaleLowerCase("es")), [
       db.prepare("INSERT INTO security_groups(id,organization_id,name,name_key,description,created_at,updated_at) VALUES (?,?,?,?,?,?,?)").bind(groupId, current.organizationId, data.name, data.name.toLocaleLowerCase("es"), data.description, at, at),
-      audit(db, current, "created", "group", groupId, `Creó el grupo de seguridad «${data.name}»`),
+      ...audit(db, current, "created", "group", groupId, `Creó el grupo de seguridad «${data.name}»`),
     ]);
     if (!created) return reply({ error: `Ya existe un grupo llamado «${data.name}».` }, 409);
     return reply({ group: (await groupsOf(db, current.organizationId, groupId))[0] }, 201);
@@ -137,7 +143,7 @@ export async function accessMatrix(path: string, method: string, input: unknown,
       db.prepare("DELETE FROM security_group_grants WHERE group_id=?").bind(id),
       db.prepare("DELETE FROM security_group_members WHERE group_id=?").bind(id),
       db.prepare("DELETE FROM security_groups WHERE id=?").bind(id),
-      audit(db, current, "deleted", "group", id, `Eliminó el grupo de seguridad «${group.name}» (${group.members.length === 1 ? "1 persona" : `${group.members.length} personas`} pierden sus permisos)`),
+      ...audit(db, current, "deleted", "group", id, `Eliminó el grupo de seguridad «${group.name}» (${group.members.length === 1 ? "1 persona" : `${group.members.length} personas`} pierden sus permisos)`),
     ]);
     return reply({ ok: true });
   }
@@ -147,7 +153,7 @@ export async function accessMatrix(path: string, method: string, input: unknown,
     if (await db.prepare("SELECT 1 AS taken FROM security_groups WHERE organization_id=? AND name_key=? AND id<>?").bind(current.organizationId, data.name.toLocaleLowerCase("es"), id).first()) return reply({ error: `Ya existe un grupo llamado «${data.name}».` }, 409);
     const saved = await db.guardedBatch(db.prepare("SELECT 1 FROM security_groups WHERE id=? AND version=?").bind(id, Number.isInteger(version) ? Number(version) : -1), [
       db.prepare("UPDATE security_groups SET name=?,name_key=?,description=?,version=version+1,updated_at=? WHERE id=?").bind(data.name, data.name.toLocaleLowerCase("es"), data.description, now(), id),
-      audit(db, current, "updated", "group", id, group.name === data.name ? `Actualizó la descripción del grupo «${data.name}»` : `Renombró el grupo «${group.name}» como «${data.name}»`),
+      ...audit(db, current, "updated", "group", id, group.name === data.name ? `Actualizó la descripción del grupo «${data.name}»` : `Renombró el grupo «${group.name}» como «${data.name}»`),
     ]);
     if (!saved) return reply({ error: "El grupo cambió desde que lo abriste. Recarga antes de guardar." }, 409);
     return reply({ group: (await groupsOf(db, current.organizationId, id))[0] });
@@ -162,7 +168,7 @@ export async function accessMatrix(path: string, method: string, input: unknown,
     const statements: Prepared[] = [
       db.prepare("DELETE FROM security_group_grants WHERE group_id=?").bind(id),
       ...grants.flatMap(grant => rowsOf(grant.scope).map(program => db.prepare("INSERT INTO security_group_grants(group_id,organization_id,permission,program_id) VALUES (?,?,?,?)").bind(id, current.organizationId, grant.permission, program))),
-      touch, audit(db, current, "granted", "group", id, summary),
+      touch, ...audit(db, current, "granted", "group", id, summary),
     ];
     await db.batch(statements);
     return reply({ group: (await groupsOf(db, current.organizationId, id))[0] });
@@ -181,7 +187,7 @@ export async function accessMatrix(path: string, method: string, input: unknown,
     await db.batch([
       ...removed.map(member => db.prepare("DELETE FROM security_group_members WHERE group_id=? AND user_id=?").bind(id, member.userId)),
       ...added.map(userId => db.prepare("INSERT INTO security_group_members(group_id,user_id,organization_id,added_by,added_at) VALUES (?,?,?,?,?)").bind(id, userId, current.organizationId, current.id, now())),
-      touch, audit(db, current, "members", "group", id, `En el grupo «${group.name}» ${summary}`),
+      touch, ...audit(db, current, "members", "group", id, `En el grupo «${group.name}» ${summary}`),
     ]);
     return reply({ group: (await groupsOf(db, current.organizationId, id))[0] });
   }

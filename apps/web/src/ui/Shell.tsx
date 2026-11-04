@@ -248,6 +248,7 @@ const administration: { id: string; label: string; pages: (Omit<Page, "active"> 
   ] },
   { id: "gobierno", label: "Gobierno", pages: [
     { href: "/roles-y-accesos", label: "Roles y accesos", icon: "shield", hue: "violet" },
+    { href: "/seguridad", label: "Seguridad", icon: "shield", hue: "coral" },
     { href: "/notificaciones", label: "Notificaciones", icon: "send", hue: "teal" },
     { href: "/organizacion/ia", label: "Inteligencia artificial", icon: "sparkles", hue: "violet" },
   ] },

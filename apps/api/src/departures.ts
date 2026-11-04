@@ -5,6 +5,7 @@ import { todayFor } from "./classes";
 import { profileOnLeave } from "./professional";
 import { educatorConflicts } from "./conflicts";
 import { event } from "./activity";
+import { securityEvent } from "./security-log";
 import { completeClosure } from "./closures";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
@@ -173,6 +174,7 @@ export async function recordDeparture(id: string, input: unknown, current: Membe
     ...completeClosure(db, current, id, member.name, departureId, now),
     // The reason stays out of the activity: it is administration's note.
     event(db, current, { action: "archived", targetType: "account", targetId: id, summary: `Registró la salida de ${member.name} el ${date}` }),
+    securityEvent(db, { organizationId: org, type: "access_changed", actorId: current.id, subjectId: id, detail: `Salida registrada el ${date}; su acceso terminó` }),
   ];
   // Nothing changed since the responsibilities were read: same teams and sections, replacements still active.
   const chosen = [...new Set([...Object.values(courseChoices), ...Object.values(sectionChoices)] as string[])];

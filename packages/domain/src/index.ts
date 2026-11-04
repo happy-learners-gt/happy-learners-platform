@@ -208,3 +208,6 @@ export { applySuggestion, checkedSuggestions, exampleSuggestions, fixtureSuggest
 export type { FieldSuggester, FieldSuggestion, SuggestField, SuggestInput, SuggestOutput } from "./field-suggestions";
 export { amountCents, formatCents, hoursPay, hoursPayable, personContract } from "./hours-pay";
 export type { HoursPay } from "./hours-pay";
+export { genesisHash, isSecurityEventType, sealText, securityCsv, securityEventTypes, securityFilter, securityMethods, securityOutcomes, securityPageLimit, securityRange, securityRetentionDays } from "./security";
+export type { SealedFields, SecurityEventType, SecurityFilter, SecurityOutcome, SecurityRow } from "./security";
+export { sha256Hex } from "./sha256";
