@@ -420,6 +420,8 @@ function StandardsReference() {
   return <section className="panel admin-section" aria-labelledby="standards-title">
     <div className="panel-header"><h2 id="standards-title">Estándares de referencia</h2></div>
     <p className="muted">Los cursos y programas se describen con clasificaciones internacionales de la UNESCO, para que la configuración sea comparable entre organizaciones y países.</p>
+    {/* ACA-02: nothing to configure here; it is the reference behind two fields. */}
+    <p className="muted small">No hay nada que configurar aquí: son las listas detrás de los campos <strong>Nivel educativo</strong> y <strong>Área</strong> al crear un curso o un programa. Ábrelas para consultar qué significa cada código.</p>
     <details className="reference"><summary>Niveles educativos · CINE 2011</summary>
       <table className="reference-table"><thead><tr><th scope="col">Código</th><th scope="col">Nivel</th><th scope="col">Equivale a</th></tr></thead>
         <tbody>{educationLevels.map(level => <tr key={level.value}><td>{level.code}</td><th scope="row">{level.label}</th><td>{level.hint}</td></tr>)}</tbody></table>

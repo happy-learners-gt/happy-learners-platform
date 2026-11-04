@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.6.34 — 2026-11-03
+
+- Diseñador de documentos (DOC-03): «Publicar» solo se habilita cuando hay cambios desde la última versión (si no,
+  dice «Publicada»), y la vista previa de una plantilla de un programa propone primero las secciones de ese programa.
+
+## 1.6.33 — 2026-11-03
+
+- Configuración académica (ACA-02): Paquetes curriculares explica en tres pasos qué hacer con un paquete (activarlo,
+  agregar sus indicadores desde el plan de cada curso, y qué pasa al desactivarlo); Estándares de referencia aclara
+  que no se configuran: son las listas detrás de Nivel educativo y Área.
+
+## 1.6.32 — 2026-11-03
+
+- Inteligencia artificial (AIC-01): en el teléfono, «Qué hace la IA» se lee como una tarjeta por capacidad, sin
+  desplazarse de lado.
+
+## 1.6.31 — 2026-11-03
+
+- Contratos y políticas (CON-02): «Verificar una constancia» pasa a la pestaña Ajustes; la lista de contratos termina
+  con un enlace a ella.
+
+## 1.6.30 — 2026-11-03
+
+- Agenda (AGE-01): en la semana, cuando varias clases coinciden, se ve una completa y un chip «+N» que abre el día con
+  todas; antes se dividían en columnas angostas e ilegibles.
+
 ## 1.6.29 — 2026-11-03
 
 - Calendario institucional (CAL-02): pestañas **Ciclo y jornadas** (solo el de la organización), **Asuetos** (con

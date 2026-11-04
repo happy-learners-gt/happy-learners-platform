@@ -43,7 +43,7 @@ function Breakdown({ title, rows }: { title: string; rows: (AiTotals & { label: 
 
 /** «Qué hace la IA»: every capability, also those not used this month, with its use and how much of it was used. */
 function Capabilities({ summary, later }: { summary: AiUsageSummary; later: Later }) {
-  return <div className="table-card" role="region" aria-label="Qué hace la IA" tabIndex={0}><table className="ai-usage-table ai-capabilities">
+  return <div className="table-card" role="region" aria-label="Qué hace la IA" tabIndex={0}><table className="members-table ai-usage-table ai-capabilities">
     <caption className="sr-only">Qué hace la IA</caption>
     <thead><tr><th scope="col">Capacidad</th><th scope="col">Dónde</th><th scope="col">Quién decide</th><th scope="col">Ejecuciones</th><th scope="col">Propuestas usadas</th></tr></thead>
     <tbody>{aiTasks.map(task => {

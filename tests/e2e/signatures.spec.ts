@@ -95,7 +95,8 @@ test("ST-151 ST-153: administration publishes a contract template, the educator 
   await context.close();
 
   await page.reload();
-  await page.goto("/contratos#contratos");
+  // CON-02: verifying a receipt is in Ajustes.
+  await page.goto("/contratos#ajustes");
   const verify = async (path: string) => {
     await page.getByLabel("Archivo de la constancia").setInputFiles(path);
     await page.getByRole("button", { name: "Verificar", exact: true }).click();
