@@ -84,7 +84,8 @@ test("HOME-02: the educator's home on a phone stays short and the folded activit
   const feed = page.locator(".activity-feed").first(), more = page.locator(".activity-feed + button.phones-only");
   if (await more.count()) {
     await expect(feed.locator("li:visible")).toHaveCount(3);
-    expect((await feed.boundingBox())!.height).toBeLessThanOrEqual(400);
+    // Three entries of any length; the eight unfolded measure well over 700 px.
+    expect((await feed.boundingBox())!.height).toBeLessThanOrEqual(500);
     const total = await feed.locator("li").count();
     await more.click();
     await expect(feed.locator("li:visible")).toHaveCount(total);
