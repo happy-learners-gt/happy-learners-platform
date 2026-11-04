@@ -58,6 +58,11 @@ describe("1.5.0 report builder on the built Worker", () => {
     const book = await read<{ gradebook: { learners: { id: string; name: string }[]; year: { name: string } } }>(await as(admin, `/sections/${section}/grades`));
     const learner = book.gradebook.learners[0], year = book.gradebook.year.name;
 
+    // DOC-02: the demonstration publishes a report card and a certificate for its primary program (0077); archived
+    // here, the section starts without templates.
+    const seeded = (await read<{ templates: { id: string; publishedVersion: number | null }[] }>(await as(admin, "/report-templates"))).templates;
+    expect(seeded.filter(item => item.id.startsWith("seed-template-")).map(item => [item.id, item.publishedVersion]).sort()).toEqual([["seed-template-boleta-primaria", 1], ["seed-template-constancia-primaria", 1]]);
+    for (const id of ["seed-template-boleta-primaria", "seed-template-constancia-primaria"]) expect((await as(admin, `/report-templates/${id}`, "DELETE")).status).toBe(200);
     // Before any template, the report card is the one it always was.
     const before = await pdf(await as(admin, `/sections/${section}/grades/report.pdf?learner=${learner.id}`));
     expect(before).toContain(inPdf("Boleta informativa de Happy Learners"));

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.23 — 2026-11-03
+
+- Documentos en la demostración (DOC-02): la organización de demostración trae una boleta y una constancia publicadas
+  para el programa «Primaria bilingüe», con el formato de siempre de cada documento (migración 0077). Así el módulo y
+  su diseñador se pueden ver y revisar; la boleta de Matemáticas 6.º usa esa plantilla.
+
 ## 1.6.22 — 2026-11-03
 
 - Roles y accesos (ACC-01): pestañas **Matriz**, **Grupos de seguridad**, **Coordinación** e **Historial**, con el número

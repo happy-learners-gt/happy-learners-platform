@@ -1723,7 +1723,7 @@ class PanelMinutesMigrationTests(unittest.TestCase):
                 db.execute("INSERT INTO generated_documents(id,organization_id,kind,template_id,template_version,subject_type,subject_id,sha256,created_by,created_at) VALUES ('d1','org-demo','report-card','t1',1,'section','g',?,?,'t')", ("a" * 64, user))
                 db.commit()
             db.executescript(path.read_text())
-        self.assertEqual(db.execute("SELECT id,kind,published_version FROM report_templates").fetchall(), [("t1", "report-card", 1)])
+        self.assertEqual(db.execute("SELECT id,kind,published_version FROM report_templates WHERE id NOT LIKE 'seed-%'").fetchall(), [("t1", "report-card", 1)])
         self.assertEqual(db.execute("SELECT id,template_id FROM generated_documents").fetchall(), [("d1", "t1")])
         user = db.execute("SELECT id FROM users LIMIT 1").fetchone()[0]
         db.execute("INSERT INTO report_templates(id,organization_id,kind,program_id,name,draft,updated_by,updated_at) VALUES ('t2','org-demo','panel-minutes',NULL,'Acta','{}',?,'t')", (user,))
@@ -1745,8 +1745,8 @@ class ProgressReportMigrationTests(unittest.TestCase):
                 db.execute("INSERT INTO ai_runs(id,organization_id,user_id,course_id,task,prompt_version,generator,model,input_chars,duration_ms,status,created_at) VALUES ('r0','org-demo',?,NULL,'write','v1','fixture','fixture',10,5,'ok','t')", (user,))
                 db.commit()
             db.executescript(path.read_text())
-        self.assertEqual(db.execute("SELECT id,kind,published_version FROM report_templates").fetchall(), [("t1", "panel-minutes", 1)])
-        self.assertEqual(db.execute("SELECT template_id,version FROM report_template_versions").fetchall(), [("t1", 1)])
+        self.assertEqual(db.execute("SELECT id,kind,published_version FROM report_templates WHERE id NOT LIKE 'seed-%'").fetchall(), [("t1", "panel-minutes", 1)])
+        self.assertEqual(db.execute("SELECT template_id,version FROM report_template_versions WHERE template_id NOT LIKE 'seed-%'").fetchall(), [("t1", 1)])
         self.assertEqual(db.execute("SELECT id,task FROM ai_runs").fetchall(), [("r0", "write")])
         self.assertEqual(db.execute("SELECT id,template_id FROM generated_documents").fetchall(), [("d1", "t1")])
         user = db.execute("SELECT id FROM users LIMIT 1").fetchone()[0]
@@ -1823,3 +1823,18 @@ class AiOutcomesMigrationTests(unittest.TestCase):
             db.execute("UPDATE ai_runs SET proposed_items=0, accepted_items=0 WHERE id='run-1'")
         db.execute("UPDATE ai_runs SET proposed_items=3, accepted_items=2, decided_at='t' WHERE id='run-1'")
         self.assertEqual(db.execute("SELECT proposed_items, accepted_items FROM ai_runs").fetchone(), (3, 2))
+
+
+class DemoReportTemplatesMigrationTests(unittest.TestCase):
+    def test_the_demo_has_a_published_report_card_and_certificate_for_its_primary_program(self):
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys=ON")
+        for path in sorted(pathlib.Path("database/migrations").glob("*.sql")):
+            db.executescript(path.read_text())
+        rows = db.execute("SELECT id,kind,program_id,published_version FROM report_templates ORDER BY kind").fetchall()
+        self.assertEqual(rows, [("seed-template-constancia-primaria", "certificate", "seed-program-primaria", 1), ("seed-template-boleta-primaria", "report-card", "seed-program-primaria", 1)])
+        self.assertEqual(db.execute("SELECT count(*) FROM report_template_versions WHERE content=(SELECT draft FROM report_templates WHERE id=template_id)").fetchone()[0], 2)
+        # Running it again adds nothing.
+        db.executescript(sorted(pathlib.Path("database/migrations").glob("0077_*.sql"))[0].read_text())
+        self.assertEqual(db.execute("SELECT count(*) FROM report_templates").fetchone()[0], 2)
+        self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
