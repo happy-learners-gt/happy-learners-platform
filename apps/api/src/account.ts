@@ -43,7 +43,7 @@ export function openSession(db: Database, tokenHash: string, userId: string, org
     db.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,id,created_at,last_used_at,method,device,country,verified) VALUES (?,?,?,?,?,?,?,?,?,?)")
       .bind(tokenHash, userId, now + (options.hours || 8) * 3600000, newSessionId(), now, now, method, client.device, client.country, options.verified ? 1 : 0),
     // ST-137: every sign-in joins the security log too.
-    securityEvent(db, { organizationId, type: "sign_in", outcome: "succeeded", actorId: userId, subjectId: userId, method, detail: options.detail, client }),
+    securityEvent(db, { organizationId, type: "sign_in", outcome: "succeeded", actorId: userId, subjectId: userId, method, detail: options.detail || (options.verified && method !== "passkey" ? "Con verificación en dos pasos" : undefined), client }),
     db.prepare("INSERT INTO sign_in_events(id,organization_id,user_id,outcome,method,device,country,occurred_at) VALUES (?,?,?,'succeeded',?,?,?,?)")
       .bind(`signin-${crypto.randomUUID()}`, organizationId, userId, method, client.device, client.country, msIso(now)),
     db.prepare("DELETE FROM sign_in_events WHERE organization_id=? AND occurred_at<?").bind(organizationId, msIso(now - signInRetentionDays * 86400000)),

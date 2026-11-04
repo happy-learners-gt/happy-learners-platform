@@ -7,6 +7,7 @@ import { startOnboarding } from "./onboarding";
 import { sendNotice } from "./account-notices";
 import { notify, type Notifier } from "./notify";
 import { securityEvent } from "./security-log";
+import type { PasswordCheck } from "./sign-in";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
 const roleName = (role: string) => role === "admin" ? "Administración" : "Educador";
@@ -58,13 +59,16 @@ export async function resetPassword(id: string, current: Member, db: Database, n
  * Their other sessions close; this one stays open. ST-158: the sign-in e-mail, when there is one, gets a mandatory
  * security notice (not for the first change of a temporary password: that one was given by administration).
  */
-export async function changePassword(input: unknown, current: Member, token: string, db: Database, notifier?: Notifier) {
+export async function changePassword(input: unknown, current: Member, token: string, db: Database, notifier?: Notifier, check?: PasswordCheck) {
   const value = input as Record<string, unknown> | null;
   if (!value || typeof value.currentPassword !== "string" || value.currentPassword.length > maxPasswordLength) return reply({ error: "Escribe tu contraseña actual." }, 400);
   const user = await db.prepare("SELECT password_salt AS salt,password_hash AS hash FROM users WHERE id=?").bind(current.id).first<{ salt: string; hash: string }>();
   if (!user || !(await verifyPassword(value.currentPassword, user.salt, user.hash))) return reply({ error: "La contraseña actual no es correcta." }, 400);
   if (!acceptablePassword(value.newPassword, current.username, value.currentPassword))
     return reply({ error: "Usa de 12 a 128 caracteres variados, distintos de tu usuario y de la contraseña actual." }, 400);
+  // ST-134: the organization's minimum length, the most common passwords and known breaches.
+  const rejected = check ? await check(value.newPassword, current.username, value.currentPassword) : null;
+  if (rejected) return reply({ error: rejected, code: "PASSWORD_REJECTED" }, 400);
   const { salt, hash } = await hashPassword(value.newPassword);
   await db.batch([
     db.prepare("UPDATE users SET password_salt=?,password_hash=?,must_change_password=0 WHERE id=?").bind(salt, hash, current.id),

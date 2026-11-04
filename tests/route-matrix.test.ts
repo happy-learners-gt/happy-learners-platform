@@ -48,6 +48,9 @@ const publicRoutes: [RegExp, string][] = [
   [/^\/api\/account\/email\/[a-z]_[a-f0-9]{64}$/, "confirmar un correo con el enlace recibido"],
   [/^\/api\/feeds\/calendar\//, "calendario suscrito con su enlace secreto"],
   [/^\/api\/public\//, "política de privacidad publicada"],
+  [/^\/api\/login\/(link|mfa|passkey|passkey\/options|providers|provider\/(google|microsoft|apple|sso))$|^\/api\/login\/link\/[a-z]_[a-f0-9]{64}$/, "otras formas de entrar: enlace por correo, segundo paso, passkey y proveedores (REL-007)"],
+  [/^\/api\/account\/recovery(\/[a-z]_[a-f0-9]{64})?$/, "recuperar la contraseña con el enlace recibido (ST-134)"],
+  [/^\/api\/auth\/callback\//, "respuesta del proveedor de identidad, validada por su state de un uso (ST-129, ST-138)"],
   [/^\/api\/(curriculum|levels|units)(\/[a-z0-9-]+)?$|^\/api\/resources\/[a-z0-9-]+$/, "rutas retiradas: responden 410 a cualquiera (HL-119)"],
 ];
 

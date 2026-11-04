@@ -1,12 +1,10 @@
 # Estado actual
 
-- **Fecha:** 03-nov-2026
+- **Fecha:** 04-nov-2026
 - **Fase:** 3–4 · Hitos M0, M1, M3 hechos; M2 casi (falta AUD-02); M4 en curso (HRS-01 y CAL-01 hechos); M5 en curso
   (PPL-01 hecho)
-- **Producción:** 1.6.36 (`2b35b24`, PR #128). SPR-004 cerró con la release v1.6.20 (`95f2ac3`, PR #123). Del 02 al 03-nov: #103–#128 (1.6.0–1.6.36), cada uno con todos los checks
-  del PR, `verify`, `deploy` y `critical-flows` verdes en `main` (salvo #108, ver incidente). Escaneo completo de
-  seguridad en `main` el 03-nov: verde.
-- **Rama:** `feat/HL-15-rel007-registro-seguridad` (1.7.0, REL-007 primer incremento).
+- **Producción:** 1.7.0 (`b55e057`, PR #129: registro de seguridad sellado, auditoría, migración 0078) el 04-nov, con todos los checks del PR, `verify`, `deploy` y `critical-flows` verdes. Antes, #103–#128 (1.6.0–1.6.36).
+- **Rama:** `feat/HL-15-rel007-identidad` (1.7.1, el resto de REL-007).
   **Sprints (ops):** SPR-003 cerrado 27-oct y aceptado; SPR-004 aceptado en lo entregado y cierra el 10-nov (DEC-057) con todo su objetivo de seguridad: 10 historias de REL-007 más ST-184 a ST-189 (DEC-058, ops #144).
 - **Últimas verificaciones:** `./scripts/verify` verde (77 archivos, 523 pruebas); E2E afectadas con build limpia en
   escritorio y móvil en cada PR; CI verde en cada PR.

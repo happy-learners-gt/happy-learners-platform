@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { api, message } from "../api";
 import { useNavigation } from "../navigation";
@@ -6,23 +6,47 @@ import { Modal } from "../ui/feedback";
 import { Icon } from "../ui/icons";
 import type { Member } from "@happy-learners/contracts";
 import { acceptablePassword, groupCodePattern, maxPasswordLength, minPasswordLength } from "@happy-learners/domain";
+import { LinkRequest } from "./sign-in-links";
+import { MfaStep, type SignInAnswer } from "./mfa";
+import { passkeysAvailable, signInWithPasskey } from "./passkeys";
+import { ProviderButtons, providerOutcome } from "./providers";
 
 function useLogin(onSuccess: () => Promise<void>, initial = "educador-demo") {
   const [username, setUsername] = useState(initial), [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  // ST-133: with a second factor, the password opens a challenge instead of the session.
+  const [challenge, setChallenge] = useState<string | null>(null);
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
-    try { await api("/login", "POST", { username, password }); setPassword(""); await onSuccess(); }
+    try { const answer = await api<SignInAnswer>("/login", "POST", { username, password }); setPassword(""); if (answer.challenge) setChallenge(answer.challenge); else await onSuccess(); }
     catch (cause) { setError(message(cause)); }
     finally { setBusy(false); }
   }
-  return { username, setUsername, password, setPassword, busy, error, submit };
+  // ST-132: a passkey of the account typed, instead of the password.
+  async function passkey() {
+    if (!username.trim()) { setError("Escribe tu usuario o tu correo para usar tu passkey."); return; }
+    setBusy(true); setError("");
+    try { const answer = await signInWithPasskey(username.trim()); if (answer.challenge) setChallenge(answer.challenge); else await onSuccess(); }
+    catch (cause) { setError(message(cause)); }
+    finally { setBusy(false); }
+  }
+  return { username, setUsername, password, setPassword, busy, error, setError, submit, challenge, setChallenge, passkey };
 }
 
 export function Login({ onSignedIn }: { onSignedIn: () => Promise<void> }) {
   const form = useLogin(onSignedIn);
   const { navigate } = useNavigation();
   const [code, setCode] = useState(""), [codeError, setCodeError] = useState(""), [busy, setBusy] = useState(false);
+  // ST-130, ST-134: a link by e-mail to sign in or to choose a new password, instead of the form.
+  const [panel, setPanel] = useState<"link" | "recovery" | null>(null);
+  // ST-129, ST-138: back from a provider, with its result or the second step it asks for.
+  const { url } = useNavigation();
+  useEffect(() => {
+    const challenge = url.searchParams.get("mfa"), outcome = url.searchParams.get("acceso");
+    if (challenge && /^[a-z]_[a-f0-9]{64}$/.test(challenge)) form.setChallenge(challenge);
+    if (outcome) form.setError(providerOutcome(outcome));
+    if (challenge || outcome) navigate("/", true);
+  }, []);
   return <div className="login-page">
     <a className="skip-link" href="#main">Saltar al contenido</a>
     <main id="main" className="login-main">
@@ -30,12 +54,21 @@ export function Login({ onSignedIn }: { onSignedIn: () => Promise<void> }) {
       <section className="login-card" aria-labelledby="login-title">
         <h1 id="login-title">Iniciar sesión</h1>
         <p>Para educadores y administración.</p>
+        {form.challenge ? <MfaStep challenge={form.challenge} onDone={onSignedIn} onCancel={() => form.setChallenge(null)}/>
+          : panel ? <LinkRequest key={panel} kind={panel} onClose={() => setPanel(null)}/> : <>
         {form.error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{form.error}</p>}
         <form onSubmit={form.submit}>
           <div className="field"><label htmlFor="username">Usuario</label><input id="username" autoComplete="username" maxLength={64} value={form.username} onChange={event => form.setUsername(event.target.value)} required/></div>
           <div className="field"><label htmlFor="password">Contraseña</label><input id="password" type="password" autoComplete="current-password" maxLength={128} value={form.password} onChange={event => form.setPassword(event.target.value)} required/></div>
           <button className="button primary full" disabled={form.busy}>{form.busy ? "Entrando…" : "Entrar"}</button>
         </form>
+        {passkeysAvailable() && <button type="button" className="button secondary full" disabled={form.busy} onClick={() => void form.passkey()}><Icon name="shield" size={16}/>Entrar con una passkey</button>}
+        <ProviderButtons identifier={form.username} onError={form.setError}/>
+        <div className="login-alternatives">
+          <button type="button" className="link-button" onClick={() => setPanel("recovery")}>¿Olvidaste tu contraseña?</button>
+          <button type="button" className="link-button" onClick={() => setPanel("link")}>Entrar con un enlace por correo</button>
+        </div>
+        </>}
         <details className="demo-help"><summary>Probar con cuentas de demostración</summary>
           <p><code>lucia.herrera</code> imparte Matemáticas 3.º; <code>educador-demo</code> prepara Exploradores. <code>marta.ruiz</code> coordina la organización.</p>
           <p>Como estudiante, entra con el código de sección <code>DG-MATE-3A</code>.</p>
@@ -68,12 +101,13 @@ export function SessionExpiredDialog({ username, onRestored, onLeave }: { userna
   const form = useLogin(onRestored, username);
   return <Modal title="Tu sesión terminó" onClose={onLeave}>
     <p>Por seguridad, las sesiones duran hasta ocho horas. Vuelve a entrar para continuar; lo que tienes en pantalla se conserva.</p>
+    {form.challenge ? <MfaStep challenge={form.challenge} onDone={onRestored} onCancel={() => form.setChallenge(null)}/> : <>
     {form.error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{form.error}</p>}
     <form onSubmit={form.submit} className="stack">
       <div className="field"><label htmlFor="renew-username">Usuario</label><input id="renew-username" autoComplete="username" value={form.username} onChange={event => form.setUsername(event.target.value)} required/></div>
       <div className="field"><label htmlFor="renew-password">Contraseña</label><input id="renew-password" type="password" autoComplete="current-password" data-autofocus value={form.password} onChange={event => form.setPassword(event.target.value)} required/></div>
       <div className="modal-actions"><button type="button" className="button ghost" onClick={onLeave}>Salir</button><button className="button primary" disabled={form.busy}>{form.busy ? "Entrando…" : "Continuar"}</button></div>
-    </form>
+    </form></>}
   </Modal>;
 }
 
