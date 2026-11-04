@@ -173,5 +173,5 @@ Incrementos de M8, en orden (brecha a la meta × uso):
 | ACC-01 | Roles y accesos: pestañas (Matriz, Grupos de seguridad, Coordinación, Historial); la matriz agrupada y plegable por área | 4.2. **Hecho en 1.6.22:** pestañas y filtro por área; 3.40 → 4.00 (4 4 4 4 4 4 4 4: falta explicar cada alcance en lenguaje simple) |
 | DOC-02 | Documentos: plantillas de demostración (boleta, constancia) para que el módulo se pueda ver y revisar; luego auditar el diseñador | 4.0. **Hecho en 1.6.23:** boleta y constancia publicadas para «Primaria bilingüe» (0077); 3.40 → 3.85 (4 4 4 3 4 4 4 4). El diseñador deja publicar sin cambios, su vista previa propone una sección de otro programa y muestra los campos como `{{clave}}`: DOC-03 |
 | NOT-01 | Notificaciones: explicar qué es obligatorio y por qué el botón espera un cambio; aviso de correo sin configurar como `message-bar` con el siguiente paso | 4.0. **Hecho en 1.6.24:** 3.60 → 4.00 (4 4 4 4 4 4 4 4) |
-| LIB-01 | Biblioteca: leyenda de «general» y «del curso», y «Usado en N lecciones» enlazado | 4.0 |
+| LIB-01 | Biblioteca: leyenda de «general» y «del curso», y «Usado en N lecciones» enlazado | 4.0. **Hecho en parte en 1.6.25:** «General · solo lectura» y leyenda; 3.70 → 3.85. Los usos enlazados quedan en LIB-02 |
 | TEAM-01 | Equipo: tarjetas de alto uniforme y los cursos que imparte cada persona | 4.0 |
