@@ -12,6 +12,8 @@
   misma hora queda alineada entre días; en el teléfono siguen las columnas por día.
 - Agenda (AGE-02): el panel dice «Hoy» solo si la próxima clase es hoy; si no, «Próxima clase», sin «Iniciar». En el
   teléfono las vistas van en su propia fila con botones más grandes y la fecha ya no se corta.
+- Inteligencia artificial (AIC-02): la tarjeta del presupuesto muestra el porcentaje usado y el presupuesto en su
+  etiqueta, en lugar de una cifra partida en tres líneas.
 - Cursos (CUR-03): la lista trae las unidades activas de cada curso en una sola consulta y ya no pide cada curso por
   separado (eran 25 peticiones más en la demostración, que cuentan en la cuota de Cloudflare). Biblioteca y Buscar
   piden los materiales de todos los cursos en una sola petición (PERF-05).
