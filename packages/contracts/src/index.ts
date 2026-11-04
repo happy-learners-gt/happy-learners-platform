@@ -220,6 +220,8 @@ export interface Course extends AcademicProfile {
   team?: CourseMember[];
   /** Present on the course detail. */
   access?: CourseAccess;
+  /** CUR-03: active units, present on the list. */
+  unitCount?: number;
 }
 export interface LearningUnit {
   id: string; courseId: string; name: string; objective: string; position: number;

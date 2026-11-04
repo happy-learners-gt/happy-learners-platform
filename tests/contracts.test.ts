@@ -331,3 +331,23 @@ describe("DEC-046 contracts on the built Worker", () => {
     expect((await as(lucia, "/contracts/verify", "POST", { contractId: mine.id })).status).toBe(403);
   });
 });
+
+describe("CON-03 how urgent a contract is", () => {
+  it("says how long a contract has waited for the signature, a warning from 7 days", async () => {
+    const { contractUrgency } = await import("../packages/domain/src/index");
+    expect(contractUrgency({ phase: "awaiting-signature", sentAt: "2026-11-04T15:00:00Z", endDate: null }, "2026-11-04")).toEqual({ text: "Enviado hoy", warning: false });
+    expect(contractUrgency({ phase: "awaiting-signature", sentAt: "2026-11-03T15:00:00Z", endDate: null }, "2026-11-04")).toEqual({ text: "Esperando desde ayer", warning: false });
+    expect(contractUrgency({ phase: "awaiting-signature", sentAt: "2026-10-01T15:00:00Z", endDate: null }, "2026-11-04")).toEqual({ text: "Esperando hace 34 días", warning: true });
+    expect(contractUrgency({ phase: "awaiting-signature", sentAt: null, endDate: null }, "2026-11-04")).toBeNull();
+  });
+  it("says in how many days a contract in force ends, within 30; not after it ended or further away", async () => {
+    const { contractUrgency, endsWithin30 } = await import("../packages/domain/src/index");
+    expect(contractUrgency({ phase: "in-force", sentAt: null, endDate: "2026-11-14" }, "2026-11-04")).toEqual({ text: "Termina en 10 días", warning: true });
+    expect(contractUrgency({ phase: "in-force", sentAt: null, endDate: "2026-11-05" }, "2026-11-04")?.text).toBe("Termina mañana");
+    expect(contractUrgency({ phase: "ending", sentAt: null, endDate: "2026-11-04" }, "2026-11-04")?.text).toBe("Termina hoy");
+    expect(contractUrgency({ phase: "in-force", sentAt: null, endDate: "2026-12-31" }, "2026-11-04")).toBeNull();
+    expect(contractUrgency({ phase: "expired", sentAt: null, endDate: "2026-11-01" }, "2026-11-04")).toBeNull();
+    expect(endsWithin30({ phase: "in-force", sentAt: null, endDate: "2026-11-14" }, "2026-11-04")).toBe(true);
+    expect(endsWithin30({ phase: "awaiting-signature", sentAt: "2026-10-01T00:00:00Z", endDate: null }, "2026-11-04")).toBe(false);
+  });
+});

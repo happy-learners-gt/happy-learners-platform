@@ -1527,7 +1527,10 @@ ul.cell-list li svg { display: inline-block; vertical-align: -2px; margin-right:
   .agenda-nav { gap: 2px; }
   .agenda-nav .button { min-height: 32px; padding: 0 var(--space-2); }
   .agenda-bar > .menu .icon-button { width: 32px; height: 32px; }
-  .agenda-views button { min-height: 28px; padding: 0 5px; font-size: var(--text-xs); }
+  /* AGE-02: the views take their own row with full-size targets, so the date is never cut. */
+  .agenda-bar { grid-template-columns: minmax(0, 1fr) auto; }
+  .agenda-views { grid-column: 1 / -1; grid-row: 2; display: flex; }
+  .agenda-views button { flex: 1 1 0; min-height: 36px; padding: 0 var(--space-2); font-size: var(--text-sm); }
   /* «Ver» and «Mostrar» take a row each; only the chips scroll sideways, so the first ones are always in view. */
   .agenda-tools { flex-wrap: wrap; gap: var(--space-2); }
   .agenda-filters { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; }
@@ -2317,3 +2320,39 @@ section.panel[id^="profile-"] { scroll-margin-top: calc(var(--topbar-h) + var(--
 .segmented > button { min-height: 30px; padding: 0 12px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-ink-soft); font-size: var(--text-sm); font-weight: var(--weight-medium); cursor: pointer; }
 .segmented > button[aria-pressed="true"] { background: var(--color-surface); color: var(--color-ink); box-shadow: var(--shadow-sm); }
 .segmented > button:disabled { opacity: .5; cursor: not-allowed; }
+.hours-pending { align-items: center; flex-wrap: wrap; }
+.hours-pending > span { flex: 1 1 18rem; }
+.identity-table th .link-button { text-align: start; }
+.course-attention { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; margin: var(--space-1) 0 0; padding: 0; }
+/* IDA-02: with eight sections, the hub's menu on narrow screens is one scrollable row, not a grid of buttons; the
+   desktop menu is narrower so the tables keep their width beside the app's own sidebar. */
+.identity-hub { grid-template-columns: 13rem minmax(0, 1fr); }
+@media (max-width: 1100px) {
+  .identity-hub { grid-template-columns: minmax(0, 1fr); }
+  .identity-hub .account-nav { position: static; }
+  .identity-hub .account-nav-title { display: none; }
+  .identity-hub .account-nav ul { display: flex; gap: var(--space-2); overflow-x: auto; padding-block-end: var(--space-1); scrollbar-width: thin; }
+  .identity-hub .account-nav-link { white-space: nowrap; border: 1px solid var(--color-border); background: var(--color-surface); min-height: 40px; }
+}
+.identity-table .badge { white-space: normal; }
+/* EDU-01: what a person needs from administration, under their name, each a link to where it is done. */
+.person-needs { display: flex; flex-wrap: wrap; gap: 4px; margin-block-start: 4px; }
+.person-needs .badge { text-decoration: none; white-space: normal; }
+.person-needs .badge:hover { text-decoration: underline; }
+/* CON-03: how long a contract has waited, or how soon it ends, under its phase. */
+.contract-urgency { display: block; margin-block-start: 2px; color: var(--color-muted); }
+.contract-urgency.is-warning { color: var(--color-warning); font-weight: var(--weight-medium); }
+/* SCH-03: the week aligned by start time on wide screens; the day columns stay for phones and narrow windows. */
+.timetable-grid { display: none; }
+.timetable-grid table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+.timetable-grid th, .timetable-grid td { padding: var(--space-2); border-block-end: 1px solid var(--color-border); vertical-align: top; text-align: start; }
+.timetable-grid thead th { font-size: var(--text-sm); }
+.timetable-grid tbody th { inline-size: 4.5rem; font-variant-numeric: tabular-nums; color: var(--color-primary-ink); font-size: var(--text-sm); }
+.timetable-grid col.timetable-hour { inline-size: 4.5rem; }
+.timetable-cell { display: grid; gap: 0; padding: 4px var(--space-2); margin-block-end: 4px; border-radius: var(--radius-sm); background: var(--color-primary-soft); line-height: 1.3; }
+.timetable-grid th, .timetable-grid td { padding-block: 6px; }
+.timetable-cell strong { font-size: var(--text-sm); }
+@media (min-width: 1280px) {
+  .timetable-grid { display: block; }
+  .timetable-grid + .timetable-week { display: none; }
+}

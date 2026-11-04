@@ -123,7 +123,8 @@ export function AiUsagePage() {
       { label: "Ejecuciones", value: number(summary.total.runs), icon: "sparkles", hue: "violet" },
       { label: "Propuestas usadas", value: acceptance(summary.total), icon: "check", hue: "teal" },
       { label: "Costo estimado", value: usd(summary.total.cost), icon: "spark", hue: "green" },
-      { label: "Presupuesto de este mes", value: `${usd(usage.budget.spent)} de ${usd(usage.budget.budget)}`, icon: "clock", hue: "amber" },
+      // AIC-02: one number per tile; the budget it is measured against goes in the label.
+      { label: `del presupuesto de ${usd(usage.budget.budget)} este mes`, value: `${Math.round(usage.budget.spent / Math.max(usage.budget.budget, 0.000001) * 100)} %`, icon: "clock", hue: "amber" },
       { label: "Con error", value: number(summary.total.errors), icon: "alert", hue: "coral" },
     ]}/>
     <p className="muted">{change === null ? `En ${monthName(usage.previousMonth)} no hubo ejecuciones.` : `${change >= 0 ? `${change} % más` : `${-change} % menos`} ejecuciones que en ${monthName(usage.previousMonth)} (${number(previous.runs)}, ${usd(previous.cost)}).`}</p>

@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.7.5 — 2026-11-04
+
+- Educadores (EDU-01): bajo el nombre de cada persona se ve lo que necesita de administración (perfil por revisar,
+  credencial por verificar, documento por vencer, pidió cerrar su cuenta), cada cosa un enlace a donde se resuelve.
+- Revisión de perfiles (PRF-01): primero los perfiles y las credenciales por revisar; el ajuste «Los perfiles requieren
+  aprobación» queda al final.
+- Contratos (CON-03): bajo la fase de cada contrato, cuánto lleva esperando la firma (aviso desde 7 días) o cuánto falta
+  para que termine (30 días o menos), y el filtro «Terminan en 30 días».
+- Horarios (SCH-03): en pantallas anchas, el horario vigente es una cuadrícula con una fila por hora de inicio, así la
+  misma hora queda alineada entre días; en el teléfono siguen las columnas por día.
+- Agenda (AGE-02): el panel dice «Hoy» solo si la próxima clase es hoy; si no, «Próxima clase», sin «Iniciar». En el
+  teléfono las vistas van en su propia fila con botones más grandes y la fecha ya no se corta.
+- Inteligencia artificial (AIC-02): la tarjeta del presupuesto muestra el porcentaje usado y el presupuesto en su
+  etiqueta, en lugar de una cifra partida en tres líneas.
+- Configuración académica (ACA-03): el número de cursos de cada programa abre Cursos filtrado por ese programa, y lo
+  que el programa fija se dice en palabras («Sus cursos no pueden cambiar: …»).
+- Cursos (CUR-03): la lista trae las unidades activas de cada curso en una sola consulta y ya no pide cada curso por
+  separado (eran 25 peticiones más en la demostración, que cuentan en la cuota de Cloudflare). Biblioteca y Buscar
+  piden los materiales de todos los cursos en una sola petición (PERF-05).
+
+## 1.7.4 — 2026-11-04
+
+Quinta ola del programa de mejora (AUD-05, `docs/transformacion/auditoria.md` §10).
+
+- Horas efectivas (HRS-05): si hay clases por revisar, un aviso arriba lo dice y «Revisarlas» abre la bandeja; en el
+  teléfono se muestran 8 clases por paso (la página pasó de 9 089 a 4 646 px).
+- Cursos (CUR-02): ordenar por recientes, por nombre o por «Necesitan atención», con las razones de Inicio en cada curso.
+- Identidad y acceso (IDA-02): cuatro métricas en el resumen, nombres alineados en las tablas, el menú en una fila
+  desplazable en pantallas angostas y las insignias completas.
+
 ## 1.7.3 — 2026-11-04
 
 - Controles operativos (ST-189, SEC-04): nada llega a producción sin que su pull request haya pasado los escáneres de

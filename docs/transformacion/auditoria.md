@@ -190,3 +190,22 @@ Sobre la rama de 1.6.26 con los datos de demostración, administración, escrito
 | Inteligencia artificial | 3.85 | 1 600 / 2 136 | La tabla de capacidades es ancha en el teléfono | AIC-01: una tarjeta por capacidad en teléfonos. **Hecho en 1.6.32:** 4.05 |
 | Configuración académica | 3.55 | 1 192 / 2 016 | Paquetes y estándares sin explicar qué hacer con ellos | ACA-02: qué es cada uno y cuándo se usa, con un ejemplo. **Hecho en 1.6.33:** 3.90 |
 | Organización | 3.55 | 943 / 1 190 | Claro y corto; lo que falta para su meta es la identidad (logotipo y marca) | ORG-01: espera la marca (AP-06) |
+
+## 10. Quinta pasada: Identidad y acceso y los módulos aún bajo su meta (AUD-05, 04-nov-2026)
+
+Capturas de la primera pantalla y altura total, escritorio (1365 × 900) y teléfono (390 × 844), con la demostración
+tras 1.7.3. Puntajes con los mismos ocho criterios; los de este paso son del responsable técnico, sin prueba con
+usuarios todavía.
+
+| Módulo | Antes | Altura escritorio / teléfono | Hallazgo | Incremento |
+| --- | --- | --- | --- | --- |
+| Horas efectivas | 3.80 | 3 092 / **9 089** | La primera pantalla dice «0 min» junto a «57 por revisar»; lo que hay que hacer (revisar) no está primero, y en el teléfono cada clase es una tarjeta de ~270 px, 25 por paso | HRS-05: aviso arriba con «Revisarlas» que filtra la bandeja; 8 clases por paso en el teléfono. **Hecho en 1.7.4:** teléfono 9 089 → 4 646 px; 4.00 |
+| Cursos | 4.20 | 3 903 / 3 068 | Sin orden ni «necesita atención» (pendiente de AUD-03) | CUR-02: ordenar por recientes, nombre o «Necesitan atención» con las razones de Inicio en cada curso. **Hecho en 1.7.4:** 4.40 |
+| Identidad y acceso (antes Roles y accesos 4.00) | — | 1 092 / 2 123 | Seis métricas que se parten 5 + 1; nombres centrados al partirse; en el teléfono el menú de ocho secciones ocupa un tercio de la primera pantalla y una insignia larga se corta | IDA-02: cuatro métricas, nombres alineados, menú en una fila desplazable bajo 1 100 px, insignias que se parten. **Hecho en 1.7.4:** 4.20 (meta 4.2) |
+| Educadores | 4.00 | 1 220 / 2 775 | Siete pestañas; lo que cada persona necesita de administración (perfil, credencial, documento por vencer, cierre de cuenta) solo se ve entrando a cada una | EDU-01: bajo el nombre de cada persona, lo que necesita, cada cosa un enlace a donde se resuelve. **Hecho en 1.7.5:** 4.20 |
+| Revisión de perfiles | 3.65 | 900 / 1 110 | El ajuste «requieren aprobación» va antes del trabajo; revisar desde la fila de la persona | PRF-01: primero perfiles y credenciales por revisar, el ajuste al final; la fila de Educadores lleva a la revisión (EDU-01). **Hecho en 1.7.5:** 4.00 |
+| Contratos y políticas | 3.85 | 1 056 / 2 564 | La fase no dice cuánto lleva esperando la firma un contrato (uno desde el 1 de octubre) ni cuánto falta para que termine uno vigente con fecha de fin (el 14 de noviembre); «Por terminar» solo cubría terminaciones anticipadas | CON-03: bajo la fase, «Esperando hace N días» (aviso desde 7) o «Termina en N días» (30 o menos), y el filtro «Terminan en 30 días». **Hecho en 1.7.5:** 4.20 |
+| Horarios | 4.00 | 1 223 / 2 383 | Cada día es una lista aparte: la misma hora no queda alineada entre días y comparar la semana cuesta | SCH-03: desde 1 280 px una cuadrícula con una fila por hora de inicio y una columna por día (cada clase dice hasta qué hora y con quién); más angosto, las columnas por día. **Hecho en 1.7.5:** escritorio 1 716 px; 4.20 |
+| Agenda | 4.00 | 900 / 1 227 | El panel dice «Hoy» aunque la próxima clase sea mañana, y ofrece «Iniciar» para ella; en el teléfono las vistas (Día, Semana, Mes, Año) son botones de 28 px que cortan la fecha | AGE-02: «Hoy» solo si la clase es hoy (si no, «Próxima clase» y sin «Iniciar»); en el teléfono las vistas van en su propia fila con botones de 36 px. **Hecho en 1.7.5:** 4.20 |
+| Inteligencia artificial | 4.05 | 1 667 / 3 025 | La tarjeta del presupuesto («0,00 US$ de 20,00 US$») se parte en tres líneas con letra grande | AIC-02: el porcentaje usado como número y el presupuesto en la etiqueta. **Hecho en 1.7.5:** 4.15 (falta: la tabla de capacidades sigue larga en el teléfono, 3 025 px) |
+| Configuración académica | 3.90 | 1 192 / 2 016 | «1 curso» de cada programa no lleva a sus cursos; «Fija: nombre de las partes del curso» no se entiende | ACA-03: el conteo abre Cursos filtrado por el programa; «Sus cursos no pueden cambiar: …». **Hecho en 1.7.5:** 4.10 (falta: el diálogo de programa es largo) |

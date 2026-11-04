@@ -44,7 +44,8 @@ test("a lesson shows its review score, explains each check and leads to the acti
   await expect(page.locator(".stat-tile")).toHaveCount(5);
   await expect(page.locator(".stat-tile", { hasText: "Propuestas usadas" })).toBeVisible();
   // AIG-6: the month's budget, from the deployment's amounts.
-  await expect(page.locator(".stat-tile", { hasText: "Presupuesto de este mes" })).toContainText("de");
+  // AIC-02: the share spent as the number, the budget in the label.
+  await expect(page.locator(".stat-tile", { hasText: /del presupuesto de .* este mes/ })).toContainText("%");
   // AIG-5: every capability, with where it appears and who decides, also those not used this month.
   const capabilities = page.getByRole("region", { name: "Qué hace la IA" });
   await expect(capabilities.locator("tbody tr")).toHaveCount(7);

@@ -208,3 +208,21 @@ const attentionRank: Record<ContractPhase, number> = {
 export function contractsByAttention<T extends Pick<Contract, "phase" | "startDate" | "partyName">>(contracts: T[]): T[] {
   return [...contracts].sort((a, b) => attentionRank[a.phase] - attentionRank[b.phase] || b.startDate.localeCompare(a.startDate) || a.partyName.localeCompare(b.partyName, "es"));
 }
+
+/**
+ * CON-03 (auditoría §10): how urgent a contract is, in words, under its phase. A contract waiting for the signature
+ * says for how long (a warning from 7 days); one in force that ends on its own within 30 days says in how many.
+ */
+export function contractUrgency(contract: Pick<Contract, "phase" | "sentAt" | "endDate">, today: string): { text: string; warning: boolean } | null {
+  const days = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000);
+  if (contract.phase === "awaiting-signature" && contract.sentAt) {
+    const waited = days(contract.sentAt.slice(0, 10), today);
+    return { text: waited <= 0 ? "Enviado hoy" : waited === 1 ? "Esperando desde ayer" : `Esperando hace ${waited} días`, warning: waited >= 7 };
+  }
+  if ((contract.phase === "in-force" || contract.phase === "ending") && contract.endDate) {
+    const left = days(today, contract.endDate);
+    if (left >= 0 && left <= 30) return { text: left === 0 ? "Termina hoy" : left === 1 ? "Termina mañana" : `Termina en ${left} días`, warning: true };
+  }
+  return null;
+}
+export const endsWithin30 = (contract: Pick<Contract, "phase" | "sentAt" | "endDate">, today: string) => (contract.phase === "in-force" || contract.phase === "ending") && !!contractUrgency(contract, today);

@@ -80,7 +80,8 @@ test("administration generates a timetable with rules, applies it to the section
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Horarios");
     // SCH-01: the page opens on the timetable in force (the seed has sections with schedules).
     const current = page.locator("section").filter({ has: page.getByRole("heading", { name: "Horario vigente" }) });
-    await expect(current.getByRole("region", { name: "lunes" })).toBeVisible();
+    // SCH-03: from 1 280 px the week is one grid aligned by start time; narrower, a column per day.
+    await expect(current.getByRole("region", { name: /^(lunes|Horario semanal por hora)$/ }).filter({ visible: true }).first()).toBeVisible();
     await expect(current.getByLabel("Ver")).toHaveValue("");
     // SCH-02: generating is a tab of its own.
     await page.getByRole("navigation", { name: "Secciones de horarios" }).getByRole("link", { name: "Generar", exact: true }).click();

@@ -26,7 +26,7 @@ import { ExpiringDocuments, PersonDetail } from "./profile";
 import { ProfileReviews } from "./professional";
 import { CoordinationBadge, CoordinationDialog } from "./access";
 import { OnboardingBadge, OnboardingFilter, useOnboardingPeople } from "./onboarding";
-import type { OnboardingPersonStatus, ProfileReviewQueue } from "@happy-learners/contracts";
+import type { ClosureRequest, ExpiringDocuments as ExpiringOverview, OnboardingPersonStatus, ProfileReviewQueue } from "@happy-learners/contracts";
 import { currentRegional } from "../regional";
 import { localeLabel } from "./preferences";
 
@@ -133,18 +133,28 @@ function MemberList() {
   // PPL-01: the name and «Perfil y expediente» open the profile; the incorporation column and tab open the incorporation.
   const [detail, setDetail] = useState<{ id: string; name: string; tab?: "incorporation" } | null>(null);
   const [coordinating, setCoordinating] = useState<MemberStats | null>(null);
+  const [needs, setNeeds] = useState<Map<string, { label: string; href: string }[]>>(new Map());
   const [contracts, setContracts] = useState<Contract[]>([]), [pendingProfiles, setPendingProfiles] = useState<ReadonlySet<string>>(new Set()), [toReview, setToReview] = useState(0);
   const onboarding = useOnboardingPeople(revision), [onboardingFilter, setOnboardingFilter] = useState<OnboardingPersonStatus | "">("");
   const tab = educatorTabOf(url.hash);
   const load = async () => {
     setError("");
     try {
-      const [people, listed, reviews] = await Promise.all([
+      const [people, listed, reviews, closures, expiring] = await Promise.all([
         api<{ members: MemberStats[] }>("/members"),
         api<{ contracts: Contract[] }>("/contracts").catch(() => ({ contracts: [] as Contract[] })),
         // PPL-01: who has a profile waiting for approval, for each person's incorporation.
         api<ProfileReviewQueue>("/profile-reviews").catch(() => null),
+        // EDU-01: what each person needs from administration, in their row.
+        api<{ closures: ClosureRequest[] }>("/closures").catch(() => ({ closures: [] as ClosureRequest[] })),
+        api<ExpiringOverview>("/expiring-documents").catch(() => ({ today: "", people: [] }) as ExpiringOverview),
       ]);
+      setNeeds(new Map(people.members.map(person => [person.id, [
+        ...(reviews?.profiles.some(item => item.userId === person.id) ? [{ label: "Perfil por revisar", href: "/educadores#perfiles" }] : []),
+        ...(reviews?.credentials.some(item => item.userId === person.id) ? [{ label: "Credencial por verificar", href: "/educadores#perfiles" }] : []),
+        ...(expiring.people.some(item => item.id === person.id) ? [{ label: "Documento por vencer", href: "/educadores#documentos" }] : []),
+        ...(closures.closures.some(item => item.userId === person.id && (item.status === "requested" || item.status === "in_progress")) ? [{ label: "Pidió cerrar su cuenta", href: "/educadores#cierres" }] : []),
+      ]])));
       setMembers(people.members); setContracts(listed.contracts); setPendingProfiles(new Set(reviews?.profiles.map(item => item.userId) || []));
       setToReview((reviews?.profiles.length || 0) + (reviews?.credentials.length || 0)); setRevision(value => value + 1);
     } catch (cause) { setError(message(cause)); }
@@ -194,6 +204,7 @@ function MemberList() {
             <th scope="row" className="cell-person"><span className="person-cell"><Avatar name={name} size={30}/><span>
               <span className="person-name-line"><button type="button" className="link-button" onClick={() => setDetail({ id: member.id, name })}>{name}</button>{owner && <StatusBadge>Cuenta principal</StatusBadge>}</span>
               <span className="person-username muted small">@{member.username}{member.email ? ` · ${member.email}` : ""}</span>
+              {(needs.get(member.id) || []).length > 0 && <span className="person-needs">{needs.get(member.id)!.map(item => <Link key={item.label} href={item.href} className="badge warning">{item.label}</Link>)}</span>}
             </span></span></th>
             <td>{member.role === "admin" ? "Administración" : "Educador"}{member.coordination && <><br/><CoordinationBadge scope={member.coordination}/></>}</td>
             <td className="cell-load">{load.summary ? <><span>{load.summary}</span>{load.detail && <span className="muted small">{load.detail}</span>}</> : <span className="muted">—</span>}</td>
@@ -346,9 +357,10 @@ function ProgramEditor() {
           <strong>{program.name}</strong>{program.status === "archived" && <StatusBadge>Archivado</StatusBadge>}
           {program.description && <p className="muted small">{program.description}</p>}
           <ul className="course-facets"><li>{labelOf.type(program.educationType)}</li>{program.level !== "unspecified" && <li>{labelOf.level(program.level)}</li>}<li>{labelOf.modality(program.modality)}</li><li>{labelOf.pacing(program.pacing)}</li>{program.area && <li>{areaLabel(program.area)}</li>}</ul>
-          {program.locked.length > 0 && <p className="muted small">Fija: {program.locked.map(key => settingDefinitions.find(item => item.key === key)!.label.toLowerCase()).join(", ")}.</p>}
+          {program.locked.length > 0 && <p className="muted small">Sus cursos no pueden cambiar: {program.locked.map(key => settingDefinitions.find(item => item.key === key)!.label.toLowerCase()).join(", ")}.</p>}
         </div>
-        <span className="muted small">{plural(program.courseCount || 0, "curso", "cursos")}</span>
+        {/* ACA-03: the count opens those courses. */}
+        {program.courseCount ? <Link href={`/cursos?programa=${program.id}`} className="small">{plural(program.courseCount, "curso", "cursos")}</Link> : <span className="muted small">Sin cursos</span>}
         <Menu label={`Acciones de ${program.name}`} items={[
           { label: "Editar", icon: "edit", onSelect: () => setEditing({ item: program }) },
           { label: "Requisitos entre cursos", icon: "list", onSelect: () => navigate(`/configuracion-academica?ruta=${program.id}`) },
