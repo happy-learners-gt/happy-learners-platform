@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.6.26 — 2026-11-03
+
+- Equipo (TEAM-01): cada persona muestra los cursos que imparte («Imparte: …»), solo si su sección «Enseñanza» es
+  visible para el equipo; quien la tiene privada no muestra sus cursos.
+
+## 1.6.25 — 2026-11-03
+
+- Biblioteca (LIB-01): los recursos heredados de la biblioteca anterior dicen «General · solo lectura» en lugar de un
+  estado verde, y una leyenda explica la diferencia con los recursos de cada curso y dónde ver en qué lecciones se usan.
+
+## 1.6.24 — 2026-11-03
+
+- Notificaciones (NOT-01): junto al botón, cuántos avisos son obligatorios y que guardar pide marcar o desmarcar uno;
+  si el correo no está configurado, un aviso explica que los avisos llegan en la aplicación pero no por correo; el
+  registro vacío explica qué lo llena y, con filtros, ofrece quitarlos.
+
+## 1.6.23 — 2026-11-03
+
+- Documentos en la demostración (DOC-02): la organización de demostración trae una boleta y una constancia publicadas
+  para el programa «Primaria bilingüe», con el formato de siempre de cada documento (migración 0077). Así el módulo y
+  su diseñador se pueden ver y revisar; la boleta de Matemáticas 6.º usa esa plantilla.
+
+## 1.6.22 — 2026-11-03
+
+- Roles y accesos (ACC-01): pestañas **Matriz**, **Grupos de seguridad**, **Coordinación** e **Historial**, con el número
+  de grupos y de personas con coordinación en su pestaña; la matriz se filtra por área. Al crear o editar un grupo se
+  abre su pestaña.
+
 ## 1.6.21 — 2026-11-03
 
 - Cursos (CUR-01): vista **Lista** con una fila por curso (nombre, contenido, lecciones publicadas y acciones),

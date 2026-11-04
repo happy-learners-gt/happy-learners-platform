@@ -665,6 +665,8 @@ export interface PublicProfile {
 export interface DirectoryEntry {
   userId: string; displayName: string; photoUrl: string | null; headline: string; country: string | null;
   areas: TeachingArea[]; levels: IscedLevel[]; languages: ProfileLanguage[]; modalities: TeachingModality[]; verifiedCredentials: number;
+  /** TEAM-01: the active courses whose team the person is in, by title. */
+  courses?: string[];
 }
 export interface ProfileReviewItem {
   userId: string; name: string; photoUrl: string | null; version: number; submittedAt: string; firstPublication: boolean;

@@ -63,7 +63,8 @@ export function ResourceCard({ item, menu, onOpen, extra }: { item: LibraryItem;
       {extra}
     </div>
     <div className="resource-side">
-      <StatusBadge tone={item.status === "published" ? "success" : item.status === "draft" ? "warning" : "neutral"}>{item.legacy ? "Recurso general" : resourceStatusLabel(item.status)}</StatusBadge>
+      {/* LIB-01: an inherited general resource is read-only, which is what it is, not a status. */}
+      <StatusBadge tone={item.legacy || item.status === "archived" ? "neutral" : item.status === "published" ? "success" : "warning"}>{item.legacy ? "General · solo lectura" : resourceStatusLabel(item.status)}</StatusBadge>
       <Updated value={item.updatedAt}/>
     </div>
     {menu && <Menu label={`Acciones del recurso ${item.title}`} items={menu}/>}

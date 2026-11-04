@@ -8,7 +8,7 @@ import { useSession } from "../session";
 import { formatInstant, weekOrder, zoneName } from "../regional";
 import { useFeedback } from "../ui/feedback";
 import { Icon } from "../ui/icons";
-import { EmptyState, ErrorState, Field, Loading, PageHeader, Section, StatusBadge } from "../ui/primitives";
+import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, Section, StatusBadge } from "../ui/primitives";
 import type { Tone } from "../ui/primitives";
 
 /**
@@ -176,7 +176,9 @@ function Policy() {
         <label className="switch"><input type="checkbox" checked={chosen.includes(item.type)} onChange={event => setChosen(current => event.target.checked ? [...current, item.type] : current.filter(type => type !== item.type))}/>
           <span><strong>{item.label}</strong> <span className="muted small">{item.audience}</span></span></label>
       </li>)}</ul>
-      <div className="form-actions"><button type="button" className="button primary" disabled={!dirty || busy} onClick={() => void save()}>{busy ? "Guardando…" : "Guardar avisos obligatorios"}</button></div>
+      {/* NOT-01: what is mandatory now, and why the button waits for a change. */}
+      <div className="form-actions"><button type="button" className="button primary" disabled={!dirty || busy} onClick={() => void save()}>{busy ? "Guardando…" : "Guardar avisos obligatorios"}</button>
+        <span className="muted small" role="status">{dirty ? "Hay cambios sin guardar." : `${chosen.length} de ${settings.length} avisos son obligatorios. Marca o desmarca uno para guardar el cambio.`}</span></div>
     </div>}
   </Section>;
 }
@@ -199,8 +201,10 @@ function SentLog() {
       <Field label="Estado"><select value={filters.status} onChange={event => set("status")(event.target.value)}><option value="">Todos</option>{Object.entries(statusLabels).map(([status, [label]]) => <option key={status} value={status}>{label}</option>)}</select></Field>
     </div>
     {error ? <ErrorState error={error} retry={load}/> : !data ? <Loading label="Cargando envíos…" lines={3}/> : <>
-      {!data.mailConfigured && <p className="muted small">El envío de correo no está configurado: los avisos quedan registrados como «Correo sin configurar».</p>}
-      {data.notifications.length ? <History items={data.notifications} labels={labels} admin/> : <p className="muted">No hay notificaciones con estos filtros.</p>}
+      {!data.mailConfigured && <p className="message-bar warning" role="status"><Icon name="alert" size={18}/><span>El envío de correo no está configurado: cada aviso llega en la aplicación y queda registrado como «Correo sin configurar», pero no sale por correo. Lo activa quien administra la plataforma.</span></p>}
+      {data.notifications.length ? <History items={data.notifications} labels={labels} admin/>
+        : filters.person || filters.type || filters.status ? <EmptyState compact icon="search" title="No hay notificaciones con estos filtros" action={<Button variant="ghost" icon="close" onClick={() => setFilters({ person: "", type: "", status: "" })}>Quitar filtros</Button>}/>
+        : <EmptyState compact icon="send" title="Aún no se ha enviado ningún aviso">Aquí aparece cada aviso que la plataforma envía: asignaciones, revisiones de lecciones, cambios y cancelaciones de clases, y los de la cuenta.</EmptyState>}
     </>}
   </Section>;
 }

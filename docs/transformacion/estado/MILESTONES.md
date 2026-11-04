@@ -13,7 +13,7 @@ día y limitaciones registradas. Fusionado a `main` ≠ resultado de producto lo
 | M5 | Personas: incorporación de punta a punta (Fase 4) | PPL-01, PPL-02, IA-04, CON-01 | DONE (1.6.2, 1.6.5, 1.6.10) | E2E contracts, professional-profile |
 | M6 | IA como plataforma (Fase 8) | AIG-1, AIG-3–6 | DONE salvo AIG-2 (1.6.1 a 1.6.16) | `ia.md`; `ai-budget.test.ts`; «Inteligencia artificial» 3.85 |
 | M7 | Preparación empresarial (Fase 7/10) | SEC-01–07, monitor, pentest | En curso: SEC-01–03, 05–07 hechos; monitor operativo (AP-03); SEC-04 el 13-nov; pentest manual espera AP-05 | `docs/security/` |
-| M8 | Segunda ola: módulos sin tocar (Fases 5–6) | AUD-03, DOC-02, TEAM-01, LIB-01, NOT-01, ACC-01 | READY (desde 03-nov, en SPR-004) | Meta: cada módulo ≥ 4.0 en `auditoria.md` |
+| M8 | Segunda ola: módulos sin tocar (Fases 5–6) | AUD-03, CUR-01, ACC-01, DOC-02, NOT-01, LIB-01, TEAM-01 | DONE (1.6.20 a 1.6.26); siguen DOC-03 y LIB-02 | Cursos 4.20, Roles 4.00, Notificaciones 4.00, Equipo 4.05, Documentos 3.85, Biblioteca 3.85 |
 | M9 | Tercera ola: módulos mejorados hasta la meta | HRS-04, AGE-01, ORG-01, CAL-02, ACA-02, CON-02, SCH-02, AIC-01 | BACKLOG | Puntaje ≥ 4.0–4.2 por módulo |
 | M10 | Ayuda contextual y marca | HLP-01, BRAND-01 | BLOCKED (AP-06, nombre «Acervum» en discusión) | — |
 | M11 | Ventaja difícil de copiar y observabilidad | MOAT-01, OBS-01 | BACKLOG | Plan de la ventaja; tablero de SLO desde `event=api` |
