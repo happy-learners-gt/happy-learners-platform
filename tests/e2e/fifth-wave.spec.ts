@@ -48,3 +48,11 @@ test("CON-03: each contract says how long it has waited for the signature or how
   const table = page.getByRole("table", { name: /Contratos del equipo/ });
   await expect(table.locator(".contract-urgency").filter({ hasText: /Esperando|Enviado hoy/ }).first()).toBeVisible();
 });
+
+test("AGE-02: the agenda's rail says «Hoy» only for today's class and starts only today's class", async ({ page }) => {
+  await signIn(page, "educador-demo", "/agenda");
+  const rail = page.locator(".agenda-rail section").first();
+  const heading = (await rail.getByRole("heading", { level: 2 }).textContent())!;
+  expect(["Hoy", "Próxima clase"]).toContain(heading);
+  if (heading === "Próxima clase") await expect(rail.getByRole("link", { name: "Iniciar" })).toHaveCount(0);
+});
