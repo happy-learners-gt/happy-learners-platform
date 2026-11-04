@@ -333,17 +333,21 @@ const fold = (value: string) => value.normalize("NFD").replace(/\p{M}/gu, "").to
 
 /** GET /api/profiles?q=&area=&level=&language=&modality= — the team directory: published profiles of active people. */
 async function directory(url: URL, current: Member, db: Database) {
-  const [rows, credentials] = await Promise.all([
+  const [rows, credentials, teams] = await Promise.all([
     db.prepare(`SELECT ${publishedColumns} ${publishedFrom} WHERE m.organization_id=? AND m.active=1 AND p.status='published' ORDER BY name`).bind(current.organizationId).all<Published>(),
     db.prepare("SELECT c.user_id,c.status,c.expires_on FROM staff_credentials c WHERE c.organization_id=? AND c.status='verified'").bind(current.organizationId).all<{ user_id: string; status: CredentialState; expires_on: string | null }>(),
+    // TEAM-01: what each person teaches, from the course teams of the organization.
+    db.prepare("SELECT m.user_id,c.title FROM course_members m JOIN courses c ON c.id=m.course_id AND c.organization_id=m.organization_id WHERE m.organization_id=? AND c.status='active' ORDER BY c.title").bind(current.organizationId).all<{ user_id: string; title: string }>(),
   ]);
   const today = await todayFor(db, current.organizationId);
   const q = fold(url.searchParams.get("q") || "").trim(), area = fold(url.searchParams.get("area") || ""), level = url.searchParams.get("level") || "", language = url.searchParams.get("language") || "", modality = url.searchParams.get("modality") || "";
   // Filters look only at what the team may see, so a private section never shows through a filter.
   const all: DirectoryEntry[] = rows.results.map(row => {
-    const { content } = audienceView(storedProfile(JSON.parse(row.content)), storedVisibility(JSON.parse(row.visibility || "{}")), "organization");
+    const { content, sections } = audienceView(storedProfile(JSON.parse(row.content)), storedVisibility(JSON.parse(row.visibility || "{}")), "organization");
     return { userId: row.user_id, displayName: row.name, photoUrl: teamPhoto(row), headline: content.headline, country: content.country, areas: content.areas, levels: content.levels, languages: content.languages, modalities: content.modalities,
-      verifiedCredentials: credentials.results.filter(item => item.user_id === row.user_id && credentialStatus(item.status, item.expires_on, today) === "verified").length };
+      verifiedCredentials: credentials.results.filter(item => item.user_id === row.user_id && credentialStatus(item.status, item.expires_on, today) === "verified").length,
+      // Only when the person shows what they teach to the team: a private «teaching» section hides their courses too.
+      courses: sections.includes("teaching") ? teams.results.filter(item => item.user_id === row.user_id).map(item => item.title) : [] };
   });
   const entries = all.filter(entry => (!q || fold([entry.displayName, entry.headline, ...entry.areas.map(item => item.label)].join(" ")).includes(q))
     && (!area || entry.areas.some(item => fold(item.label) === area || item.field === area))

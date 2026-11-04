@@ -111,9 +111,13 @@ test("HL-174 ST-128 ST-135: administration assigns coordination of one program, 
     await people.getByRole("checkbox", { name: new RegExp(name) }).check();
     await people.getByRole("button", { name: "Guardar personas" }).click();
     await expect(toast(page)).toContainText(`Personas de «${group}» guardadas`);
+    // ACC-01: the matrix, the groups and the history are tabs of the page.
+    const tabs = page.getByRole("navigation", { name: "Secciones de roles y accesos" });
+    await tabs.getByRole("link", { name: "Matriz", exact: true }).click();
     const column = await matrix.locator("thead th").allTextContents();
     expect(column).toContain(group);
     await expect(matrix.getByRole("row", { name: /Consultar la actividad/ })).toContainText("Todos los programas");
+    await tabs.getByRole("link", { name: "Historial", exact: true }).click();
     await expect(page.locator(".access-events")).toContainText(`Creó el grupo de seguridad «${group}»`);
     // ST-135 criterion 3: applied on the coordinator's next request, without a new session.
     expect((await (await coordinator.get("/api/session")).json()).member.permissions.grants["activity.view"]).toEqual({ all: true });

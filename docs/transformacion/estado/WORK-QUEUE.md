@@ -51,11 +51,13 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | AIG-3 | IA | Modelo menor para tareas cortas (redactar, sugerir campos) | P2 | AI-01 | DONE | 1.6.15: `OPENAI_MODEL_SHORT` opcional, registrado en `ai_runs`; prueba en `openai.test.ts`. Activarlo es configuración del despliegue |
 | AUD-03 | Auditoría | Volver a puntuar con evidencia los módulos sin tocar | P1 | — | DONE | `auditoria.md` §8: Cursos 3.75 (9 945 px en móvil), Roles 3.40, Documentos 3.40, Notificaciones 3.60, Biblioteca 3.70, Equipo 3.85 |
 | CUR-01 | Contenido | Cursos agrupados por programa y en lista de una fila por curso (por omisión en el teléfono) | P1 | AUD-03 | DONE | 1.6.21: móvil 9 945 → 3 068 px con 25 cursos; escritorio sin cambios (3 903 px, tarjetas); vista Tarjetas/Lista en la dirección; E2E en `layout.spec` |
-| DOC-02 | Documentos | Documentos 3.40 → 4.0: plantillas de demostración y auditoría del diseñador | P1 | AUD-03 | READY | Puntaje ≥ 4.0 |
-| TEAM-01 | Personas | Equipo 3.85 → 4.0: tarjetas uniformes y cursos que imparte | P3 | AUD-03 | READY | Puntaje ≥ 4.0 |
-| LIB-01 | Contenido | Biblioteca 3.70 → 4.0: leyenda general/del curso y usos enlazados | P2 | AUD-03 | READY | Puntaje ≥ 4.0 |
-| NOT-01 | Gobierno | Notificaciones 3.60 → 4.0: explicar obligatorios y el aviso de correo con siguiente paso | P2 | AUD-03 | READY | Puntaje ≥ 4.0 |
-| ACC-01 | Gobierno | Roles y accesos 3.40 → 4.2: pestañas y matriz plegable por área | P1 | AUD-03 | READY | Puntaje ≥ 4.2 |
+| DOC-02 | Documentos | Plantillas de demostración y auditoría del diseñador | P1 | AUD-03 | DONE | 1.6.23: migración 0077 con boleta y constancia publicadas para «Primaria bilingüe» (por programa, para no chocar con las de toda la organización); puntaje 3.40 → 3.85 |
+| DOC-03 | Documentos | Diseñador: «Publicar» solo con cambios; la vista previa propone secciones del programa de la plantilla; campos con su nombre legible en lugar de `{{clave}}` | P2 | DOC-02 | READY | Puntaje ≥ 4.0 |
+| TEAM-01 | Personas | Equipo: los cursos que imparte cada persona, solo si muestra su sección «Enseñanza» al equipo | P3 | AUD-03 | DONE | 1.6.26: el directorio suma los cursos activos de cada equipo; un perfil con la enseñanza privada no los muestra (prueba en `professional-profile.test.ts`); las tarjetas ya tenían el mismo alto por fila; puntaje 3.85 → 4.05 |
+| LIB-01 | Contenido | Biblioteca: «General · solo lectura» en lugar de un estado verde, y leyenda de general frente a del curso | P2 | AUD-03 | DONE | 1.6.25: puntaje 3.70 → 3.85; dónde se usa cada recurso sigue solo en su vista previa (LIB-02) |
+| LIB-02 | Contenido | «Usado en N lecciones» con los nombres o un enlace a esas lecciones en la lista | P3 | LIB-01 | BACKLOG | Puntaje ≥ 4.0 |
+| NOT-01 | Gobierno | Notificaciones: cuántos avisos son obligatorios y por qué el botón espera un cambio; correo sin configurar como aviso con lo que sí pasa; registro vacío explicado | P2 | AUD-03 | DONE | 1.6.24: puntaje 3.60 → 4.00; E2E `notifications`, `accessibility` |
+| ACC-01 | Gobierno | Roles y accesos en pestañas (Matriz, Grupos de seguridad, Coordinación, Historial) y la matriz filtrable por área | P1 | AUD-03 | DONE | 1.6.22: 2 036 / 2 573 → 1 736 / 2 211 px (escritorio / móvil); al crear o editar un grupo se abre su pestaña; E2E `access` por pestañas; puntaje 3.40 → 4.00 |
 | HRS-04 | Operación | Horas efectivas 3.40 → 4.0 | P2 | M8 | BACKLOG | Puntaje ≥ 4.0 |
 | AGE-01 | Operación | Agenda 3.50 → 4.2 | P2 | M8 | BACKLOG | Puntaje ≥ 4.2 |
 | ORG-01 | Institución | Organización 3.55 → 4.2 | P2 | M8 | BACKLOG | Puntaje ≥ 4.2 |
