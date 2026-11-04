@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.27 — 2026-11-03
+
+- Horas efectivas (HRS-04): si los últimos 30 días no tienen clases finalizadas, la página abre en el último mes con
+  clases y lo dice; un periodo elegido que queda vacío ofrece ir a ese mes. Nunca abre vacía cuando hay historial.
+
 ## 1.6.26 — 2026-11-03
 
 - Equipo (TEAM-01): cada persona muestra los cursos que imparte («Imparte: …»), solo si su sección «Enseñanza» es

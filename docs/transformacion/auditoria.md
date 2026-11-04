@@ -182,7 +182,7 @@ Sobre la rama de 1.6.26 con los datos de demostración, administración, escrito
 
 | Módulo | Puntaje | Escritorio / móvil (px) | Hallazgo | Incremento |
 | --- | --- | --- | --- | --- |
-| Horas efectivas | 3.40 | 900 / 1 024 | Abre vacía («No hay clases finalizadas en este filtro») cuando los últimos 30 días no tienen clases, aunque el historial sí | HRS-04: abrir en el último mes con clases y decirlo |
+| Horas efectivas | 3.40 | 900 / 1 024 | Abre vacía («No hay clases finalizadas en este filtro») cuando los últimos 30 días no tienen clases, aunque el historial sí | HRS-04: abrir en el último mes con clases y decirlo. **Hecho en 1.6.27:** 3.80 (4 3 4 4 4 4 4 4) |
 | Horarios | 3.65 | 3 187 / **5 941** | El generador (jornada y secciones, aulas, reglas) queda apilado bajo el horario vigente | SCH-02: pestañas Horario vigente, Generar, Aulas y Reglas |
 | Calendario institucional | 3.55 | 2 809 / 3 814 | Cinco bloques apilados (ciclo, jornadas, asuetos, eventos, año siguiente) | CAL-02: pestañas por bloque |
 | Agenda | 3.50 | 900 / 1 227 | En la semana, las clases simultáneas se vuelven ilegibles («0… I…») | AGE-01: a lo sumo dos lado a lado y «+N» que abre el día |
