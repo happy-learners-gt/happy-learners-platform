@@ -115,6 +115,11 @@ jobs:
         with:
           name: demo-${{ github.sha }}
           path: build/
+      # ST-189: only what passed the security scanners in its pull request reaches production (scripts/security-gate.py).
+      - name: Security gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/security-gate.py
       - name: Confirm artifact version
         run: node scripts/verify-artifact.mjs
       - name: Isolate preview configuration
@@ -156,6 +161,8 @@ jobs:
     permissions:
       contents: read
       deployments: write
+      actions: read
+      pull-requests: read
     needs: verify
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -175,6 +182,11 @@ jobs:
         with:
           name: demo-${{ github.sha }}
           path: build/
+      # ST-189: only what passed the security scanners in its pull request reaches production (scripts/security-gate.py).
+      - name: Security gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/security-gate.py
       - name: Confirm artifact version
         run: node scripts/verify-artifact.mjs
       - name: Record deployment start
