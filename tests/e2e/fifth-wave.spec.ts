@@ -62,5 +62,5 @@ test("ACA-03: each program's count of courses opens them in Cursos", async ({ pa
   const link = page.locator(".program-list a, a").filter({ hasText: /^\d+ cursos?$/ }).first();
   await link.click();
   await expect(page).toHaveURL(/\/cursos\?programa=/);
-  await expect(page.getByLabel("Programa")).not.toHaveValue("");
+  await expect(page.getByRole("group", { name: "Filtrar por configuración académica" }).getByLabel("Programa")).not.toHaveValue("");
 });
