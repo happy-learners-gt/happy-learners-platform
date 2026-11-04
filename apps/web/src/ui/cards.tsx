@@ -12,7 +12,9 @@ import { hueFor, plural, resourceHue, resourceKindLabel, resourceStatusLabel } f
 import type { CourseStats } from "../model";
 
 /** `row` (CUR-01): one line per course for long lists and phones; the same title link and menu as the card. */
-export function CourseCard({ course, program, stats, menu, row }: { course: Course; program?: StudyProgram | null; stats?: CourseStats; menu?: MenuItem[]; row?: boolean }) {
+/** CUR-02: `reasons` are why the course needs attention (HOME-01), shown when the list is sorted by them. */
+export function CourseCard({ course, program, stats, menu, row, reasons }: { course: Course; program?: StudyProgram | null; stats?: CourseStats; menu?: MenuItem[]; row?: boolean; reasons?: string[] }) {
+  const attention = reasons?.length ? <ul className="course-attention" aria-label="Necesita atención">{reasons.slice(0, 2).map(reason => <li key={reason}><StatusBadge tone="warning">{reason}</StatusBadge></li>)}</ul> : null;
   const href = `/cursos/${course.id}`;
   const noun = moduleNoun(resolveSettings(course, program).values.moduleLabel);
   const level = program?.level || course.level;
@@ -22,6 +24,7 @@ export function CourseCard({ course, program, stats, menu, row }: { course: Cour
     <div className="course-card-title">
       <h3 title={course.title}><Link href={href} className="card-link">{course.title}</Link></h3>
       <p className="course-card-meta">{meta}{stats && <span className="phones-only">{` · ${stats.published} de ${stats.lessons} publicadas`}</span>}{course.status === "archived" ? " · Archivado" : ""}</p>
+      {attention}
     </div>
     {stats && <span className="course-row-progress">{`${stats.published} de ${stats.lessons} publicadas`}</span>}
     {menu && <Menu label={`Acciones del curso ${course.title}`} items={menu}/>}
@@ -34,6 +37,7 @@ export function CourseCard({ course, program, stats, menu, row }: { course: Cour
         <h3 title={course.title}><Link href={href} className="card-link">{course.title}</Link></h3>
         <p className="course-card-meta">{meta}</p>
         {course.status === "archived" && <StatusBadge>Archivado</StatusBadge>}
+        {attention}
       </div>
       {menu && <Menu label={`Acciones del curso ${course.title}`} items={menu}/>}
     </div>

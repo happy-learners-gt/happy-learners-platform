@@ -28,7 +28,8 @@ const periods = [
   { value: "todo", label: "Todo el historial" }, { value: "personalizado", label: "Personalizado" },
 ] as const satisfies readonly { value: HoursPeriod | "personalizado"; label: string }[];
 type Period = typeof periods[number]["value"];
-const pageSize = 25;
+/** HRS-05: on a phone each class is a card of ~270 px, so fewer per step (25 made the page 9 000 px). */
+const pageSize = typeof window !== "undefined" && window.matchMedia?.("(max-width: 640px)").matches ? 8 : 25;
 type Show = "todas" | "revisar";
 type Totalled = "people" | "courses" | "sections";
 
@@ -139,6 +140,10 @@ export function HoursPage() {
       </select></Field>}
       {any && <Button icon="close" variant="ghost" onClick={() => navigate(url.pathname, true)}>Limpiar filtros</Button>}
     </div>
+    {/* HRS-05: classes waiting for a correction add nothing yet; that is the first thing to do, not a number among others. */}
+    {admin && pending > 0 && <div className="message-bar warning hours-pending" role="status"><Icon name="alert" size={18}/>
+      <span><strong>{pending === 1 ? "1 clase está por revisar" : `${pending} clases están por revisar`}</strong> y no suman horas hasta que las corrijas: no tienen registro de inicio o duraron más de 8 horas.</span>
+      <Button variant="secondary" onClick={() => { setShow("revisar"); document.getElementById("clases-impartidas")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Revisarlas</Button></div>}
     <StatTiles items={[
       { label: "Horas efectivas", value: formatMinutes(report.minutes), icon: "clock", hue: "violet" },
       { label: "Clases que suman", value: counted, icon: "check", hue: "green" },
@@ -165,6 +170,7 @@ export function HoursPage() {
           {admin && totalled === "people" && <p className="muted small">«Según contrato» lee las horas de este filtro con el contrato vigente de cada persona. Solo los contratos por hora que no son de empleo, voluntariado ni servicios profesionales dan un monto por horas registradas; el resto es una referencia. No es un cálculo de nómina.</p>}
         </Tabs>
       </Section>
+      <div id="clases-impartidas"/>
       <Section title="Clases impartidas" action={pending > 0 ? <div className="chips" role="group" aria-label="Mostrar">
         {([["todas", `Todas (${report.rows.length})`], ["revisar", `Por revisar (${pending})`]] as const).map(([value, label]) =>
           <button key={value} type="button" className="chip-button" aria-pressed={show === value} onClick={() => setShow(value)}>{label}</button>)}

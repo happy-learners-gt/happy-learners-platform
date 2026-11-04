@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.4 — 2026-11-04
+
+Quinta ola del programa de mejora (AUD-05, `docs/transformacion/auditoria.md` §10).
+
+- Horas efectivas (HRS-05): si hay clases por revisar, un aviso arriba lo dice y «Revisarlas» abre la bandeja; en el
+  teléfono se muestran 8 clases por paso (la página pasó de 9 089 a 4 646 px).
+- Cursos (CUR-02): ordenar por recientes, por nombre o por «Necesitan atención», con las razones de Inicio en cada curso.
+- Identidad y acceso (IDA-02): cuatro métricas en el resumen, nombres alineados en las tablas, el menú en una fila
+  desplazable en pantallas angostas y las insignias completas.
+
 ## 1.7.3 — 2026-11-04
 
 - Controles operativos (ST-189, SEC-04): nada llega a producción sin que su pull request haya pasado los escáneres de

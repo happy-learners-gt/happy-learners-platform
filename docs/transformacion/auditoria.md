@@ -190,3 +190,15 @@ Sobre la rama de 1.6.26 con los datos de demostración, administración, escrito
 | Inteligencia artificial | 3.85 | 1 600 / 2 136 | La tabla de capacidades es ancha en el teléfono | AIC-01: una tarjeta por capacidad en teléfonos. **Hecho en 1.6.32:** 4.05 |
 | Configuración académica | 3.55 | 1 192 / 2 016 | Paquetes y estándares sin explicar qué hacer con ellos | ACA-02: qué es cada uno y cuándo se usa, con un ejemplo. **Hecho en 1.6.33:** 3.90 |
 | Organización | 3.55 | 943 / 1 190 | Claro y corto; lo que falta para su meta es la identidad (logotipo y marca) | ORG-01: espera la marca (AP-06) |
+
+## 10. Quinta pasada: Identidad y acceso y los módulos aún bajo su meta (AUD-05, 04-nov-2026)
+
+Capturas de la primera pantalla y altura total, escritorio (1365 × 900) y teléfono (390 × 844), con la demostración
+tras 1.7.3. Puntajes con los mismos ocho criterios; los de este paso son del responsable técnico, sin prueba con
+usuarios todavía.
+
+| Módulo | Antes | Altura escritorio / teléfono | Hallazgo | Incremento |
+| --- | --- | --- | --- | --- |
+| Horas efectivas | 3.80 | 3 092 / **9 089** | La primera pantalla dice «0 min» junto a «57 por revisar»; lo que hay que hacer (revisar) no está primero, y en el teléfono cada clase es una tarjeta de ~270 px, 25 por paso | HRS-05: aviso arriba con «Revisarlas» que filtra la bandeja; 8 clases por paso en el teléfono. **Hecho en 1.7.4:** teléfono 9 089 → 4 646 px; 4.00 |
+| Cursos | 4.20 | 3 903 / 3 068 | Sin orden ni «necesita atención» (pendiente de AUD-03) | CUR-02: ordenar por recientes, nombre o «Necesitan atención» con las razones de Inicio en cada curso. **Hecho en 1.7.4:** 4.40 |
+| Identidad y acceso (antes Roles y accesos 4.00) | — | 1 092 / 2 123 | Seis métricas que se parten 5 + 1; nombres centrados al partirse; en el teléfono el menú de ocho secciones ocupa un tercio de la primera pantalla y una insignia larga se corta | IDA-02: cuatro métricas, nombres alineados, menú en una fila desplazable bajo 1 100 px, insignias que se parten. **Hecho en 1.7.4:** 4.20 (meta 4.2) |
