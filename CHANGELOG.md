@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.34 — 2026-11-03
+
+- Diseñador de documentos (DOC-03): «Publicar» solo se habilita cuando hay cambios desde la última versión (si no,
+  dice «Publicada»), y la vista previa de una plantilla de un programa propone primero las secciones de ese programa.
+
 ## 1.6.33 — 2026-11-03
 
 - Configuración académica (ACA-02): Paquetes curriculares explica en tres pasos qué hacer con un paquete (activarlo,

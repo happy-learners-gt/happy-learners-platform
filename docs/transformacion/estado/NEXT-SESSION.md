@@ -18,7 +18,7 @@
 ## Siguiente acción
 
 1. `git status` y `git fetch && git merge origin/main` si avanzó. Rama `feat/HL-15-estado-1619` con este estado sin push.
-2. Siguiente de la cola: DOC-03, LIB-02, M11 (MOAT-01, OBS-01); ORG-01 y M10 esperan la marca (AP-06). El 13-nov SEC-04. El programa NO está completo: 1 de 18 módulos en su meta.
+2. Siguiente de la cola: DOC-04, LIB-02, M11 (MOAT-01, OBS-01); ORG-01 y M10 esperan la marca (AP-06). El 13-nov SEC-04. El programa NO está completo: 1 de 18 módulos en su meta.
    Decisiones del dueño del 03-nov en `aprobaciones.md` (AP-03…AP-08).
 3. Por cada hito: `rm -rf build && npm run build`, E2E afectadas, `./scripts/verify`, versión y CHANGELOG, push, PR,
    **todos** los checks verdes (también `code`/Semgrep; correr `uvx semgrep scan --config .semgrep` antes) →

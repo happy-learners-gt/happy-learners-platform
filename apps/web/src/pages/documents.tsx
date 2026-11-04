@@ -160,19 +160,30 @@ function BlockProperties({ block, spec, images, templateId, sectionId, onChange 
 export function DocumentDesigner({ id }: { id: string }) {
   const { toast } = useFeedback();
   const [template, setTemplate] = useState<TemplateView | null>(null), [draft, setDraft] = useState<ReportTemplate | null>(null), [kinds, setKinds] = useState<Record<ReportKind, ReportKindSpec> | null>(null);
-  const [versions, setVersions] = useState<{ version: number; publishedAt: string; publishedBy: string }[]>([]), [images, setImages] = useState<ImageView[]>([]), [sections, setSections] = useState<{ id: string; name: string; course: { title: string } }[]>([]);
+  const [versions, setVersions] = useState<{ version: number; publishedAt: string; publishedBy: string }[]>([]), [images, setImages] = useState<ImageView[]>([]), [sections, setSections] = useState<{ id: string; name: string; course: { id: string; title: string } }[]>([]);
   const [selected, setSelected] = useState<string>("documento"), [error, setError] = useState(""), [busy, setBusy] = useState(""), [dirty, setDirty] = useState(false);
   const [preview, setPreview] = useState<string | null>(null), [previewSection, setPreviewSection] = useState(""), [history, setHistory] = useState(false);
   const upload = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    void Promise.all([api<{ template: TemplateView; versions: typeof versions }>(`/report-templates/${id}`), api<{ kinds: Record<ReportKind, ReportKindSpec> }>("/report-templates"), api<{ images: ImageView[] }>("/report-images"), api<{ sections: { id: string; name: string; course: { title: string } }[] }>("/sections")])
-      .then(([one, all, files, list]) => { setTemplate(one.template); setDraft(one.template.draft); setVersions(one.versions); setKinds(all.kinds); setImages(files.images); setSections(list.sections); setPreviewSection(list.sections[0]?.id || ""); }, cause => setError(message(cause)));
+    void Promise.all([api<{ template: TemplateView; versions: typeof versions }>(`/report-templates/${id}`), api<{ kinds: Record<ReportKind, ReportKindSpec> }>("/report-templates"), api<{ images: ImageView[] }>("/report-images"), api<{ sections: { id: string; name: string; course: { id: string; title: string } }[] }>("/sections"), api<{ courses: { id: string; programId: string | null }[] }>("/courses")])
+      .then(([one, all, files, list, catalog]) => {
+        setTemplate(one.template); setDraft(one.template.draft); setVersions(one.versions); setKinds(all.kinds); setImages(files.images);
+        // DOC-03: a program's template previews with a section of that program first.
+        const programOf = new Map(catalog.courses.map(course => [course.id, course.programId]));
+        const own = one.template.programId ? list.sections.filter(section => programOf.get(section.course.id) === one.template.programId) : [];
+        const ordered = [...own, ...list.sections.filter(section => !own.includes(section))];
+        setSections(ordered); setPreviewSection(ordered[0]?.id || "");
+      }, cause => setError(message(cause)));
   }, [id]);
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+  // DOC-03: publishing records a new version only when the saved draft changed after the latest one (publishing also
+  // stamps the template's updatedAt) or there are unsaved changes.
+  const latestPublished = versions.reduce((latest, item) => item.publishedAt > latest ? item.publishedAt : latest, "");
+  const unpublished = !!template && (!template.publishedVersion || dirty || template.updatedAt > latestPublished);
   const header = <PageHeader crumbs={[{ label: "Documentos", href: "/organizacion/documentos" }, { label: template?.name || "Plantilla" }]} title={template?.name || "Plantilla"}
     description={template ? `${template.publishedVersion ? `Publicada v${template.publishedVersion}` : "Sin publicar"}${dirty ? " · Cambios sin guardar" : ""}` : undefined}
     actions={template && <><Button icon="clock" onClick={() => setHistory(true)}>Historial</Button><Button busy={busy === "save"} disabled={!!busy || !dirty} onClick={() => void save()}>Guardar</Button></>}
-    primary={template && <PrimaryAction icon="send" busy={busy === "publish"} disabled={!!busy} onClick={() => void publish()}>Publicar</PrimaryAction>}/>;
+    primary={template && <PrimaryAction icon="send" busy={busy === "publish"} disabled={!!busy || !unpublished} onClick={() => void publish()}>{unpublished ? "Publicar" : "Publicada"}</PrimaryAction>}/>;
   if (error) return <>{header}<ErrorState error={error}/></>;
   if (!template || !draft || !kinds) return <>{header}<Loading label="Abriendo la plantilla…" lines={8}/></>;
   const spec = kinds[template.kind];
