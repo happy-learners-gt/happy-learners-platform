@@ -25,9 +25,11 @@ export function Library() {
   async function load() {
     setError("");
     try {
-      const [{ courses }, { lessons }, { resources }, taxonomy] = await Promise.all([api<{ courses: Course[] }>("/courses"), api<{ lessons: Lesson[] }>("/lessons?drafts=1"), api<{ resources: Resource[] }>("/resources"), api<Taxonomy>("/taxonomy").catch(() => ({ vocabularies: [], terms: [] }))]);
-      const perCourse = await Promise.all(courses.map(course => api<{ materials: Material[] }>(`/courses/${course.id}/materials`).then(result => result.materials.map(item => ({ ...item, courseTitle: course.title, usedIn: usage(item.id, lessons).length })))));
-      setData({ courses, lessons, taxonomy, items: [...perCourse.flat(), ...resources.filter(resource => resource.status !== "archived").map(resource => ({ ...legacyItem(resource, usage(resource.id, lessons).length), courseTitle: "General" }))] });
+      // PERF-05: the materials of every course in one request.
+      const [{ courses }, { lessons }, { resources }, taxonomy, { materials }] = await Promise.all([api<{ courses: Course[] }>("/courses"), api<{ lessons: Lesson[] }>("/lessons?drafts=1"), api<{ resources: Resource[] }>("/resources"), api<Taxonomy>("/taxonomy").catch(() => ({ vocabularies: [], terms: [] })), api<{ materials: Material[] }>("/materials")]);
+      const titles = new Map(courses.map(course => [course.id, course.title]));
+      const perCourse = materials.filter(item => titles.has(item.courseId || "")).map(item => ({ ...item, courseTitle: titles.get(item.courseId || "")!, usedIn: usage(item.id, lessons).length }));
+      setData({ courses, lessons, taxonomy, items: [...perCourse, ...resources.filter(resource => resource.status !== "archived").map(resource => ({ ...legacyItem(resource, usage(resource.id, lessons).length), courseTitle: "General" }))] });
     } catch (cause) { setError(message(cause)); }
   }
   useEffect(() => { void load(); }, []);

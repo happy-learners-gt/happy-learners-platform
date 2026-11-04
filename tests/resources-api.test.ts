@@ -128,3 +128,16 @@ describe("course resources on the built Worker", () => {
     expect(progress.progress.percent).toBe(100);
   }, 60_000);
 });
+
+describe("PERF-05 the materials of every reachable course in one request", () => {
+  it("answers what asking each course would, for administration and for an educator", async () => {
+    for (const username of ["admin-demo", "educador-demo"]) {
+      const cookie = await signIn(username);
+      const { courses } = await read<{ courses: { id: string }[] }>(await as(cookie, "/courses"));
+      const each = (await Promise.all(courses.map(async course => (await read<{ materials: { id: string }[] }>(await as(cookie, `/courses/${course.id}/materials`))).materials))).flat().map(item => item.id).sort();
+      const all = (await read<{ materials: { id: string }[] }>(await as(cookie, "/materials"))).materials.map(item => item.id).sort();
+      expect(all, username).toEqual(each);
+    }
+    expect((await as(null, "/materials")).status).toBe(401);
+  });
+});
