@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.28 — 2026-11-03
+
+- Horarios (SCH-02): pestañas **Horario vigente**, **Generar** (secciones, reglas y horario propuesto) y **Aulas**. La
+  página abre en el horario vigente; en el teléfono pasa de 5 941 a 2 383 px.
+
 ## 1.6.27 — 2026-11-03
 
 - Horas efectivas (HRS-04): si los últimos 30 días no tienen clases finalizadas, la página abre en el último mes con
