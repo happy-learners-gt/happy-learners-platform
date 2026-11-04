@@ -16,10 +16,11 @@ it("Documentos without templates starts one from a document's usual format in on
     if (input === "/api/report-templates" && init?.method === "POST") { created.push(JSON.parse(String(init.body))); return Response.json({ template: { id: "tpl-1" } }, { status: 201 }); }
     if (input === "/api/report-templates") return Response.json({ templates: [], kinds: reportKinds });
     if (input === "/api/programs") return Response.json({ programs: [] });
-    // The designer it opens reads the new template, its versions and the institution's images.
+    // The designer it opens reads the new template, its versions, the institution's images, sections and courses.
     if (input === "/api/report-templates/tpl-1") return Response.json({ template: { id: "tpl-1", kind: "certificate", programId: null, programName: null, name: "Constancia", draft: defaultTemplate("certificate"), publishedVersion: null, updatedAt: "t" }, versions: [] });
     if (input.startsWith("/api/report-images")) return Response.json({ images: [] });
     if (input === "/api/sections") return Response.json({ sections: [] });
+    if (input === "/api/courses") return Response.json({ courses: [] });
     return Response.json({});
   }));
   history.replaceState(null, "", "/organizacion/documentos");

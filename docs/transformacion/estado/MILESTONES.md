@@ -14,7 +14,7 @@ día y limitaciones registradas. Fusionado a `main` ≠ resultado de producto lo
 | M6 | IA como plataforma (Fase 8) | AIG-1, AIG-3–6 | DONE salvo AIG-2 (1.6.1 a 1.6.16) | `ia.md`; `ai-budget.test.ts`; «Inteligencia artificial» 3.85 |
 | M7 | Preparación empresarial (Fase 7/10) | SEC-01–07, monitor, pentest | En curso: SEC-01–03, 05–07 hechos; monitor operativo (AP-03); SEC-04 el 13-nov; pentest manual espera AP-05 | `docs/security/` |
 | M8 | Segunda ola: módulos sin tocar (Fases 5–6) | AUD-03, CUR-01, ACC-01, DOC-02, NOT-01, LIB-01, TEAM-01 | DONE (1.6.20 a 1.6.26); siguen DOC-03 y LIB-02 | Cursos 4.20, Roles 4.00, Notificaciones 4.00, Equipo 4.05, Documentos 3.85, Biblioteca 3.85 |
-| M9 | Tercera ola: módulos mejorados hasta la meta | HRS-04, AGE-01, ORG-01, CAL-02, ACA-02, CON-02, SCH-02, AIC-01 | BACKLOG | Puntaje ≥ 4.0–4.2 por módulo |
+| M9 | Tercera ola: módulos mejorados hasta la meta | AUD-04, HRS-04, SCH-02, CAL-02, AGE-01, CON-02, AIC-01, ACA-02, ORG-01 | DONE salvo ORG-01 (AP-06), 1.6.27 a 1.6.33 | Horarios 4.00, Calendario 4.00, Agenda 4.00, IA 4.05, Académica 3.90, Contratos 3.85, Horas 3.80 |
 | M10 | Ayuda contextual y marca | HLP-01, BRAND-01 | BLOCKED (AP-06, nombre «Acervum» en discusión) | — |
 | M11 | Ventaja difícil de copiar y observabilidad | MOAT-01, OBS-01 | BACKLOG | Plan de la ventaja; tablero de SLO desde `event=api` |
 

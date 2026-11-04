@@ -83,7 +83,7 @@ export function ContractsPage() {
     {tab === "plantillas" && <TemplatesTab creating={creatingTemplate} onCreating={setCreatingTemplate} onEditing={setEditingTemplate}/>}
     {tab === "contratos" && <ContractsTab creating={creatingContract} onCreating={setCreatingContract} preferred={persona}/>}
     {tab === "politicas" && <LegalSettings/>}
-    {tab === "ajustes" && <SettingsTab/>}
+    {tab === "ajustes" && <SettingsAndVerify/>}
   </>;
 }
 
@@ -294,7 +294,8 @@ function ContractsTab({ creating, onCreating, preferred }: { creating: boolean; 
       </table></div>}
     {selected && <ContractDetail contract={selected} onClose={() => setSelected(null)} onChanged={next => { setSelected(next); load(); }} onGone={() => { setSelected(null); load(); }} toast={toast} confirm={confirm}/>}
     {creating && <NewContractDialog people={people} templates={templates} preferred={preferred} onClose={() => onCreating(false)} onCreated={item => { onCreating(false); setSelected(item); load(); }}/>}
-    <ContractVerify/>
+    {/* CON-02: checking a receipt is occasional work; it lives in Ajustes. */}
+    <p className="muted small"><Link href="/contratos#ajustes">Verificar una constancia de firma</Link></p>
   </>;
 }
 
@@ -472,4 +473,8 @@ function SettingsTab() {
     </label>}
     <p className="muted small">Si lo activas, quien imparte una clase necesita un contrato vigente. Publica al menos una plantilla antes de exigirlo.</p>
   </Section>;
+}
+
+function SettingsAndVerify() {
+  return <div className="stack-lg"><SettingsTab/><ContractVerify/></div>;
 }
