@@ -75,12 +75,15 @@ export type AccountNotice =
   | { kind: "email_changed"; username: string; newEmail: string }
   | { kind: "password_changed"; username: string }
   | { kind: "closure_requested"; person: string; username: string; link: string }
-  | { kind: "closure_started"; username: string };
+  | { kind: "closure_started"; username: string }
+  | { kind: "password_recovery"; username: string; link: string; expiresAt: string }
+  | { kind: "sign_in_link"; username: string; link: string; expiresAt: string };
 export type AccountNoticeKind = AccountNotice["kind"];
 
 const subjects: Record<AccountNoticeKind, string> = {
   email_verify: "Confirma tu nuevo correo de acceso", email_change_requested: "Se pidió cambiar el correo de tu cuenta", email_changed: "El correo de tu cuenta cambió",
   password_changed: "Tu contraseña cambió", closure_requested: "Una persona pidió cerrar su cuenta", closure_started: "Administración comenzó a cerrar tu cuenta",
+  password_recovery: "Recupera tu contraseña", sign_in_link: "Tu enlace para entrar",
 };
 const clip = (text: string, size: number) => text.length > size ? `${text.slice(0, size - 1)}…` : text;
 /** The reason recorded in the outbox with each notice: one sentence, no secrets, at most 240 characters. */
@@ -92,6 +95,8 @@ export function accountNoticeReason(notice: AccountNotice): string {
     case "password_changed": return clip(`Aviso de seguridad: cambió la contraseña de @${notice.username}`, 240);
     case "closure_requested": return clip(`${clip(notice.person, 80)} (@${notice.username}) pidió cerrar su cuenta`, 240);
     case "closure_started": return clip(`Administración inició el cierre de la cuenta de @${notice.username}`, 240);
+    case "password_recovery": return clip(`Enlace para recuperar la contraseña de @${notice.username}`, 240);
+    case "sign_in_link": return clip(`Enlace para entrar a la cuenta de @${notice.username}`, 240);
   }
 }
 
@@ -107,7 +112,8 @@ export interface AccountNoticeDetails { organization: string; recipientName: str
  * spell out the new one, and none of them carries a password or a token other than the confirmation link itself.
  */
 export function accountMessage(to: string, notice: AccountNotice, details: AccountNoticeDetails): MailMessage {
-  const lines: string[] = [], action: { label: string; link: string } | null = notice.kind === "email_verify" ? { label: "Confirmar mi correo", link: notice.link } : notice.kind === "closure_requested" ? { label: "Ver la solicitud", link: notice.link } : null;
+  const lines: string[] = [], action: { label: string; link: string } | null = notice.kind === "email_verify" ? { label: "Confirmar mi correo", link: notice.link } : notice.kind === "closure_requested" ? { label: "Ver la solicitud", link: notice.link }
+    : notice.kind === "password_recovery" ? { label: "Elegir una contraseña nueva", link: notice.link } : notice.kind === "sign_in_link" ? { label: "Entrar a Happy Learners", link: notice.link } : null;
   const notMe = "Si no fuiste tú, cambia tu contraseña de inmediato y avisa a administración de tu organización.";
   switch (notice.kind) {
     case "email_verify":
@@ -125,6 +131,14 @@ export function accountMessage(to: string, notice: AccountNotice, details: Accou
       break;
     case "closure_requested":
       lines.push(`${notice.person} (@${notice.username}) pidió cerrar su cuenta. Revisa la solicitud en Educadores y, cuando corresponda, registra su salida.`);
+      break;
+    case "password_recovery":
+      lines.push(`Pediste recuperar la contraseña de tu cuenta @${notice.username} en ${details.organization}.`, "Para elegir una nueva, abre este enlace:");
+      lines.push(notice.link, "", `El enlace caduca el ${when(notice.expiresAt, details.timezone)} y solo funciona una vez. Al usarlo se cierran tus sesiones abiertas.`, "Si no lo pediste, ignora este correo: tu contraseña no cambiará.");
+      break;
+    case "sign_in_link":
+      lines.push(`Pediste entrar a tu cuenta @${notice.username} en ${details.organization} sin contraseña.`, "Para entrar, abre este enlace en este mismo dispositivo:");
+      lines.push(notice.link, "", `El enlace caduca el ${when(notice.expiresAt, details.timezone)} y solo funciona una vez.`, "Si no lo pediste, ignora este correo y nadie entrará con él.");
       break;
     case "closure_started":
       lines.push(`Administración inició el cierre de tu cuenta @${notice.username}. Al registrar tu salida ya no podrás entrar; lo que hiciste se conserva en la organización.`, "Si ya no quieres cerrarla, habla con administración.");

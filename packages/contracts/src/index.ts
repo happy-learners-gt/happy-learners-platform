@@ -1,8 +1,9 @@
 export interface HealthResponse { status: "ok" }
 export interface VersionResponse { sha: string }
-/** `mustChangePassword` is present (true) only while the account still signs in with a temporary password (ST-093).
+/** `mfaSetupRequired` is present (true) while the policy requires a second factor for the role and the person has none (ST-133).
+ * `mustChangePassword` is present (true) only while the account still signs in with a temporary password (ST-093).
  * `email` is set once someone joins by invitation (ST-121) and only administration's list of people shows it. */
-export interface Member { id: string; username: string; displayName?: string; role: "admin" | "educator"; organizationId: string; active?: boolean; mustChangePassword?: true; email?: string | null; permissions?: EffectivePermissions; coordination?: ProgramScope | null }
+export interface Member { id: string; username: string; displayName?: string; role: "admin" | "educator"; organizationId: string; active?: boolean; mustChangePassword?: true; mfaSetupRequired?: true; email?: string | null; permissions?: EffectivePermissions; coordination?: ProgramScope | null }
 /**
  * Roles and access (ST-128, ST-135, DEC-041). Permissions come from a fixed catalog grouped by area. Grantable ones reach
  * a person through the academic coordination profile or a security group, always within a program scope; the

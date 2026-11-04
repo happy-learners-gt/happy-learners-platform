@@ -2,6 +2,7 @@ import type { Invitation, InvitationPreview, Member } from "@happy-learners/cont
 import type { AccountRole, MailSender } from "@happy-learners/domain";
 import { acceptablePassword, invitationInput, invitationLifetimeMs, invitationMessage, invitationState, maxPasswordLength, roleLabel, tokenPattern, tokenPrefix, usernamePattern } from "@happy-learners/domain";
 import type { Database } from "./storage";
+import type { PasswordCheck } from "./sign-in";
 import { digest, hashPassword, newToken } from "./auth";
 import { deliver, type Delivery } from "./mail";
 import { event } from "./activity";
@@ -124,7 +125,7 @@ export async function previewInvitation(token: string, scope: string, db: Databa
  * the password the person chooses, marks the invitation used and opens a session. Returns the session token so the
  * caller can set the cookie.
  */
-export async function acceptInvitation(token: string, input: unknown, scope: string, db: Database, taken: (username: string) => Promise<boolean>, client: Client = { device: "Navegador desconocido", country: null }): Promise<{ response: Response; session?: string }> {
+export async function acceptInvitation(token: string, input: unknown, scope: string, db: Database, taken: (username: string) => Promise<boolean>, client: Client = { device: "Navegador desconocido", country: null }, check?: PasswordCheck): Promise<{ response: Response; session?: string }> {
   const found = await lookup(token, scope, db);
   if (!found) return { response: missing() };
   const now = new Date();
@@ -135,6 +136,9 @@ export async function acceptInvitation(token: string, input: unknown, scope: str
   if (!usernamePattern.test(username)) return { response: reply({ error: "Elige un usuario de 3 a 32 letras minúsculas, números, puntos o guiones." }, 400) };
   if (typeof value?.password !== "string" || value.password.length > maxPasswordLength || !acceptablePassword(value.password, username))
     return { response: reply({ error: "Usa una contraseña de 12 a 128 caracteres variados, distinta de tu usuario." }, 400) };
+  // ST-134: the organization's password policy.
+  const rejected = check ? await check(value.password, username) : null;
+  if (rejected) return { response: reply({ error: rejected, code: "PASSWORD_REJECTED" }, 400) };
   const taken409 = reply({ error: `El usuario «${username}» ya existe. Elige otro.` }, 409);
   if (await taken(username)) return { response: taken409 };
   // DEC-046: an invitation with a contract is accepted by signing it; the account and the signature are one step.

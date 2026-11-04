@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.7.1 — 2026-11-04
+
+REL-007, seguridad, identidad y accesos (SPR-004, DEC-058): el resto de las historias.
+
+- Recuperar la contraseña (ST-134): «¿Olvidaste tu contraseña?» envía un enlace de un solo uso que caduca en 30 minutos;
+  al usarlo se cierran todas las sesiones y se levanta el bloqueo. La política rechaza contraseñas más cortas que su
+  mínimo (12 a 64), las más usadas y, con Have I Been Pwned por k-anonimato, las filtradas (solo salen 5 caracteres
+  de su huella). Diez fallos en 15 minutos bloquean la cuenta y queda en el registro.
+- Entrar con un enlace por correo (ST-130): de un solo uso, 15 minutos, solo a cuentas con correo confirmado; la
+  solicitud responde lo mismo exista o no la cuenta. Administración lo puede desactivar.
+- Verificación en dos pasos (ST-133): aplicación de autenticación (TOTP) con 10 códigos de recuperación; un código no
+  se reutiliza; administración la exige por rol (quien no la tiene la configura antes de seguir) y la restablece.
+  El secreto se guarda cifrado con una clave de la organización que nunca sale en la copia.
+- Passkeys (ST-132): registrar, nombrar, entrar y eliminar, con la huella, el rostro o el PIN del dispositivo;
+  cuentan como los dos pasos; un contador que no avanza (passkey copiada) se rechaza.
+- Tokens de integración (ST-136): solo lectura, de 1 a 90 días, revocables por su dueño y por administración; nunca
+  abren la cuenta, la seguridad, las personas ni el respaldo.
+- Google, Microsoft y Apple (ST-129, ST-131) por OpenID Connect: cada persona vincula su cuenta desde Mi cuenta y entra
+  con ella; administración desvincula. Se activan al configurar las credenciales de cada proveedor
+  (`docs/security/identidad.md`); Apple pide una cuenta de pago (OQ-016).
+- Proveedor institucional (ST-138): Okta, Entra ID u otro por OpenID Connect; se prueba con una cuenta de la
+  institución antes de activarse; entran solo personas activas con correo de los dominios configurados y el rol sigue
+  el grupo configurado.
+- Gobierno › Seguridad: pestañas Política de acceso, Proveedor institucional y Tokens; «Revisión de accesos» en CSV
+  (ST-189). Educadores: restablecer la verificación en dos pasos y desvincular cuentas externas.
+- Documentación: arquitectura de seguridad (ST-185), matriz de cumplimiento frente a OWASP ASVS 4.0.3 y NIST SP
+  800-63B, sin afirmar certificaciones (ST-188), accesos de seguridad (ST-184), controles operativos, respuesta a
+  incidentes y rotación de secretos (ST-189), y cómo activar cada proveedor.
+
 ## 1.7.0 — 2026-11-03
 
 REL-007, seguridad, identidad y accesos (SPR-004, DEC-058), primer incremento.

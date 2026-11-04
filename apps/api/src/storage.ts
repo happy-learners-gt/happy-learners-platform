@@ -123,6 +123,18 @@ export class OrganizationStore extends DurableObject<Env> {
     return result[0].length === 1;
   }
 
+  /**
+   * ST-133, ST-138: the organization's key for the secrets it keeps encrypted (second factors, the identity provider's
+   * client secret). It lives in the key-value storage of this object, never in SQL, so no backup or export carries it.
+   */
+  async securityKey(scope: string): Promise<ArrayBuffer> {
+    await this.query(scope, []);
+    const stored = await this.ctx.storage.get<ArrayBuffer>("security-key");
+    if (stored) return stored;
+    const key = crypto.getRandomValues(new Uint8Array(32)).buffer;
+    await this.ctx.storage.put("security-key", key);
+    return key;
+  }
   /** Wakes the organization's background work (lesson proposals) as soon as possible; an earlier alarm is kept. */
   async schedule(scope: string) {
     await this.query(scope, []);
@@ -261,7 +273,7 @@ export class Prepared {
   async run() { await this.db.execute([this]); }
 }
 /** What a Database runs on: the organization's Durable Object, through its stub or, inside it (alarms), itself. */
-type Store = Pick<OrganizationStore, "query" | "measuredQuery" | "exportData" | "importData">;
+type Store = Pick<OrganizationStore, "query" | "measuredQuery" | "exportData" | "importData" | "securityKey">;
 export class Database {
   constructor(private stub: DurableObjectStub<OrganizationStore> | Store, private scope: string, private usage?: Usage) {}
   prepare(sql: string) { return new Prepared(this, sql); }
@@ -274,6 +286,7 @@ export class Database {
   batch(statements: Prepared[]) { return this.execute(statements); }
   exportData() { return this.stub.exportData(this.scope); }
   importData(backup: Backup) { return this.stub.importData(this.scope, backup); }
+  securityKey() { return this.stub.securityKey(this.scope); }
   async guardedBatch(guard: Prepared, statements: Prepared[]) {
     return (await this.measured(statements, guard)).length > 0;
   }

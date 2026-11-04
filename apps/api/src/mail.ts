@@ -6,7 +6,7 @@ import { dailyMailCap, mailAttempts, mailDecision } from "@happy-learners/domain
  * (an address verified as a sender in Brevo); without both, messages stay in the outbox as `not_configured` and
  * administration shares the link by hand. Local development and the tests run without them.
  */
-declare global { interface Env { BREVO_API_KEY?: string; MAIL_FROM?: string } }
+declare global { interface Env { BREVO_API_KEY?: string; MAIL_FROM?: string; MAIL_API_URL?: string } }
 
 export const brevoEndpoint = "https://api.brevo.com/v3/smtp/email";
 export const senderName = "Happy Learners";
@@ -21,10 +21,10 @@ export function sanitize(text: string, secrets: (string | undefined)[] = []): st
 /** Brevo's transactional e-mail API over HTTPS. Non-2xx answers are failures; 429 and 5xx may be retried. */
 export class BrevoMailSender implements MailSender {
   readonly configured = true;
-  constructor(private apiKey: string, private from: string, private fetcher: typeof fetch = (input, init) => fetch(input, init)) {}
+  constructor(private apiKey: string, private from: string, private fetcher: typeof fetch = (input, init) => fetch(input, init), private endpoint = brevoEndpoint) {}
   async send(message: MailMessage): Promise<MailResult> {
     try {
-      const response = await this.fetcher(brevoEndpoint, {
+      const response = await this.fetcher(this.endpoint, {
         method: "POST", signal: AbortSignal.timeout(10000),
         headers: { "api-key": this.apiKey, "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ sender: { name: senderName, email: this.from }, to: [{ email: message.to }], subject: message.subject, textContent: message.text, htmlContent: message.html }),
@@ -47,9 +47,14 @@ export class DisabledMailSender implements MailSender {
   async send(): Promise<MailResult> { return { ok: false, retry: false, error: "El envío de correo no está configurado." }; }
 }
 
-export function mailSender(env: Pick<Env, "BREVO_API_KEY" | "MAIL_FROM">): MailSender {
-  const key = env.BREVO_API_KEY?.trim(), from = env.MAIL_FROM?.trim();
-  return key && from ? new BrevoMailSender(key, from) : new DisabledMailSender();
+/**
+ * The provider of the Worker's secrets. MAIL_API_URL replaces Brevo's address only with a server on the same machine:
+ * the tests read the links that leave by e-mail (REL-007) without any message leaving it.
+ */
+export function mailSender(env: Pick<Env, "BREVO_API_KEY" | "MAIL_FROM" | "MAIL_API_URL">): MailSender {
+  const key = env.BREVO_API_KEY?.trim(), from = env.MAIL_FROM?.trim(), local = env.MAIL_API_URL?.trim();
+  const endpoint = local && /^http:\/\/127\.0\.0\.1:\d+\/v3\/smtp\/email$/.test(local) ? local : brevoEndpoint;
+  return key && from ? new BrevoMailSender(key, from, undefined, endpoint) : new DisabledMailSender();
 }
 
 /** Sends while the request waits: one try plus one retry when the failure is temporary. */
