@@ -40,6 +40,12 @@ registro de seguridad.
 | Segundo paso (ST-133) | TOTP (RFC 6238) o un código de recuperación | Desafío de 5 minutos y 5 intentos; un código no se reutiliza |
 | Token de integración (ST-136) | `Authorization: Bearer hlt_…` | Solo lectura (GET), nunca cuenta, seguridad, personas ni respaldo; caduca en 90 días como máximo |
 
+Las acciones sensibles sobre la propia cuenta (agregar o quitar un método, tokens, cuentas vinculadas) exigen la
+**ventana de confirmación** de la sesión (`apps/api/src/step-up.ts`): 10 minutos después de entrar o de confirmar con
+passkey, código o contraseña; fuera de ella responden `REAUTH_REQUIRED` y la pantalla pide confirmar y repite la
+acción. Las passkeys guardan en su identificador de usuario la letra de la organización, así se entra sin escribir el
+usuario.
+
 Los viajes a un proveedor llevan `state` de un uso, `nonce`, PKCE (S256) y una cookie del navegador que los empezó, así
 que nadie puede terminar en su navegador un inicio de sesión empezado en otro (`apps/api/src/oidc.ts`).
 

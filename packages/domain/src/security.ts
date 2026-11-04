@@ -34,6 +34,8 @@ export const securityEventTypes = {
   policy_changed: "Política de acceso cambiada",
   log_exported: "Registro de seguridad exportado",
   access_review_exported: "Revisión de accesos exportada",
+  access_review_started: "Revisión de accesos iniciada",
+  access_review_completed: "Revisión de accesos completada",
 } as const;
 export type SecurityEventType = keyof typeof securityEventTypes;
 export type SecurityOutcome = "succeeded" | "failed" | "info";

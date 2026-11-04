@@ -38,41 +38,6 @@ export function ProviderButtons({ identifier, onError }: { identifier: string; o
   </div>;
 }
 
-type Linked = { provider: ProviderKey; email: string | null; linkedAt: string; lastUsedAt: string | null };
-/** Mi cuenta › Cuentas vinculadas. */
-export function LinkedAccounts() {
-  const { toast, confirm } = useFeedback();
-  const { url, navigate } = useNavigation();
-  const [data, setData] = useState<{ linked: Linked[]; available: ProviderKey[] } | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState("");
-  const load = () => api<{ linked: Linked[]; available: ProviderKey[] }>("/me/identities").then(setData, cause => setError(message(cause)));
-  useEffect(() => { void load(); }, []);
-  useEffect(() => {
-    const result = url.searchParams.get("vinculo");
-    if (!result) return;
-    toast(result === "vinculada" ? { message: "Cuenta vinculada. Ya puedes entrar con ella." } : { tone: "error", message: providerOutcome(result) });
-    navigate("/mi-cuenta/cuenta#cuentas-vinculadas", true);
-  }, [url.search]);
-  async function link(key: ProviderKey) {
-    setBusy(key);
-    try { window.location.assign((await api<{ url: string }>(`/me/identities/${key}`, "POST")).url); } catch (cause) { toast({ tone: "error", message: message(cause) }); setBusy(""); }
-  }
-  async function unlink(key: ProviderKey) {
-    if (!await confirm({ title: `¿Desvincular tu cuenta de ${providerNames[key]}?`, body: "Ya no podrás entrar con ella. Tu contraseña y tus passkeys siguen funcionando.", confirm: "Desvincular", danger: true })) return;
-    try { await api(`/me/identities/${key}`, "DELETE"); await load(); toast({ message: "Cuenta desvinculada." }); } catch (cause) { toast({ tone: "error", message: message(cause) }); }
-  }
-  if (error) return <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>;
-  if (!data) return <p className="muted" role="status">Cargando…</p>;
-  const keys = [...new Set([...data.available, ...data.linked.map(item => item.provider).filter(key => key !== "sso")])];
-  if (!keys.length && !data.linked.length) return <p className="muted">Esta plataforma todavía no ofrece entrar con Google, Microsoft o Apple.</p>;
-  return <ul className="plain-list passkey-list">{[...keys, ...(data.linked.some(item => item.provider === "sso") ? ["sso" as const] : [])].map(key => {
-    const linked = data.linked.find(item => item.provider === key);
-    return <li key={key}><span><strong>{providerNames[key]}</strong><br/><span className="muted small">{linked ? `${linked.email || "Vinculada"} · desde el ${formatInstant(linked.linkedAt)}${linked.lastUsedAt ? ` · usada el ${formatInstant(linked.lastUsedAt)}` : ""}` : "Sin vincular"}</span></span>
-      {linked ? key !== "sso" && <button type="button" className="button ghost small" onClick={() => void unlink(key)}>Desvincular</button>
-        : <button type="button" className="button secondary small" disabled={!!busy} onClick={() => void link(key)}>{busy === key ? "Abriendo…" : "Vincular"}</button>}
-    </li>;
-  })}</ul>;
-}
-
 type Connection = { name: string; issuer: string; clientId: string; domains: string[]; defaultRole: "educator" | "admin"; adminGroup: string | null; status: "draft" | "tested" | "active"; testedAt: string | null; version: number; callback: string };
 const statusLabel = { draft: ["Sin probar", "warning"], tested: ["Probado, inactivo", "info"], active: ["Activo", "success"] } as const;
 /** Seguridad › Proveedor institucional (ST-138): configure, test with an account of the institution, then activate. */
@@ -86,7 +51,7 @@ export function InstitutionProvider() {
     const result = url.searchParams.get("prueba");
     if (!result) return;
     toast(result === "correcta" ? { message: "Prueba correcta. Ya puedes activar el proveedor." } : { tone: "error", message: providerOutcome(result) });
-    navigate("/seguridad#proveedor", true);
+    navigate("/identidad/inicio-de-sesion", true);
   }, [url.search]);
   if (error && !data) return <ErrorState error={error} retry={() => void load()}/>;
   if (!data) return <Loading label="Cargando el proveedor…"/>;

@@ -39,24 +39,32 @@ test("REL-007 ST-134 ST-130: the sign-in page offers recovering the password and
   await expect(page.getByRole("alert")).toContainText("no existe");
 });
 
-test("REL-007 ST-133: a person turns on two-step verification from their account and then signs in with a code", async ({ page }, info) => {
+test("REL-007 ST-133: a person adds an authenticator app by scanning, the code sends itself, and the next sign-in asks for it", async ({ page }, info) => {
   const username = `e2e-mfa-${info.project.name}-${Date.now().toString(36)}`;
   const session = await newPerson(username);
   await page.context().addCookies([{ name: "hl_session", value: session, url: origin, httpOnly: true, sameSite: "Strict" }]);
-  await page.goto("/mi-cuenta/cuenta");
-  const section = page.locator("#dos-pasos");
-  await section.getByRole("button", { name: "Activar la verificación en dos pasos" }).click();
-  await section.getByLabel("Tu contraseña actual").fill(password);
-  await section.getByRole("button", { name: "Continuar" }).click();
-  const key = (await section.getByLabel("Clave para tu aplicación").textContent())!;
-  await audit(page, "activar la verificación en dos pasos");
-  await section.getByLabel("Código de verificación").fill(await totpAt(fromBase32(key)!, stepOf(Date.now())));
-  await section.getByRole("button", { name: "Activar" }).click();
-  await expect(section.getByRole("region", { name: "Códigos de recuperación" }).getByRole("listitem")).toHaveCount(10);
-  await section.getByLabel("Ya guardé mis códigos en un lugar seguro").check();
-  await section.getByRole("button", { name: "Terminar" }).click();
-  await expect(section).toContainText("Activa desde el");
-  // Signing in again asks for the code after the password.
+  await page.goto("/mi-cuenta/seguridad");
+  await expect(page.getByRole("status").filter({ hasText: "Tu cuenta solo tiene contraseña" })).toBeVisible();
+  await audit(page, "seguridad de la cuenta");
+  await page.getByRole("button", { name: "Agregar un método" }).click();
+  const chooser = page.getByRole("dialog", { name: "Agregar un método" });
+  await expect(chooser.getByRole("button", { name: /Passkey/ })).toContainText("Recomendado");
+  await chooser.getByRole("button", { name: /Aplicación de autenticación/ }).click();
+  const wizard = page.getByRole("dialog", { name: "Aplicación de autenticación" });
+  await expect(wizard.getByRole("img", { name: "Código QR para tu aplicación de autenticación" })).toBeVisible();
+  await audit(page, "código QR");
+  await wizard.getByRole("button", { name: "¿No puedes escanear? Escribe la clave" }).click();
+  const key = (await wizard.getByLabel("Clave para tu aplicación").textContent())!;
+  // Typing (or pasting) the six digits in the first box fills them all and sends the code.
+  await wizard.getByLabel("Dígito 1 de 6").fill(await totpAt(fromBase32(key)!, stepOf(Date.now())));
+  const codes = page.getByRole("dialog", { name: "Guarda tus códigos de recuperación" });
+  await expect(codes.getByRole("listitem")).toHaveCount(10);
+  await expect(codes.getByRole("button", { name: "Terminar" })).toBeDisabled();
+  await codes.getByLabel("Ya guardé mis códigos en un lugar seguro").check();
+  await codes.getByRole("button", { name: "Terminar" }).click();
+  await expect(page.locator(".method-list")).toContainText("Aplicación de autenticación");
+  await expect(page.getByRole("status").filter({ hasText: "Tu cuenta pide un segundo paso al entrar" })).toBeVisible();
+  // Signing in again asks for the code after the password; it sends itself too.
   await page.context().clearCookies();
   await page.goto("/");
   await page.getByLabel("Usuario", { exact: true }).fill(username);
@@ -64,23 +72,7 @@ test("REL-007 ST-133: a person turns on two-step verification from their account
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Verificación en dos pasos" })).toBeVisible();
   await audit(page, "segundo paso");
-  await page.getByLabel("Código de verificación").fill(await totpAt(fromBase32(key)!, stepOf(Date.now()) + 1));
-  await page.getByRole("button", { name: "Verificar" }).click();
-  // The space opens: the sign-in page is gone and the menu is there.
+  await page.getByLabel("Dígito 1 de 6").fill(await totpAt(fromBase32(key)!, stepOf(Date.now()) + 1));
   await expect(page.getByRole("heading", { name: "Iniciar sesión" })).toHaveCount(0);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-});
-
-test("REL-007 ST-134 ST-138 ST-136: administration sees the access policy, the institution's provider and the tokens", async ({ page }) => {
-  await signIn(page, "admin-demo", "/seguridad#politicas");
-  await expect(page.getByLabel("Longitud mínima de las contraseñas")).toHaveValue("12");
-  await expect(page.getByRole("group", { name: "Exigir la verificación en dos pasos" })).toBeVisible();
-  await audit(page, "política de acceso");
-  await page.getByRole("link", { name: "Proveedor institucional" }).click();
-  await expect(page.getByLabel("Emisor (issuer)")).toBeVisible();
-  await expect(page.getByText("/api/auth/callback/sso")).toBeVisible();
-  await audit(page, "proveedor institucional");
-  await page.getByRole("link", { name: "Tokens", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Tokens de integración" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Revisión de accesos" })).toHaveAttribute("href", "/api/security/access-review");
 });

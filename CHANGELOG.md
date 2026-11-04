@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.7.2 — 2026-11-04
+
+Identidad y acceso, rediseño tras la revisión del responsable del proyecto (`docs/design/identidad-y-acceso.md`).
+
+- Mi cuenta › Seguridad: el estado de la cuenta arriba y todos los métodos en una lista (passkeys, aplicación de
+  autenticación, códigos de recuperación, cuentas vinculadas, contraseña), con «Agregar un método» que propone primero
+  la passkey. Sesiones, actividad reciente y tokens están en la misma página; Cuenta queda con el correo, mis datos y el
+  cierre.
+- Passkey en un clic: sin contraseña ni nombre (toma el del dispositivo y se cambia después). Entrar con passkey ya no
+  pide escribir el usuario. Después de entrar con contraseña en un dispositivo que puede guardar passkeys, se sugiere
+  crear una (descartable).
+- Aplicación de autenticación con código QR, la clave solo si no se puede escanear, y el código en seis casillas que
+  aceptan pegar y se envía solo; los códigos de recuperación se descargan, copian o imprimen. El segundo paso al entrar
+  usa las mismas casillas.
+- Modo de confirmación: durante 10 minutos después de entrar o de confirmar, los cambios sensibles no piden la
+  contraseña; fuera de ese tiempo un diálogo pide confirmar con passkey, código o contraseña y el cambio sigue solo.
+  Cinco fallos en 15 minutos lo detienen.
+- Gobierno › Identidad y acceso reemplaza Roles y accesos y Seguridad (sus direcciones redirigen): Resumen con
+  puntuación y recomendaciones que se aplican desde ahí, Personas con cómo entra cada una y su panel completo (métodos,
+  sesiones, grupos, actividad y acciones), Roles y grupos, Políticas, Inicio de sesión, Integraciones, Registros y
+  Revisiones de acceso (mantener o quitar persona por persona; al completar se aplica). Educadores enlaza a la seguridad
+  de cada persona.
+- Exigir el segundo factor a administración sin tenerlo uno mismo ya no es posible: dejaba a esa persona sin poder
+  seguir.
+- Migración 0079 (no destructiva): ventana de confirmación de cada sesión y revisiones de acceso.
+
 ## 1.7.1 — 2026-11-04
 
 REL-007, seguridad, identidad y accesos (SPR-004, DEC-058): el resto de las historias.

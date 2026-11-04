@@ -5,6 +5,7 @@ import { Icon } from "../ui/icons";
 import type { IconName } from "../ui/icons";
 import { PageHeader } from "../ui/primitives";
 import { AccountPage } from "./account";
+import { MySecurityPage } from "./my-security";
 import { MyContractsPage } from "./my-contracts";
 import { StaffFileSection } from "./profile";
 import { MyNotifications } from "./notifications";
@@ -19,7 +20,8 @@ export const accountSections = [
   { id: "perfil", label: "Perfil", icon: "user" },
   { id: "expediente", label: "Expediente", icon: "file" },
   { id: "contratos", label: "Contratos", icon: "shield" },
-  { id: "cuenta", label: "Cuenta y seguridad", icon: "settings" },
+  { id: "cuenta", label: "Cuenta", icon: "settings" },
+  { id: "seguridad", label: "Seguridad", icon: "shield" },
   { id: "preferencias", label: "Preferencias", icon: "options" },
   { id: "notificaciones", label: "Notificaciones", icon: "bell" },
 ] as const;
@@ -50,6 +52,7 @@ function content(section: AccountSection): ReactNode {
     case "expediente": return <MyFilePage/>;
     case "contratos": return <MyContractsPage/>;
     case "cuenta": return <AccountPage/>;
+    case "seguridad": return <MySecurityPage/>;
     case "preferencias": return <PreferencesPage/>;
     case "notificaciones": return <MyNotificationsPage/>;
   }

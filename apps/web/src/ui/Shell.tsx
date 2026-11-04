@@ -247,8 +247,7 @@ const administration: { id: string; label: string; pages: (Omit<Page, "active"> 
     { href: "/configuracion-academica", label: "Configuración académica", icon: "grid", hue: "green" },
   ] },
   { id: "gobierno", label: "Gobierno", pages: [
-    { href: "/roles-y-accesos", label: "Roles y accesos", icon: "shield", hue: "violet" },
-    { href: "/seguridad", label: "Seguridad", icon: "shield", hue: "coral" },
+    { href: "/identidad", label: "Identidad y acceso", icon: "shield", hue: "violet", match: true },
     { href: "/notificaciones", label: "Notificaciones", icon: "send", hue: "teal" },
     { href: "/organizacion/ia", label: "Inteligencia artificial", icon: "sparkles", hue: "violet" },
   ] },

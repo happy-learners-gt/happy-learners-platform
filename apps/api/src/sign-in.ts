@@ -186,6 +186,11 @@ export async function accessPolicy(method: string, input: unknown, current: Memb
   const next = accessPolicyInput(input);
   if (!next) return reply({ error: "Revisa la política: longitud mínima de 12 a 64 caracteres y sesiones de 1 a 12 horas." }, 400);
   if (next.version !== policy.version) return reply({ error: "La política cambió desde que la abriste. Recarga antes de guardar." }, 409);
+  // Requiring the second factor for administration, without one oneself, would lock oneself out at the next request.
+  if (next.mfaAdmin && !policy.mfaAdmin) {
+    const strong = await db.prepare("SELECT EXISTS (SELECT 1 FROM totp_factors WHERE user_id=?1 AND status='active') OR EXISTS (SELECT 1 FROM passkeys WHERE user_id=?1) AS yes").bind(current.id).first<{ yes: number }>();
+    if (!strong?.yes) return reply({ error: "Configura tu propia verificación en dos pasos o una passkey antes de exigirla a administración: si no, quedarías sin poder seguir.", code: "SELF_MFA_FIRST" }, 409);
+  }
   const changes = ([
     ["minPasswordLength", `longitud mínima ${policy.minPasswordLength} → ${next.minPasswordLength}`], ["breachedCheck", `contraseñas filtradas ${next.breachedCheck ? "se rechazan" : "no se revisan"}`],
     ["mfaAdmin", `segundo factor de administración ${next.mfaAdmin ? "obligatorio" : "opcional"}`], ["mfaEducator", `segundo factor de educadores ${next.mfaEducator ? "obligatorio" : "opcional"}`],

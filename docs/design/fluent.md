@@ -28,9 +28,9 @@ exporta un componente que no está en esta tabla, y la Guía de estilo muestra l
 
 | Nivel | Componentes | Para qué |
 | --- | --- | --- |
-| Átomos | `Icon`, `Button`, `PrimaryAction`, `StatusBadge`, `Field`, `Progress`, `Skeleton`, `Updated`, `Avatar`, `SortHandle`, `InlineName`, `LessonBadge`, `FreedomChip` | Una sola cosa: un control, un dato o un estado |
+| Átomos | `Icon`, `Button`, `PrimaryAction`, `StatusBadge`, `Field`, `Progress`, `Skeleton`, `Updated`, `Avatar`, `SortHandle`, `InlineName`, `LessonBadge`, `FreedomChip`, `QrCode`, `CodeInput` | Una sola cosa: un control, un dato o un estado |
 | Moléculas | `Breadcrumbs`, `Menu`, `Tabs`, `EmptyState`, `ErrorState`, `Loading`, `StatTiles`, `FoldOnPhones`, `StatusSteps`, `TimeFit`, `TeamLine`, `AiWrite`, `FreedomPolicyField`, `FreedomMarks`, `CourseCard`, `ResourceCard`, `Bell` | Un grupo de átomos con un propósito (elegir, avisar, resumir) |
-| Patrones | `PageHeader`, `Section`, `AppShell`, `Brand`, `NewSection`, `Modal`, `Drawer`, `ConfirmDialog`, `FeedbackProvider`, `LessonOutline`, `ActivityFeed`, `CourseProgressList`, `FreedomChangeDialog` | Estructura de pantalla, capas y flujos que se repiten |
+| Patrones | `PageHeader`, `Section`, `AppShell`, `Brand`, `NewSection`, `Modal`, `Drawer`, `ConfirmDialog`, `FeedbackProvider`, `LessonOutline`, `ActivityFeed`, `CourseProgressList`, `FreedomChangeDialog`, `ConfirmationHost` | Estructura de pantalla, capas y flujos que se repiten |
 
 Al tocar una pantalla que arma a mano algo que ya es un componente de esta tabla, se migra a él en el mismo cambio.
 

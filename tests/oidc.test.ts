@@ -151,7 +151,7 @@ describe("ST-129 ST-131 ST-138 on the built Worker", () => {
     expect((await read<{ providers: string[] }>(await as(null, "/login/providers"))).providers).toEqual(["google", "microsoft", "apple"]);
     const ana = await person(admin, "oidc-ana");
     const linked = await roundTrip(await as(ana.cookie, "/me/identities/google", "POST"), claimsFor("google", "g-ana", { email: "ana@gmail.com", email_verified: true }));
-    expect(linked.location).toBe("/mi-cuenta/cuenta?vinculo=vinculada#cuentas-vinculadas");
+    expect(linked.location).toBe("/mi-cuenta/seguridad?vinculo=vinculada");
     const mine = await read<{ linked: { provider: string; email: string }[] }>(await as(ana.cookie, "/me/identities"));
     expect(mine.linked).toEqual([expect.objectContaining({ provider: "google", email: "ana@gmail.com" })]);
     // Signing in with it, after typing who one is.
@@ -171,7 +171,7 @@ describe("ST-129 ST-131 ST-138 on the built Worker", () => {
     expect((await roundTrip(await as(null, "/login/provider/google", "POST", { identifier: "oidc-ana" }), url => ({ ...claimsFor("google", "g-ana")(url), aud: "otra-app" }))).location).toBe("/?acceso=error");
     // The same Google account cannot be linked to a second person.
     const leo = await person(admin, "oidc-leo");
-    expect((await roundTrip(await as(leo.cookie, "/me/identities/google", "POST"), claimsFor("google", "g-ana"))).location).toBe("/mi-cuenta/cuenta?vinculo=ya-vinculada#cuentas-vinculadas");
+    expect((await roundTrip(await as(leo.cookie, "/me/identities/google", "POST"), claimsFor("google", "g-ana"))).location).toBe("/mi-cuenta/seguridad?vinculo=ya-vinculada");
     // CA3: administration unlinks it; it no longer enters. Every step is logged.
     expect((await as(leo.cookie, `/security/people/${ana.id}/identities/google`, "DELETE")).status).toBe(403);
     await read(await as(admin, `/security/people/${ana.id}/identities/google`, "DELETE"));
@@ -184,7 +184,7 @@ describe("ST-129 ST-131 ST-138 on the built Worker", () => {
   it("ST-129 Microsoft and ST-131 Apple (its client secret signed with the account's key) link and sign in the same way", async () => {
     const eva = await person(admin, "oidc-eva");
     for (const provider of ["microsoft", "apple"]) {
-      expect((await roundTrip(await as(eva.cookie, `/me/identities/${provider}`, "POST"), claimsFor(provider, `${provider}-eva`))).location, provider).toBe("/mi-cuenta/cuenta?vinculo=vinculada#cuentas-vinculadas");
+      expect((await roundTrip(await as(eva.cookie, `/me/identities/${provider}`, "POST"), claimsFor(provider, `${provider}-eva`))).location, provider).toBe("/mi-cuenta/seguridad?vinculo=vinculada");
       const signedIn = await roundTrip(await as(null, `/login/provider/${provider}`, "POST", { identifier: "oidc-eva" }), claimsFor(provider, `${provider}-eva`));
       expect(signedIn.location, provider).toBe("/inicio");
     }
@@ -201,8 +201,8 @@ describe("ST-129 ST-131 ST-138 on the built Worker", () => {
     expect(JSON.stringify(await read(await as(admin, "/security/sso")))).not.toContain("secreto-okta");
     expect((await as(admin, "/security/sso/activate", "POST", { version: 1 })).status).toBe(409);
     // A test with an account outside the domains fails; one inside passes.
-    expect((await roundTrip(await as(admin, "/security/sso/test", "POST"), claimsFor("okta", "okta-x", { email: "x@otra.org", email_verified: true }))).location).toBe("/seguridad?prueba=dominio#proveedor");
-    expect((await roundTrip(await as(admin, "/security/sso/test", "POST"), claimsFor("okta", "okta-admin", { email: "direccion@escuela.edu.gt", email_verified: true, groups: ["hl-admins"] }))).location).toBe("/seguridad?prueba=correcta#proveedor");
+    expect((await roundTrip(await as(admin, "/security/sso/test", "POST"), claimsFor("okta", "okta-x", { email: "x@otra.org", email_verified: true }))).location).toBe("/identidad/inicio-de-sesion?prueba=dominio");
+    expect((await roundTrip(await as(admin, "/security/sso/test", "POST"), claimsFor("okta", "okta-admin", { email: "direccion@escuela.edu.gt", email_verified: true, groups: ["hl-admins"] }))).location).toBe("/identidad/inicio-de-sesion?prueba=correcta");
     const active = await read<{ connection: { status: string } }>(await as(admin, "/security/sso/activate", "POST", { version: 1 }));
     expect(active.connection.status).toBe("active");
     // An active person with that sign-in e-mail enters; the group makes them administration.

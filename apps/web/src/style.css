@@ -2257,3 +2257,63 @@ section.panel[id^="profile-"] { scroll-margin-top: calc(var(--topbar-h) + var(--
   .ai-capabilities th[scope=row] > span { display: block; }
   .members-table.ai-capabilities:not(.notification-matrix) td[data-label]:not(:first-child):not(.cell-person):not(.cell-actions) { padding-left: 46%; }
 }
+
+/* Identidad y acceso (docs/design/identidad-y-acceso.md): Mi cuenta › Seguridad and the administration hub. */
+.security-status { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-4) var(--space-5); margin-block-end: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+.security-status > div { flex: 1 1 16rem; }
+.security-status p { margin: var(--space-1) 0 0; color: var(--color-muted); }
+.security-status.is-protected { background: var(--color-success-soft); }
+.security-status.is-protected > svg { color: var(--color-success); }
+.security-status.is-weak { background: var(--color-warning-soft); }
+.security-status.is-weak > svg { color: var(--color-warning); }
+.method-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.method-row, .provider-card { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) 0; border-block-end: 1px solid var(--color-border); }
+.method-row:last-child, .provider-card:last-child { border-block-end: 0; }
+.method-icon { display: grid; place-items: center; inline-size: 2.5rem; block-size: 2.5rem; flex: none; border-radius: var(--radius-md); background: var(--color-primary-soft); color: var(--color-primary-ink); }
+.method-text { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.method-title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.method-choices { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.method-choice { display: flex; align-items: flex-start; gap: var(--space-3); inline-size: 100%; padding: var(--space-4); text-align: start; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); color: inherit; cursor: pointer; }
+.method-choice:hover { background: var(--color-surface-hover); }
+.method-choice > span { display: grid; gap: var(--space-1); }
+.method-choice > span > span { color: var(--color-muted); font-size: var(--text-sm); }
+.method-choice.is-recommended { border-color: var(--color-primary); box-shadow: 0 0 0 1px var(--color-primary) inset; }
+.method-choice > svg { color: var(--color-primary-ink); flex: none; margin-block-start: 2px; }
+.login-card .method-choice { margin: 0; }
+.code-input { border: 0; padding: 0; margin: 0; display: grid; gap: var(--space-2); }
+.code-input legend { font-weight: var(--weight-medium); margin-block-end: var(--space-2); }
+.code-boxes { display: grid; grid-template-columns: repeat(6, minmax(2.25rem, 3rem)); gap: var(--space-2); }
+.code-boxes input { block-size: 3.25rem; text-align: center; font-size: var(--text-lg); font-variant-numeric: tabular-nums; padding: 0; }
+.qr-frame { display: grid; place-items: center; padding: var(--space-3); border-radius: var(--radius-lg); background: #fff; justify-self: center; }
+.qr-code { display: block; inline-size: min(196px, 60vw); block-size: auto; }
+.authenticator-steps { margin: 0; padding-inline-start: var(--space-5); display: grid; gap: var(--space-1); }
+.hub-section-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--space-3); margin-block-end: var(--space-4); }
+.hub-section-head > p { flex: 1 1 24rem; margin: 0; }
+.hub-section-head h2 { margin: var(--space-1) 0 0; }
+.posture { display: flex; align-items: center; gap: var(--space-5); flex-wrap: wrap; margin-block-end: var(--space-4); }
+.posture-text { flex: 1 1 18rem; }
+.posture-text h2 { margin: 0 0 var(--space-1); font-size: var(--text-lg); }
+.score-ring { position: relative; inline-size: 7.5rem; block-size: 7.5rem; flex: none; }
+.score-ring svg { inline-size: 100%; block-size: 100%; }
+.score-track { fill: none; stroke: var(--color-surface-muted); stroke-width: 12; }
+.score-value { fill: none; stroke-width: 12; stroke-linecap: round; transition: stroke-dasharray var(--motion-slow) var(--ease-enter); }
+.score-ring.is-good .score-value { stroke: var(--color-success); }
+.score-ring.is-fair .score-value { stroke: var(--color-warning); }
+.score-ring.is-poor .score-value { stroke: var(--color-danger); }
+.score-number { position: absolute; inset: 0; display: grid; place-content: center; font-size: 1.75rem; font-weight: var(--weight-bold); text-align: center; }
+.score-number small { font-size: var(--text-sm); font-weight: var(--weight-regular); color: var(--color-muted); }
+.recommendations { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.recommendation { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; padding: var(--space-3) var(--space-4); border: 1px solid var(--color-border); border-inline-start-width: 4px; border-radius: var(--radius-md); background: var(--color-surface); }
+.recommendation.is-high { border-inline-start-color: var(--color-danger); }
+.recommendation.is-medium { border-inline-start-color: var(--color-warning); }
+.recommendation.is-low { border-inline-start-color: var(--color-primary); }
+.recommendation-text { flex: 1 1 20rem; display: grid; gap: var(--space-1); }
+.recommendation-text p { margin: 0; }
+.recommendation-title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.identity-table td .badge + .badge { margin-inline-start: var(--space-1); }
+.person-panel-head { display: grid; gap: var(--space-2); }
+.person-panel-head .badges { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.review-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.segmented > button { min-height: 30px; padding: 0 12px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-ink-soft); font-size: var(--text-sm); font-weight: var(--weight-medium); cursor: pointer; }
+.segmented > button[aria-pressed="true"] { background: var(--color-surface); color: var(--color-ink); box-shadow: var(--shadow-sm); }
+.segmented > button:disabled { opacity: .5; cursor: not-allowed; }

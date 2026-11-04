@@ -85,26 +85,25 @@ export function AccessPage() {
 
 type Editing = { kind: "group"; group?: SecurityGroup } | { kind: "permissions"; group: SecurityGroup } | { kind: "members"; group: SecurityGroup };
 /** ACC-01 (docs/transformacion/auditoria.md §8): one tab per thing administered, as Educadores and Contratos. */
-const accessTabs = [
-  { id: "matriz", label: "Matriz", href: "/roles-y-accesos" },
-  { id: "grupos", label: "Grupos de seguridad", href: "/roles-y-accesos#grupos" },
-  { id: "coordinacion", label: "Coordinación", href: "/roles-y-accesos#coordinacion" },
-  { id: "historial", label: "Historial", href: "/roles-y-accesos#historial" },
-] as const;
-type AccessTab = (typeof accessTabs)[number]["id"];
-function AccessMatrix() {
+const accessTabIds = [["matriz", "Matriz"], ["grupos", "Grupos de seguridad"], ["coordinacion", "Coordinación"], ["historial", "Historial"]] as const;
+type AccessTab = (typeof accessTabIds)[number][0];
+/** The matrix, groups, coordination and history; inside Identidad y acceso › Roles y grupos (docs/design/identidad-y-acceso.md). */
+export function AccessMatrix({ base = "/identidad/roles", embedded = false }: { base?: string; embedded?: boolean }) {
+  const accessTabs = accessTabIds.map(([id, label]) => ({ id, label, href: id === "matriz" ? base : `${base}#${id}` }));
   const { toast, confirm } = useFeedback();
   const { url, navigate } = useNavigation();
   const tab: AccessTab = accessTabs.find(item => `#${item.id}` === url.hash)?.id || "matriz";
   const [data, setData] = useState<Matrix | null>(null), [error, setError] = useState(""), [editing, setEditing] = useState<Editing | null>(null), [area, setArea] = useState("");
   const load = async () => { setError(""); try { setData(await api<Matrix>("/access/matrix")); } catch (cause) { setError(message(cause)); } };
   useEffect(() => { void load(); }, []);
-  const header = <PageHeader title="Roles y accesos" description="Qué puede hacer cada rol y cada grupo de seguridad, por área. Los cambios se aplican en la siguiente solicitud de cada persona y quedan en el historial."
+  const header = embedded
+    ? <div className="hub-section-head"><p className="muted">Qué puede hacer cada rol y cada grupo de seguridad, por área. Los cambios se aplican en la siguiente solicitud de cada persona y quedan en el historial.</p>{data && <PrimaryAction icon="plus" onClick={() => setEditing({ kind: "group" })}>Crear grupo</PrimaryAction>}</div>
+    : <PageHeader title="Roles y accesos" description="Qué puede hacer cada rol y cada grupo de seguridad, por área. Los cambios se aplican en la siguiente solicitud de cada persona y quedan en el historial."
     primary={data && <PrimaryAction icon="plus" onClick={() => setEditing({ kind: "group" })}>Crear grupo</PrimaryAction>}/>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
   if (!data) return <>{header}<Loading label="Cargando la matriz de accesos…"/></>;
   // A group just created or changed is shown where its actions are.
-  const done = async (text: string) => { setEditing(null); await load(); toast({ message: text }); if (tab !== "grupos") navigate("/roles-y-accesos#grupos", true); };
+  const done = async (text: string) => { setEditing(null); await load(); toast({ message: text }); if (tab !== "grupos") navigate(`${base}#grupos`, true); };
   const counts: Partial<Record<AccessTab, number>> = { grupos: data.groups.length, coordinacion: data.coordinators.length };
   async function remove(group: SecurityGroup) {
     if (!await confirm({ title: `¿Eliminar el grupo «${group.name}»?`, body: `${group.members.length ? `${group.members.length === 1 ? "La persona del grupo pierde" : `Las ${group.members.length} personas del grupo pierden`} sus permisos en su siguiente solicitud.` : "El grupo no tiene personas."} El historial conserva el registro.`, confirm: "Eliminar grupo", danger: true })) return;
