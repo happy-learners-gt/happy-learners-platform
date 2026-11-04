@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.24 — 2026-11-03
+
+- Notificaciones (NOT-01): junto al botón, cuántos avisos son obligatorios y que guardar pide marcar o desmarcar uno;
+  si el correo no está configurado, un aviso explica que los avisos llegan en la aplicación pero no por correo; el
+  registro vacío explica qué lo llena y, con filtros, ofrece quitarlos.
+
 ## 1.6.23 — 2026-11-03
 
 - Documentos en la demostración (DOC-02): la organización de demostración trae una boleta y una constancia publicadas
