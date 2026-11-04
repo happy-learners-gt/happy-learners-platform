@@ -4,7 +4,10 @@ import { sessionToken, signIn, toast } from "./helpers";
 // 1.5.0 (docs/design/constructor-de-reportes.md): administration designs a document, previews it with real data,
 // publishes it, and the documents generated from then on use it; 1.5.2 adds «Sugerir campos». The certificate is used
 // here so the report card other specs check keeps its format.
-test("administration designs, previews and publishes the certificate, and new certificates use it", async ({ page, playwright, baseURL }) => {
+test("administration designs, previews and publishes the certificate, and new certificates use it", async ({ page, playwright, baseURL }, info) => {
+  // The organization has one certificate template per scope and section 6.º A takes it: desktop and mobile at once
+  // would archive and create the same one. The designer's phone layout is checked by layout and accessibility.
+  test.skip(info.project.name === "mobile", "one certificate template per scope; the flow runs once");
   const admin = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("admin-demo")}` } });
   const educator = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL!, Cookie: `hl_session=${await sessionToken("lucia.herrera")}` } });
   try {
