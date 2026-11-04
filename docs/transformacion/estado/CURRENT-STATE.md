@@ -14,8 +14,8 @@
   desplegar los PR de cada hito con CI verde; aplicar las recomendaciones de la cola que no requieren cuentas ni gasto.
 - **En curso:** nada a medias
 - **Requieren al usuario:** AP-05 pentest manual de pago (SEC-06 gratuito en curso); AP-06 marca
-  («Acervum» en discusión); AP-07 y AP-08 decididos el 03-nov
-- **Siguiente acción:** M8 hecho salvo DOC-03 y LIB-02; M9 hecho salvo ORG-01 (espera AP-06); sigue M11 (MOAT-01, OBS-01); el 13-nov SEC-04. El programa
+  («Acervum» en discusión); AP-07 y AP-08 decididos el 03-nov; AP-09 lectura de Workers Observability (OBS-01)
+- **Siguiente acción:** M8 hecho salvo DOC-03 y LIB-02; M9 hecho salvo ORG-01 (espera AP-06); M11: MOAT-01 hecho (`ventaja.md`), OBS-01 espera AP-09 (MOAT-01, OBS-01); el 13-nov SEC-04. El programa
   no está completo: 1 de 18 módulos en su meta (ver MILESTONES)
 - **Incidente 03-nov:** #108 se fusionó con el escáner `code` (Semgrep) en rojo porque la automatización solo miraba
   `verify`. Corregido en 1.6.6 (#109, todos los checks verdes);

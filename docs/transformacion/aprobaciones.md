@@ -102,3 +102,13 @@ y qué sigue avanzando mientras tanto.
   horas». Administración ve además una referencia del resto: por hora (otros contratos), por clase × clases, y un
   monto fijo mensual convertido a costo por hora efectiva cuando el filtro es un mes completo. **Hecho en 1.6.12
   (HRS-03).**
+
+## AP-09 · Lectura de Workers Observability para el informe de SLO
+
+- **Hoy:** cada petición deja su línea `event=api` en Workers Logs y las consultas de disponibilidad, latencia, cuota y
+  fallos están descritas para el panel de Cloudflare (`docs/operations/slo.md` §3); el monitor externo avisa caídas.
+- **Propuesta (OBS-01):** un flujo semanal que consulte esos registros con la API de Cloudflare y deje el informe en el
+  resumen de la corrida. Necesita que el token de CI tenga permiso de **lectura** de Workers Observability (o un token
+  nuevo solo de lectura). Costo 0.
+- **Por qué pide decisión:** es un cambio de credenciales en la cuenta de Cloudflare del dueño.
+- **Bloquea:** OBS-01.
