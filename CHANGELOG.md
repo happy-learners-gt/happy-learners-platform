@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.35 — 2026-11-03
+
+- Biblioteca (LIB-02): cada recurso dice en la lista dónde se usa («En: …», las dos primeras lecciones enlazadas y
+  cuántas más), sin abrir su vista previa.
+
 ## 1.6.34 — 2026-11-03
 
 - Diseñador de documentos (DOC-03): «Publicar» solo se habilita cuando hay cambios desde la última versión (si no,
