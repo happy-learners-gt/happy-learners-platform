@@ -81,7 +81,7 @@ test("the agenda shows a class, a holiday and a delivery, and a holiday configur
     await shoot("panel-clase", 1440, 900);
     await shoot("panel-clase", 390, 844);
     await page.keyboard.press("Escape");
-    await page.goto("/organizacion/calendario");
+    await page.goto("/organizacion/calendario#asuetos");
     await expect(page.getByRole("heading", { level: 1, name: "Calendario institucional" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Asuetos y fechas recurrentes" })).toBeVisible();
     await expect(page.getByText("Año Nuevo").first()).toBeVisible();
