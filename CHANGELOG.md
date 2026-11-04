@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.36 — 2026-11-03
+
+- Diseñador de documentos (DOC-04): en la lista de bloques y en el encabezado, los campos se leen por su nombre
+  («Nombre del estudiante») en lugar de su clave; al editar un texto se sigue viendo la clave que se inserta.
+
+## 1.6.35 — 2026-11-03
+
+- Biblioteca (LIB-02): cada recurso dice en la lista dónde se usa («En: …», las dos primeras lecciones enlazadas y
+  cuántas más), sin abrir su vista previa.
+
 ## 1.6.34 — 2026-11-03
 
 - Diseñador de documentos (DOC-03): «Publicar» solo se habilita cuando hay cambios desde la última versión (si no,
