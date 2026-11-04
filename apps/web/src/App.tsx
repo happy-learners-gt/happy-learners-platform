@@ -23,6 +23,8 @@ import { ContractsPage } from "./pages/contracts";
 import { AcceptInvitation } from "./pages/invitations";
 import { AccessPage } from "./pages/access";
 import { SecurityPage } from "./pages/security";
+import { EnterWithLink, RecoverPassword } from "./pages/sign-in-links";
+import { MfaRequired } from "./pages/mfa";
 import { NotificationsAdmin } from "./pages/notifications";
 import { ConsentGate, PrivacyPage } from "./pages/legal";
 import { TeamDirectory, TeamProfilePage } from "./pages/professional";
@@ -55,6 +57,10 @@ function Application() {
   // ST-158: the link that confirms a new sign-in e-mail opens with or without a session.
   const emailChange = /^\/cuenta\/correo\/([a-z]_[a-f0-9]{64})\/?$/.exec(url.pathname)?.[1];
   if (emailChange || url.pathname.startsWith("/cuenta/correo/")) return <ConfirmEmail key={emailChange || "invalid"} token={emailChange || "invalid"}/>;
+  // REL-007 (ST-130, ST-134): the links sent by e-mail to sign in and to recover the password open without a session.
+  const linkToken = /^\/(entrar|recuperar)\/([a-z]_[a-f0-9]{64})\/?$/.exec(url.pathname);
+  if (linkToken || /^\/(entrar|recuperar)\//.test(url.pathname)) return linkToken?.[1] === "entrar" || url.pathname.startsWith("/entrar/")
+    ? <EnterWithLink key={linkToken?.[2] || "invalid"} token={linkToken?.[2] || "invalid"}/> : <RecoverPassword key={linkToken?.[2] || "invalid"} token={linkToken?.[2] || "invalid"}/>;
   if (url.pathname.replace(/\/+$/, "") === "/estudiante") return <Suspense fallback={<main className="splash"><p role="status">Abriendo tu sección…</p></main>}><StudentSpace/></Suspense>;
   return <AuthenticatedApp/>;
 }
@@ -105,7 +111,7 @@ function AuthenticatedApp() {
     const session = await api<{ member: Member; pending?: PendingDocument[]; onboarding?: true; preferences?: EffectivePreferences }>("/session");
     if (session.preferences) applyPreferences(session.preferences);
     // With a temporary password, nothing else opens until the person chooses their own (ST-093).
-    const org = session.member.mustChangePassword ? null : await api<{ organization: Organization }>("/organization");
+    const org = session.member.mustChangePassword || session.member.mfaSetupRequired ? null : await api<{ organization: Organization }>("/organization");
     setMember(session.member); setOrganization(org?.organization || null); setPending(session.pending || []); setOnboarding(!!session.onboarding);
   }, []);
   const start = useCallback(() => {
@@ -133,6 +139,9 @@ function AuthenticatedApp() {
   if (status === "offline") return <main className="splash"><span className="brand-mark" aria-hidden="true">hl</span><h1>No pudimos conectar</h1><p>Comprueba tu conexión y vuelve a intentar.</p><button type="button" className="button primary" onClick={start}>Volver a intentar</button></main>;
   if (!member) return <Login onSignedIn={async () => { await refresh(); setExpired(false); }}/>;
   if (member.mustChangePassword) return <ChangePassword member={member} onChanged={async () => { await refresh(); toast({ message: "Contraseña guardada. Ya puedes usar tu espacio." }); }}
+    onLeave={() => { api("/logout", "POST").catch(() => undefined).finally(() => setMember(null)); }}/>;
+  // ST-133: the policy requires a second factor for the role and the person has none: set it up first.
+  if (member.mfaSetupRequired) return <MfaRequired member={member} onDone={async () => { await refresh(); toast({ message: "Verificación en dos pasos activada. Ya puedes usar tu espacio." }); }}
     onLeave={() => { api("/logout", "POST").catch(() => undefined).finally(() => setMember(null)); }}/>;
   const logout = () => api("/logout", "POST").catch(() => undefined).finally(() => { setMember(null); setOrganization(null); setPending([]); toast({ tone: "info", message: "Sesión cerrada de forma segura." }); });
   if (pending.length) return <ConsentGate pending={pending} organizationId={member.organizationId} onAccepted={refresh} onLogout={() => void logout()}/>;

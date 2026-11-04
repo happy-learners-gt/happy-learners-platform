@@ -27,9 +27,11 @@ export async function roles(path: string, method: string, input: unknown, curren
       (SELECT count(*) FROM activity_events e WHERE e.actor_id=u.id) AS events,
       (SELECT max(e.occurred_at) FROM activity_events e WHERE e.actor_id=u.id) AS lastActivity,
       (SELECT d.departed_on FROM departures d WHERE d.user_id=u.id AND d.organization_id=m.organization_id ORDER BY d.recorded_at DESC LIMIT 1) AS departedOn,
-      (SELECT group_concat(cs.program_id) FROM coordination_scopes cs WHERE cs.user_id=u.id AND cs.organization_id=m.organization_id) AS coordinationScopes
+      (SELECT group_concat(cs.program_id) FROM coordination_scopes cs WHERE cs.user_id=u.id AND cs.organization_id=m.organization_id) AS coordinationScopes,
+      EXISTS (SELECT 1 FROM totp_factors f WHERE f.user_id=u.id AND f.status='active') AS mfa,
+      (SELECT group_concat(l.provider) FROM linked_identities l WHERE l.user_id=u.id) AS identities
       FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.organization_id=? ORDER BY m.role,displayName`).bind(current.organizationId).all<Member & Record<string, number | string | null>>();
-    return Response.json({ members: rows.results.map(m => ({ ...m, active: !!m.active, mustChangePassword: m.mustChangePassword ? true : undefined, departedOn: m.departedOn || undefined,
+    return Response.json({ members: rows.results.map(m => ({ ...m, active: !!m.active, mfa: !!m.mfa, identities: m.identities ? String(m.identities).split(",") : [], mustChangePassword: m.mustChangePassword ? true : undefined, departedOn: m.departedOn || undefined,
       coordination: m.role === "educator" && m.coordinationScopes ? String(m.coordinationScopes).split(",").includes("*") ? { all: true } : { programs: String(m.coordinationScopes).split(",").sort() } : null, coordinationScopes: undefined })) });
   }
   if (method === "POST" && path === "/api/members") return createAccount(input, current, db, taken);

@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { AccountNoticeDelivery, AccountOverview, AccountSession, ClosureRequest, EmailChangeIssued, EmailChangePreview, MyClosure, SignInRecord } from "@happy-learners/contracts";
-import { acceptablePassword, closureLabels, emailChangeHours, maxClosureReason, maxPasswordLength, minPasswordLength, normalizeEmail, personalDataSections } from "@happy-learners/domain";
+import { acceptablePassword, closureLabels, emailChangeHours, maxClosureReason, maxPasswordLength, minPasswordLength, normalizeEmail, personalDataSections, securityMethods } from "@happy-learners/domain";
+import { MfaSettings } from "./mfa";
+import { PasskeySettings } from "./passkeys";
+import { MyTokens } from "./tokens";
+import { LinkedAccounts } from "./providers";
 import { api, ApiError, message } from "../api";
 import { fullDate, timeAgo } from "../model";
 import { useSession } from "../session";
@@ -35,10 +39,14 @@ export function AccountPage() {
   useEffect(load, [revision]);
   const refresh = () => setRevision(value => value + 1);
   return <>
-    <PageHeader title="Cuenta" description="Tu correo, tu contraseña, las sesiones abiertas y una copia de tus datos."/>
+    <PageHeader title="Cuenta" description="Tu correo, tu contraseña, la verificación en dos pasos, las sesiones abiertas y una copia de tus datos."/>
     <div className="form-sheet account-cards">
       {error ? <ErrorState error={error} retry={load}/> : !overview ? <Loading label="Cargando tu cuenta…" lines={3}/> : <EmailSection overview={overview} onChanged={refresh}/>}
       <PasswordSection username={member.username} onChanged={refresh}/>
+      <Anchored id="dos-pasos" title="Verificación en dos pasos"><MfaSettings/></Anchored>
+      <Anchored id="passkeys" title="Passkeys"><PasskeySettings/></Anchored>
+      <Anchored id="cuentas-vinculadas" title="Cuentas vinculadas"><LinkedAccounts/></Anchored>
+      <Anchored id="tokens" title="Tokens de integración"><MyTokens/></Anchored>
       <SessionsSection revision={revision} onChanged={refresh}/>
       <SignInHistory revision={revision}/>
       <MyData/>
@@ -175,7 +183,7 @@ function SessionsSection({ revision, onChanged }: { revision: number; onChanged:
       <caption className="sr-only">Tus sesiones abiertas: dispositivo, país, inicio y último uso</caption>
       <thead><tr><th scope="col">Dispositivo</th><th scope="col">País</th><th scope="col">Inició</th><th scope="col">Último uso</th><th scope="col"><span className="sr-only">Acciones</span></th></tr></thead>
       <tbody>{sessions.map(session => <tr key={session.id}>
-        <th scope="row"><span className="device-cell"><Icon name={/iPhone|Android/.test(session.device) ? "present" : "grid"} size={18}/><span><span>{session.device}</span>{session.current && <> <StatusBadge tone="success">Esta sesión</StatusBadge></>}{session.method === "invitation" && <span className="muted small"> · al aceptar la invitación</span>}</span></span></th>
+        <th scope="row"><span className="device-cell"><Icon name={/iPhone|Android/.test(session.device) ? "present" : "grid"} size={18}/><span><span>{session.device}</span>{session.current && <> <StatusBadge tone="success">Esta sesión</StatusBadge></>}{session.method !== "password" && <span className="muted small"> · {session.method === "invitation" ? "al aceptar la invitación" : securityMethods[session.method].toLowerCase()}</span>}</span></span></th>
         <td>{countryName(session.country)}</td>
         <td><time dateTime={session.createdAt} title={fullDate(session.createdAt)}>{shortDate(session.createdAt)}</time></td>
         <td>{session.current ? <span>Ahora</span> : <time dateTime={session.lastUsedAt} title={fullDate(session.lastUsedAt)}>{timeAgo(session.lastUsedAt)}</time>}</td>
@@ -205,7 +213,7 @@ function SignInHistory({ revision }: { revision: number }) {
           <thead><tr><th scope="col">Fecha</th><th scope="col">Resultado</th><th scope="col">Dispositivo</th><th scope="col">País</th></tr></thead>
           <tbody>{visible.map(item => <tr key={item.id}>
             <th scope="row"><time dateTime={item.occurredAt}>{shortDate(item.occurredAt)}</time></th>
-            <td><StatusBadge tone={outcomeLabel[item.outcome][1]}>{outcomeLabel[item.outcome][0]}</StatusBadge>{item.method === "invitation" && <span className="muted small"> · invitación</span>}</td>
+            <td><StatusBadge tone={outcomeLabel[item.outcome][1]}>{outcomeLabel[item.outcome][0]}</StatusBadge>{item.method !== "password" && <span className="muted small"> · {securityMethods[item.method].toLowerCase()}</span>}</td>
             <td>{item.device}</td>
             <td>{countryName(item.country)}</td>
           </tr>)}</tbody>

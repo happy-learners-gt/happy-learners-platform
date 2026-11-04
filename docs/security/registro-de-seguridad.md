@@ -16,9 +16,12 @@ un detalle breve, el resumen del dispositivo, el país y la fecha. Los tipos est
 | Contraseña y correo | Cambio, restablecimiento por administración, cambio del correo de acceso |
 | Roles y permisos | Cuenta creada con su rol, cambio de rol, activación o desactivación, salida, coordinación académica y grupos de seguridad |
 | Registro | Cada exportación del registro |
-
-Los factores nuevos (enlace por correo, recuperación, segundo factor, passkeys, proveedores, tokens y proveedor
-institucional) agregan sus eventos al entregarse.
+| Enlaces y recuperación (1.7.1) | Enlace de acceso pedido, recuperación pedida y hecha (también cuando lo escrito no tiene cuenta, sin el nombre) |
+| Segundo factor (1.7.1) | Activado, desactivado, restablecido por administración, código incorrecto, código de recuperación usado, códigos renovados |
+| Passkeys (1.7.1) | Registrada y eliminada (con su nombre); inicios y fallos con passkey |
+| Proveedores (1.7.1) | Cuenta vinculada y desvinculada, inicios y fallos con Google, Microsoft, Apple o el proveedor institucional, cambios y pruebas del proveedor institucional, rol asignado por su grupo |
+| Tokens (1.7.1) | Creado, revocado y primer uso de cada día |
+| Política y revisión (1.7.1) | Cambios de la política de acceso, exportación de la revisión de accesos |
 
 ## Qué no se registra nunca
 

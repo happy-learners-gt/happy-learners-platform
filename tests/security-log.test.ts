@@ -247,6 +247,17 @@ describe("ST-137 ST-068 ST-184 ST-186 ST-187 on the built Worker", () => {
     expect(data.security.log.find(item => item.type === "role_changed")?.byThemselves).toBe(false);
   });
 
+  it("ST-189 CA3 administration exports the review of accesses: one row per person, with their factors, and it is logged", async () => {
+    const educator = await newEducator(admin, "seguridad-revision", "Persona Revisión");
+    expect((await as(educator.cookie, "/security/access-review")).status).toBe(403);
+    const response = await as(admin, "/security/access-review");
+    expect(response.headers.get("content-disposition")).toMatch(/^attachment; filename="revision-de-accesos-\d{4}-\d{2}-\d{2}\.csv"$/);
+    const lines = (await response.text()).trim().split("\r\n");
+    expect(lines[0].replace(/^\uFEFF/, "")).toBe("Usuario,Nombre,Rol,Acceso,Coordinación,Grupos de seguridad,Verificación en dos pasos,Passkeys,Cuentas vinculadas,Tokens activos,Último inicio de sesión (UTC)");
+    expect(lines.find(line => line.startsWith("seguridad-revision,"))).toMatch(/^seguridad-revision,Persona Revisión,Educador,Activo,,,No,0,,0,\d{4}-/);
+    expect((await log(admin, "&tipo=access_review_exported"))[0]).toMatchObject({ outcome: "info" });
+  });
+
   it("ST-187 CA2 a backup of the organization never carries the security log", async () => {
     const backup = await read<{ tables: Record<string, unknown> }>(await as(admin, "/organization/backup"));
     for (const table of ["security_events", "security_chain", "totp_factors", "recovery_codes", "passkeys", "auth_challenges", "linked_identities", "sso_connections", "access_tokens", "sessions"]) expect(backup.tables, table).not.toHaveProperty(table);
