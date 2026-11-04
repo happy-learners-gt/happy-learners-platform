@@ -758,6 +758,8 @@ export interface HoursReport {
   options: { courses: { id: string; name: string }[]; sections: { id: string; name: string; courseId: string }[]; people: { id: string; name: string }[] };
   /** PERF-03: more classes than one report reads; it has the most recent ones and its sums are partial. */
   truncated?: boolean;
+  /** HRS-04: when the period has no classes, the day of the latest class the person may see, if any. */
+  latestDay?: string;
 }
 export interface HoursAdjustmentInput { minutes: number; educatorId?: string; reason: string }
 /**

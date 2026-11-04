@@ -275,6 +275,18 @@ describe("ST-152 Controlar las horas efectivas impartiendo clases", () => {
     expect(backup.tables.class_hour_adjustments.columns).toEqual(["id", "organization_id", "session_id", "minutes_before", "minutes_after", "educator_before", "educator_after", "reason", "adjusted_by", "adjusted_at"]);
   });
 
+  it("HRS-04: an empty period says the day of the latest class the person may see", async () => {
+    const all = await report(admin);
+    const latest = all.rows.map(row => row.day).sort().at(-1)!;
+    const empty = await report(admin, "?from=2030-01-01&to=2030-01-31");
+    expect(empty.rows).toHaveLength(0);
+    expect(empty.latestDay).toBe(latest);
+    expect(all.latestDay).toBeUndefined();
+    // Each educator only learns about their own classes.
+    const own = await report(other, "?from=2030-01-01&to=2030-01-31");
+    expect(own.latestDay).toBe((await report(other)).rows.map(row => row.day).sort().at(-1));
+  });
+
   it("HRS-02: administration corrects the classes por revisar at once with their planned duration and one reason", async () => {
     const [a, b, pendingMine] = mine.classes, [, , pendingTheirs] = theirs.classes;
     // Completed straight from planned: no start, so they count 0 until reviewed.

@@ -51,6 +51,19 @@ function hoursRow(row: Stored, timezone: string): HoursRow {
 }
 const byName = <T extends { name: string }>(a: T, b: T) => a.name.localeCompare(b.name, "es", { numeric: true });
 
+/**
+ * The day of the latest completed class the person may see (administration all of them, else those attributed to them
+ * after the latest correction, as in the report), in the same time zone as the report.
+ */
+async function latestDay(db: Database, organizationId: string, own: string | null, timezone: string) {
+  // nosemgrep: sql-interpolated-text -- own agrega un fragmento constante; el valor va como parámetro
+  const row = await db.prepare(`SELECT s.started_at AS startedAt,s.session_date AS sessionDate FROM class_sessions s
+    WHERE s.organization_id=? AND s.status='completed' AND s.completed_at IS NOT NULL${own ? " AND COALESCE((SELECT x.educator_after FROM class_hour_adjustments x WHERE x.session_id=s.id ORDER BY x.adjusted_at DESC,x.rowid DESC LIMIT 1),s.taught_by)=?" : ""}
+    ORDER BY COALESCE(s.started_at,s.session_date) DESC LIMIT 1`)
+    .bind(organizationId, ...(own ? [own] : [])).first<{ startedAt: string | null; sessionDate: string }>();
+  return row ? hoursDay(row.startedAt, row.sessionDate, timezone) : null;
+}
+
 /** The report the person may see: administration every class, anyone else only the classes attributed to them. */
 async function report(url: URL, current: Member, db: Database): Promise<HoursReport | { error: string }> {
   const filter = hoursFilterInput(url.searchParams);
@@ -60,6 +73,8 @@ async function report(url: URL, current: Member, db: Database): Promise<HoursRep
   const visible = stored.slice(0, hoursRowLimit).map(row => hoursRow(row, timezone));
   const rows = visible.filter(row => inHoursFilter(row, filter)).sort((a, b) => b.day.localeCompare(a.day) || (b.startedAt || b.completedAt).localeCompare(a.startedAt || a.completedAt));
   const unique = <T extends { id: string }>(items: T[]) => [...new Map(items.map(item => [item.id, item])).values()];
+  // HRS-04: an empty period says where the latest class is, so the page never opens empty with a history behind it.
+  const latest = !rows.length && (filter.from || filter.to) ? await latestDay(db, current.organizationId, admin ? null : current.id, timezone) : null;
   return {
     filter, timezone, scope: admin ? "all" : "own", rows, minutes: rows.reduce((sum, row) => sum + row.minutes, 0), totals: hoursTotals(rows),
     options: {
@@ -68,6 +83,7 @@ async function report(url: URL, current: Member, db: Database): Promise<HoursRep
       people: unique(visible.flatMap(row => row.educatorId ? [{ id: row.educatorId, name: row.educatorName || row.educatorId }] : [])).sort(byName),
     },
     ...(truncated ? { truncated } : {}),
+    ...(latest ? { latestDay: latest } : {}),
   };
 }
 
