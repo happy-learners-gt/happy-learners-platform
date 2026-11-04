@@ -25,10 +25,24 @@ async function parse<T>(response: Response, path: string): Promise<T> {
   return result as T;
 }
 
+/**
+ * Identidad y acceso: a sensitive change outside the session's confirmation window answers REAUTH_REQUIRED. The shell
+ * registers how to ask the person to confirm (password, passkey or code); the request then repeats once by itself.
+ */
+let confirmer: (() => Promise<boolean>) | null = null;
+export const setConfirmer = (ask: (() => Promise<boolean>) | null) => { confirmer = ask; };
+
 export async function api<T>(path: string, method = "GET", data?: unknown): Promise<T> {
   let response: Response;
-  try { response = await fetch(`/api${path}`, { method, credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(15000), ...(data ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) } : {}) }); }
+  const send = () => fetch(`/api${path}`, { method, credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(15000), ...(data ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) } : {}) });
+  try { response = await send(); }
   catch { throw new ApiError("No pudimos conectar. Comprueba tu conexión y vuelve a intentar.", 0); }
+  if (response.status === 403 && confirmer && path !== "/me/confirm") {
+    const detail = await response.clone().json().catch(() => ({})) as { code?: string };
+    if (detail.code === "REAUTH_REQUIRED" && await confirmer()) {
+      try { response = await send(); } catch { throw new ApiError("No pudimos conectar. Comprueba tu conexión y vuelve a intentar.", 0); }
+    }
+  }
   const result = await parse<T>(response, path);
   if (method !== "GET") dispatchEvent(new CustomEvent(changed, { detail: path }));
   return result;
