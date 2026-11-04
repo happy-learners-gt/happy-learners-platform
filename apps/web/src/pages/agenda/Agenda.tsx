@@ -72,15 +72,25 @@ function titleOf(view: AgendaView, anchor: string, range: { from: string; until:
   const sameYear = range.from.slice(0, 4) === range.until.slice(0, 4);
   return sameYear ? `${short(range.from)} – ${short(range.until)} ${range.until.slice(0, 4)}` : `${short(range.from)} ${range.from.slice(0, 4)} – ${short(range.until)} ${range.until.slice(0, 4)}`;
 }
-function placedClasses(classes: ClassItem[]) {
+/**
+ * Classes of one day side by side when they overlap. With `max` (AGE-01, the week), a group of overlapping classes
+ * shows at most `max` columns and the rest as a «+N» chip over the group, which opens the day.
+ */
+type Placed = { item: ClassItem; lane: number; lanes: number; more?: ClassItem[] };
+function placedClasses(classes: ClassItem[], max = Infinity): Placed[] {
   const startOf = (item: ClassItem) => minutes(classMoment(item.date, item.startsAt).time);
   const endOf = (item: ClassItem) => startOf(item) + (item.durationMinutes || 45);
   const sorted = [...classes].sort((a, b) => startOf(a) - startOf(b) || a.id.localeCompare(b.id));
-  const result: { item: ClassItem; lane: number; lanes: number }[] = [];
+  const result: Placed[] = [];
   let cluster: { item: ClassItem; lane: number }[] = [], laneEnds: number[] = [], clusterEnd = -1;
   const flush = () => {
     const lanes = Math.max(1, ...cluster.map(entry => entry.lane + 1));
-    for (const entry of cluster) result.push({ ...entry, lanes });
+    if (lanes <= max) for (const entry of cluster) result.push({ ...entry, lanes });
+    else {
+      const kept = cluster.filter(entry => entry.lane < max), rest = cluster.filter(entry => entry.lane >= max).map(entry => entry.item);
+      for (const entry of kept) result.push({ ...entry, lanes: max });
+      result.push({ item: rest[0], lane: max - 1, lanes: max, more: rest });
+    }
     cluster = []; laneEnds = []; clusterEnd = -1;
   };
   for (const item of sorted) {
@@ -195,7 +205,7 @@ export function Agenda() {
     {error ? <ErrorState error={error} retry={() => visit({ fecha: anchor })}/> : !data ? <Loading label="Cargando la agenda…" cards={2}/> : <div className="agenda-body">
       <div className="agenda-main">
         {view === "day" && <DayList day={anchor} items={visible} onOpen={setSelected}/>}
-        {view === "week" && <WeekView admin={admin} from={range.from} items={visible} onOpen={setSelected}/>}
+        {view === "week" && <WeekView admin={admin} from={range.from} items={visible} onOpen={setSelected} openDay={day => visit({ fecha: day, vista: "day" })}/>}
         {view === "month" && <MonthView anchor={anchor} weekStart={weekStart} items={visible} onOpen={setSelected} openDay={day => visit({ fecha: day, vista: "day" })}/>}
         {view === "year" && <YearView year={anchor.slice(0, 4)} items={visible} weekStart={weekStart} onMonth={month => visit({ fecha: `${anchor.slice(0, 4)}-${month}-01`, vista: "month" })}/>}
       </div>
@@ -218,7 +228,7 @@ function DayList({ day, items, onOpen }: { day: string; items: AgendaItem[]; onO
   </section>;
 }
 
-function WeekView({ admin, from, items, onOpen }: { admin: boolean; from: string; items: AgendaItem[]; onOpen: (item: AgendaItem) => void }) {
+function WeekView({ admin, from, items, onOpen, openDay }: { admin: boolean; from: string; items: AgendaItem[]; onOpen: (item: AgendaItem) => void; openDay: (day: string) => void }) {
   const days = Array.from({ length: 7 }, (_, index) => addDays(from, index));
   const hours = Array.from({ length: 12 }, (_, index) => index + 7);
   return <section className="agenda-week" aria-label={admin ? "La semana" : "Tu semana"}>
@@ -241,7 +251,8 @@ function WeekView({ admin, from, items, onOpen }: { admin: boolean; from: string
         const off = items.some(item => item.type === "no-class" && covers(item, day));
         const classes = items.filter((item): item is ClassItem => item.type === "class" && classDay(item) === day);
         return <div key={`${day}-col`} className={`agenda-day-column${off ? " agenda-off" : ""}`}>
-          {placedClasses(classes).map(entry => <ClassBlock key={entry.item.id} {...entry} onOpen={onOpen}/>)}
+          {placedClasses(classes, 1).map(entry => entry.more ? <MoreClasses key={`${entry.item.id}-more`} {...entry} more={entry.more} onOpen={() => openDay(day)}/>
+            : <ClassBlock key={entry.item.id} {...entry} onOpen={onOpen}/>)}
         </div>;
       })}
     </div>
@@ -257,6 +268,16 @@ function ClassBlock({ item, lane, lanes, onOpen }: { item: ClassItem; lane: numb
     <span className="agenda-class-time"><span className="agenda-when">{when.time}</span>{` · ${item.sectionName}`}</span>
     <strong>{item.courseTitle}</strong>
     <span className="sr-only">{state}</span>
+  </button>;
+}
+
+/** AGE-01: the classes that do not fit, as a «+N» chip at the start of their time; it opens the day. */
+function MoreClasses({ item, more, onOpen }: Placed & { more: ClassItem[]; onOpen: () => void }) {
+  const start = Math.min(...more.map(entry => minutes(classMoment(entry.date, entry.startsAt).time)));
+  const top = Math.min(96, Math.max(0, ((start - 7 * 60) / (12 * 60)) * 100));
+  return <button type="button" className="agenda-more" style={{ top: `calc(${top}% + 2px)` }} onClick={onOpen}
+    aria-label={`${more.length === 1 ? "1 clase más" : `${more.length} clases más`} a la misma hora: ${more.map(entry => `${classMoment(entry.date, entry.startsAt).time} ${entry.courseTitle}`).join(", ")}. Ver el día`}>
+    {`+${more.length}`}
   </button>;
 }
 
