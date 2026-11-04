@@ -3,10 +3,10 @@
 - **Fecha:** 03-nov-2026
 - **Fase:** 3–4 · Hitos M0, M1, M3 hechos; M2 casi (falta AUD-02); M4 en curso (HRS-01 y CAL-01 hechos); M5 en curso
   (PPL-01 hecho)
-- **Producción:** 1.6.29 (`86735b4`, PR #126, M9 primera parte). SPR-004 cerró con la release v1.6.20 (`95f2ac3`, PR #123). Del 02 al 03-nov: #103–#126 (1.6.0–1.6.29), cada uno con todos los checks
+- **Producción:** 1.6.34 (`da97030`, PR #127, M9). SPR-004 cerró con la release v1.6.20 (`95f2ac3`, PR #123). Del 02 al 03-nov: #103–#127 (1.6.0–1.6.34), cada uno con todos los checks
   del PR, `verify`, `deploy` y `critical-flows` verdes en `main` (salvo #108, ver incidente). Escaneo completo de
   seguridad en `main` el 03-nov: verde.
-- **Rama:** `feat/HL-15-disenador` (1.6.30 AGE-01, 1.6.31 CON-02, 1.6.32 AIC-01, 1.6.33 ACA-02, 1.6.34 DOC-03; PR #127); `feat/HL-15-campos-legibles` (1.6.35 LIB-02, 1.6.36 DOC-04).
+- **Rama:** `feat/HL-15-ventaja` (1.6.35 LIB-02, 1.6.36 DOC-04, MOAT-01, AP-09).
   **Sprints (ops):** SPR-003 cerrado 27-oct, SPR-004 cerrado 3-nov; lo de desde el 4-nov cuenta en SPR-005 (DEC-056).
 - **Últimas verificaciones:** `./scripts/verify` verde (77 archivos, 523 pruebas); E2E afectadas con build limpia en
   escritorio y móvil en cada PR; CI verde en cada PR.
