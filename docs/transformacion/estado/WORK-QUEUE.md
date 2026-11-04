@@ -49,4 +49,22 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | QA-05 | Calidad | Workers de prueba que no arrancaban bajo carga: «Address already in use», no lentitud. Pedir el puerto 0 y cerrarlo lo dejaba libre para los puertos efímeros de otros Workers | P2 | — | DONE | 1.6.17: `tests/test-port.ts` elige puertos fuera del rango efímero (20000–31999) y salta los ocupados; 32 archivos; verify verde 3 veces seguidas |
 | QA-06 | Calidad | Con todos los Workers de prueba arrancando, más pruebas corren a la vez y algunas pasaban de 10 s | P2 | QA-05 | DONE | 1.6.18: `testTimeout` 30 s (sin tocar aserciones; varias pruebas de Worker ya tenían 60 s) |
 | AIG-3 | IA | Modelo menor para tareas cortas (redactar, sugerir campos) | P2 | AI-01 | DONE | 1.6.15: `OPENAI_MODEL_SHORT` opcional, registrado en `ai_runs`; prueba en `openai.test.ts`. Activarlo es configuración del despliegue |
+| AUD-03 | Auditoría | Volver a puntuar con evidencia los módulos sin tocar | P1 | — | DONE | `auditoria.md` §8: Cursos 3.75 (9 945 px en móvil), Roles 3.40, Documentos 3.40, Notificaciones 3.60, Biblioteca 3.70, Equipo 3.85 |
+| CUR-01 | Contenido | Cursos agrupados por programa y ordenados por atención, lista compacta; tarjetas compactas en móvil | P1 | AUD-03 | READY | ≤ 3 500 px en móvil con 25 cursos; puntaje 4.3 |
+| DOC-02 | Documentos | Documentos 3.40 → 4.0: plantillas de demostración y auditoría del diseñador | P1 | AUD-03 | READY | Puntaje ≥ 4.0 |
+| TEAM-01 | Personas | Equipo 3.85 → 4.0: tarjetas uniformes y cursos que imparte | P3 | AUD-03 | READY | Puntaje ≥ 4.0 |
+| LIB-01 | Contenido | Biblioteca 3.70 → 4.0: leyenda general/del curso y usos enlazados | P2 | AUD-03 | READY | Puntaje ≥ 4.0 |
+| NOT-01 | Gobierno | Notificaciones 3.60 → 4.0: explicar obligatorios y el aviso de correo con siguiente paso | P2 | AUD-03 | READY | Puntaje ≥ 4.0 |
+| ACC-01 | Gobierno | Roles y accesos 3.40 → 4.2: pestañas y matriz plegable por área | P1 | AUD-03 | READY | Puntaje ≥ 4.2 |
+| HRS-04 | Operación | Horas efectivas 3.40 → 4.0 | P2 | M8 | BACKLOG | Puntaje ≥ 4.0 |
+| AGE-01 | Operación | Agenda 3.50 → 4.2 | P2 | M8 | BACKLOG | Puntaje ≥ 4.2 |
+| ORG-01 | Institución | Organización 3.55 → 4.2 | P2 | M8 | BACKLOG | Puntaje ≥ 4.2 |
+| CAL-02 | Institución | Calendario institucional 3.55 → 4.0 | P2 | M8 | BACKLOG | Puntaje ≥ 4.0 |
+| ACA-02 | Académico | Configuración académica 3.55 → 4.2 (explicar paquetes y estándares) | P2 | M8 | BACKLOG | Puntaje ≥ 4.2 |
+| CON-02 | Personas | Contratos y políticas 3.60 → 4.2 (contratos también en Educadores, T3) | P2 | M8 | BACKLOG | Puntaje ≥ 4.2 |
+| SCH-02 | Operación | Horarios 3.65 → 4.2 | P3 | M8 | BACKLOG | Puntaje ≥ 4.2 |
+| AIC-01 | IA | Inteligencia artificial 3.85 → 4.2 (tabla ancha en móvil) | P3 | M8 | BACKLOG | Puntaje ≥ 4.2 |
+| MOAT-01 | Producto | Plan de la ventaja difícil de copiar (datos curriculares, flujos institucionales, IA con evidencia) en incrementos | P2 | — | BACKLOG | Documento con incrementos priorizados |
+| OBS-01 | Operación | Tablero de SLO desde los registros `event=api` (disponibilidad, latencia, filas leídas por ruta) | P2 | — | BACKLOG | Tablero o informe semanal reproducible sin costo |
+| BRAND-01 | Marca | Cambio de nombre y marca cuando se decida (AP-06) | P2 | AP-06 | BLOCKED | Textos, metadatos y correos con la marca nueva |
 | HLP-01 | Ayuda | Ayuda contextual por página (IA-05) | P3 | AP-06 | BACKLOG | — |
