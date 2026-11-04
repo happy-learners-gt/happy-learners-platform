@@ -25,6 +25,7 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | PERF-05 | Rendimiento | Biblioteca y Buscar piden los materiales de todos los cursos en una petición (`/api/materials`), no una por curso | P2 | CUR-03 | DONE | 1.7.5: prueba de equivalencia con la consulta por curso en `resources-api.test.ts` |
 | AGE-02 | Operación | Agenda: «Hoy» solo para la clase de hoy; vistas en su fila en el teléfono | P1 | AUD-05 | DONE | 1.7.5: E2E `fifth-wave`, `agenda` |
 | AIC-02 | IA | El presupuesto como porcentaje en su tarjeta | P3 | AUD-05 | DONE | 1.7.5: E2E `ai-harness` |
+| ACA-03 | Académico | El conteo de cursos de cada programa abre Cursos filtrado; lo fijo dicho en palabras | P3 | AUD-05 | DONE | 1.7.5: E2E `fifth-wave`, `admin` |
 | PRG-01 | Programa | Descubrimiento, línea base, auditoría, arquitectura de información y espacio del programa | P0 | — | DONE | `docs/transformacion/` completo; estado retomable |
 | IA-01 | Navegación | Menú: cursos más relevantes (8) + «Todos los cursos (n)»; Administración en 4 grupos; Horas efectivas de administración en Personas | P0 | PRG-01 | DONE | Con 25 cursos el menú muestra 8 + enlace; el curso abierto siempre aparece; grupos con encabezado; Vitest y E2E de navegación verdes; capturas claro/oscuro, escritorio/móvil |
 | IA-02 | Navegación | Migas coherentes con el menú en administración (TD-006) | P1 | IA-01 | DONE | Ninguna página de administración muestra un padre que el menú no tiene |

@@ -82,7 +82,8 @@ test("administration configures programs and library tags; courses inherit what 
   await expect(toast(page)).toContainText("Programa creado");
   const row = page.locator(".program-list > li").filter({ hasText: program });
   await expect(row).toContainText("Educación primaria");
-  await expect(row).toContainText("Fija: nombre de las partes del curso");
+  // ACA-03: what the courses cannot change, said plainly.
+  await expect(row).toContainText("Sus cursos no pueden cambiar: nombre de las partes del curso");
 
   await page.getByRole("navigation", { name: "Secciones de la configuración académica" }).getByRole("link", { name: "Etiquetas" }).click();
 

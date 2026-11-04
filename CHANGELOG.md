@@ -14,6 +14,8 @@
   teléfono las vistas van en su propia fila con botones más grandes y la fecha ya no se corta.
 - Inteligencia artificial (AIC-02): la tarjeta del presupuesto muestra el porcentaje usado y el presupuesto en su
   etiqueta, en lugar de una cifra partida en tres líneas.
+- Configuración académica (ACA-03): el número de cursos de cada programa abre Cursos filtrado por ese programa, y lo
+  que el programa fija se dice en palabras («Sus cursos no pueden cambiar: …»).
 - Cursos (CUR-03): la lista trae las unidades activas de cada curso en una sola consulta y ya no pide cada curso por
   separado (eran 25 peticiones más en la demostración, que cuentan en la cuota de Cloudflare). Biblioteca y Buscar
   piden los materiales de todos los cursos en una sola petición (PERF-05).

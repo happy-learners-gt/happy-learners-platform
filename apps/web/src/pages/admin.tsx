@@ -357,9 +357,10 @@ function ProgramEditor() {
           <strong>{program.name}</strong>{program.status === "archived" && <StatusBadge>Archivado</StatusBadge>}
           {program.description && <p className="muted small">{program.description}</p>}
           <ul className="course-facets"><li>{labelOf.type(program.educationType)}</li>{program.level !== "unspecified" && <li>{labelOf.level(program.level)}</li>}<li>{labelOf.modality(program.modality)}</li><li>{labelOf.pacing(program.pacing)}</li>{program.area && <li>{areaLabel(program.area)}</li>}</ul>
-          {program.locked.length > 0 && <p className="muted small">Fija: {program.locked.map(key => settingDefinitions.find(item => item.key === key)!.label.toLowerCase()).join(", ")}.</p>}
+          {program.locked.length > 0 && <p className="muted small">Sus cursos no pueden cambiar: {program.locked.map(key => settingDefinitions.find(item => item.key === key)!.label.toLowerCase()).join(", ")}.</p>}
         </div>
-        <span className="muted small">{plural(program.courseCount || 0, "curso", "cursos")}</span>
+        {/* ACA-03: the count opens those courses. */}
+        {program.courseCount ? <Link href={`/cursos?programa=${program.id}`} className="small">{plural(program.courseCount, "curso", "cursos")}</Link> : <span className="muted small">Sin cursos</span>}
         <Menu label={`Acciones de ${program.name}`} items={[
           { label: "Editar", icon: "edit", onSelect: () => setEditing({ item: program }) },
           { label: "Requisitos entre cursos", icon: "list", onSelect: () => navigate(`/configuracion-academica?ruta=${program.id}`) },

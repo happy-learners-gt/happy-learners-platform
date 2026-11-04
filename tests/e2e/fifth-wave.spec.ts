@@ -56,3 +56,11 @@ test("AGE-02: the agenda's rail says «Hoy» only for today's class and starts o
   expect(["Hoy", "Próxima clase"]).toContain(heading);
   if (heading === "Próxima clase") await expect(rail.getByRole("link", { name: "Iniciar" })).toHaveCount(0);
 });
+
+test("ACA-03: each program's count of courses opens them in Cursos", async ({ page }) => {
+  await signIn(page, "admin-demo", "/configuracion-academica");
+  const link = page.locator(".program-list a, a").filter({ hasText: /^\d+ cursos?$/ }).first();
+  await link.click();
+  await expect(page).toHaveURL(/\/cursos\?programa=/);
+  await expect(page.getByLabel("Programa")).not.toHaveValue("");
+});
