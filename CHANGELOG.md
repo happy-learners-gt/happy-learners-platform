@@ -6,6 +6,8 @@
   credencial por verificar, documento por vencer, pidió cerrar su cuenta), cada cosa un enlace a donde se resuelve.
 - Revisión de perfiles (PRF-01): primero los perfiles y las credenciales por revisar; el ajuste «Los perfiles requieren
   aprobación» queda al final.
+- Contratos (CON-03): bajo la fase de cada contrato, cuánto lleva esperando la firma (aviso desde 7 días) o cuánto falta
+  para que termine (30 días o menos), y el filtro «Terminan en 30 días».
 
 ## 1.7.4 — 2026-11-04
 

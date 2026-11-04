@@ -2336,3 +2336,6 @@ section.panel[id^="profile-"] { scroll-margin-top: calc(var(--topbar-h) + var(--
 .person-needs { display: flex; flex-wrap: wrap; gap: 4px; margin-block-start: 4px; }
 .person-needs .badge { text-decoration: none; white-space: normal; }
 .person-needs .badge:hover { text-decoration: underline; }
+/* CON-03: how long a contract has waited, or how soon it ends, under its phase. */
+.contract-urgency { display: block; margin-block-start: 2px; color: var(--color-muted); }
+.contract-urgency.is-warning { color: var(--color-warning); font-weight: var(--weight-medium); }
