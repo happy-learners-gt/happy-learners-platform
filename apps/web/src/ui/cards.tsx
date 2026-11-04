@@ -11,17 +11,28 @@ import { Progress, StatusBadge, Updated } from "./primitives";
 import { hueFor, plural, resourceHue, resourceKindLabel, resourceStatusLabel } from "../model";
 import type { CourseStats } from "../model";
 
-export function CourseCard({ course, program, stats, menu }: { course: Course; program?: StudyProgram | null; stats?: CourseStats; menu?: MenuItem[] }) {
+/** `row` (CUR-01): one line per course for long lists and phones; the same title link and menu as the card. */
+export function CourseCard({ course, program, stats, menu, row }: { course: Course; program?: StudyProgram | null; stats?: CourseStats; menu?: MenuItem[]; row?: boolean }) {
   const href = `/cursos/${course.id}`;
   const noun = moduleNoun(resolveSettings(course, program).values.moduleLabel);
   const level = program?.level || course.level;
+  const meta = stats ? `${plural(stats.units, noun.one, noun.many)} · ${plural(stats.lessons, "lección", "lecciones")}` : "Cargando contenido…";
+  if (row) return <article className={`course-card is-row tone-${hueFor(course.id)}`}>
+    <span className="course-avatar" aria-hidden="true">{course.title.trim().charAt(0).toUpperCase()}</span>
+    <div className="course-card-title">
+      <h3 title={course.title}><Link href={href} className="card-link">{course.title}</Link></h3>
+      <p className="course-card-meta">{meta}{stats && <span className="phones-only">{` · ${stats.published} de ${stats.lessons} publicadas`}</span>}{course.status === "archived" ? " · Archivado" : ""}</p>
+    </div>
+    {stats && <span className="course-row-progress">{`${stats.published} de ${stats.lessons} publicadas`}</span>}
+    {menu && <Menu label={`Acciones del curso ${course.title}`} items={menu}/>}
+  </article>;
   return <article className={`course-card tone-${hueFor(course.id)}`}>
     <div className="course-cover" aria-hidden="true"><span/><span/><span/></div>
     <div className="course-card-top">
       <span className="course-avatar" aria-hidden="true">{course.title.trim().charAt(0).toUpperCase()}</span>
       <div className="course-card-title">
         <h3 title={course.title}><Link href={href} className="card-link">{course.title}</Link></h3>
-        <p className="course-card-meta">{stats ? `${plural(stats.units, noun.one, noun.many)} · ${plural(stats.lessons, "lección", "lecciones")}` : "Cargando contenido…"}</p>
+        <p className="course-card-meta">{meta}</p>
         {course.status === "archived" && <StatusBadge>Archivado</StatusBadge>}
       </div>
       {menu && <Menu label={`Acciones del curso ${course.title}`} items={menu}/>}
