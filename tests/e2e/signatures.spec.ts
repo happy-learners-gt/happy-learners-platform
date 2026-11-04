@@ -94,9 +94,11 @@ test("ST-151 ST-153: administration publishes a contract template, the educator 
   await expect(banner).toBeHidden();
   await context.close();
 
-  await page.reload();
-  // CON-02: verifying a receipt is in Ajustes.
-  await page.goto("/contratos#ajustes");
+  // CON-02: verifying a receipt is in Ajustes. A fresh load of the page and a click on its tab: changing only the
+  // address's hash right after a reload sometimes left the tab closed, and the upload waited two minutes (CI, 04-nov).
+  await page.goto("/contratos");
+  await page.getByRole("navigation", { name: "Secciones de contratos" }).getByRole("link", { name: "Ajustes" }).click();
+  await expect(page.getByLabel("Archivo de la constancia")).toBeVisible();
   const verify = async (path: string) => {
     await page.getByLabel("Archivo de la constancia").setInputFiles(path);
     await page.getByRole("button", { name: "Verificar", exact: true }).click();
