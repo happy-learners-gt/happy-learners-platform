@@ -50,6 +50,7 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | QA-06 | Calidad | Con todos los Workers de prueba arrancando, más pruebas corren a la vez y algunas pasaban de 10 s | P2 | QA-05 | DONE | 1.6.18: `testTimeout` 30 s (sin tocar aserciones; varias pruebas de Worker ya tenían 60 s) |
 | AIG-3 | IA | Modelo menor para tareas cortas (redactar, sugerir campos) | P2 | AI-01 | DONE | 1.6.15: `OPENAI_MODEL_SHORT` opcional, registrado en `ai_runs`; prueba en `openai.test.ts`. Activarlo es configuración del despliegue |
 | AUD-03 | Auditoría | Volver a puntuar con evidencia los módulos sin tocar | P1 | — | DONE | `auditoria.md` §8: Cursos 3.75 (9 945 px en móvil), Roles 3.40, Documentos 3.40, Notificaciones 3.60, Biblioteca 3.70, Equipo 3.85 |
+| AUD-04 | Auditoría | Cuarta pasada sobre los módulos mejorados aún bajo su meta, con incrementos concretos para M9 | P1 | M8 | DONE | `auditoria.md` §9 |
 | CUR-01 | Contenido | Cursos agrupados por programa y en lista de una fila por curso (por omisión en el teléfono) | P1 | AUD-03 | DONE | 1.6.21: móvil 9 945 → 3 068 px con 25 cursos; escritorio sin cambios (3 903 px, tarjetas); vista Tarjetas/Lista en la dirección; E2E en `layout.spec` |
 | DOC-02 | Documentos | Plantillas de demostración y auditoría del diseñador | P1 | AUD-03 | DONE | 1.6.23: migración 0077 con boleta y constancia publicadas para «Primaria bilingüe» (por programa, para no chocar con las de toda la organización); puntaje 3.40 → 3.85 |
 | DOC-03 | Documentos | Diseñador: «Publicar» solo con cambios; la vista previa propone secciones del programa de la plantilla; campos con su nombre legible en lugar de `{{clave}}` | P2 | DOC-02 | READY | Puntaje ≥ 4.0 |
@@ -58,14 +59,14 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | LIB-02 | Contenido | «Usado en N lecciones» con los nombres o un enlace a esas lecciones en la lista | P3 | LIB-01 | BACKLOG | Puntaje ≥ 4.0 |
 | NOT-01 | Gobierno | Notificaciones: cuántos avisos son obligatorios y por qué el botón espera un cambio; correo sin configurar como aviso con lo que sí pasa; registro vacío explicado | P2 | AUD-03 | DONE | 1.6.24: puntaje 3.60 → 4.00; E2E `notifications`, `accessibility` |
 | ACC-01 | Gobierno | Roles y accesos en pestañas (Matriz, Grupos de seguridad, Coordinación, Historial) y la matriz filtrable por área | P1 | AUD-03 | DONE | 1.6.22: 2 036 / 2 573 → 1 736 / 2 211 px (escritorio / móvil); al crear o editar un grupo se abre su pestaña; E2E `access` por pestañas; puntaje 3.40 → 4.00 |
-| HRS-04 | Operación | Horas efectivas 3.40 → 4.0 | P2 | M8 | BACKLOG | Puntaje ≥ 4.0 |
-| AGE-01 | Operación | Agenda 3.50 → 4.2 | P2 | M8 | BACKLOG | Puntaje ≥ 4.2 |
-| ORG-01 | Institución | Organización 3.55 → 4.2 | P2 | M8 | BACKLOG | Puntaje ≥ 4.2 |
-| CAL-02 | Institución | Calendario institucional 3.55 → 4.0 | P2 | M8 | BACKLOG | Puntaje ≥ 4.0 |
-| ACA-02 | Académico | Configuración académica 3.55 → 4.2 (explicar paquetes y estándares) | P2 | M8 | BACKLOG | Puntaje ≥ 4.2 |
-| CON-02 | Personas | Contratos y políticas 3.60 → 4.2 (contratos también en Educadores, T3) | P2 | M8 | BACKLOG | Puntaje ≥ 4.2 |
-| SCH-02 | Operación | Horarios 3.65 → 4.2 | P3 | M8 | BACKLOG | Puntaje ≥ 4.2 |
-| AIC-01 | IA | Inteligencia artificial 3.85 → 4.2 (tabla ancha en móvil) | P3 | M8 | BACKLOG | Puntaje ≥ 4.2 |
+| HRS-04 | Operación | Horas efectivas abre en el último mes con clases cuando los últimos 30 días no tienen, y lo dice | P1 | AUD-04 | READY | Nunca abre vacía si hay historial; puntaje ≥ 4.0 |
+| AGE-01 | Operación | Agenda: en la semana, a lo sumo dos clases simultáneas lado a lado y «+N» que abre el día | P1 | AUD-04 | READY | Ninguna clase ilegible en la semana; puntaje ≥ 4.2 |
+| ORG-01 | Institución | Organización: identidad (logotipo y marca) | P3 | AP-06 | BLOCKED | Espera la marca |
+| CAL-02 | Institución | Calendario institucional en pestañas por bloque | P1 | AUD-04 | READY | ≤ 2 000 px en móvil por pestaña; puntaje ≥ 4.0 |
+| ACA-02 | Académico | Configuración académica: qué es cada paquete y estándar y cuándo se usa | P2 | AUD-04 | READY | Puntaje ≥ 4.2 |
+| CON-02 | Personas | Contratos: verificar una constancia en Ajustes, con un enlace desde Contratos | P2 | AUD-04 | READY | ≤ 2 000 px en móvil; puntaje ≥ 4.2 |
+| SCH-02 | Operación | Horarios en pestañas: Horario vigente, Generar, Aulas y Reglas | P1 | AUD-04 | READY | ≤ 2 500 px en móvil por pestaña; puntaje ≥ 4.2 |
+| AIC-01 | IA | Inteligencia artificial: una tarjeta por capacidad en teléfonos | P2 | AUD-04 | READY | Sin tabla ancha en móvil; puntaje ≥ 4.2 |
 | MOAT-01 | Producto | Plan de la ventaja difícil de copiar (datos curriculares, flujos institucionales, IA con evidencia) en incrementos | P2 | — | BACKLOG | Documento con incrementos priorizados |
 | OBS-01 | Operación | Tablero de SLO desde los registros `event=api` (disponibilidad, latencia, filas leídas por ruta) | P2 | — | BACKLOG | Tablero o informe semanal reproducible sin costo |
 | BRAND-01 | Marca | Cambio de nombre y marca cuando se decida (AP-06) | P2 | AP-06 | BLOCKED | Textos, metadatos y correos con la marca nueva |

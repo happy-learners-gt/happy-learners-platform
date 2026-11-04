@@ -175,3 +175,18 @@ Incrementos de M8, en orden (brecha a la meta × uso):
 | NOT-01 | Notificaciones: explicar qué es obligatorio y por qué el botón espera un cambio; aviso de correo sin configurar como `message-bar` con el siguiente paso | 4.0. **Hecho en 1.6.24:** 3.60 → 4.00 (4 4 4 4 4 4 4 4) |
 | LIB-01 | Biblioteca: leyenda de «general» y «del curso», y «Usado en N lecciones» enlazado | 4.0. **Hecho en parte en 1.6.25:** «General · solo lectura» y leyenda; 3.70 → 3.85. Los usos enlazados quedan en LIB-02 |
 | TEAM-01 | Equipo: tarjetas de alto uniforme y los cursos que imparte cada persona | 4.0. **Hecho en 1.6.26:** «Imparte: …» respetando la visibilidad de la enseñanza; el alto desigual era solo la última fila. 3.85 → 4.05 (4 4 4 4 4 5 4 4) |
+
+## 9. Cuarta pasada: módulos mejorados aún bajo su meta (AUD-04, 03-nov-2026)
+
+Sobre la rama de 1.6.26 con los datos de demostración, administración, escritorio (1365 px) y móvil (390 px).
+
+| Módulo | Puntaje | Escritorio / móvil (px) | Hallazgo | Incremento |
+| --- | --- | --- | --- | --- |
+| Horas efectivas | 3.40 | 900 / 1 024 | Abre vacía («No hay clases finalizadas en este filtro») cuando los últimos 30 días no tienen clases, aunque el historial sí | HRS-04: abrir en el último mes con clases y decirlo |
+| Horarios | 3.65 | 3 187 / **5 941** | El generador (jornada y secciones, aulas, reglas) queda apilado bajo el horario vigente | SCH-02: pestañas Horario vigente, Generar, Aulas y Reglas |
+| Calendario institucional | 3.55 | 2 809 / 3 814 | Cinco bloques apilados (ciclo, jornadas, asuetos, eventos, año siguiente) | CAL-02: pestañas por bloque |
+| Agenda | 3.50 | 900 / 1 227 | En la semana, las clases simultáneas se vuelven ilegibles («0… I…») | AGE-01: a lo sumo dos lado a lado y «+N» que abre el día |
+| Contratos y políticas | 3.60 | 1 367 / 2 931 | «Verificar una constancia» ocupa el final de la lista de contratos | CON-02: verificar en Ajustes, y en Contratos un enlace |
+| Inteligencia artificial | 3.85 | 1 600 / 2 136 | La tabla de capacidades es ancha en el teléfono | AIC-01: una tarjeta por capacidad en teléfonos |
+| Configuración académica | 3.55 | 1 192 / 2 016 | Paquetes y estándares sin explicar qué hacer con ellos | ACA-02: qué es cada uno y cuándo se usa, con un ejemplo |
+| Organización | 3.55 | 943 / 1 190 | Claro y corto; lo que falta para su meta es la identidad (logotipo y marca) | ORG-01: espera la marca (AP-06) |
