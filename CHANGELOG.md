@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.26 — 2026-11-03
+
+- Equipo (TEAM-01): cada persona muestra los cursos que imparte («Imparte: …»), solo si su sección «Enseñanza» es
+  visible para el equipo; quien la tiene privada no muestra sus cursos.
+
 ## 1.6.25 — 2026-11-03
 
 - Biblioteca (LIB-01): los recursos heredados de la biblioteca anterior dicen «General · solo lectura» en lugar de un
