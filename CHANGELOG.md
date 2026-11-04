@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.3 — 2026-11-04
+
+- Controles operativos (ST-189, SEC-04): nada llega a producción sin que su pull request haya pasado los escáneres de
+  secretos, dependencias y código. GitHub no ofrece protección de rama en repositorios privados del plan gratuito; el
+  despliegue lo comprueba antes de publicar (`scripts/security-gate.py`) y se detiene si no.
+
 ## 1.7.2 — 2026-11-04
 
 Identidad y acceso, rediseño tras la revisión del responsable del proyecto (`docs/design/identidad-y-acceso.md`).
