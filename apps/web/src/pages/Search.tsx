@@ -15,9 +15,10 @@ export function Search() {
   async function load() {
     setError("");
     try {
-      const [{ courses }, { lessons }] = await Promise.all([api<{ courses: Course[] }>("/courses"), api<{ lessons: Lesson[] }>("/lessons?drafts=1")]);
-      const resources = await Promise.all(courses.map(course => api<{ materials: Material[] }>(`/courses/${course.id}/materials`).then(result => result.materials.map(item => ({ ...item, courseTitle: course.title })))));
-      setIndex({ courses, lessons, resources: resources.flat() });
+      // PERF-05: the materials of every course in one request.
+      const [{ courses }, { lessons }, { materials }] = await Promise.all([api<{ courses: Course[] }>("/courses"), api<{ lessons: Lesson[] }>("/lessons?drafts=1"), api<{ materials: Material[] }>("/materials")]);
+      const titles = new Map(courses.map(course => [course.id, course.title]));
+      setIndex({ courses, lessons, resources: materials.filter(item => titles.has(item.courseId || "")).map(item => ({ ...item, courseTitle: titles.get(item.courseId || "")! })) });
     } catch (cause) { setError(message(cause)); }
   }
   useEffect(() => { void load(); }, []);

@@ -111,6 +111,15 @@ export async function taxonomy(path: string, method: string, input: unknown, cur
   return reply({ id: itemId, ...await taxonomyFor(db, current.organizationId) }, id ? 200 : 201);
 }
 
+/**
+ * PERF-05: GET /api/materials, the materials and files of every course the person reaches, in one request; the
+ * library and the search used to ask each course separately (one request per course). Same reach as the course list.
+ */
+export async function allMaterials(current: Member, db: Database) {
+  const reachable = await reachableCourses(db, current);
+  const visible = (item: Material) => !reachable || reachable.has(item.courseId || "");
+  return reply({ materials: [...await materialsFor(db, current.organizationId), ...await filesFor(db, current.organizationId)].filter(visible) });
+}
 export async function courses(path: string, method: string, input: unknown, current: Member, db: Database, notifier?: Notifier) {
   const [, , , id, area, itemId] = path.split("/");
   const list = await coursesFor(db, current.organizationId);

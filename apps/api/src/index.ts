@@ -10,7 +10,7 @@ import { roles } from "./roles";
 import { changePassword } from "./accounts";
 import { digests, type Backup } from "./backup";
 import { content, reviews, shared } from "./content";
-import { courses, programs, taxonomy } from "./courses";
+import { courses, programs, taxonomy , allMaterials } from "./courses";
 import { assessmentMethods, courseAssessment } from "./assessment";
 import { duplicateCourse } from "./duplicate";
 import { accessTo } from "./access";
@@ -255,7 +255,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (/^\/api\/courses\/[a-z0-9-]+\/units\/[a-z0-9-]+\/outcomes$/.test(path)) methods[path] = ["PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/team$/.test(path)) methods[path] = ["PUT"];
   if (/^\/api\/courses\/[a-z0-9-]+\/duplicate$/.test(path)) methods[path] = ["POST"];
-  if (path === "/api/activity" || path === "/api/progress" || path === "/api/people" || path === "/api/reviews") methods[path] = ["GET"];
+  if (path === "/api/activity" || path === "/api/progress" || path === "/api/people" || path === "/api/reviews" || path === "/api/materials") methods[path] = ["GET"];
   if (/^\/api\/courses\/[a-z0-9-]+\/files$/.test(path)) methods[path] = ["GET", "POST"];
   if (/^\/api\/courses\/[a-z0-9-]+\/files\/[a-z0-9-]+\/content$/.test(path)) methods[path] = ["GET"];
   if (/^\/api\/courses\/[a-z0-9-]+\/files\/[a-z0-9-]+\/archive$/.test(path)) methods[path] = ["POST"];
@@ -562,6 +562,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (mfaTarget) return current.role === "admin" ? resetMfa(mfaTarget, current, db, clientOf(request)) : json({ error: "Solo administración restablece la verificación en dos pasos." }, 403);
   if (isSecurityPath(path)) return security(path, method, url, current, db, clientOf(request));
   if (path === "/api/activity") return activity(url, current, db);
+  if (path === "/api/materials") return allMaterials(current, db);
   if (path === "/api/classes") return myClasses(current, db);
   if (path === "/api/feeds/calendar") return feedLink(method, url, current, db);
   if (path.startsWith("/api/calendar")) return calendar(path, method, input, url, current, db);
