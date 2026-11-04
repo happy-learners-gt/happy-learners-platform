@@ -120,9 +120,8 @@ function Overview() {
       </div>
     </div>
     <StatTiles items={[
-      { label: "Personas con acceso", value: m.people, icon: "users", hue: "violet" }, { label: "Con passkey", value: m.passkeys, icon: "shield", hue: "green" },
-      { label: "Con aplicación de autenticación", value: m.mfa, icon: "clock", hue: "sky" }, { label: "Solo contraseña", value: m.passwordOnly, icon: "alert", hue: "amber" },
-      { label: "Inicios en 24 h", value: m.signIns24h, icon: "check", hue: "teal" }, { label: "Fallos en 24 h", value: m.failed24h, icon: "alert", hue: "coral" },
+      { label: "Personas con acceso", value: m.people, icon: "users", hue: "violet" }, { label: "Con passkey o aplicación", value: m.people - m.passwordOnly, icon: "shield", hue: "green" },
+      { label: "Solo contraseña", value: m.passwordOnly, icon: "alert", hue: "amber" }, { label: "Fallos de inicio en 24 h", value: m.failed24h, icon: "alert", hue: "coral" },
     ]}/>
     <Section title={data.recommendations.length ? `Recomendaciones (${data.recommendations.length})` : "Recomendaciones"}>
       {data.recommendations.length ? <ul className="recommendations">{data.recommendations.map(item => <li key={item.id} className={`recommendation is-${item.severity}`}>

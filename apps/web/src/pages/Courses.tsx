@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { AcademicProfile, Course, CourseFormat, CourseSettings, EducationLevel, EducationType, LearningUnit, Lesson, Modality, Pacing, StudyProgram, Taxonomy } from "@happy-learners/contracts";
+import type { AcademicProfile, Course, CourseFormat, CourseProgress, CourseSettings, EducationLevel, EducationType, LearningUnit, Lesson, Modality, Pacing, StudyProgram, Taxonomy } from "@happy-learners/contracts";
 import type { FreedomPolicy } from "@happy-learners/domain";
-import { areaLabel, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, pacings, resolveSettings, settingChoices, settingDefinitions, settingText, settingValue, sourceLabel } from "@happy-learners/domain";
+import { areaLabel, attentionLabels, courseAttention, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, pacings, resolveSettings, settingChoices, settingDefinitions, settingText, settingValue, sourceLabel } from "@happy-learners/domain";
 import type { SettingKey } from "@happy-learners/domain";
 import { api, ApiError, message } from "../api";
 import { Link, useNavigation, useUnsavedChanges } from "../navigation";
+import { personalToday } from "../regional";
 import { useSession } from "../session";
 import { courseBody, courseStats, matches, newest, plural } from "../model";
 import { FreedomChangeDialog, FreedomPolicyField } from "../ui/freedom";
@@ -67,7 +68,15 @@ export function CourseList() {
   const pool = (courses || []).filter(course => (archived ? course.status === "archived" : course.status === "active") && matches(query, course.title, course.objective));
   const selected = (facet: typeof facets[number]) => url.searchParams.get(facet.param) || "";
   const passes = (course: Course, skip?: string) => facets.every(facet => facet.key === skip || !selected(facet) || facet.value(course, programOf(course)) === selected(facet));
-  const visible = newest(pool.filter(course => passes(course)));
+  // CUR-02: most recent (default), by name, or those that need attention first with their reasons (HOME-01).
+  const order = (["nombre", "atencion"] as const).find(value => value === url.searchParams.get("orden")) || "recientes";
+  const [progress, setProgress] = useState<CourseProgress[] | null>(null);
+  useEffect(() => { if (order === "atencion" && !progress) api<{ courses: CourseProgress[] }>("/progress").then(result => setProgress(result.courses), () => setProgress([])); }, [order]);
+  const reasonsOf = new Map((order === "atencion" && progress ? progress : []).map(item => [item.courseId, courseAttention(item, personalToday())]));
+  const weightOf = (course: Course) => (reasonsOf.get(course.id) || []).length;
+  const filteredPool = pool.filter(course => passes(course));
+  const visible = order === "nombre" ? [...filteredPool].sort((a, b) => a.title.localeCompare(b.title, "es", { numeric: true }))
+    : order === "atencion" ? newest(filteredPool).sort((a, b) => weightOf(b) - weightOf(a)) : newest(filteredPool);
   const filtered = facets.some(selected);
   // CUR-01: a list of rows on phones unless the address says otherwise; cards elsewhere.
   const [narrow] = useState(() => typeof window !== "undefined" && window.matchMedia?.("(max-width: 720px)").matches);
@@ -85,7 +94,8 @@ export function CourseList() {
     "separator" as const,
     course.status === "active" ? { label: "Archivar", icon: "archive" as const, danger: true, onSelect: () => void actions.setStatus(course, "archived") } : { label: "Restaurar", icon: "archive" as const, onSelect: () => void actions.setStatus(course, "active") },
   ] : undefined;
-  const list = (items: Course[]) => <div className={view === "lista" ? "card-grid course-rows" : "card-grid"}>{items.map(course => <CourseCard key={course.id} course={course} program={programOf(course)} stats={stats[course.id]} row={view === "lista"} menu={menuOf(course)}/>)}</div>;
+  const list = (items: Course[]) => <div className={view === "lista" ? "card-grid course-rows" : "card-grid"}>{items.map(course => <CourseCard key={course.id} course={course} program={programOf(course)} stats={stats[course.id]} row={view === "lista"} menu={menuOf(course)}
+    reasons={order === "atencion" ? (reasonsOf.get(course.id) || []).map(reason => attentionLabels[reason]) : undefined}/>)}</div>;
   return <>
     <PageHeader title="Cursos" description={courses ? archived ? plural(courses.length - active, "curso archivado", "cursos archivados") : admin ? plural(active, "curso activo", "cursos activos") : `${plural(active, "curso asignado", "cursos asignados")} a tu cuenta` : undefined} primary={admin && (!courses || courses.length > 0) && <PrimaryAction href="/cursos/nuevo" icon="plus">Crear curso</PrimaryAction>}/>
     <div className="toolbar" role="group" aria-label="Filtrar cursos">
@@ -93,6 +103,9 @@ export function CourseList() {
       <fieldset className="segmented"><legend className="sr-only">Estado</legend>
         {[["", "Activos"], ["archivados", "Archivados"]].map(([value, label]) => <label key={label}><input type="radio" name="course-status" checked={(url.searchParams.get("estado") || "") === value} onChange={() => filter("estado", value)}/><span>{label}</span></label>)}
       </fieldset>
+      <label className="select-inline"><span>Ordenar</span><select value={order} onChange={event => filter("orden", event.target.value === "recientes" ? "" : event.target.value)}>
+        <option value="recientes">Recientes</option><option value="nombre">Por nombre</option><option value="atencion">Necesitan atención</option>
+      </select></label>
       <fieldset className="segmented"><legend className="sr-only">Vista</legend>
         {[["tarjetas", "Tarjetas"], ["lista", "Lista"]].map(([value, label]) => <label key={value}><input type="radio" name="course-view" checked={view === value} onChange={() => filter("vista", value)}/><span>{label}</span></label>)}
       </fieldset>

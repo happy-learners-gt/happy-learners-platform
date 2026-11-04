@@ -2317,3 +2317,18 @@ section.panel[id^="profile-"] { scroll-margin-top: calc(var(--topbar-h) + var(--
 .segmented > button { min-height: 30px; padding: 0 12px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-ink-soft); font-size: var(--text-sm); font-weight: var(--weight-medium); cursor: pointer; }
 .segmented > button[aria-pressed="true"] { background: var(--color-surface); color: var(--color-ink); box-shadow: var(--shadow-sm); }
 .segmented > button:disabled { opacity: .5; cursor: not-allowed; }
+.hours-pending { align-items: center; flex-wrap: wrap; }
+.hours-pending > span { flex: 1 1 18rem; }
+.identity-table th .link-button { text-align: start; }
+.course-attention { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; margin: var(--space-1) 0 0; padding: 0; }
+/* IDA-02: with eight sections, the hub's menu on narrow screens is one scrollable row, not a grid of buttons; the
+   desktop menu is narrower so the tables keep their width beside the app's own sidebar. */
+.identity-hub { grid-template-columns: 13rem minmax(0, 1fr); }
+@media (max-width: 1100px) {
+  .identity-hub { grid-template-columns: minmax(0, 1fr); }
+  .identity-hub .account-nav { position: static; }
+  .identity-hub .account-nav-title { display: none; }
+  .identity-hub .account-nav ul { display: flex; gap: var(--space-2); overflow-x: auto; padding-block-end: var(--space-1); scrollbar-width: thin; }
+  .identity-hub .account-nav-link { white-space: nowrap; border: 1px solid var(--color-border); background: var(--color-surface); min-height: 40px; }
+}
+.identity-table .badge { white-space: normal; }
