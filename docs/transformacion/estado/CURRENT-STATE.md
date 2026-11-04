@@ -3,12 +3,11 @@
 - **Fecha:** 03-nov-2026
 - **Fase:** 3–4 · Hitos M0, M1, M3 hechos; M2 casi (falta AUD-02); M4 en curso (HRS-01 y CAL-01 hechos); M5 en curso
   (PPL-01 hecho)
-- **Producción:** 1.6.20 (`95f2ac3`, PR #123; release del cierre de SPR-004). Del 02 al 03-nov: #103–#123 (1.6.0–1.6.20), cada uno con todos los checks
+- **Producción:** 1.6.21 (`8ccd0da`, PR #124). SPR-004 cerró con la release v1.6.20 (`95f2ac3`, PR #123). Del 02 al 03-nov: #103–#124 (1.6.0–1.6.21), cada uno con todos los checks
   del PR, `verify`, `deploy` y `critical-flows` verdes en `main` (salvo #108, ver incidente). Escaneo completo de
   seguridad en `main` el 03-nov: verde.
-- **Rama:** `feat/HL-15-cursos` (1.6.21: CUR-01, PR #124); `feat/HL-15-accesos` (1.6.22: ACC-01); `feat/HL-15-documentos-demo` (1.6.23: DOC-02, migración 0077);
-  `feat/HL-15-notificaciones` (1.6.24: NOT-01); `feat/HL-15-biblioteca` (1.6.25: LIB-01). **Sprints (ops):** SPR-003 cerrado 27-oct, SPR-004 cerrado 3-nov
-  (releases v1.2.0 y v1.6.20); lo de desde el 4-nov cuenta en SPR-005 (DEC-056).
+- **Rama:** `feat/HL-15-equipo` con M8 restante (1.6.22 ACC-01, 1.6.23 DOC-02, 1.6.24 NOT-01, 1.6.25 LIB-01, 1.6.26 TEAM-01).
+  **Sprints (ops):** SPR-003 cerrado 27-oct, SPR-004 cerrado 3-nov; lo de desde el 4-nov cuenta en SPR-005 (DEC-056).
 - **Últimas verificaciones:** `./scripts/verify` verde (77 archivos, 523 pruebas); E2E afectadas con build limpia en
   escritorio y móvil en cada PR; CI verde en cada PR.
 - **Autorización vigente (02-nov, del usuario):** «sigue adelante con el merge y también todo lo demás»: fusionar y
@@ -16,7 +15,7 @@
 - **En curso:** nada a medias
 - **Requieren al usuario:** AP-05 pentest manual de pago (SEC-06 gratuito en curso); AP-06 marca
   («Acervum» en discusión); AP-07 y AP-08 decididos el 03-nov
-- **Siguiente acción:** M8 en el orden de `auditoria.md` §8: TEAM-01; luego M9; el 13-nov SEC-04. El programa
+- **Siguiente acción:** M8 hecho salvo DOC-03 y LIB-02; luego M9 (HRS-04, AGE-01, ORG-01, CAL-02, ACA-02, CON-02, SCH-02, AIC-01); el 13-nov SEC-04. El programa
   no está completo: 1 de 18 módulos en su meta (ver MILESTONES)
 - **Incidente 03-nov:** #108 se fusionó con el escáner `code` (Semgrep) en rojo porque la automatización solo miraba
   `verify`. Corregido en 1.6.6 (#109, todos los checks verdes);

@@ -330,6 +330,10 @@ describe("HL-15 ST-155 ST-157 credentials, directory and «Tu educador» on the 
     expect((await list("?area=matemática")).find(item => item.userId === carlosId)).toBeUndefined();
     expect((await list("?level=1")).find(item => item.userId === carlosId)).toBeUndefined();
     expect((await list()).find(item => item.userId === carlosId)).toMatchObject({ areas: [], userId: carlosId });
+    // TEAM-01: a private «teaching» section also keeps the person's courses out of the directory.
+    expect((await list()).find(item => item.userId === carlosId)).toMatchObject({ courses: [] });
+    // Someone who shows their teaching lists the active courses they are in.
+    expect((await list()).some(item => item.userId !== carlosId && ((item as { courses?: string[] }).courses || []).length > 0)).toBe(true);
     const page = (await json<{ profile: PublicProfile }>(await as(diego, `/profiles/${carlosId}`))).profile;
     expect(page.contact).toEqual({ phone: "+502 5555-0154", contactEmail: "carlos@ejemplo.org" });
     expect(page.credentials.map(item => [item.type, item.status])).toEqual(expect.arrayContaining([["degree", "verified"], ["language_certificate", "expired"]]));

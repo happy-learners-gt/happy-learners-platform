@@ -722,6 +722,7 @@ export function TeamDirectory() {
               {entry.headline && <p className="small">{entry.headline}</p>}
               {entry.areas.length > 0 && <ul className="chips small-chips" aria-label="Áreas">{entry.areas.slice(0, 3).map(item => <li key={item.label}><span className="chip-button">{item.label}</span></li>)}{extra > 0 && <li><span className="chip-button">+{extra}</span></li>}</ul>}
               {entry.languages.length > 0 && <p className="muted small">{entry.languages.map(item => languageLabel(item.code)).join(", ")}</p>}
+              {!!entry.courses?.length && <p className="small"><span className="muted">Imparte: </span>{entry.courses.slice(0, 2).join(", ")}{entry.courses.length > 2 ? ` y ${entry.courses.length - 2} más` : ""}</p>}
             </div>
           </article></li>;
         })}</ul></>}
