@@ -21,6 +21,7 @@ export function sealSecurityEvents(sql: Sql, scope: string) {
   sql.exec("INSERT OR IGNORE INTO security_chain(organization_id,anchor_rowid,anchor_hash,head_rowid,head_hash,sealed_at) VALUES (?,0,?,0,?,?)", scope, genesisHash, genesisHash, iso);
   const chain = (sql.exec("SELECT head_rowid,head_hash,pruned_on FROM security_chain WHERE organization_id=?", scope).one() as { head_rowid: number; head_hash: string; pruned_on: string | null });
   let previous = chain.head_hash, head = chain.head_rowid;
+  // nosemgrep: sql-interpolated-text -- sealedColumns es la lista constante de columnas del sello
   for (const row of sql.exec(`SELECT rowid AS r,${sealedColumns} FROM security_events WHERE hash IS NULL ORDER BY rowid`).toArray()) {
     previous = sha256(sealText(previous, row as unknown as SealedFields)); head = Number(row.r);
     sql.exec("UPDATE security_events SET hash=? WHERE rowid=?", previous, head);
@@ -49,6 +50,7 @@ export async function verifySecurityChain(db: Reader, organizationId: string): P
   }
   let previous = chain.anchorHash, after = chain.anchorRowid, events = 0, lastRowid = chain.anchorRowid;
   for (;;) {
+    // nosemgrep: sql-interpolated-text -- sealedColumns es la lista constante de columnas del sello
     const rows = (await db.prepare(`SELECT rowid AS r,${sealedColumns},hash FROM security_events WHERE rowid>? ORDER BY rowid LIMIT 1000`).bind(after)
       .all<SealedFields & { r: number; hash: string | null }>()).results;
     for (const row of rows) {

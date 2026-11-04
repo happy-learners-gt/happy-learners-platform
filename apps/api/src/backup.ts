@@ -112,6 +112,7 @@ export function importStore(sql: SqlStorage, scope: string, backup: Backup) {
   sql.exec("DELETE FROM calendar_feeds WHERE user_id NOT IN (SELECT id FROM users)");
   sql.exec("DELETE FROM sign_in_events WHERE user_id NOT IN (SELECT id FROM users)");
   sql.exec("DELETE FROM email_changes WHERE user_id NOT IN (SELECT id FROM users)");
+  // nosemgrep: sql-interpolated-text -- los nombres son de la lista fija de tablas con credenciales de esta línea
   for (const name of ["totp_factors", "recovery_codes", "passkeys", "auth_challenges", "linked_identities", "access_tokens"]) sql.exec(`DELETE FROM "${name}" WHERE user_id IS NOT NULL AND user_id NOT IN (SELECT id FROM users)`);
   if (!backup.tables.invitations) sql.exec("DELETE FROM invitations WHERE invited_by NOT IN (SELECT id FROM users) OR (accepted_user_id IS NOT NULL AND accepted_user_id NOT IN (SELECT id FROM users))");
   sql.exec("DELETE FROM group_access_sessions WHERE group_id NOT IN (SELECT id FROM course_groups) OR (learner_id IS NOT NULL AND learner_id NOT IN (SELECT id FROM group_learners))");
