@@ -17,6 +17,8 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | HRS-05 | Operación | Horas: lo por revisar primero, con «Revisarlas»; 8 clases por paso en el teléfono | P2 | AUD-05 | DONE | 1.7.4: teléfono 9 089 → 4 646 px; E2E `fifth-wave` |
 | CUR-02 | Cursos | Ordenar por recientes, nombre o «Necesitan atención» con sus razones | P2 | AUD-05 | DONE | 1.7.4: E2E `fifth-wave` |
 | IDA-02 | Seguridad / UX | Pulido del centro: cuatro métricas, nombres alineados, menú en una fila en pantallas angostas | P2 | IDA-01 | DONE | 1.7.4: E2E `fifth-wave` (móvil) |
+| EDU-01 | Personas | En la fila de cada persona, lo que necesita de administración con su enlace | P2 | AUD-05 | DONE | 1.7.5: E2E `fifth-wave` |
+| PRF-01 | Personas | Revisión de perfiles: el trabajo primero, el ajuste al final | P2 | AUD-05 | DONE | 1.7.5: E2E `fifth-wave` |
 | PRG-01 | Programa | Descubrimiento, línea base, auditoría, arquitectura de información y espacio del programa | P0 | — | DONE | `docs/transformacion/` completo; estado retomable |
 | IA-01 | Navegación | Menú: cursos más relevantes (8) + «Todos los cursos (n)»; Administración en 4 grupos; Horas efectivas de administración en Personas | P0 | PRG-01 | DONE | Con 25 cursos el menú muestra 8 + enlace; el curso abierto siempre aparece; grupos con encabezado; Vitest y E2E de navegación verdes; capturas claro/oscuro, escritorio/móvil |
 | IA-02 | Navegación | Migas coherentes con el menú en administración (TD-006) | P1 | IA-01 | DONE | Ninguna página de administración muestra un padre que el menú no tiene |

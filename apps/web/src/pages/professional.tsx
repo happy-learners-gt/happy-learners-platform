@@ -771,10 +771,6 @@ export function ProfileReviews({ onChanged }: { onChanged?: () => void }) {
   return <>
     <p className="muted">Aprueba los perfiles profesionales antes de que el equipo y los estudiantes los vean, y verifica las credenciales que las personas envían.</p>
     {error ? <ErrorState error={error} retry={fetchQueue}/> : !queue ? <Loading label="Cargando la revisión…"/> : <div className="stack-lg">
-      {member.role === "admin" && <section className="panel" aria-labelledby="review-setting"><div className="panel-header"><h2 id="review-setting">Publicación de perfiles</h2></div>
-        <label className="switch"><input type="checkbox" checked={queue.reviewRequired} onChange={event => void setting(event.target.checked)}/>Los perfiles requieren aprobación de administración antes de publicarse</label>
-        <p className="muted small">{queue.reviewRequired ? "Cada nueva versión espera tu aprobación; mientras tanto se sigue viendo la versión publicada." : "Al enviarlo, cada perfil se publica de inmediato. Puedes ocultar cualquier perfil desde su revisión."}</p>
-      </section>}
       <Section title={`Perfiles por revisar (${queue.profiles.length})`}>
         {!queue.profiles.length ? <p className="muted">No hay perfiles esperando revisión.</p> : <ul className="plain-list review-list">{queue.profiles.map(item => <li key={item.userId} className="review-item">
           {item.photoUrl ? <img className="profile-photo" src={item.photoUrl} alt="" width={40} height={40}/> : <Avatar name={item.name} size={40}/>}
@@ -802,6 +798,11 @@ export function ProfileReviews({ onChanged }: { onChanged?: () => void }) {
           </tr>)}</tbody>
         </table></div>}
       </Section>
+      {/* PRF-01: the work first; the setting that decides whether there is work, after it. */}
+      {member.role === "admin" && <section className="panel" aria-labelledby="review-setting"><div className="panel-header"><h2 id="review-setting">Publicación de perfiles</h2></div>
+        <label className="switch"><input type="checkbox" checked={queue.reviewRequired} onChange={event => void setting(event.target.checked)}/>Los perfiles requieren aprobación de administración antes de publicarse</label>
+        <p className="muted small">{queue.reviewRequired ? "Cada nueva versión espera tu aprobación; mientras tanto se sigue viendo la versión publicada." : "Al enviarlo, cada perfil se publica de inmediato. Puedes ocultar cualquier perfil desde su revisión."}</p>
+      </section>}
     </div>}
     {open && <ReviewDialog item={open} self={open.userId === member.id} onClose={() => setOpen(null)} onDone={text => { setOpen(null); toast({ message: text }); load(); }}/>}
     {rejecting && <ReasonDialog title={`Rechazar «${rejecting.credential.name}»`} label="Motivo del rechazo" hint="La persona lo ve junto a su credencial para corregirla." confirm="Rechazar credencial"
