@@ -284,7 +284,9 @@ describe("book map on the built Worker (rebanada 5b)", () => {
     // The mapper's review runs in the alarm; each accepted page carries a quote that is on that page.
     expect((await read<BookMapView>(await as(educator, `${map}/check`, "POST", {}), 202)).outcomes.filter(row => row.aiStatus === "queued").map(row => row.code)).toEqual(["1.1", "1.2"]);
     let checked = searched;
-    for (let attempt = 0; attempt < 100 && checked.outcomes.some(row => row.aiStatus === "queued" || row.aiStatus === "running"); attempt++) { await delay(150); checked = await read<BookMapView>(await as(educator, map)); }
+    for (let attempt = 0; attempt < 300 && checked.outcomes.some(row => row.aiStatus === "queued" || row.aiStatus === "running"); attempt++) { await delay(150); checked = await read<BookMapView>(await as(educator, map)); }
+    // The check runs in the alarm: under a loaded machine it may take a while, but it must end.
+    expect(checked.outcomes.filter(row => row.aiStatus === "queued" || row.aiStatus === "running")).toEqual([]);
     for (const row of checked.outcomes.filter(item => item.aiStatus === "done")) {
       expect(row.source).toBe("ai");
       for (const evidence of row.evidence) expect(book[evidence.page - 1].toLowerCase()).toContain(evidence.quote.toLowerCase().slice(0, 20));
