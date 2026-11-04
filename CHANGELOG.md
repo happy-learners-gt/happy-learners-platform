@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.25 — 2026-11-03
+
+- Biblioteca (LIB-01): los recursos heredados de la biblioteca anterior dicen «General · solo lectura» en lugar de un
+  estado verde, y una leyenda explica la diferencia con los recursos de cada curso y dónde ver en qué lecciones se usan.
+
 ## 1.6.24 — 2026-11-03
 
 - Notificaciones (NOT-01): junto al botón, cuántos avisos son obligatorios y que guardar pide marcar o desmarcar uno;

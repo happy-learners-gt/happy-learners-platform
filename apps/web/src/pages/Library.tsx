@@ -55,6 +55,7 @@ export function Library() {
       {(areaCounts.size > 1 || area) && <label className="select-inline"><span>Área</span><select value={area} onChange={event => filter("area", event.target.value)}><option value="">Todas</option>{[...areaCounts.entries()].map(([code, count]) => <option key={code} value={code}>{areaLabel(code)} ({count})</option>)}</select></label>}
     </div>
     <p className="toolbar-count" aria-live="polite">{plural(visible.length, "recurso", "recursos")}</p>
+    {visible.some(item => item.legacy) && <p className="muted small">«General · solo lectura»: recursos de la biblioteca anterior, disponibles en cualquier curso; ya no se editan. Los demás pertenecen a un curso y se editan desde él. Abre un recurso para ver en qué lecciones se usa.</p>}
     {visible.length ? <div className="resource-list">{visible.map(item => <ResourceCard key={`${item.courseId}-${item.id}`} item={item} onOpen={() => setPreview(item)} menu={[
       { label: "Vista previa", icon: "eye", onSelect: () => setPreview(item) },
       ...(educator && !item.legacy && item.kind !== "file" && editable(item) ? [{ label: "Editar", icon: "edit" as const, onSelect: () => setForm(item) }] : []),
