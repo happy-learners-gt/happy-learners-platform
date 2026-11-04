@@ -227,7 +227,9 @@ export function DocumentDesigner({ id }: { id: string }) {
     change({ ...draft!, blocks: [...draft!.blocks, created] }); setSelected(created.id);
   }
   const move = (index: number, by: number) => { const blocks = [...draft.blocks]; const [item] = blocks.splice(index, 1); blocks.splice(index + by, 0, item); change({ ...draft, blocks }); };
-  const summary = (item: TemplateBlock) => item.type === "title" || item.type === "text" ? item.text.slice(0, 90) : item.type === "fields" ? item.pairs.map(pair => pair.label).join(" · ") : item.type === "table" ? item.columns.map(column => column.label).join(" · ")
+  // DOC-04: in the list of blocks, a field reads by its name («Nombre del estudiante»), not its key; editing keeps the key.
+  const readable = (text: string) => text.replace(/\{\{\s*([a-z0-9_.]+)\s*\}\}/gi, (whole, key: string) => { const field = spec.fields.find(item => item.key === key); return field ? `«${field.label}»` : whole; });
+  const summary = (item: TemplateBlock) => item.type === "title" || item.type === "text" ? readable(item.text).slice(0, 90) : item.type === "fields" ? item.pairs.map(pair => pair.label).join(" · ") : item.type === "table" ? item.columns.map(column => column.label).join(" · ")
     : item.type === "image" ? images.find(image => image.id === item.imageId)?.name || "Imagen" : item.type === "signatures" ? item.lines.map(line => line.name).join(" · ") : "—";
   return <>
     {header}
@@ -240,7 +242,7 @@ export function DocumentDesigner({ id }: { id: string }) {
       </section>
       <section className="document-sheet" aria-label="Hoja">
         <button type="button" className={`document-block${selected === "documento" ? " is-selected" : ""}`} onClick={() => setSelected("documento")}>
-          <strong>Encabezado y página</strong><span className="muted">{draft.header.join(" · ") || "Sin encabezado"}</span>
+          <strong>Encabezado y página</strong><span className="muted">{readable(draft.header.join(" · ")) || "Sin encabezado"}</span>
         </button>
         <ol>{draft.blocks.map((item, index) => <li key={item.id} className={`document-block${selected === item.id ? " is-selected" : ""}`}>
           <button type="button" className="document-block-main" onClick={() => setSelected(item.id)}><strong>{blockLabels[item.type]}</strong><span className="muted">{summary(item)}</span></button>
