@@ -3,16 +3,16 @@
 - **Fecha:** 03-nov-2026
 - **Fase:** 3–4 · Hitos M0, M1, M3 hechos; M2 casi (falta AUD-02); M4 en curso (HRS-01 y CAL-01 hechos); M5 en curso
   (PPL-01 hecho)
-- **Producción:** 1.6.34 (`da97030`, PR #127, M9). SPR-004 cerró con la release v1.6.20 (`95f2ac3`, PR #123). Del 02 al 03-nov: #103–#127 (1.6.0–1.6.34), cada uno con todos los checks
+- **Producción:** 1.6.36 (`2b35b24`, PR #128). SPR-004 cerró con la release v1.6.20 (`95f2ac3`, PR #123). Del 02 al 03-nov: #103–#128 (1.6.0–1.6.36), cada uno con todos los checks
   del PR, `verify`, `deploy` y `critical-flows` verdes en `main` (salvo #108, ver incidente). Escaneo completo de
   seguridad en `main` el 03-nov: verde.
-- **Rama:** `feat/HL-15-ventaja` (1.6.35 LIB-02, 1.6.36 DOC-04, MOAT-01, AP-09).
-  **Sprints (ops):** SPR-003 cerrado 27-oct, SPR-004 cerrado 3-nov; lo de desde el 4-nov cuenta en SPR-005 (DEC-056).
+- **Rama:** `feat/HL-15-rel007-registro-seguridad` (1.7.0, REL-007 primer incremento).
+  **Sprints (ops):** SPR-003 cerrado 27-oct y aceptado; SPR-004 aceptado en lo entregado y cierra el 10-nov (DEC-057) con todo su objetivo de seguridad: 10 historias de REL-007 más ST-184 a ST-189 (DEC-058, ops #144).
 - **Últimas verificaciones:** `./scripts/verify` verde (77 archivos, 523 pruebas); E2E afectadas con build limpia en
   escritorio y móvil en cada PR; CI verde en cada PR.
 - **Autorización vigente (02-nov, del usuario):** «sigue adelante con el merge y también todo lo demás»: fusionar y
   desplegar los PR de cada hito con CI verde; aplicar las recomendaciones de la cola que no requieren cuentas ni gasto.
-- **En curso:** nada a medias
+- **En curso:** REL-007 por incrementos (cola REL7-01 a REL7-08); 1.7.0 = registro de seguridad sellado, auditoría restringida y cierre de sesiones por administración
 - **Requieren al usuario:** AP-05 pentest manual de pago (SEC-06 gratuito en curso); AP-06 marca
   («Acervum» en discusión); AP-07 y AP-08 decididos el 03-nov; AP-09 lectura de Workers Observability (OBS-01)
 - **Siguiente acción:** M8 hecho salvo DOC-03 y LIB-02; M9 hecho salvo ORG-01 (espera AP-06); M11: MOAT-01 hecho (`ventaja.md`), OBS-01 espera AP-09 (MOAT-01, OBS-01); el 13-nov SEC-04. El programa

@@ -5,6 +5,14 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 
 | Id | Carril | Tarea | Prio | Depende | Estado | Criterio de aceptación |
 | --- | --- | --- | --- | --- | --- | --- |
+| REL7-01 | Seguridad | ST-137, ST-068, ST-186, ST-187 (parte), ST-136 (parte): registro de seguridad sellado, auditoría restringida, cerrar sesiones de una persona | P0 | DEC-058 | DONE | 1.7.0: `security-log.test.ts` (cadena con alteraciones, retención, rutas 401/403, sin secretos, exportación); `docs/security/registro-de-seguridad.md` |
+| REL7-02 | Seguridad | ST-134, ST-130: recuperación de contraseña, políticas (longitud, contraseñas comprometidas), inicio con enlace por correo | P0 | REL7-01 | READY | Enlace de un solo uso que caduca en minutos; la solicitud no revela si la cuenta existe; todo en el registro |
+| REL7-03 | Seguridad | ST-133: verificación en dos pasos (TOTP) con códigos de recuperación, exigible por rol, restablecible por administración | P0 | REL7-01 | READY | RFC 6238 con pruebas de vectores; reuso de un código rechazado |
+| REL7-04 | Seguridad | ST-132: passkeys (WebAuthn) para entrar sin contraseña | P1 | REL7-01 | READY | Registro, inicio y eliminación con prueba de un autenticador emulado |
+| REL7-05 | Seguridad | ST-136: tokens de integración con alcance, caducidad y revocación | P1 | REL7-01 | READY | Solo lectura; revocables por su dueño y por administración |
+| REL7-06 | Seguridad | ST-129, ST-131: Google, Microsoft y Apple por OpenID Connect, vinculados a una persona activa | P1 | REL7-01 | READY | Probado contra un proveedor de prueba; se activa con las credenciales del responsable del proyecto |
+| REL7-07 | Seguridad | ST-138: proveedor institucional (Okta, Entra ID) por OpenID Connect, probado antes de activarse, con rol por grupo | P1 | REL7-06 | READY | Igual que REL7-06 |
+| REL7-08 | Seguridad | ST-184, ST-185, ST-188, ST-189: matriz de accesos de seguridad, arquitectura, matriz de cumplimiento (ASVS, NIST 800-63B), controles operativos | P1 | REL7-01 | READY | Documentos en `docs/security/`; escáneres obligatorios en `main` |
 | PRG-01 | Programa | Descubrimiento, línea base, auditoría, arquitectura de información y espacio del programa | P0 | — | DONE | `docs/transformacion/` completo; estado retomable |
 | IA-01 | Navegación | Menú: cursos más relevantes (8) + «Todos los cursos (n)»; Administración en 4 grupos; Horas efectivas de administración en Personas | P0 | PRG-01 | DONE | Con 25 cursos el menú muestra 8 + enlace; el curso abierto siempre aparece; grupos con encabezado; Vitest y E2E de navegación verdes; capturas claro/oscuro, escritorio/móvil |
 | IA-02 | Navegación | Migas coherentes con el menú en administración (TD-006) | P1 | IA-01 | DONE | Ninguna página de administración muestra un padre que el menú no tiene |

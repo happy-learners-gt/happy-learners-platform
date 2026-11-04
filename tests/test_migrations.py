@@ -1838,3 +1838,40 @@ class DemoReportTemplatesMigrationTests(unittest.TestCase):
         db.executescript(sorted(pathlib.Path("database/migrations").glob("0077_*.sql"))[0].read_text())
         self.assertEqual(db.execute("SELECT count(*) FROM report_templates").fetchone()[0], 2)
         self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+
+class SecurityMigrationTests(unittest.TestCase):
+    """0078 (REL-007): sessions and the sign-in history are rebuilt with the new methods, keeping every row."""
+
+    def setUp(self):
+        self.db = sqlite3.connect(":memory:")
+        self.db.execute("PRAGMA foreign_keys=ON")
+        paths = sorted(pathlib.Path("database/migrations").glob("*.sql"))
+        for path in paths:
+            if path.name.startswith("0078_"):
+                break
+            self.db.executescript(path.read_text())
+        self.db.execute("INSERT INTO sessions(token_hash,user_id,expires_at,id,created_at,last_used_at,method,device,country) VALUES ('h1','user-0',9,'session-' || printf('%032d', 1),1,2,'invitation','Firefox en Windows','GT')")
+        self.db.execute("INSERT INTO sign_in_events VALUES ('signin-1','org-demo','user-0','failed','password','Firefox en Windows',NULL,'2026-11-01T00:00:00Z')")
+        self.db.executescript(next(path for path in paths if path.name.startswith("0078_")).read_text())
+
+    def test_rows_and_indexes_are_kept_and_new_methods_accepted(self):
+        self.assertEqual(self.db.execute("SELECT token_hash,user_id,expires_at,created_at,last_used_at,method,device,country,verified FROM sessions").fetchall(), [("h1", "user-0", 9, 1, 2, "invitation", "Firefox en Windows", "GT", 0)])
+        self.assertEqual(self.db.execute("SELECT id,outcome,method FROM sign_in_events").fetchall(), [("signin-1", "failed", "password")])
+        for method in ["link", "recovery", "passkey", "google", "microsoft", "apple", "sso"]:
+            self.db.execute("INSERT INTO sign_in_events VALUES (?,?,?,?,?,?,?,?)", (f"signin-{method}", "org-demo", "user-0", "succeeded", method, "Chrome en Linux", None, "t"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute("INSERT INTO sign_in_events VALUES ('signin-x','org-demo','user-0','succeeded','fax','Chrome en Linux',NULL,'t')")
+        indexes = {row[0] for row in self.db.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name IN ('sessions','sign_in_events')")}
+        self.assertTrue({"sessions_expiry", "sessions_user", "sign_in_events_user", "sign_in_events_organization"} <= indexes)
+        self.assertEqual(self.db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_a_sealed_security_event_cannot_change(self):
+        self.db.execute("INSERT INTO security_events(id,organization_id,type,outcome,occurred_at) VALUES ('security-1','org-demo','sign_in','failed','t')")
+        self.db.execute("UPDATE security_events SET hash=? WHERE id='security-1'", ("a" * 64,))
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute("UPDATE security_events SET detail='otro' WHERE id='security-1'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute("INSERT INTO security_events(id,organization_id,type,outcome,occurred_at) VALUES ('otro-2','org-demo','sign_in','failed','t')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute("INSERT INTO access_tokens(id,user_id,name,token_hash,scope,created_at,expires_at) VALUES ('token-1','user-0','CI',?,'write','t','t')", ("b" * 64,))
