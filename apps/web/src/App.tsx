@@ -22,6 +22,7 @@ import { Members, OrganizationSettings, AcademicSettings } from "./pages/admin";
 import { ContractsPage } from "./pages/contracts";
 import { AcceptInvitation } from "./pages/invitations";
 import { AccessPage } from "./pages/access";
+import { SecurityPage } from "./pages/security";
 import { NotificationsAdmin } from "./pages/notifications";
 import { ConsentGate, PrivacyPage } from "./pages/legal";
 import { TeamDirectory, TeamProfilePage } from "./pages/professional";
@@ -197,6 +198,7 @@ function page(first: string, second: string | undefined, url: URL) {
     case "configuracion-academica": return second === "calendario" ? <InstitutionalCalendarPage/> : <AcademicSettings/>;
     case "tribunales": return <MyPanelsPage/>;
     case "roles-y-accesos": return <AccessPage/>;
+    case "seguridad": return <SecurityPage/>;
     case "notificaciones": return <NotificationsAdmin/>;
     case "clasificaciones": return <Redirect to="/configuracion-academica"/>;
     case "contenido": return null;

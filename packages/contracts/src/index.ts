@@ -801,7 +801,7 @@ export interface AccountOverview {
 export interface EmailChangeIssued { change: EmailChange; delivery: AccountNoticeDelivery; link?: string }
 /** GET /api/account/email/<token>: what the public confirmation page shows before confirming. */
 export interface EmailChangePreview { organization: string; username: string; newEmail: string; expiresAt: string }
-export type SignInMethod = "password" | "invitation";
+export type SignInMethod = "password" | "invitation" | "link" | "recovery" | "passkey" | "google" | "microsoft" | "apple" | "sso";
 export interface AccountSession { id: string; device: string; country: string | null; method: SignInMethod; createdAt: string; lastUsedAt: string; expiresAt: string; current: boolean }
 export interface SignInRecord { id: string; outcome: "succeeded" | "failed"; method: SignInMethod; device: string; country: string | null; occurredAt: string }
 /** ST-159: closing the account, linked to the departure (ST-123) that completes it. */

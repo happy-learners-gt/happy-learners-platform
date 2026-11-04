@@ -6,6 +6,7 @@ import { event } from "./activity";
 import { startOnboarding } from "./onboarding";
 import { sendNotice } from "./account-notices";
 import { notify, type Notifier } from "./notify";
+import { securityEvent } from "./security-log";
 
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
 const roleName = (role: string) => role === "admin" ? "Administración" : "Educador";
@@ -25,6 +26,7 @@ export async function createAccount(input: unknown, current: Member, db: Databas
     db.prepare("INSERT INTO users(id,username,password_salt,password_hash,display_name,must_change_password) VALUES (?,?,?,?,?,1)").bind(id, account.username, salt, hash, account.displayName),
     db.prepare("INSERT INTO memberships(user_id,organization_id,role,active) VALUES (?,?,?,1)").bind(id, current.organizationId, account.role === "educator" ? "instructor" : "admin"),
     db.prepare("INSERT INTO role_events VALUES (?,?,?,?,?,?)").bind(crypto.randomUUID(), current.id, id, account.role, 1, new Date().toISOString()),
+    securityEvent(db, { organizationId: current.organizationId, type: "role_changed", actorId: current.id, subjectId: id, detail: `Cuenta creada con rol ${roleName(account.role)}` }),
     // ST-122: a new account goes through the guided onboarding on its first sign-in.
     startOnboarding(db, id, current.organizationId, new Date().toISOString()),
     event(db, current, { action: "created", targetType: "account", targetId: id, summary: `Creó la cuenta de ${account.displayName} (@${account.username}) con rol ${roleName(account.role)}` }),
@@ -44,6 +46,7 @@ export async function resetPassword(id: string, current: Member, db: Database, n
     db.prepare("UPDATE users SET password_salt=?,password_hash=?,must_change_password=1 WHERE id=?").bind(salt, hash, id),
     db.prepare("DELETE FROM sessions WHERE user_id=?").bind(id),
     event(db, current, { action: "reset", targetType: "account", targetId: id, summary: `Restableció la contraseña de ${target.name}` }),
+    securityEvent(db, { organizationId: current.organizationId, type: "password_reset", actorId: current.id, subjectId: id, detail: "Contraseña temporal; sus sesiones se cerraron" }),
   ]);
   // ST-161: an account notice, mandatory on every channel.
   await notify(db, notifier, current, [{ userId: id, facts: { type: "account_security", change: "password_reset" }, targetId: id, path: "/inicio" }]);
@@ -67,6 +70,7 @@ export async function changePassword(input: unknown, current: Member, token: str
     db.prepare("UPDATE users SET password_salt=?,password_hash=?,must_change_password=0 WHERE id=?").bind(salt, hash, current.id),
     db.prepare("DELETE FROM sessions WHERE user_id=? AND token_hash<>?").bind(current.id, await digest(token)),
     event(db, current, { action: "updated", targetType: "account", targetId: current.id, summary: "Cambió su contraseña" }),
+    securityEvent(db, { organizationId: current.organizationId, type: "password_changed", outcome: "succeeded", actorId: current.id, subjectId: current.id, detail: current.mustChangePassword ? "Reemplazó la contraseña temporal" : null }),
   ]);
   // ST-158 and ST-161: the owner hears of every change of their own password, except when replacing a temporary one.
   // The bell always shows it (account_security, mandatory). The e-mail goes once: as the account's security notice

@@ -18,7 +18,11 @@
 declare global { interface Env { RESTORE_ENABLED?: string } }
 
 export const BACKUP_FORMAT = "happy-learners-backup/1";
-const SKIPPED = new Set(["sessions", "group_access_sessions", "login_limits", "calendar_feeds", "mail_outbox", "email_changes", "sign_in_events", "mail_schedule_runs", "schema_migrations"]);
+// REL-007 (ST-187): the security log and its chain belong to the store that wrote them; second factors, recovery codes,
+// passkeys, linked accounts, the institution's identity provider, sign-in challenges and integration tokens are
+// credentials, so a copy never carries them and a restore keeps the ones the target already has. The access policy is copied.
+const SKIPPED = new Set(["sessions", "group_access_sessions", "login_limits", "calendar_feeds", "mail_outbox", "email_changes", "sign_in_events", "mail_schedule_runs", "schema_migrations",
+  "security_events", "security_chain", "totp_factors", "recovery_codes", "passkeys", "auth_challenges", "linked_identities", "sso_connections", "access_tokens"]);
 const SECRET: Record<string, string[]> = { users: ["password_salt", "password_hash", "must_change_password"], invitations: ["token_hash"] };
 /** Tables a copy may lack because older copies did not include them; restoring such a copy leaves them as they are. */
 const OPTIONAL = new Set(["invitations"]);
@@ -108,6 +112,7 @@ export function importStore(sql: SqlStorage, scope: string, backup: Backup) {
   sql.exec("DELETE FROM calendar_feeds WHERE user_id NOT IN (SELECT id FROM users)");
   sql.exec("DELETE FROM sign_in_events WHERE user_id NOT IN (SELECT id FROM users)");
   sql.exec("DELETE FROM email_changes WHERE user_id NOT IN (SELECT id FROM users)");
+  for (const name of ["totp_factors", "recovery_codes", "passkeys", "auth_challenges", "linked_identities", "access_tokens"]) sql.exec(`DELETE FROM "${name}" WHERE user_id IS NOT NULL AND user_id NOT IN (SELECT id FROM users)`);
   if (!backup.tables.invitations) sql.exec("DELETE FROM invitations WHERE invited_by NOT IN (SELECT id FROM users) OR (accepted_user_id IS NOT NULL AND accepted_user_id NOT IN (SELECT id FROM users))");
   sql.exec("DELETE FROM group_access_sessions WHERE group_id NOT IN (SELECT id FROM course_groups) OR (learner_id IS NOT NULL AND learner_id NOT IN (SELECT id FROM group_learners))");
   for (const name of names) if (canonical(read(sql, name, backup.tables[name].columns)) !== canonical(backup.tables[name])) throw new RestoreError(`La tabla ${name} no quedó igual a la copia.`);

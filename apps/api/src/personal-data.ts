@@ -18,7 +18,7 @@ const parse = (text: string | null, fallback: unknown) => { try { return text ? 
 
 export async function exportMyData(current: Member, db: Database, tokenHash: string) {
   const id = current.id, org = current.organizationId, now = new Date();
-  const [account, profile, documents, preferences, consents, signatures, activity, sessions, signIns, emailChanges, closures, notices, versions, credentials, regional, delivery, inbox] = await db.batch([
+  const [account, profile, documents, preferences, consents, signatures, activity, sessions, signIns, emailChanges, closures, notices, versions, credentials, regional, delivery, inbox, securityLog] = await db.batch([
     db.prepare(`SELECT u.id,u.username,COALESCE(u.display_name,u.username) AS displayName,CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END AS role,m.active,u.email,
       o.id AS organizationId,o.name AS organization,o.timezone FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=? JOIN organizations o ON o.id=m.organization_id WHERE u.id=?`).bind(org, id),
     db.prepare("SELECT phone,contact_email AS contactEmail,education,specialties,availability,photo_key IS NOT NULL AS hasPhoto,updated_at AS updatedAt,draft,visibility,status,draft_version AS draftVersion,hidden_by AS hiddenBy,status_changed_at AS statusChangedAt FROM staff_profiles WHERE user_id=? AND organization_id=?").bind(id, org),
@@ -39,6 +39,8 @@ export async function exportMyData(current: Member, db: Database, tokenHash: str
     db.prepare("SELECT language,locale,timezone,week_start AS weekStart,hour_cycle AS hourCycle,home_page AS homePage,theme,text_scale AS textScale,high_contrast AS highContrast,motion,density,updated_at AS updatedAt FROM user_preferences WHERE user_id=? AND organization_id=?").bind(id, org),
     db.prepare("SELECT email_frequency AS frequency,digest_time AS digestTime,quiet_start AS quietStart,quiet_end AS quietEnd,updated_at AS updatedAt FROM notification_settings WHERE user_id=? AND organization_id=?").bind(id, org),
     db.prepare("SELECT type,reason,path,mandatory,created_at AS createdAt,read_at AS readAt FROM notification_inbox WHERE user_id=? AND organization_id=? ORDER BY created_at").bind(id, org),
+    // ST-187: the person's own security events, with their seals; never who else appears in them.
+    db.prepare("SELECT type,outcome,method,detail,device,country,occurred_at AS occurredAt,actor_id=subject_id AS byThemselves,hash AS seal FROM security_events WHERE subject_id=? AND organization_id=? ORDER BY occurred_at DESC LIMIT 5000").bind(id, org),
   ]) as unknown as Record<string, unknown>[][];
   const person = account[0] as { username: string; active: number; organizationId: string; organization: string | null; timezone: string | null } & Record<string, unknown> | undefined;
   if (!person) return Response.json({ error: "Tu cuenta no está disponible." }, { status: 404 });
@@ -65,6 +67,7 @@ export async function exportMyData(current: Member, db: Database, tokenHash: str
     security: {
       sessions: sessions.map(row => ({ ...row, createdAt: ms(row.createdAt as number), lastUsedAt: ms(row.lastUsedAt as number), expiresAt: ms(row.expiresAt as number), current: !!row.current })),
       signIns, emailChanges, notices,
+      log: securityLog.map(row => ({ ...row, byThemselves: !!row.byThemselves })),
     },
     closures,
   };
