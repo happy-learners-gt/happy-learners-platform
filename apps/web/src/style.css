@@ -2226,3 +2226,14 @@ section.panel[id^="profile-"] { scroll-margin-top: calc(var(--topbar-h) + var(--
   .fold-on-phones.fold-2 > :first-child > li:nth-child(n+3), .fold-on-phones.fold-3 > :first-child > li:nth-child(n+4) { display: none; }
   .phones-only { display: inline-flex; }
 }
+
+/* CUR-01: Cursos grouped by program, and a list of one row per course (default on phones). */
+.course-group-title { font-size: var(--text-lg); margin: 0 0 var(--space-3); }
+.course-rows { grid-template-columns: 1fr; gap: var(--space-2); }
+.course-card.is-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); min-height: 0; }
+.course-card.is-row .course-card-title { padding-top: 0; }
+.course-card.is-row .course-avatar { width: 36px; height: 36px; border: 0; }
+.course-card.is-row .course-card-title h3 { margin: 0; -webkit-line-clamp: 1; }
+.course-card.is-row .course-card-meta { margin: 0; }
+.course-row-progress { color: var(--color-muted); font-size: var(--text-sm); white-space: nowrap; }
+@media (max-width: 720px) { .course-card.is-row { grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-2); padding: var(--space-2) var(--space-3); } .course-row-progress { display: none; } .course-card.is-row .course-card-meta .phones-only { display: inline; } .course-group-title { font-size: var(--text-md); margin-bottom: var(--space-2); } }

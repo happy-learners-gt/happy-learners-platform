@@ -50,7 +50,7 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | QA-06 | Calidad | Con todos los Workers de prueba arrancando, más pruebas corren a la vez y algunas pasaban de 10 s | P2 | QA-05 | DONE | 1.6.18: `testTimeout` 30 s (sin tocar aserciones; varias pruebas de Worker ya tenían 60 s) |
 | AIG-3 | IA | Modelo menor para tareas cortas (redactar, sugerir campos) | P2 | AI-01 | DONE | 1.6.15: `OPENAI_MODEL_SHORT` opcional, registrado en `ai_runs`; prueba en `openai.test.ts`. Activarlo es configuración del despliegue |
 | AUD-03 | Auditoría | Volver a puntuar con evidencia los módulos sin tocar | P1 | — | DONE | `auditoria.md` §8: Cursos 3.75 (9 945 px en móvil), Roles 3.40, Documentos 3.40, Notificaciones 3.60, Biblioteca 3.70, Equipo 3.85 |
-| CUR-01 | Contenido | Cursos agrupados por programa y ordenados por atención, lista compacta; tarjetas compactas en móvil | P1 | AUD-03 | READY | ≤ 3 500 px en móvil con 25 cursos; puntaje 4.3 |
+| CUR-01 | Contenido | Cursos agrupados por programa y en lista de una fila por curso (por omisión en el teléfono) | P1 | AUD-03 | DONE | 1.6.21: móvil 9 945 → 3 068 px con 25 cursos; escritorio sin cambios (3 903 px, tarjetas); vista Tarjetas/Lista en la dirección; E2E en `layout.spec` |
 | DOC-02 | Documentos | Documentos 3.40 → 4.0: plantillas de demostración y auditoría del diseñador | P1 | AUD-03 | READY | Puntaje ≥ 4.0 |
 | TEAM-01 | Personas | Equipo 3.85 → 4.0: tarjetas uniformes y cursos que imparte | P3 | AUD-03 | READY | Puntaje ≥ 4.0 |
 | LIB-01 | Contenido | Biblioteca 3.70 → 4.0: leyenda general/del curso y usos enlazados | P2 | AUD-03 | READY | Puntaje ≥ 4.0 |

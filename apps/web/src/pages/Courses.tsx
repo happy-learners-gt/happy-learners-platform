@@ -69,12 +69,32 @@ export function CourseList() {
   const passes = (course: Course, skip?: string) => facets.every(facet => facet.key === skip || !selected(facet) || facet.value(course, programOf(course)) === selected(facet));
   const visible = newest(pool.filter(course => passes(course)));
   const filtered = facets.some(selected);
+  // CUR-01: a list of rows on phones unless the address says otherwise; cards elsewhere.
+  const [narrow] = useState(() => typeof window !== "undefined" && window.matchMedia?.("(max-width: 720px)").matches);
+  const view = url.searchParams.get("vista") === "lista" || (!url.searchParams.get("vista") && narrow) ? "lista" : "tarjetas";
+  // In the list, grouped by program when there is more than one and none is chosen; independent courses last. Cards
+  // stay in one grid: with several programs of one or two courses, groups would leave rows half empty.
+  const groupNames = new Map(visible.map(course => [course.programId || "", programOf(course)?.name || "Sin programa"]));
+  const groups = view === "lista" && !selected(facets[0]) && groupNames.size > 1
+    ? [...groupNames.entries()].sort(([a, x], [b, y]) => (a ? 0 : 1) - (b ? 0 : 1) || x.localeCompare(y, "es")).map(([id, name]) => ({ id, name, courses: visible.filter(course => (course.programId || "") === id) }))
+    : [{ id: "all", name: "", courses: visible }];
+  const menuOf = (course: Course) => admin ? [
+    { label: "Abrir", icon: "arrowRight" as const, onSelect: () => navigate(`/cursos/${course.id}`) },
+    { label: "Editar configuración", icon: "settings" as const, onSelect: () => navigate(`/cursos/${course.id}/configuracion`) },
+    { label: "Duplicar", icon: "copy" as const, onSelect: () => void actions.duplicate(course) },
+    "separator" as const,
+    course.status === "active" ? { label: "Archivar", icon: "archive" as const, danger: true, onSelect: () => void actions.setStatus(course, "archived") } : { label: "Restaurar", icon: "archive" as const, onSelect: () => void actions.setStatus(course, "active") },
+  ] : undefined;
+  const list = (items: Course[]) => <div className={view === "lista" ? "card-grid course-rows" : "card-grid"}>{items.map(course => <CourseCard key={course.id} course={course} program={programOf(course)} stats={stats[course.id]} row={view === "lista"} menu={menuOf(course)}/>)}</div>;
   return <>
     <PageHeader title="Cursos" description={courses ? archived ? plural(courses.length - active, "curso archivado", "cursos archivados") : admin ? plural(active, "curso activo", "cursos activos") : `${plural(active, "curso asignado", "cursos asignados")} a tu cuenta` : undefined} primary={admin && (!courses || courses.length > 0) && <PrimaryAction href="/cursos/nuevo" icon="plus">Crear curso</PrimaryAction>}/>
     <div className="toolbar" role="group" aria-label="Filtrar cursos">
       <div className="search-field"><Icon name="search" size={18}/><label htmlFor="course-search" className="sr-only">Buscar cursos</label><input id="course-search" type="search" value={query} onChange={event => filter("q", event.target.value)} placeholder="Buscar por nombre u objetivo"/></div>
       <fieldset className="segmented"><legend className="sr-only">Estado</legend>
         {[["", "Activos"], ["archivados", "Archivados"]].map(([value, label]) => <label key={label}><input type="radio" name="course-status" checked={(url.searchParams.get("estado") || "") === value} onChange={() => filter("estado", value)}/><span>{label}</span></label>)}
+      </fieldset>
+      <fieldset className="segmented"><legend className="sr-only">Vista</legend>
+        {[["tarjetas", "Tarjetas"], ["lista", "Lista"]].map(([value, label]) => <label key={value}><input type="radio" name="course-view" checked={view === value} onChange={() => filter("vista", value)}/><span>{label}</span></label>)}
       </fieldset>
     </div>
     {courses && courses.length > 1 && <div className="facet-bar" role="group" aria-label="Filtrar por configuración académica">
@@ -90,13 +110,10 @@ export function CourseList() {
       {filtered && <Button variant="ghost" icon="close" onClick={() => { const next = new URL(url); facets.forEach(facet => next.searchParams.delete(facet.param)); navigate(next.pathname + next.search, true); }}>Quitar filtros</Button>}
     </div>}
     {error ? <ErrorState error={error} retry={() => void load()}/> : !courses ? <Loading label="Cargando cursos…" cards={3}/> :
-      visible.length ? <div className="card-grid">{visible.map(course => <CourseCard key={course.id} course={course} program={programOf(course)} stats={stats[course.id]} menu={admin ? [
-        { label: "Abrir", icon: "arrowRight", onSelect: () => navigate(`/cursos/${course.id}`) },
-        { label: "Editar configuración", icon: "settings", onSelect: () => navigate(`/cursos/${course.id}/configuracion`) },
-        { label: "Duplicar", icon: "copy", onSelect: () => void actions.duplicate(course) },
-        "separator",
-        course.status === "active" ? { label: "Archivar", icon: "archive", danger: true, onSelect: () => void actions.setStatus(course, "archived") } : { label: "Restaurar", icon: "archive", onSelect: () => void actions.setStatus(course, "active") },
-      ] : undefined}/>)}</div>
+      visible.length ? (groups.length > 1 ? <div className="stack-lg">{groups.map(group => <section key={group.id} className="course-group" aria-labelledby={`course-group-${group.id || "none"}`}>
+        <h2 id={`course-group-${group.id || "none"}`} className="course-group-title">{group.name} <span className="muted">({group.courses.length})</span></h2>
+        {list(group.courses)}
+      </section>)}</div> : list(visible))
       : query || filtered ? <EmptyState icon="search" title="Ningún curso coincide con la búsqueda y los filtros" action={<Button onClick={() => navigate(url.pathname, true)}>Limpiar búsqueda y filtros</Button>}>Prueba con otra palabra o quita algún filtro.</EmptyState>
       : archived ? <EmptyState icon="archive" title="No hay cursos archivados">Los cursos que archives aparecerán aquí y podrás restaurarlos.</EmptyState>
       : admin ? <EmptyState icon="courses" title="Crea tu primer curso" action={<PrimaryAction href="/cursos/nuevo" icon="plus">Crear curso</PrimaryAction>}>Un curso reúne módulos, lecciones y recursos. Puede ser una asignatura, un taller o un curso libre.</EmptyState>

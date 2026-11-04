@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.21 — 2026-11-03
+
+- Cursos (CUR-01): vista **Lista** con una fila por curso (nombre, contenido, lecciones publicadas y acciones),
+  agrupada por programa con «Sin programa» al final; en el teléfono es la vista por omisión y la página pasa de
+  9 945 a 3 068 px con 25 cursos. En pantallas anchas siguen las tarjetas; la vista elegida queda en la dirección.
+
 ## 1.6.20 — 2026-11-03
 
 - Documentación del programa de transformación: tercera pasada de la auditoría sobre los módulos que no se habían

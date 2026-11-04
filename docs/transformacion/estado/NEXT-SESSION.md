@@ -9,7 +9,7 @@
 
 ## Hecho
 
-- 1.6.0–1.6.19 en producción (#103–#122, 02 y 03-nov): menú y Agenda por rol, Inicio por excepciones, Horas por
+- 1.6.0–1.6.20 en producción (#103–#123, 02 y 03-nov); SPR-004 cerrado el 3-nov con releases v1.2.0 y v1.6.20: menú y Agenda por rol, Inicio por excepciones, Horas por
   periodo y con la mitad de lecturas, R1, límite de IA (H4), incorporación de educadores (con agregar a un curso),
   calendario unificado, horario vigente con choques, orden estable de la actividad, contraste AA en oscuro y
   segunda pasada de la auditoría (AUD-02). 1.6.8 (DOC-01, #111): empezar una plantilla de documento en un paso. 1.6.9 (AIG-4/5): propuestas usadas e
@@ -18,7 +18,7 @@
 ## Siguiente acción
 
 1. `git status` y `git fetch && git merge origin/main` si avanzó. Rama `feat/HL-15-estado-1619` con este estado sin push.
-2. Siguiente de la cola: M8 en el orden de `auditoria.md` §8 (CUR-01, ACC-01, DOC-02, NOT-01, LIB-01, TEAM-01);
+2. Siguiente de la cola: M8 en el orden de `auditoria.md` §8 (ACC-01, DOC-02, NOT-01, LIB-01, TEAM-01; CUR-01 hecho en 1.6.21);
    luego M9. El 13-nov SEC-04. El programa NO está completo: 1 de 18 módulos en su meta.
    Decisiones del dueño del 03-nov en `aprobaciones.md` (AP-03…AP-08).
 3. Por cada hito: `rm -rf build && npm run build`, E2E afectadas, `./scripts/verify`, versión y CHANGELOG, push, PR,
