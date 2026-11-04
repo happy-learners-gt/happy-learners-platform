@@ -49,9 +49,9 @@ test("HL-15 ST-158: the person adds a sign-in e-mail confirmed through the copie
     await page.goto("/inicio");
     await page.getByRole("button", { name: /^Perfil de / }).click();
     await page.getByRole("menuitem", { name: "Mi cuenta" }).click();
-    await page.getByRole("navigation", { name: "Mi cuenta" }).getByRole("link", { name: "Cuenta y seguridad" }).click();
+    await page.getByRole("navigation", { name: "Mi cuenta" }).getByRole("link", { name: "Cuenta", exact: true }).click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Cuenta");
-    for (const section of ["Correo", "Contraseña", "Sesiones activas", "Historial de accesos", "Mis datos", "Cerrar la cuenta"]) await expect(page.getByRole("heading", { level: 2, name: section, exact: true })).toBeVisible();
+    for (const section of ["Correo", "Mis datos", "Cerrar la cuenta"]) await expect(page.getByRole("heading", { level: 2, name: section, exact: true })).toBeVisible();
     await expect(page.getByText(`@${person.username}`)).toBeVisible();
     await audit(page, "cuenta");
 
@@ -88,9 +88,10 @@ test("HL-15 ST-158: the person adds a sign-in e-mail confirmed through the copie
     await expect(page.locator(".profile-facts")).toContainText(email);
     await expect(page.getByText("Pendiente de confirmar")).toHaveCount(0);
 
-    // Criteria 3 and 4: another session (an iPhone) appears with its device; it is closed from here.
+    // Criteria 3 and 4: another session (an iPhone) appears with its device in Mi cuenta › Seguridad; it is closed from there.
     const other = await signInApi(person.username, iphone);
-    await page.reload();
+    await page.goto("/mi-cuenta/seguridad");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Seguridad");
     const sessions = page.getByRole("region", { name: "Lista de sesiones activas" });
     await expect(sessions.getByRole("row")).toHaveCount(3);
     await expect(sessions.getByRole("row", { name: /Esta sesión/ })).toBeVisible();
@@ -106,6 +107,8 @@ test("HL-15 ST-158: the person adds a sign-in e-mail confirmed through the copie
     await expect(history.getByRole("row")).toHaveCount(3);
     await expect(history).toContainText("Safari en iPhone");
     await expect(history.getByText("Correcto").first()).toBeVisible();
+    // From the top: scrolled down, the fixed bar of the phone covers the first rows and axe counts them as obscured.
+    await page.evaluate(() => scrollTo(0, 0));
     await audit(page, "cuenta con sesiones e historial");
   } finally {
     await guestContext.close();

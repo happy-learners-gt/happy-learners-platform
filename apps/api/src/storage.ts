@@ -77,6 +77,7 @@ import attendanceCountsMigration from "../../../database/migrations/0075_attenda
 import aiOutcomesMigration from "../../../database/migrations/0076_ai_outcomes.sql";
 import demoReportTemplatesMigration from "../../../database/migrations/0077_demo_report_templates.sql";
 import securityMigration from "../../../database/migrations/0078_security.sql";
+import identityMigration from "../../../database/migrations/0079_identity_and_access.sql";
 import { organizationIds } from "@happy-learners/domain";
 import { exportStore, importStore, RestoreError, type Backup } from "./backup";
 import { processProposals } from "./proposals";
@@ -255,6 +256,7 @@ export class OrganizationStore extends DurableObject<Env> {
       if (!applied.length || applied[0].version < 76) { runScript(this.ctx.storage.sql, aiOutcomesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (76,?)", scope); }
       if (!applied.length || applied[0].version < 77) { runScript(this.ctx.storage.sql, demoReportTemplatesMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (77,?)", scope); }
       if (!applied.length || applied[0].version < 78) { runScript(this.ctx.storage.sql, securityMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (78,?)", scope); }
+      if (!applied.length || applied[0].version < 79) { runScript(this.ctx.storage.sql, identityMigration); this.ctx.storage.sql.exec("INSERT INTO schema_migrations VALUES (79,?)", scope); }
       // Compare-and-write plus dependent writes belong to one SQLite transaction.
       if (guard && !run(guard).length) return { results: [], rowsRead, rowsWritten };
       const results = statements.map(run);

@@ -85,8 +85,10 @@ test("HL-174 ST-128 ST-135: administration assigns coordination of one program, 
 
     // ST-135: administration creates a group, grants «Consultar la actividad» and adds the coordinator.
     await page.context().clearCookies();
+    // Identidad y acceso › Roles y grupos (the old address redirects there).
     await signIn(page, "admin-demo", "/roles-y-accesos");
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Roles y accesos");
+    await expect(page).toHaveURL(/\/identidad\/roles$/);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Roles y grupos");
     const matrix = page.getByRole("region", { name: "Matriz de accesos" });
     await expect(matrix).toContainText("Coordinación académica");
     await expect(matrix).toContainText("Solo administración");

@@ -36,11 +36,12 @@ async function authenticator(rpId: string, origin: string) {
   const pair = await subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]) as CryptoKeyPair;
   const raw = new Uint8Array(await subtle.exportKey("raw", pair.publicKey));
   const id = webcrypto.getRandomValues(new Uint8Array(32)), cose = cbor(new Map<Value, Value>([[1, 2], [3, -7], [-1, 1], [-2, raw.slice(1, 33)], [-3, raw.slice(33)]]));
-  let counter = 0;
+  let counter = 0, handle: string | null = null;
   const clientData = (type: string, challenge: string, at = origin) => toBase64Url(new TextEncoder().encode(JSON.stringify({ type, challenge, origin: at, crossOrigin: false })));
   return {
     id: toBase64Url(id),
-    create: async (challenge: string, flags = 0x45, at = origin) => {
+    create: async (challenge: string, flags = 0x45, at = origin, user?: string) => {
+      if (user) handle = user;
       const authData = join8(await sha256(new TextEncoder().encode(rpId)), Uint8Array.of(flags), u32(0), new Uint8Array(16), Uint8Array.of(0, 32), id, cose);
       return { id: toBase64Url(id), rawId: toBase64Url(id), type: "public-key", response: { clientDataJSON: clientData("webauthn.create", challenge, at), attestationObject: toBase64Url(cbor(new Map<Value, Value>([["fmt", "none"], ["attStmt", new Map()], ["authData", authData]]))), transports: ["internal"] } };
     },
@@ -49,7 +50,7 @@ async function authenticator(rpId: string, origin: string) {
       const authData = join8(await sha256(new TextEncoder().encode(rpId)), Uint8Array.of(options.flags ?? 0x05), u32(options.counter ?? counter));
       const client = clientData("webauthn.get", challenge, options.at);
       const signature = new Uint8Array(await subtle.sign({ name: "ECDSA", hash: "SHA-256" }, pair.privateKey, join8(authData, await sha256(fromBase64Url(client)!))));
-      return { id: toBase64Url(id), rawId: toBase64Url(id), type: "public-key", response: { clientDataJSON: client, authenticatorData: toBase64Url(authData), signature: toBase64Url(der(signature)), userHandle: null } };
+      return { id: toBase64Url(id), rawId: toBase64Url(id), type: "public-key", response: { clientDataJSON: client, authenticatorData: toBase64Url(authData), signature: toBase64Url(der(signature)), userHandle: handle } };
     },
   };
 }
@@ -135,10 +136,13 @@ describe("ST-132 on the built Worker", () => {
     const device = await authenticator("127.0.0.1", origin);
     const options = await read<Options>(await as(ana.cookie, "/me/passkeys/options", "POST"));
     expect(options.publicKey).toMatchObject({ rp: { id: "127.0.0.1" }, authenticatorSelection: { userVerification: "required" } });
-    expect(new TextDecoder().decode(fromBase64Url(options.publicKey.user!.id)!)).toBe(ana.id);
-    expect((await as(ana.cookie, "/me/passkeys", "POST", { name: "", credential: await device.create(options.publicKey.challenge) })).status).toBe(400);
-    const created = await read<{ passkey: { id: string; name: string } }>(await as(ana.cookie, "/me/passkeys", "POST", { name: "Teléfono de Ana", credential: await device.create(options.publicKey.challenge) }), 201);
-    expect(created.passkey).toMatchObject({ id: device.id, name: "Teléfono de Ana" });
+    // The user handle carries the organization's letter, to sign in without typing a name.
+    expect(new TextDecoder().decode(fromBase64Url(options.publicKey.user!.id)!)).toBe(`d_${ana.id}`);
+    // One click: without a name it takes the device's; it is renamed later.
+    const created = await read<{ passkey: { id: string; name: string } }>(await as(ana.cookie, "/me/passkeys", "POST", { credential: await device.create(options.publicKey.challenge) }), 201);
+    expect(created.passkey).toMatchObject({ id: device.id, name: "Navegador desconocido" });
+    expect((await as(ana.cookie, `/me/passkeys/${device.id}`, "PUT", { name: "" })).status).toBe(400);
+    expect((await read<{ name: string }>(await as(ana.cookie, `/me/passkeys/${device.id}`, "PUT", { name: "Teléfono de Ana" }))).name).toBe("Teléfono de Ana");
     // The same ceremony cannot register twice.
     expect((await as(ana.cookie, "/me/passkeys", "POST", { name: "Otra", credential: await device.create(options.publicKey.challenge) })).status).toBe(400);
     expect((await read<{ passkeys: { name: string }[] }>(await as(ana.cookie, "/me/passkeys"))).passkeys.map(item => item.name)).toEqual(["Teléfono de Ana"]);
@@ -167,6 +171,18 @@ describe("ST-132 on the built Worker", () => {
     expect((await as(null, "/login/passkey", "POST", { credential: await device.get(fourth.publicKey.challenge) })).status).toBe(401);
     const events = (await log(admin, `&persona=${ana.id}`)).map(item => `${item.type}:${item.outcome}:${item.method}`);
     for (const expected of ["passkey_added:succeeded:passkey", "sign_in:succeeded:passkey", "sign_in:failed:passkey", "passkey_removed:info:passkey"]) expect(events, expected).toContain(expected);
+  });
+
+  it("ST-132 a passkey signs in without typing a name: the device offers it and its handle names the organization", async () => {
+    const eva = await person(admin, "llave-eva");
+    const device = await authenticator("127.0.0.1", origin);
+    const options = await read<Options>(await as(eva.cookie, "/me/passkeys/options", "POST"));
+    await read(await as(eva.cookie, "/me/passkeys", "POST", { credential: await device.create(options.publicKey.challenge, 0x45, origin, options.publicKey.user!.id) }), 201);
+    const anyone = await read<Options>(await as(null, "/login/passkey/options", "POST", {}));
+    expect(anyone.publicKey.allowCredentials).toEqual([]);
+    const opened = await as(null, "/login/passkey", "POST", { credential: await device.get(anyone.publicKey.challenge) });
+    expect(opened.status, await opened.clone().text()).toBe(200);
+    expect((await read<{ member: { username: string } }>(await as(cookieOf(opened), "/session"))).member.username).toBe("llave-eva");
   });
 
   it("ST-133 CA2 a session opened with a passkey meets a policy that requires two factors", async () => {

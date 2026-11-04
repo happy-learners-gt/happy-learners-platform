@@ -167,8 +167,10 @@ it("HL-11 published lessons are read-only and isolated from other organizations"
 it("HL-14 responses expose no password data and reject oversized or malformed input", async () => {
   const Cookie = await login("instructor-demo");
   const response = await fetch(`${origin}/api/session`, { headers: { Cookie } });
-  // ST-160: the preferences in force come with the session; they hold no account secret either.
+  // ST-160: the preferences in force come with the session; they hold no account secret either. Identidad y acceso:
+  // how this session signed in and how many passkeys the person has, never which.
   expect(await response.json()).toEqual({ member: { id: "user-1", username: "instructor-demo", displayName: "Instructor de la demostración", role: "educator", organizationId: "org-demo", permissions: { admin: false, coordination: null, grants: {} } }, pending: [],
+    security: { method: "password", passkeys: 0 },
     preferences: expect.objectContaining({ language: "es", locale: "es", theme: "system", textScale: 100, chosen: { locale: null, timezone: null, weekStart: null, hourCycle: null }, organization: expect.objectContaining({ locale: "es" }) }) });
   expect(response.headers.get("referrer-policy")).toBe("no-referrer");
   for (const body of ["{", JSON.stringify({ username: "x".repeat(3000), password: "x" })]) {

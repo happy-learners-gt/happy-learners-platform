@@ -22,9 +22,8 @@ function useLogin(onSuccess: () => Promise<void>, initial = "educador-demo") {
     catch (cause) { setError(message(cause)); }
     finally { setBusy(false); }
   }
-  // ST-132: a passkey of the account typed, instead of the password.
+  // ST-132: a passkey instead of the password; with nothing typed, the device offers the passkeys it has for this site.
   async function passkey() {
-    if (!username.trim()) { setError("Escribe tu usuario o tu correo para usar tu passkey."); return; }
     setBusy(true); setError("");
     try { const answer = await signInWithPasskey(username.trim()); if (answer.challenge) setChallenge(answer.challenge); else await onSuccess(); }
     catch (cause) { setError(message(cause)); }

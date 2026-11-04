@@ -8,6 +8,8 @@ import { event } from "./activity";
 import { securityEvent } from "./security-log";
 import { finishSignIn } from "./sign-in";
 import { seal, unseal } from "./mfa";
+import { requireConfirmation } from "./step-up";
+import { sessionToken } from "./auth";
 
 /**
  * Identity providers by OpenID Connect (REL-007):
@@ -94,7 +96,7 @@ async function start(provider: Provider, purpose: Purpose, userId: string | null
 }
 
 const redirect = (location: string, cookies: string[] = []) => { const headers = new Headers({ Location: location, "Cache-Control": "no-store" }); for (const cookie of cookies) headers.append("Set-Cookie", cookie); return new Response(null, { status: 302, headers }); };
-const back = (purpose: Purpose, outcome: string) => purpose === "link" ? `/mi-cuenta/cuenta?vinculo=${outcome}#cuentas-vinculadas` : purpose === "test" ? `/seguridad?prueba=${outcome}#proveedor` : `/?acceso=${outcome}`;
+const back = (purpose: Purpose, outcome: string) => purpose === "link" ? `/mi-cuenta/seguridad?vinculo=${outcome}` : purpose === "test" ? `/identidad/inicio-de-sesion?prueba=${outcome}` : `/?acceso=${outcome}`;
 export const callbackPath = /^\/api\/auth\/callback\/(google|microsoft|apple|sso)$/;
 
 /** GET /api/auth/callback/:provider: the provider's answer. Everything is checked before anything changes. */
@@ -214,6 +216,8 @@ export async function myIdentities(path: string, method: string, current: Member
     return reply({ linked, available: availableProviders(env, origin) });
   }
   const key = identityPath.exec(path)![1] as ProviderKey;
+  const confirmation = await requireConfirmation(db, current, sessionToken(request) || "", null);
+  if (confirmation) return confirmation;
   if (method === "DELETE") return unlink(db, current, current.id, key, client, false);
   const provider = socialProvider(env, key, origin);
   if (!provider) return reply({ error: `El inicio con ${providerNames[key]} no está configurado en esta plataforma.` }, 404);

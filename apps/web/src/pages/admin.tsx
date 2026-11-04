@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ProviderKey } from "@happy-learners/domain";
 import type { FormEvent, ReactNode } from "react";
 import type { AcademicProfile, Contract, ContractPhase, CourseFormat, EffectivePreferences, CourseSettings, EducationLevel, EducationType, Member, Modality, OnboardingPerson, Organization, Pacing, StudyProgram, Taxonomy, TaxonomyTerm, Vocabulary } from "@happy-learners/contracts";
-import { accountInput, areaLabel, contractPhaseLabels, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, pacings, settingChoices, settingDefinitions, settingText, settingValue, suggestedLocales, timezoneGroups, utcOffset, providerNames } from "@happy-learners/domain";
+import { accountInput, areaLabel, contractPhaseLabels, courseFormats, coursePresets, derivedSettings, educationLevels, educationTypes, knowledgeAreas, labelOf, modalities, pacings, settingChoices, settingDefinitions, settingText, settingValue, suggestedLocales, timezoneGroups, utcOffset } from "@happy-learners/domain";
 import { incorporationSteps } from "@happy-learners/domain";
 import type { FreedomPolicy, SettingKey } from "@happy-learners/domain";
 import { plural } from "../model";
@@ -165,33 +164,6 @@ function MemberList() {
     catch (cause) { toast({ tone: "error", message: message(cause) }); }
     finally { setBusy(""); }
   }
-  // ST-136: administration closes every open session of a person; it is in the security log.
-  async function closeSessions(member: Member) {
-    const name = member.displayName || member.username;
-    if (!await confirm({ title: `¿Cerrar las sesiones de ${name}?`, body: "Sale de todos sus dispositivos y tiene que volver a iniciar sesión. Su contraseña y sus accesos no cambian.", confirm: "Cerrar sesiones", danger: true })) return;
-    setBusy(member.id);
-    try { const { closed } = await api<{ closed: number }>(`/security/people/${member.id}/sessions`, "DELETE"); toast({ message: closed ? `${closed === 1 ? "Se cerró 1 sesión" : `Se cerraron ${closed} sesiones`} de ${name}.` : `${name} no tenía sesiones abiertas.` }); }
-    catch (cause) { toast({ tone: "error", message: message(cause) }); }
-    finally { setBusy(""); }
-  }
-  // ST-133: administration resets a lost second factor; the person sets it up again.
-  async function resetFactor(member: Member) {
-    const name = member.displayName || member.username;
-    if (!await confirm({ title: `¿Restablecer la verificación en dos pasos de ${name}?`, body: "Su aplicación y sus códigos de recuperación dejan de funcionar y sus sesiones se cierran. Al entrar con su contraseña, la configura de nuevo si su rol la exige. Hazlo solo si confirmaste que es la persona.", confirm: "Restablecer", danger: true })) return;
-    setBusy(member.id);
-    try { await api(`/security/people/${member.id}/mfa`, "DELETE"); await load(); toast({ message: `Verificación en dos pasos de ${name} restablecida.` }); }
-    catch (cause) { toast({ tone: "error", message: message(cause) }); }
-    finally { setBusy(""); }
-  }
-  // ST-129 CA3: administration unlinks an external account of a person.
-  async function unlinkIdentity(member: Member, provider: ProviderKey) {
-    const name = member.displayName || member.username;
-    if (!await confirm({ title: `¿Desvincular la cuenta de ${providerNames[provider]} de ${name}?`, body: "Ya no podrá entrar con ella; su contraseña y sus passkeys siguen funcionando. Queda en el registro de seguridad.", confirm: "Desvincular", danger: true })) return;
-    setBusy(member.id);
-    try { await api(`/security/people/${member.id}/identities/${provider}`, "DELETE"); await load(); toast({ message: `Cuenta de ${providerNames[provider]} de ${name} desvinculada.` }); }
-    catch (cause) { toast({ tone: "error", message: message(cause) }); }
-    finally { setBusy(""); }
-  }
   const invite = () => { navigate("/educadores#invitaciones"); setInviting(true); };
   const header = <PageHeader title="Educadores" description="Quién forma el equipo, su contrato y su incorporación. Los estudiantes no necesitan cuenta."
     primary={members && <PrimaryAction icon="plus" onClick={() => setAdding(true)}>Agregar cuenta</PrimaryAction>}
@@ -233,9 +205,7 @@ function MemberList() {
               { label: member.role === "admin" ? "Cambiar a educador" : "Cambiar a administración", icon: "users", disabled: busy === member.id, onSelect: () => void update(member, { role: member.role === "admin" ? "educator" : "admin" }) },
               ...(member.role === "educator" && member.active ? [{ label: member.coordination ? "Cambiar la coordinación académica" : "Asignar coordinación académica", icon: "shield" as const, disabled: busy === member.id, onSelect: () => setCoordinating(member) }] : []),
               { label: "Restablecer contraseña", icon: "undo", disabled: busy === member.id, onSelect: () => void reset(member) },
-              ...(member.id !== me.id ? [{ label: "Cerrar sus sesiones", icon: "logout" as const, disabled: busy === member.id, onSelect: () => void closeSessions(member) }] : []),
-              ...((member as Member & { identities?: ProviderKey[] }).identities || []).map(provider => ({ label: `Desvincular ${providerNames[provider]}`, icon: "link" as const, disabled: busy === member.id, onSelect: () => void unlinkIdentity(member, provider) })),
-              ...(member.id !== me.id && (member as Member & { mfa?: boolean }).mfa ? [{ label: "Restablecer verificación en dos pasos", icon: "shield" as const, disabled: busy === member.id, onSelect: () => void resetFactor(member) }] : []),
+              { label: "Seguridad de la cuenta", icon: "shield" as const, onSelect: () => navigate(`/identidad/personas?persona=${member.id}`) },
               { label: member.active ? "Quitar acceso" : "Dar acceso", icon: "shield", danger: member.active, disabled: busy === member.id, onSelect: () => void update(member, { active: !member.active }) },
               ...(member.id !== me.id && (member.active || !member.departedOn) ? [{ label: "Registrar salida", icon: "logout" as const, danger: true, disabled: busy === member.id, onSelect: () => setLeaving({ id: member.id, name }) }] : []),
             ]}/>}</td>
