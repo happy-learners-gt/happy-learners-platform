@@ -272,14 +272,29 @@ function CurrentTimetable({ setup }: { setup: Setup }) {
           {item.kind === "educator" ? people.get(item.resourceId) || "Un docente" : `El aula ${rooms.get(item.resourceId) || ""}`.trim()} tiene dos clases el {weekdayNames[item.weekday]} a las {item.startsAt}: {label(item.sectionIds[0])} y {label(item.sectionIds[1])}.
         </li>)}</ul>
       </div></div>}
-      {!days.length ? <p className="muted">Sin clases para lo que elegiste.</p> : <div className="timetable-week">{days.map(day => <section key={day.weekday} aria-label={weekdayNames[day.weekday]}>
+      {!days.length ? <p className="muted">Sin clases para lo que elegiste.</p> : <>
+      {/* SCH-03: on wide screens, one row per start time, so the same hour lines up across the week. */}
+      <div className="table-card timetable-grid" role="region" aria-label="Horario semanal por hora" tabIndex={0}><table>
+        <caption className="sr-only">Horario vigente: una fila por hora de inicio y una columna por día</caption>
+        <colgroup><col className="timetable-hour"/>{days.map(day => <col key={day.weekday}/>)}</colgroup>
+        <thead><tr><th scope="col">Hora</th>{days.map(day => <th key={day.weekday} scope="col">{weekdayNames[day.weekday][0].toLocaleUpperCase("es") + weekdayNames[day.weekday].slice(1)}</th>)}</tr></thead>
+        <tbody>{[...new Set(days.flatMap(day => day.items.map(item => item.meeting.startsAt)))].sort().map(time => <tr key={time}>
+          <th scope="row">{time}</th>
+          {days.map(day => <td key={day.weekday}>{day.items.filter(item => item.meeting.startsAt === time).map(({ section, meeting }) => <div key={section.id} className="timetable-cell">
+            <strong>{section.courseTitle}</strong>
+            <span className="muted small">hasta {endOf(meeting)} · {section.educators.map(person => person.name.split(" ")[0]).join(", ") || "Sin docente"}{section.classroomId && rooms.get(section.classroomId) ? ` · ${rooms.get(section.classroomId)}` : ""}</span>
+          </div>)}</td>)}
+        </tr>)}</tbody>
+      </table></div>
+      <div className="timetable-week">{days.map(day => <section key={day.weekday} aria-label={weekdayNames[day.weekday]}>
         <h3>{weekdayNames[day.weekday][0].toLocaleUpperCase("es") + weekdayNames[day.weekday].slice(1)}</h3>
         <ul>{day.items.map(({ section, meeting }) => <li key={`${section.id}-${meeting.startsAt}`}>
           <span className="timetable-time">{meeting.startsAt}–{endOf(meeting)}</span>
           <strong>{section.courseTitle}</strong>
           <span className="muted small">{section.name}{section.educators.length ? ` · ${section.educators.map(person => person.name).join(", ")}` : ""}{section.classroomId && rooms.get(section.classroomId) ? ` · ${rooms.get(section.classroomId)}` : ""}</span>
         </li>)}</ul>
-      </section>)}</div>}
+      </section>)}</div>
+      </>}
     </>}
   </Section>;
 }

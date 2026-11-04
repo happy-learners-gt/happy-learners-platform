@@ -20,6 +20,7 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | EDU-01 | Personas | En la fila de cada persona, lo que necesita de administración con su enlace | P2 | AUD-05 | DONE | 1.7.5: E2E `fifth-wave` |
 | PRF-01 | Personas | Revisión de perfiles: el trabajo primero, el ajuste al final | P2 | AUD-05 | DONE | 1.7.5: E2E `fifth-wave` |
 | CON-03 | Personas | Contratos: cuánto lleva esperando la firma o cuánto falta para terminar; filtro «Terminan en 30 días» | P2 | AUD-05 | DONE | 1.7.5: `contractUrgency` con pruebas; E2E `fifth-wave` |
+| SCH-03 | Operación | Horario vigente alineado por hora en pantallas anchas | P2 | AUD-05 | DONE | 1.7.5: E2E `timetables` |
 | PRG-01 | Programa | Descubrimiento, línea base, auditoría, arquitectura de información y espacio del programa | P0 | — | DONE | `docs/transformacion/` completo; estado retomable |
 | IA-01 | Navegación | Menú: cursos más relevantes (8) + «Todos los cursos (n)»; Administración en 4 grupos; Horas efectivas de administración en Personas | P0 | PRG-01 | DONE | Con 25 cursos el menú muestra 8 + enlace; el curso abierto siempre aparece; grupos con encabezado; Vitest y E2E de navegación verdes; capturas claro/oscuro, escritorio/móvil |
 | IA-02 | Navegación | Migas coherentes con el menú en administración (TD-006) | P1 | IA-01 | DONE | Ninguna página de administración muestra un padre que el menú no tiene |
