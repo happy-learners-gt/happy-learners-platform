@@ -96,6 +96,7 @@ async function member(request: Request, db: Database): Promise<Member | null> {
   const token = sessionToken(request);
   if (!token) return null;
   const tokenHash = await digest(token), now = Date.now();
+  // nosemgrep: sql-interpolated-text -- permissionColumns es la lista constante de permissions.ts; los valores van como parámetros
   const row = await db.prepare(`SELECT s.id AS sessionId, s.last_used_at AS lastUsed, u.id, u.username, COALESCE(u.display_name,u.username) AS displayName, CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END AS role, m.organization_id AS organizationId, u.must_change_password AS mustChange, s.verified, (SELECT status FROM totp_factors WHERE user_id=u.id) AS factor,
     (SELECT CASE m.role WHEN 'admin' THEN mfa_admin ELSE mfa_educator END FROM security_policies WHERE organization_id=m.organization_id) AS mfaRequired, ${permissionColumns} FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND m.active=1`)
     .bind(tokenHash, now).first<Member & { mustChange: number; sessionId: string; lastUsed: number; verified: number; factor: string | null; mfaRequired: number | null }>();
