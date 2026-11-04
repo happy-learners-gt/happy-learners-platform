@@ -10,6 +10,8 @@
   para que termine (30 días o menos), y el filtro «Terminan en 30 días».
 - Horarios (SCH-03): en pantallas anchas, el horario vigente es una cuadrícula con una fila por hora de inicio, así la
   misma hora queda alineada entre días; en el teléfono siguen las columnas por día.
+- Cursos (CUR-03): la lista trae las unidades activas de cada curso en una sola consulta y ya no pide cada curso por
+  separado (eran 25 peticiones más en la demostración, que cuentan en la cuota de Cloudflare).
 
 ## 1.7.4 — 2026-11-04
 

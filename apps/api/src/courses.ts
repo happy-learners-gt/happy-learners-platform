@@ -122,7 +122,9 @@ export async function courses(path: string, method: string, input: unknown, curr
     const teams = await teamsFor(db, current.organizationId);
     if (!id) {
       const reachable = await reachableCourses(db, current);
-      return reply({ courses: list.filter(c => !reachable || reachable.has(c.id)).map(({ legacyProgramId: _, ...c }) => ({ ...c, team: teams.get(c.id) || [] })) });
+      // CUR-03: the active units of every course in one grouped query, so the list needs no request per course.
+      const units = new Map((await db.prepare("SELECT u.course_id AS id,count(*) AS n FROM learning_units u JOIN courses c ON c.id=u.course_id AND c.organization_id=? WHERE u.status='active' GROUP BY u.course_id").bind(current.organizationId).all<{ id: string; n: number }>()).results.map(row => [row.id, row.n]));
+      return reply({ courses: list.filter(c => !reachable || reachable.has(c.id)).map(({ legacyProgramId: _, ...c }) => ({ ...c, team: teams.get(c.id) || [], unitCount: units.get(c.id) || 0 })) });
     }
     if (area === "materials") return reply({ materials: [...await materialsFor(db, current.organizationId, id), ...await filesFor(db, current.organizationId, id)] });
     const { legacyProgramId: _, ...view } = course!;

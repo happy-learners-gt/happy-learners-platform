@@ -56,8 +56,8 @@ export function CourseList() {
     try {
       const [{ courses }, { lessons }, { programs }] = await Promise.all([api<{ courses: Course[] }>("/courses"), api<{ lessons: Lesson[] }>("/lessons?drafts=1"), api<{ programs: StudyProgram[] }>("/programs")]);
       setCourses(courses); setPrograms(programs);
-      const details = await Promise.all(courses.map(course => api<{ units: LearningUnit[] }>(`/courses/${course.id}`).then(detail => [course.id, courseStats(detail.units, lessons.filter(lesson => lesson.courseId === course.id))] as const)));
-      setStats(Object.fromEntries(details));
+      // CUR-03: the list brings each course's active units; no request per course (25 in the demonstration).
+      setStats(Object.fromEntries(courses.map(course => [course.id, { ...courseStats([], lessons.filter(lesson => lesson.courseId === course.id)), units: course.unitCount ?? 0 }])));
     } catch (cause) { setError(message(cause)); }
   }
   useEffect(() => { void load(); }, []);
