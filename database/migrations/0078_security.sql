@@ -154,7 +154,8 @@ CREATE UNIQUE INDEX linked_identities_user ON linked_identities(user_id, provide
 CREATE TABLE sso_connections (
   organization_id TEXT PRIMARY KEY REFERENCES organizations(id),
   name TEXT NOT NULL CHECK(length(name) BETWEEN 2 AND 80),
-  issuer TEXT NOT NULL CHECK(issuer GLOB 'https://*' AND length(issuer) <= 300),
+  -- An http issuer only on this machine: the tests' stand-in, accepted by the Worker only when it runs locally too.
+  issuer TEXT NOT NULL CHECK((issuer GLOB 'https://*' OR issuer GLOB 'http://127.0.0.1:*') AND length(issuer) <= 300),
   client_id TEXT NOT NULL CHECK(length(client_id) BETWEEN 1 AND 255),
   client_secret TEXT NOT NULL CHECK(length(client_secret) BETWEEN 1 AND 2000),
   domains TEXT NOT NULL CHECK(length(domains) BETWEEN 3 AND 500),
