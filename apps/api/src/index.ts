@@ -52,6 +52,7 @@ import { timetableMethods, timetables } from "./timetables";
 import { reportMethods, reports } from "./reports";
 import { panelMinuteMethods, panelMinutes } from "./panel-minutes";
 import { account, accountBody, accountMethods, clientOf, confirmEmail, emailConfirmPath, failedSignIn, openSession } from "./account";
+import { isSecurityPath, security, securityEvent, securityMethodsOf } from "./security-log";
 import { institutionalCalendarMethods, institutionalCalendars } from "./institutional-calendar";
 import { agenda, agendaMethods } from "./agenda";
 import { gradingSchemeMethods, gradingSchemesApi } from "./grading-schemes";
@@ -297,6 +298,8 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (accountAllowed) methods[path] = accountAllowed;
   const meAllowed = meMethods(path);
   if (meAllowed) methods[path] = meAllowed;
+  const securityAllowed = securityMethodsOf(path);
+  if (securityAllowed) methods[path] = securityAllowed;
   const allowed = methods[path] || (path === "/api/members" ? ["GET", "POST"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/members\/[a-z0-9-]+\/password$/.test(path) ? ["POST"] : /^\/api\/members\/[a-z0-9-]+\/departure$/.test(path) ? ["GET", "POST"] : /^\/api\/lessons\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/(publish|duplicate|review|review\/return)$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+\/files\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
   if (!allowed) return json({ error: "Not found" }, 404);
   if (!allowed.includes(method)) return json({ error: "Method not allowed" }, 405, { Allow: allowed.join(", ") });
@@ -321,10 +324,15 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
     const valid = await verifyPassword(value.password, user?.password_salt || "synthetic-dummy-salt", user?.password_hash || "0".repeat(64));
     // ST-158: each attempt on an existing account joins its owner's sign-in history, with a device summary and country.
     const client = clientOf(request);
-    if (user && !valid) await failedSignIn(db, user.id, scope, client).run();
     if (!user || !valid) {
-      await db.prepare("INSERT INTO login_limits (bucket, attempts, expires_at) VALUES (?,1,?) ON CONFLICT(bucket) DO UPDATE SET attempts=CASE WHEN expires_at<? THEN 1 ELSE attempts+1 END, expires_at=CASE WHEN expires_at<? THEN excluded.expires_at ELSE expires_at END")
-        .bind(account, now + 900000, now, now).run();
+      // ST-137: a failure on a known account is in its owner's history and in the security log; one on an unknown
+      // name is in the log without the name. ST-134: the tenth failure in 15 minutes locks the account and is logged.
+      const [counted] = await db.batch([
+        db.prepare("INSERT INTO login_limits (bucket, attempts, expires_at) VALUES (?,1,?) ON CONFLICT(bucket) DO UPDATE SET attempts=CASE WHEN expires_at<? THEN 1 ELSE attempts+1 END, expires_at=CASE WHEN expires_at<? THEN excluded.expires_at ELSE expires_at END RETURNING attempts")
+          .bind(account, now + 900000, now, now),
+        ...(user ? failedSignIn(db, user.id, scope, client) : [securityEvent(db, { organizationId: scope, type: "sign_in", outcome: "failed", method: "password", detail: "Usuario desconocido", client })]),
+      ]) as unknown as [{ attempts: number }[]];
+      if (user && counted[0]?.attempts === 10) await db.batch([securityEvent(db, { organizationId: scope, type: "sign_in_locked", outcome: "failed", subjectId: user.id, method: "password", detail: "10 intentos fallidos en 15 minutos; bloqueada 15 minutos", client })]);
       return json({ error: "Usuario o contraseña incorrectos." }, 401);
     }
     const token = tokenPrefix(scope) + newToken();
@@ -365,7 +373,10 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (path.startsWith("/api/student/")) return student(path, method, input, request, scope, db, env.COURSE_FILES);
   if (path === "/api/logout") {
     const token = sessionToken(request);
-    if (token) await db.prepare("DELETE FROM sessions WHERE token_hash=?").bind(await digest(token)).run();
+    if (token) {
+      const [closed] = await db.batch([db.prepare("DELETE FROM sessions WHERE token_hash=? RETURNING user_id AS userId").bind(await digest(token))]) as unknown as [{ userId: string }[]];
+      if (closed[0]) await db.batch([securityEvent(db, { organizationId: scope, type: "sign_out", actorId: closed[0].userId, subjectId: closed[0].userId, client: clientOf(request) })]);
+    }
     return json({ ok: true }, 200, { "Set-Cookie": cookie("", request, true) });
   }
   if (path === "/api/public/privacy") return publicPrivacy(url, id => database(env, id));
@@ -437,6 +448,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (/^\/api\/courses\/[a-z0-9-]+\/(core|sections\/differences|section-proposals(\/[a-z0-9-]+)?)$/.test(path) || /^\/api\/sections\/[a-z0-9-]+\/(plan|lessons|activities|content-overrides|units|copies|proposals|reviews)$/.test(path)) return sectionFreedom(path, method, input, current, db, notifier);
   if (/^\/api\/courses(\/|$)/.test(path)) return courses(path, method, input, current, db, notifier);
   if (/^\/api\/programs(\/|$)/.test(path)) return programs(path, method, input, current, db);
+  if (isSecurityPath(path)) return security(path, method, url, current, db, clientOf(request));
   if (path === "/api/activity") return activity(url, current, db);
   if (path === "/api/classes") return myClasses(current, db);
   if (path === "/api/feeds/calendar") return feedLink(method, url, current, db);

@@ -6,6 +6,7 @@ import { departurePreview, recordDeparture } from "./departures";
 import { event } from "./activity";
 import { setCoordination } from "./permissions";
 import { profileOnLeave } from "./professional";
+import { securityEvent } from "./security-log";
 
 /** /api/members: administration lists people, creates accounts (ST-093), changes roles and access, resets passwords. */
 export async function roles(path: string, method: string, input: unknown, current: Member, db: Database, taken: (username: string) => Promise<boolean>, notifier?: Notifier) {
@@ -43,8 +44,10 @@ export async function roles(path: string, method: string, input: unknown, curren
   // Turning access off keeps the account and everything it did; only its sessions and its calendar link (ST-125) end,
   // so a reactivated account asks for a new link instead of reviving the old one.
   const role = value.role === "educator" ? "instructor" : "admin", changes = [];
-  if (target.role !== role) changes.push(event(db, current, { action: "updated", targetType: "account", targetId: id, summary: `Cambió el rol de ${target.name} a ${value.role === "admin" ? "Administración" : "Educador"}` }));
-  if (!!target.active !== value.active) changes.push(event(db, current, { action: value.active ? "restored" : "archived", targetType: "account", targetId: id, summary: `${value.active ? "Reactivó" : "Desactivó"} la cuenta de ${target.name}` }));
+  if (target.role !== role) changes.push(event(db, current, { action: "updated", targetType: "account", targetId: id, summary: `Cambió el rol de ${target.name} a ${value.role === "admin" ? "Administración" : "Educador"}` }),
+    securityEvent(db, { organizationId: current.organizationId, type: "role_changed", actorId: current.id, subjectId: id, detail: `De ${target.role === "admin" ? "Administración" : "Educador"} a ${value.role === "admin" ? "Administración" : "Educador"}` }));
+  if (!!target.active !== value.active) changes.push(event(db, current, { action: value.active ? "restored" : "archived", targetType: "account", targetId: id, summary: `${value.active ? "Reactivó" : "Desactivó"} la cuenta de ${target.name}` }),
+    securityEvent(db, { organizationId: current.organizationId, type: "access_changed", actorId: current.id, subjectId: id, detail: value.active ? "Cuenta reactivada" : "Cuenta desactivada; sus sesiones se cerraron" }));
   await db.batch([
     db.prepare("UPDATE memberships SET role=?,active=? WHERE user_id=? AND organization_id=?").bind(role, value.active ? 1 : 0, id, current.organizationId),
     db.prepare("DELETE FROM sessions WHERE user_id=?").bind(id),

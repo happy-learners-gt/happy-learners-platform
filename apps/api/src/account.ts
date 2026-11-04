@@ -1,4 +1,4 @@
-import type { AccountOverview, AccountSession, EmailChange, EmailChangePreview, Member, SignInRecord } from "@happy-learners/contracts";
+import type { AccountOverview, AccountSession, EmailChange, EmailChangePreview, Member, SignInMethod, SignInRecord } from "@happy-learners/contracts";
 import type { MailSender } from "@happy-learners/domain";
 import { countryCode, deviceLabel, emailChangeInput, emailChangeLifetimeMs, emailChangeState, signInHistoryLimit, signInRetentionDays, tokenPattern, tokenPrefix } from "@happy-learners/domain";
 import type { Database } from "./storage";
@@ -7,6 +7,7 @@ import { sendNotice, type AccountContext } from "./account-notices";
 import { event } from "./activity";
 import { closureMethods, closures } from "./closures";
 import { exportMyData } from "./personal-data";
+import { securityEvent } from "./security-log";
 
 /**
  * ST-158: account settings under /api/me/account. The sign-in e-mail changes only after the link sent to the new
@@ -37,19 +38,23 @@ const msIso = (value: number) => new Date(value).toISOString();
 export const newSessionId = () => `session-${crypto.randomUUID().replaceAll("-", "")}`;
 
 /** The statements that open a session (8 hours) and record the successful sign-in; older history is pruned. */
-export function openSession(db: Database, tokenHash: string, userId: string, organizationId: string, method: "password" | "invitation", client: Client, now: number) {
+export function openSession(db: Database, tokenHash: string, userId: string, organizationId: string, method: SignInMethod, client: Client, now: number, options: { hours?: number; verified?: boolean; detail?: string } = {}) {
   return [
-    db.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,id,created_at,last_used_at,method,device,country) VALUES (?,?,?,?,?,?,?,?,?)")
-      .bind(tokenHash, userId, now + 28800000, newSessionId(), now, now, method, client.device, client.country),
+    db.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,id,created_at,last_used_at,method,device,country,verified) VALUES (?,?,?,?,?,?,?,?,?,?)")
+      .bind(tokenHash, userId, now + (options.hours || 8) * 3600000, newSessionId(), now, now, method, client.device, client.country, options.verified ? 1 : 0),
+    // ST-137: every sign-in joins the security log too.
+    securityEvent(db, { organizationId, type: "sign_in", outcome: "succeeded", actorId: userId, subjectId: userId, method, detail: options.detail, client }),
     db.prepare("INSERT INTO sign_in_events(id,organization_id,user_id,outcome,method,device,country,occurred_at) VALUES (?,?,?,'succeeded',?,?,?,?)")
       .bind(`signin-${crypto.randomUUID()}`, organizationId, userId, method, client.device, client.country, msIso(now)),
     db.prepare("DELETE FROM sign_in_events WHERE organization_id=? AND occurred_at<?").bind(organizationId, msIso(now - signInRetentionDays * 86400000)),
   ];
 }
 /** A wrong password for an existing, active account: recorded so its owner sees it in their history. */
-export const failedSignIn = (db: Database, userId: string, organizationId: string, client: Client) =>
-  db.prepare("INSERT INTO sign_in_events(id,organization_id,user_id,outcome,method,device,country,occurred_at) VALUES (?,?,?,'failed','password',?,?,?)")
-    .bind(`signin-${crypto.randomUUID()}`, organizationId, userId, client.device, client.country, new Date().toISOString());
+export const failedSignIn = (db: Database, userId: string, organizationId: string, client: Client, method: SignInMethod = "password", detail?: string) => [
+  db.prepare("INSERT INTO sign_in_events(id,organization_id,user_id,outcome,method,device,country,occurred_at) VALUES (?,?,?,'failed',?,?,?,?)")
+    .bind(`signin-${crypto.randomUUID()}`, organizationId, userId, method, client.device, client.country, new Date().toISOString()),
+  securityEvent(db, { organizationId, type: "sign_in", outcome: "failed", actorId: userId, subjectId: userId, method, detail, client }),
+];
 
 type ChangeRow = Omit<EmailChange, "status"> & { status: string };
 const changeColumns = `c.id,c.new_email AS newEmail,c.status,c.requested_at AS requestedAt,c.expires_at AS expiresAt,c.verified_at AS verifiedAt,
@@ -129,7 +134,10 @@ export async function account(path: string, method: string, input: unknown, curr
   }
   if (path === "/api/me/account/sessions/others") {
     const closed = (await db.prepare("DELETE FROM sessions WHERE user_id=? AND token_hash<>? RETURNING id,expires_at AS expiresAt").bind(current.id, tokenHash).all<{ id: string; expiresAt: number }>()).results.filter(row => row.expiresAt > now.getTime());
-    if (closed.length) await event(db, current, { action: "revoked", targetType: "account", targetId: current.id, summary: closed.length === 1 ? "Cerró su otra sesión abierta" : `Cerró sus otras ${closed.length} sesiones abiertas` }).run();
+    if (closed.length) await db.batch([
+      event(db, current, { action: "revoked", targetType: "account", targetId: current.id, summary: closed.length === 1 ? "Cerró su otra sesión abierta" : `Cerró sus otras ${closed.length} sesiones abiertas` }),
+      securityEvent(db, { organizationId: current.organizationId, type: "session_closed", actorId: current.id, subjectId: current.id, detail: closed.length === 1 ? "Su otra sesión abierta" : `Sus otras ${closed.length} sesiones abiertas` }),
+    ]);
     return reply({ closed: closed.length });
   }
   const sessionId = sessionPath.exec(path)?.[1];
@@ -140,6 +148,7 @@ export async function account(path: string, method: string, input: unknown, curr
     await db.batch([
       db.prepare("DELETE FROM sessions WHERE id=? AND user_id=?").bind(sessionId, current.id),
       event(db, current, { action: "revoked", targetType: "account", targetId: sessionId, summary: `Cerró una sesión abierta en ${found.device || "un dispositivo sin identificar"}` }),
+      securityEvent(db, { organizationId: current.organizationId, type: "session_closed", actorId: current.id, subjectId: current.id, detail: `Sesión en ${found.device || "un dispositivo sin identificar"}` }),
     ]);
     return reply({ ok: true });
   }
@@ -183,6 +192,7 @@ export async function confirmEmail(token: string, method: string, scope: string,
     db.prepare("UPDATE users SET email=? WHERE id=?").bind(found.newEmail, found.userId),
     db.prepare("UPDATE email_changes SET status='verified',verified_at=max(?,requested_at) WHERE id=?").bind(now, found.id),
     event(db, actor, { action: "updated", targetType: "account", targetId: found.id, summary: "Confirmó su nuevo correo de acceso" }),
+    securityEvent(db, { organizationId: scope, type: "email_changed", outcome: "succeeded", actorId: found.userId, subjectId: found.userId }),
   ]);
   if (!ok) {
     const again = await lookup(token, scope, db);
