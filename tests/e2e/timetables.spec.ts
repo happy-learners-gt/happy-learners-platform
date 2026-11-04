@@ -78,10 +78,12 @@ test("administration generates a timetable with rules, applies it to the section
     // The page: a rule written in words is interpreted, confirmed and listed before generating.
     await signIn(page, "admin-demo", "/organizacion/horarios");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Horarios");
-    // SCH-01: the page opens on the timetable in force (the seed has sections with schedules), with the generator below it.
+    // SCH-01: the page opens on the timetable in force (the seed has sections with schedules).
     const current = page.locator("section").filter({ has: page.getByRole("heading", { name: "Horario vigente" }) });
     await expect(current.getByRole("region", { name: "lunes" })).toBeVisible();
     await expect(current.getByLabel("Ver")).toHaveValue("");
+    // SCH-02: generating is a tab of its own.
+    await page.getByRole("navigation", { name: "Secciones de horarios" }).getByRole("link", { name: "Generar", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Generar un horario nuevo" })).toBeVisible();
     await page.getByLabel("Escribe una regla").fill(`${teacherName} no da clases el viernes.`);
     await page.getByRole("button", { name: "Interpretar" }).click();
@@ -92,8 +94,9 @@ test("administration generates a timetable with rules, applies it to the section
     await page.getByRole("button", { name: "Generar horario" }).click();
     await expect(page.getByRole("region", { name: "Horario semanal" })).toBeVisible({ timeout: 15_000 });
 
-    // Classrooms are added and archived from the page; a section shows its usual one.
+    // A section shows its usual classroom in the generator; classrooms are added and archived from their tab.
     await expect(page.getByLabel(`Aula habitual de ${E2E_PREFIX} Horarios ${info.project.name} · ${E2E_PREFIX} Horario A`)).toHaveValue(rooms[0]);
+    await page.getByRole("navigation", { name: "Secciones de horarios" }).getByRole("link", { name: "Aulas", exact: true }).click();
     const extra = e2eName(info, "Laboratorio");
     const add = page.getByRole("form", { name: "Agregar aula" });
     await add.getByLabel("Nombre del aula").fill(extra);

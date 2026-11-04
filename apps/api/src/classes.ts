@@ -451,9 +451,11 @@ export async function calendar(path: string, method: string, input: unknown, url
     const scope = groupId ? "section" : "organization", now = new Date().toISOString();
     let own = await db.prepare("SELECT id FROM calendars WHERE organization_id=? AND scope=? AND scope_id IS ?").bind(current.organizationId, scope, groupId).first<{ id: string }>();
     if (!own) {
-      own = { id: `calendar-${crypto.randomUUID()}` };
-      await db.prepare("INSERT INTO calendars(id,organization_id,scope,scope_id,name,created_at,updated_at) VALUES (?,?,?,?,?,?,?)")
-        .bind(own.id, current.organizationId, scope, groupId, group ? `Calendario de ${group.name}` : "Calendario institucional", now, now).run();
+      // Another request may create it meanwhile: insert if missing, then use the one stored.
+      await db.prepare("INSERT INTO calendars(id,organization_id,scope,scope_id,name,created_at,updated_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT DO NOTHING")
+        .bind(`calendar-${crypto.randomUUID()}`, current.organizationId, scope, groupId, group ? `Calendario de ${group.name}` : "Calendario institucional", now, now).run();
+      own = await db.prepare("SELECT id FROM calendars WHERE organization_id=? AND scope=? AND scope_id IS ?").bind(current.organizationId, scope, groupId).first<{ id: string }>();
+      if (!own) return reply({ error: "No se pudo preparar el calendario. Vuelve a intentar." }, 503);
     }
     const category = await db.prepare("SELECT id FROM calendar_categories WHERE organization_id=? AND key='no-class'").bind(current.organizationId).first<{ id: string }>();
     item = { id: `event-${crypto.randomUUID()}`, groupId, calendarId: own.id, ...value };

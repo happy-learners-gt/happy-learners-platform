@@ -31,7 +31,12 @@ test("the institutional calendar applies a template, generates a year, skips one
   const newYear = page.locator(".agenda-rule-list > li").filter({ hasText: "Año Nuevo" }).first();
   await expect(newYear).toContainText(`1 ene`);
   await expect(newYear).not.toContainText("se crea al generar el año");
+  // CAL-02: the events are a tab of their own; a holiday with its rule is not repeated there.
+  const tabs = page.getByRole("navigation", { name: "Secciones del calendario" });
+  await tabs.getByRole("link", { name: "Eventos", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Otros eventos del año" })).toBeVisible();
   await expect(page.locator(".agenda-event").filter({ hasText: "Año Nuevo" })).toHaveCount(0);
+  await tabs.getByRole("link", { name: "Asuetos", exact: true }).click();
   await newYear.getByRole("button", { name: "Acciones de Año Nuevo" }).click();
   await page.getByRole("menuitem", { name: `Saltar la fecha de ${year}` }).click();
   await expect(newYear).toContainText("omitida");

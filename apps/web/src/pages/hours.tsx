@@ -76,6 +76,17 @@ export function HoursPage() {
   useEffect(() => { setShown(pageSize); }, [query, show]);
   const load = async () => { setError(""); try { setReport(await api<HoursReport>(`/hours${query ? `?${query}` : ""}`)); } catch (cause) { setError(message(cause)); } };
   useEffect(() => { void load(); }, [query]);
+  // HRS-04: opened without a period, an empty last 30 days moves to the latest month with classes, and says so.
+  const explicit = ["periodo", "desde", "hasta"].some(key => url.searchParams.has(key));
+  const monthOf = (day: string) => { const [year, month] = day.split("-").map(Number); return { from: `${day.slice(0, 7)}-01`, to: `${day.slice(0, 7)}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0")}` }; };
+  const showMonth = (day: string, automatic: boolean) => {
+    const next = new URL(url), month = monthOf(day);
+    next.searchParams.delete("periodo"); next.searchParams.set("desde", month.from); next.searchParams.set("hasta", month.to);
+    if (automatic) next.searchParams.set("ultimo", "1"); else next.searchParams.delete("ultimo");
+    navigate(next.pathname + next.search, true);
+  };
+  useEffect(() => { if (!explicit && report && !report.rows.length && report.latestDay) showMonth(report.latestDay, true); }, [report]);
+  const monthName = (day: string) => new Intl.DateTimeFormat("es", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${day.slice(0, 7)}-01T00:00:00Z`));
   function filter(key: keyof typeof keys, value: string) {
     const next = new URL(url); if (value) next.searchParams.set(key, value); else next.searchParams.delete(key);
     if (key === "curso") next.searchParams.delete("seccion");
@@ -137,11 +148,13 @@ export function HoursPage() {
     {minePay && <p className="muted small">{formatMinutes(minePay.minutes)} × {formatCents(minePay.rateCents, minePay.currency)} por hora, con tu contrato vigente. Es una referencia: el pago lo confirma administración.</p>}
     {report.truncated && <p className="message-bar warning" role="status"><Icon name="alert" size={18}/>
       <span>Hay más clases de las que se suman de una vez: se muestran las más recientes y los totales son parciales. Elige un periodo para ver sumas completas.</span></p>}
+    {url.searchParams.get("ultimo") === "1" && report.rows.length > 0 && <p className="message-bar" role="status"><Icon name="info" size={18}/><span>Los últimos 30 días no tienen clases finalizadas: se muestra {monthName(value("desde"))}, el último mes con clases.</span></p>}
     {range && <p className="muted small">Del {sessionDay(range.from, "short")} al {sessionDay(range.to, "short")}.</p>}
     <p className="muted small">Solo suman las clases finalizadas. Una clase cancelada o sin finalizar no suma horas; una sin registro de inicio o de más de 8 h suma 0 hasta que administración la corrige. Fechas y horas en {report.timezone}.</p>
     {!report.rows.length ? <EmptyState icon="clock" title="No hay clases finalizadas en este filtro"
       // After a break the period is empty but the history is not: one step to see it.
-      action={range && report.options.courses.length > 0 ? <Button variant="secondary" onClick={() => choosePeriod("todo")}>Ver todo el historial</Button> : undefined}>
+      action={report.latestDay ? <Button variant="secondary" onClick={() => showMonth(report.latestDay!, false)}>{`Ver ${monthName(report.latestDay)}, el último mes con clases`}</Button>
+        : range && report.options.courses.length > 0 ? <Button variant="secondary" onClick={() => choosePeriod("todo")}>Ver todo el historial</Button> : undefined}>
       {admin ? "Las horas aparecen cuando un educador comienza y finaliza una clase." : "Tus horas aparecen cuando comienzas y finalizas una clase."}</EmptyState> : <>
       <Section title="Totales">
         <Tabs label="Totales por" value={totalled} onChange={setTotalled} items={[

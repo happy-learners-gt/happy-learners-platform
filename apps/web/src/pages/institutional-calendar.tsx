@@ -42,6 +42,13 @@ export function InstitutionalCalendarPage() {
   const [error, setError] = useState(""), [eventDialog, setEventDialog] = useState<InstitutionalCalendarEvent | "new" | null>(null);
   const [ruleDialog, setRuleDialog] = useState<InstitutionalCalendarRule | "new" | null>(null), [generating, setGenerating] = useState(false);
   const programId = url.searchParams.get("programa"), sectionId = url.searchParams.get("seccion");
+  // CAL-02: the organization's administration also sees its school years and schedules; every calendar has the rest.
+  const tabs = [
+    ...(!programId && !sectionId && member.role === "admin" ? [{ id: "ciclo", label: "Ciclo y jornadas" }] : []),
+    { id: "asuetos", label: "Asuetos" }, { id: "eventos", label: "Eventos" },
+  ];
+  const tab = tabs.find(item => `#${item.id}` === url.hash)?.id || tabs[0].id;
+  const openTab = (id: string) => { if (tab !== id) navigate(`${url.pathname}${url.search}#${id}`, true); };
   const selected = catalog?.calendars.find(item => sectionId ? item.scope === "section" && item.scopeId === sectionId
     : programId ? item.scope === "program" && item.scopeId === programId : item.scope === "organization");
   const selectedProgram = selected?.scope === "program" ? selected.scopeId : selected?.scope === "section"
@@ -64,7 +71,7 @@ export function InstitutionalCalendarPage() {
   }, [year, sectionId, programId]);
   useEffect(() => { void loadCatalog(); }, [loadCatalog]);
   useEffect(() => { setEvents(null); void loadEvents(); }, [loadEvents]);
-  useEffect(() => { if (requestedYear === year) return; navigate(settingsPath(programId, sectionId, year), true); }, [year]);
+  useEffect(() => { if (requestedYear === year) return; navigate(settingsPath(programId, sectionId, year) + url.hash, true); }, [year]);
 
   const ownGenerated = (events || []).filter(item => item.calendarId === selected?.id && item.year === year);
   const needsGeneration = rules.some(rule => !ownGenerated.some(event => event.ruleId === rule.id));
@@ -106,16 +113,20 @@ export function InstitutionalCalendarPage() {
         { label: "Aplicar plantilla de Guatemala", icon: "copy", onSelect: () => void template() },
       ]}/>}/>
     <div className="calendar-year"><Field label="Año">{yearSelect}</Field></div>
+    {/* CAL-02: one tab per block; the year above applies to all of them. */}
+    <nav className="tabs scrollable-tabs" aria-label="Secciones del calendario">
+      {tabs.map(item => <Link key={item.id} href={`${url.pathname}${url.search}#${item.id}`} className="tab" aria-current={tab === item.id ? "page" : undefined}>{item.label}</Link>)}
+    </nav>
     {/* CAL-01: the organization's school year and class schedules come first; they load on their own. */}
-    {organization && member.role === "admin" && <><AcademicYears/><BellSchedules/></>}
-    {error ? <ErrorState error={error} retry={() => void refresh()}/> : !catalog || !events ? <Loading label="Cargando calendario…" cards={3}/>
+    {tab === "ciclo" && <><AcademicYears/><BellSchedules/></>}
+    {tab !== "ciclo" && (error ? <ErrorState error={error} retry={() => void refresh()}/> : !catalog || !events ? <Loading label="Cargando calendario…" cards={3}/>
       : <div className="agenda-config">
-        <Section title="Asuetos y fechas recurrentes" action={writable ? <div className="agenda-section-actions"><button type="button" className="button secondary small" onClick={() => setRuleDialog("new")}><Icon name="plus" size={16}/>Agregar</button><Menu label="Más acciones de los asuetos" items={[{ label: "Usar plantilla", icon: "copy", onSelect: () => void template() }]}/></div> : undefined}>
+        {tab === "asuetos" && <Section title="Asuetos y fechas recurrentes" action={writable ? <div className="agenda-section-actions"><button type="button" className="button secondary small" onClick={() => setRuleDialog("new")}><Icon name="plus" size={16}/>Agregar</button><Menu label="Más acciones de los asuetos" items={[{ label: "Usar plantilla", icon: "copy", onSelect: () => void template() }]}/></div> : undefined}>
           <p className="muted small">Cada regla dice, en palabras, cuándo cae. Las fechas son las de {year}. La plantilla de Guatemala es una referencia y no afirma la ley vigente.</p>
           <RulesPanel rules={rules} titles={titles} writable={writable} year={year} onEdit={setRuleDialog}
             stored={ownEvents.filter(event => event.ruleId)} onMove={setEventDialog} onSkip={event => void updateOccurrence(event, event.status === "skipped" ? "active" : "skipped")}/>
-        </Section>
-        <Section title="Otros eventos del año" action={writable ? <button type="button" className="button secondary small" onClick={() => setEventDialog("new")}><Icon name="plus" size={16}/>Agregar</button> : undefined}>
+        </Section>}
+        {tab === "eventos" && <Section title="Otros eventos del año" action={writable ? <button type="button" className="button secondary small" onClick={() => setEventDialog("new")}><Icon name="plus" size={16}/>Agregar</button> : undefined}>
           
           {oneOff.length ? Object.entries(grouped).map(([category, list]) => <div key={category} className="agenda-event-group"><h3>{category}</h3><ul>{list.map(event => <li key={event.id} className={`agenda-event${event.status === "skipped" ? " is-skipped" : ""}`}>
             <div><strong>{event.title}</strong><span>{event.from === event.until ? sessionDay(event.from, "short") : `${sessionDay(event.from, "short")} – ${sessionDay(event.until, "short")}`}{event.part !== "full" ? ` · ${parts[event.part]}` : ""}{event.noClass ? " · Sin clase" : ""}{event.status === "skipped" ? " · Omitido" : ""}</span></div>
@@ -124,19 +135,19 @@ export function InstitutionalCalendarPage() {
               ...(event.ruleId ? [{ label: event.status === "skipped" ? "Restaurar ocurrencia" : "Saltar esta ocurrencia", icon: "calendar" as const, onSelect: () => void updateOccurrence(event, event.status === "skipped" ? "active" : "skipped") }] : []),
             ]}/>}
           </li>)}</ul></div>) : <EmptyState compact icon="calendar" title="Sin eventos en este año">Agrega uno o genera el año a partir de las reglas.</EmptyState>}
-        </Section>
-        <Section title="Preparar el año siguiente">
+        </Section>}
+        {tab === "asuetos" && <Section title="Preparar el año siguiente">
           <p className="muted small">Generar crea las fechas que faltan, actualiza las que cambiaron y conserva las que moviste u omitiste.</p>
           {writable && selected && rules.length > 0 && needsGeneration && <PrimaryAction icon="spark" onClick={() => setGenerating(true)}>Generar {year}</PrimaryAction>}
           {writable && selected && rules.length > 0 && !needsGeneration && <PrimaryAction icon="spark" onClick={() => { setYear(year + 1); setGenerating(true); }}>Generar {year + 1}</PrimaryAction>}
-        </Section>
-      </div>}
+        </Section>}
+      </div>)}
     {eventDialog && selected && catalog && <EventDialog calendar={selected} event={eventDialog === "new" ? null : eventDialog} categories={catalog.categories}
-      onClose={() => setEventDialog(null)} onSaved={async moved => { setEventDialog(null); toast({ message: `Evento guardado.${moved ? ` ${plural(moved, "clase pendiente se movió", "clases pendientes se movieron")}.` : ""}` }); await loadEvents(); }}/>}
+      onClose={() => setEventDialog(null)} onSaved={async moved => { setEventDialog(null); openTab("eventos"); toast({ message: `Evento guardado.${moved ? ` ${plural(moved, "clase pendiente se movió", "clases pendientes se movieron")}.` : ""}` }); await loadEvents(); }}/>}
     {ruleDialog && selected && catalog && <RuleDialog calendar={selected} value={ruleDialog === "new" ? null : ruleDialog} categories={catalog.categories} rules={rules} year={year}
-      onClose={() => setRuleDialog(null)} onSaved={async () => { setRuleDialog(null); toast({ message: "Regla guardada. Genera el año para aplicar sus fechas." }); await loadCatalog(); }}/>}
+      onClose={() => setRuleDialog(null)} onSaved={async () => { setRuleDialog(null); openTab("asuetos"); toast({ message: "Regla guardada. Genera el año para aplicar sus fechas." }); await loadCatalog(); }}/>}
     {generating && selected && <GenerateDialog calendar={selected} year={year} onClose={() => setGenerating(false)}
-      onGenerated={async result => { setGenerating(false); toast({ message: `${plural(result.created, "evento creado", "eventos creados")}, ${result.updated} actualizados y ${result.kept} conservados.` }); await loadEvents(); }}/>}
+      onGenerated={async result => { setGenerating(false); openTab("asuetos"); toast({ message: `${plural(result.created, "evento creado", "eventos creados")}, ${result.updated} actualizados y ${result.kept} conservados.` }); await loadEvents(); }}/>}
   </>;
 }
 
