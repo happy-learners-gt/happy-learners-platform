@@ -55,7 +55,7 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | TEAM-01 | Personas | Equipo 3.85 → 4.0: tarjetas uniformes y cursos que imparte | P3 | AUD-03 | READY | Puntaje ≥ 4.0 |
 | LIB-01 | Contenido | Biblioteca 3.70 → 4.0: leyenda general/del curso y usos enlazados | P2 | AUD-03 | READY | Puntaje ≥ 4.0 |
 | NOT-01 | Gobierno | Notificaciones 3.60 → 4.0: explicar obligatorios y el aviso de correo con siguiente paso | P2 | AUD-03 | READY | Puntaje ≥ 4.0 |
-| ACC-01 | Gobierno | Roles y accesos 3.40 → 4.2: pestañas y matriz plegable por área | P1 | AUD-03 | READY | Puntaje ≥ 4.2 |
+| ACC-01 | Gobierno | Roles y accesos en pestañas (Matriz, Grupos de seguridad, Coordinación, Historial) y la matriz filtrable por área | P1 | AUD-03 | DONE | 1.6.22: 2 036 / 2 573 → 1 736 / 2 211 px (escritorio / móvil); al crear o editar un grupo se abre su pestaña; E2E `access` por pestañas; puntaje 3.40 → 4.00 |
 | HRS-04 | Operación | Horas efectivas 3.40 → 4.0 | P2 | M8 | BACKLOG | Puntaje ≥ 4.0 |
 | AGE-01 | Operación | Agenda 3.50 → 4.2 | P2 | M8 | BACKLOG | Puntaje ≥ 4.2 |
 | ORG-01 | Institución | Organización 3.55 → 4.2 | P2 | M8 | BACKLOG | Puntaje ≥ 4.2 |

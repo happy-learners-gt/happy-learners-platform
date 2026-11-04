@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import type { AccessEvent, GrantablePermission, PermissionArea, PermissionGrant, PermissionKey, ProgramScope, SecurityGroup } from "@happy-learners/contracts";
 import type { BuiltInRole, PermissionDefinition, Reach } from "@happy-learners/domain";
 import { api, message } from "../api";
-import { Link } from "../navigation";
+import { Link, useNavigation } from "../navigation";
 import { useSession } from "../session";
 import { timeAgo } from "../model";
 import { Modal, useFeedback } from "../ui/feedback";
@@ -84,16 +84,28 @@ export function AccessPage() {
 }
 
 type Editing = { kind: "group"; group?: SecurityGroup } | { kind: "permissions"; group: SecurityGroup } | { kind: "members"; group: SecurityGroup };
+/** ACC-01 (docs/transformacion/auditoria.md §8): one tab per thing administered, as Educadores and Contratos. */
+const accessTabs = [
+  { id: "matriz", label: "Matriz", href: "/roles-y-accesos" },
+  { id: "grupos", label: "Grupos de seguridad", href: "/roles-y-accesos#grupos" },
+  { id: "coordinacion", label: "Coordinación", href: "/roles-y-accesos#coordinacion" },
+  { id: "historial", label: "Historial", href: "/roles-y-accesos#historial" },
+] as const;
+type AccessTab = (typeof accessTabs)[number]["id"];
 function AccessMatrix() {
   const { toast, confirm } = useFeedback();
-  const [data, setData] = useState<Matrix | null>(null), [error, setError] = useState(""), [editing, setEditing] = useState<Editing | null>(null);
+  const { url, navigate } = useNavigation();
+  const tab: AccessTab = accessTabs.find(item => `#${item.id}` === url.hash)?.id || "matriz";
+  const [data, setData] = useState<Matrix | null>(null), [error, setError] = useState(""), [editing, setEditing] = useState<Editing | null>(null), [area, setArea] = useState("");
   const load = async () => { setError(""); try { setData(await api<Matrix>("/access/matrix")); } catch (cause) { setError(message(cause)); } };
   useEffect(() => { void load(); }, []);
   const header = <PageHeader title="Roles y accesos" description="Qué puede hacer cada rol y cada grupo de seguridad, por área. Los cambios se aplican en la siguiente solicitud de cada persona y quedan en el historial."
     primary={data && <PrimaryAction icon="plus" onClick={() => setEditing({ kind: "group" })}>Crear grupo</PrimaryAction>}/>;
   if (error) return <>{header}<ErrorState error={error} retry={() => void load()}/></>;
   if (!data) return <>{header}<Loading label="Cargando la matriz de accesos…"/></>;
-  const done = async (text: string) => { setEditing(null); await load(); toast({ message: text }); };
+  // A group just created or changed is shown where its actions are.
+  const done = async (text: string) => { setEditing(null); await load(); toast({ message: text }); if (tab !== "grupos") navigate("/roles-y-accesos#grupos", true); };
+  const counts: Partial<Record<AccessTab, number>> = { grupos: data.groups.length, coordinacion: data.coordinators.length };
   async function remove(group: SecurityGroup) {
     if (!await confirm({ title: `¿Eliminar el grupo «${group.name}»?`, body: `${group.members.length ? `${group.members.length === 1 ? "La persona del grupo pierde" : `Las ${group.members.length} personas del grupo pierden`} sus permisos en su siguiente solicitud.` : "El grupo no tiene personas."} El historial conserva el registro.`, confirm: "Eliminar grupo", danger: true })) return;
     try { await api(`/access/groups/${group.id}`, "DELETE"); await done(`Grupo «${group.name}» eliminado.`); } catch (cause) { toast({ tone: "error", message: message(cause) }); }
@@ -102,10 +114,17 @@ function AccessMatrix() {
   const grantOf = (group: SecurityGroup, key: PermissionKey) => group.grants.find(grant => grant.permission === key);
   return <>
     {header}
+    <nav className="tabs scrollable-tabs" aria-label="Secciones de roles y accesos">
+      {accessTabs.map(item => <Link key={item.id} href={item.href} className="tab" aria-current={tab === item.id ? "page" : undefined}>{item.id in counts ? `${item.label} (${counts[item.id]})` : item.label}</Link>)}
+    </nav>
+    {tab === "matriz" && <>
+    <div className="chips" role="group" aria-label="Área">
+      {[{ key: "", label: "Todas" }, ...data.areas].map(item => <button key={item.key} type="button" className="chip-button" aria-pressed={area === item.key} onClick={() => setArea(item.key)}>{item.label}</button>)}
+    </div>
     <div className="table-card" role="region" aria-label="Matriz de accesos" tabIndex={0}><table className="access-table">
       <caption className="sr-only">Permisos por área para cada rol y grupo de seguridad</caption>
       <thead><tr><th scope="col">Permiso</th>{data.roles.map(role => <th key={role.key} scope="col" title={role.description}>{role.label}</th>)}{data.groups.map(group => <th key={group.id} scope="col">{group.name}</th>)}</tr></thead>
-      <tbody>{data.areas.map(area => <Fragment key={area.key}>
+      <tbody>{data.areas.filter(item => !area || item.key === area).map(area => <Fragment key={area.key}>
         <tr className="access-area"><th scope="colgroup" colSpan={1 + data.roles.length + data.groups.length}>{area.label}</th></tr>
         {data.catalog.filter(item => item.area === area.key).map(item => <tr key={item.key}>
           <th scope="row"><span className="access-permission"><strong>{item.label}</strong><span className="muted small">{item.description}</span>{!item.grantable && <span className="muted small">Solo administración</span>}</span></th>
@@ -114,8 +133,8 @@ function AccessMatrix() {
         </tr>)}
       </Fragment>)}</tbody>
     </table></div>
-    <div className="admin-grid">
-      <Section title="Grupos de seguridad">
+    </>}
+    {tab === "grupos" && <Section title="Grupos de seguridad">
         {data.groups.length ? <ul className="access-groups">{data.groups.map(group => <li key={group.id} className="panel">
           <div className="access-group-head"><div><h3>{group.name}</h3>{group.description && <p className="muted small">{group.description}</p>}</div>
             <Menu label={`Acciones del grupo ${group.name}`} items={[
@@ -128,16 +147,15 @@ function AccessMatrix() {
           <p className="small">{group.grants.length ? group.grants.map(grant => `${data.catalog.find(item => item.key === grant.permission)?.label} (${scopeText(grant.scope, data.programs).toLowerCase()})`).join(" · ") : <span className="muted">Sin permisos todavía.</span>}</p>
           <p className="small">{group.members.length ? group.members.map(person => person.name).join(", ") : <span className="muted">Sin personas todavía.</span>}</p>
         </li>)}</ul> : <EmptyState compact icon="shield" title="Aún no hay grupos de seguridad" action={<button type="button" className="button secondary small" onClick={() => setEditing({ kind: "group" })}>Crear grupo</button>}>Un grupo reúne a educadores que necesitan un permiso adicional en algunos programas, por ejemplo consultar la actividad.</EmptyState>}
-      </Section>
-      <Section title="Coordinación académica" action={<Link href="/educadores" className="section-link">Asignar en Educadores</Link>}>
+      </Section>}
+    {tab === "coordinacion" && <Section title="Coordinación académica" action={<Link href="/educadores" className="section-link">Asignar en Educadores</Link>}>
         {data.coordinators.length ? <ul className="plain-list">{data.coordinators.map(person => <li key={person.userId}><strong>{person.name}</strong> <span className="muted small">@{person.username}</span><br/><span className="small">{scopeText(person.scope, data.programs)}</span></li>)}</ul>
           : <p className="muted">Nadie tiene la coordinación académica. Asígnala a un educador desde Educadores.</p>}
-      </Section>
-    </div>
-    <Section title="Historial de cambios">
+      </Section>}
+    {tab === "historial" && <Section title="Historial de cambios">
       {data.events.length ? <ol className="plain-list access-events">{data.events.map(item => <li key={item.id}><span>{item.summary}</span> <span className="muted small">{item.actorName} · <time dateTime={item.occurredAt}>{timeAgo(item.occurredAt)}</time></span></li>)}</ol>
         : <p className="muted">Aún no hay cambios en los accesos.</p>}
-    </Section>
+    </Section>}
     {editing?.kind === "group" && <GroupDialog group={editing.group} onClose={() => setEditing(null)} onDone={done}/>}
     {editing?.kind === "permissions" && <PermissionsDialog group={editing.group} catalog={data.catalog} areas={data.areas} programs={data.programs} onClose={() => setEditing(null)} onDone={done}/>}
     {editing?.kind === "members" && <MembersDialog group={editing.group} onClose={() => setEditing(null)} onDone={done}/>}
