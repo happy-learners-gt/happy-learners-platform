@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.31 — 2026-11-03
+
+- Contratos y políticas (CON-02): «Verificar una constancia» pasa a la pestaña Ajustes; la lista de contratos termina
+  con un enlace a ella.
+
 ## 1.6.30 — 2026-11-03
 
 - Agenda (AGE-01): en la semana, cuando varias clases coinciden, se ve una completa y un chip «+N» que abre el día con
