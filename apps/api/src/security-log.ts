@@ -45,7 +45,9 @@ const personSessions = /^\/api\/security\/people\/([a-z0-9-]{1,100})\/sessions$/
 /** Allowed methods of the security routes; null for any other path. */
 export function securityMethodsOf(path: string): string[] | null {
   if (["/api/security/events", "/api/security/events/export", "/api/security/chain", "/api/security/audit"].includes(path)) return ["GET"];
-  if (personSessions.test(path)) return ["DELETE"];
+  if (path === "/api/security/policy") return ["GET", "PUT"];
+  if (path === "/api/security/access-review") return ["GET"];
+  if (personSessions.test(path) || /^\/api\/security\/people\/[a-z0-9-]{1,100}\/mfa$/.test(path)) return ["DELETE"];
   return null;
 }
 export const isSecurityPath = (path: string) => path.startsWith("/api/security/");
@@ -72,6 +74,7 @@ export async function security(path: string, method: string, url: URL, current: 
     ]);
     return reply({ closed });
   }
+  if (path === "/api/security/access-review") return accessReview(current, db, client);
   const filter = securityFilter(url.searchParams);
   if (!filter) return reply({ error: "Revisa los filtros: persona, tipo de evento y fechas (AAAA-MM-DD, desde antes de hasta)." }, 400);
   if (path === "/api/security/audit") return audit(filter, url.searchParams.get("objeto"), org, db);
@@ -113,4 +116,25 @@ async function audit(filter: SecurityFilter, object: string | null, org: string,
       FROM role_events r LEFT JOIN users a ON a.id=r.actor_id LEFT JOIN users m ON m.id=r.member_id WHERE ${roleClauses.join(" AND ")} ${object && object !== "account" ? "AND 0" : ""} ORDER BY r.occurred_at DESC LIMIT 100`).bind(...roleValues),
   ]) as unknown as [Record<string, unknown>[], (Record<string, unknown> & { active: number })[]];
   return reply({ events: events.slice(0, filter.limit), more: events.length > filter.limit, roleChanges: roles.map(row => ({ ...row, active: !!row.active })), objects: auditObjects });
+}
+
+/**
+ * ST-189 CA3: the periodic review of who can enter and with what. One row per person: role, access, coordination,
+ * security groups, second factor, passkeys, linked accounts, active tokens and last sign-in. The export is logged.
+ */
+async function accessReview(current: Member, db: Database, client: Client) {
+  const rows = (await db.prepare(`SELECT u.username,COALESCE(u.display_name,u.username) AS name,CASE m.role WHEN 'instructor' THEN 'Educador' ELSE 'Administración' END AS role,m.active,
+      (SELECT group_concat(cs.program_id) FROM coordination_scopes cs WHERE cs.user_id=u.id) AS coordination,
+      (SELECT group_concat(g.name, '; ') FROM security_group_members gm JOIN security_groups g ON g.id=gm.group_id WHERE gm.user_id=u.id) AS groups,
+      EXISTS (SELECT 1 FROM totp_factors f WHERE f.user_id=u.id AND f.status='active') AS mfa,
+      (SELECT count(*) FROM passkeys p WHERE p.user_id=u.id) AS passkeys,
+      (SELECT group_concat(l.provider) FROM linked_identities l WHERE l.user_id=u.id) AS providers,
+      (SELECT count(*) FROM access_tokens t WHERE t.user_id=u.id AND t.revoked_at IS NULL AND t.expires_at>?) AS tokens,
+      (SELECT max(s.occurred_at) FROM sign_in_events s WHERE s.user_id=u.id AND s.outcome='succeeded') AS lastSignIn
+    FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=? ORDER BY m.active DESC,m.role,name`).bind(new Date().toISOString(), current.organizationId).all<Record<string, string | number | null>>()).results;
+  const cell = (value: unknown) => { const text = String(value ?? ""); const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text; return /[",\n\r;]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe; };
+  const header = ["Usuario", "Nombre", "Rol", "Acceso", "Coordinación", "Grupos de seguridad", "Verificación en dos pasos", "Passkeys", "Cuentas vinculadas", "Tokens activos", "Último inicio de sesión (UTC)"];
+  const lines = rows.map(row => [row.username, row.name, row.role, row.active ? "Activo" : "Sin acceso", row.coordination === "*" ? "Todos los programas" : row.coordination, row.groups, row.mfa ? "Sí" : "No", row.passkeys, row.providers, row.tokens, row.lastSignIn].map(cell).join(","));
+  await db.batch([securityEvent(db, { organizationId: current.organizationId, type: "access_review_exported", actorId: current.id, detail: `${rows.length} personas`, client })]);
+  return new Response("\uFEFF" + [header.join(","), ...lines].join("\r\n") + "\r\n", { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="revision-de-accesos-${new Date().toISOString().slice(0, 10)}.csv"` } });
 }

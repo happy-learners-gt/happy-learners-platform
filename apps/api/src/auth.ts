@@ -31,7 +31,8 @@ export function sessionToken(request: Request): string | null {
 export function newToken(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, "0")).join("");
 }
-export function cookie(token: string, request: Request, remove = false): string {
+/** The session cookie; it lasts what the session does (8 hours unless the access policy says otherwise). */
+export function cookie(token: string, request: Request, remove = false, maxAge = 28800): string {
   const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
-  return `hl_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${remove ? 0 : 28800}${secure}`;
+  return `hl_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${remove ? 0 : maxAge}${secure}`;
 }

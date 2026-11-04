@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { SecurityEventType } from "@happy-learners/domain";
-import { securityEventTypes, securityMethods, securityOutcomes } from "@happy-learners/domain";
+import type { AccessPolicy, SecurityEventType } from "@happy-learners/domain";
+import { policyLimits, securityEventTypes, securityMethods, securityOutcomes } from "@happy-learners/domain";
 import { api, message } from "../api";
 import { Link, useNavigation } from "../navigation";
 import { useSession } from "../session";
 import { formatInstant } from "../regional";
+import { useFeedback } from "../ui/feedback";
+import { OrganizationTokens } from "./tokens";
+import { InstitutionProvider } from "./providers";
 import { Icon } from "../ui/icons";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, Section, StatusBadge } from "../ui/primitives";
 import type { Tone } from "../ui/primitives";
@@ -24,6 +27,9 @@ type Filters = { persona: string; tipo: string; desde: string; hasta: string; ob
 const securityTabs = [
   { id: "registro", label: "Registro de seguridad", href: "/seguridad" },
   { id: "auditoria", label: "Auditoría", href: "/seguridad#auditoria" },
+  { id: "politicas", label: "Política de acceso", href: "/seguridad#politicas" },
+  { id: "proveedor", label: "Proveedor institucional", href: "/seguridad#proveedor" },
+  { id: "tokens", label: "Tokens", href: "/seguridad#tokens" },
 ] as const;
 type SecurityTab = (typeof securityTabs)[number]["id"];
 const outcomeTone: Record<string, Tone> = { succeeded: "success", failed: "danger", info: "neutral" };
@@ -41,11 +47,12 @@ function Security() {
   const [people, setPeople] = useState<Person[]>([]);
   useEffect(() => { api<{ members: Person[] }>("/members").then(result => setPeople(result.members), () => setPeople([])); }, []);
   return <>
-    <PageHeader title="Seguridad" description="Quién entró, quién falló y qué cambió en los accesos de la organización. Cada evento queda sellado y la cadena se puede verificar."/>
+    <PageHeader title="Seguridad" description="Quién entró, quién falló y qué cambió en los accesos de la organización. Cada evento queda sellado y la cadena se puede verificar."
+      actions={<a className="button secondary" href="/api/security/access-review" download><Icon name="download" size={16}/>Revisión de accesos</a>}/>
     <nav className="tabs scrollable-tabs" aria-label="Secciones de seguridad">
       {securityTabs.map(item => <Link key={item.id} href={item.href} className="tab" aria-current={tab === item.id ? "page" : undefined}>{item.label}</Link>)}
     </nav>
-    {tab === "registro" ? <SecurityLog people={people}/> : <Audit people={people}/>}
+    {tab === "registro" ? <SecurityLog people={people}/> : tab === "auditoria" ? <Audit people={people}/> : tab === "tokens" ? <Section title="Tokens de integración"><OrganizationTokens/></Section> : tab === "proveedor" ? <Section title="Proveedor institucional"><InstitutionProvider/></Section> : <Policy/>}
   </>;
 }
 
@@ -149,4 +156,44 @@ function Audit({ people }: { people: Person[] }) {
       <p className="muted small">La auditoría cubre toda la organización y solo la consulta administración. Los permisos de grupos y coordinación están en <Link href="/roles-y-accesos#historial">Roles y accesos › Historial</Link>.</p>
     </Section>
   </>;
+}
+
+/** ST-134, ST-130, ST-136: what every password, link and session of the organization follows. */
+function Policy() {
+  const { toast } = useFeedback();
+  const [policy, setPolicy] = useState<AccessPolicy | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  const load = async () => { setError(""); try { setPolicy((await api<{ policy: AccessPolicy }>("/security/policy")).policy); } catch (cause) { setError(message(cause)); } };
+  useEffect(() => { void load(); }, []);
+  if (error && !policy) return <ErrorState error={error} retry={() => void load()}/>;
+  if (!policy) return <Loading label="Cargando la política…"/>;
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true); setError("");
+    const form = new FormData(event.currentTarget);
+    try {
+      const result = await api<{ policy: AccessPolicy; changed: boolean }>("/security/policy", "PUT", {
+        ...policy, minPasswordLength: Number(form.get("minPasswordLength")), sessionHours: Number(form.get("sessionHours")),
+        breachedCheck: form.get("breachedCheck") === "on", linkSignIn: form.get("linkSignIn") === "on", mfaAdmin: form.get("mfaAdmin") === "on", mfaEducator: form.get("mfaEducator") === "on",
+      });
+      setPolicy(result.policy); toast({ message: result.changed ? "Política de acceso guardada. Queda en el registro de seguridad." : "No había cambios." });
+    } catch (cause) { setError(message(cause)); }
+    finally { setBusy(false); }
+  }
+  return <Section title="Política de acceso">
+    <form className="stack policy-form" aria-label="Política de acceso" onSubmit={submit}><fieldset className="stack" disabled={busy}>
+      {error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{error}</p>}
+      <Field label="Longitud mínima de las contraseñas" hint={`De ${policyLimits.minPasswordLength[0]} a ${policyLimits.minPasswordLength[1]} caracteres. Se aplica al elegir o cambiar una contraseña.`}>
+        <input type="number" name="minPasswordLength" min={policyLimits.minPasswordLength[0]} max={policyLimits.minPasswordLength[1]} defaultValue={policy.minPasswordLength} required/></Field>
+      <label className="switch"><input type="checkbox" name="breachedCheck" defaultChecked={policy.breachedCheck}/><span><strong>Rechazar contraseñas filtradas</strong> <span className="muted small">Se compara con las filtraciones conocidas de Have I Been Pwned sin enviar la contraseña: solo los primeros 5 caracteres de su huella SHA-1.</span></span></label>
+      <Field label="Duración de las sesiones (horas)" hint={`De ${policyLimits.sessionHours[0]} a ${policyLimits.sessionHours[1]}. Se aplica a las sesiones que se abran desde ahora.`}>
+        <input type="number" name="sessionHours" min={policyLimits.sessionHours[0]} max={policyLimits.sessionHours[1]} defaultValue={policy.sessionHours} required/></Field>
+      <label className="switch"><input type="checkbox" name="linkSignIn" defaultChecked={policy.linkSignIn}/><span><strong>Permitir entrar con un enlace por correo</strong> <span className="muted small">Enlace de un solo uso que caduca en 15 minutos, solo a cuentas con correo de acceso confirmado.</span></span></label>
+      <fieldset className="choice-field"><legend>Exigir la verificación en dos pasos</legend>
+        <label className="switch"><input type="checkbox" name="mfaAdmin" defaultChecked={policy.mfaAdmin}/><span>A administración</span></label>
+        <label className="switch"><input type="checkbox" name="mfaEducator" defaultChecked={policy.mfaEducator}/><span>A educadores</span></label>
+        <p className="muted small">Quien no la tenga la configura en su siguiente solicitud y no puede usar nada más hasta hacerlo. Una passkey cuenta como los dos pasos.</p>
+      </fieldset>
+      <p className="muted small">Diez intentos fallidos en 15 minutos bloquean la cuenta 15 minutos; recuperar la contraseña la desbloquea. Todo queda en el registro de seguridad.</p>
+      <div className="button-row"><button className="button primary">{busy ? "Guardando…" : "Guardar política"}</button></div>
+    </fieldset></form>
+  </Section>;
 }

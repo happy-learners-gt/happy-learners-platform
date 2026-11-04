@@ -53,6 +53,11 @@ import { reportMethods, reports } from "./reports";
 import { panelMinuteMethods, panelMinutes } from "./panel-minutes";
 import { account, accountBody, accountMethods, clientOf, confirmEmail, emailConfirmPath, failedSignIn, openSession } from "./account";
 import { isSecurityPath, security, securityEvent, securityMethodsOf } from "./security-log";
+import { availableProviders, callback, callbackPath, identityPath, myIdentities, organizationOfDomain, personIdentityPath, providerStartPath, sso, ssoMethods, startSignIn, unlinkByAdmin } from "./oidc";
+import { bearerToken, closedToTokens, tokenMember, tokenMethods, tokens, tokenScopeKey } from "./tokens";
+import { myPasskeys, passkeyMethods, passkeySignIn, passkeySignInPaths, passkeyTicket } from "./passkeys";
+import { answerChallenge, mfaMethods, mfaPath, mfaResetPath, myMfa, resetMfa } from "./mfa";
+import { accessPolicy, breachRange, finishSignIn, linkConfirmPath, passwordChecker, recoverPassword, recoveryConfirmPath, requestLink, signInWithLink } from "./sign-in";
 import { institutionalCalendarMethods, institutionalCalendars } from "./institutional-calendar";
 import { agenda, agendaMethods } from "./agenda";
 import { gradingSchemeMethods, gradingSchemesApi } from "./grading-schemes";
@@ -66,6 +71,8 @@ const headers = {
   "Cross-Origin-Opener-Policy": "same-origin", "Cross-Origin-Resource-Policy": "same-origin",
   "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
 };
+/** The session cookie a sign-in step set, if it set one (a second-factor challenge does not). */
+const cookieOf = (response: Response): Record<string, string> => { const value = response.headers.get("Set-Cookie"); return value ? { "Set-Cookie": value } : {}; };
 function json(data: unknown, status = 200, extra: Record<string, string> = {}) {
   return Response.json(data, { status, headers: { ...headers, ...extra } });
 }
@@ -89,14 +96,18 @@ async function member(request: Request, db: Database): Promise<Member | null> {
   const token = sessionToken(request);
   if (!token) return null;
   const tokenHash = await digest(token), now = Date.now();
-  const row = await db.prepare(`SELECT s.id AS sessionId, s.last_used_at AS lastUsed, u.id, u.username, COALESCE(u.display_name,u.username) AS displayName, CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END AS role, m.organization_id AS organizationId, u.must_change_password AS mustChange, ${permissionColumns} FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND m.active=1`)
-    .bind(tokenHash, now).first<Member & { mustChange: number; sessionId: string; lastUsed: number }>();
+  const row = await db.prepare(`SELECT s.id AS sessionId, s.last_used_at AS lastUsed, u.id, u.username, COALESCE(u.display_name,u.username) AS displayName, CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END AS role, m.organization_id AS organizationId, u.must_change_password AS mustChange, s.verified, (SELECT status FROM totp_factors WHERE user_id=u.id) AS factor,
+    (SELECT CASE m.role WHEN 'admin' THEN mfa_admin ELSE mfa_educator END FROM security_policies WHERE organization_id=m.organization_id) AS mfaRequired, ${permissionColumns} FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND m.active=1`)
+    .bind(tokenHash, now).first<Member & { mustChange: number; sessionId: string; lastUsed: number; verified: number; factor: string | null; mfaRequired: number | null }>();
   if (!row) return null;
   // ST-158: the session's last use, written at most once a minute so it costs nothing on most requests.
   if (now - row.lastUsed >= sessionTouchMs) await db.prepare("UPDATE sessions SET last_used_at=? WHERE token_hash=? AND last_used_at<?").bind(now, tokenHash, now).run();
   // ST-128, ST-135: effective permissions are computed on every request, from the same query.
-  const { mustChange, sessionId: _, lastUsed: __, ...current } = row;
-  return withPermissions(mustChange ? { ...current, mustChangePassword: true } : current);
+  const { mustChange, sessionId: _, lastUsed: __, verified, factor, mfaRequired, ...current } = row;
+  // ST-133: the policy requires a second factor for the role and the person has none yet; a session opened with a
+  // passkey (both factors at once) already meets it.
+  const setup = !!mfaRequired && factor !== "active" && !verified;
+  return withPermissions({ ...current, ...(mustChange ? { mustChangePassword: true as const } : {}), ...(setup ? { mfaSetupRequired: true as const } : {}) });
 }
 /** Whether a username exists in any organization, active or not: it decides where its owner signs in (ST-093). */
 async function usernameTaken(env: Env, username: string) {
@@ -106,6 +117,11 @@ async function usernameTaken(env: Env, username: string) {
 /** The organization a username belongs to: each store is asked once; an unknown name stays with the default one. */
 async function organizationOf(env: Env, username: string) {
   const found = await Promise.all(organizationIds.map(id => database(env, id).prepare("SELECT 1 AS found FROM users u JOIN memberships m ON m.user_id=u.id WHERE u.username=? AND m.active=1").bind(username).first()));
+  return organizationIds[found.findIndex(Boolean)] || organizationIds[0];
+}
+/** The organization of an active account with this sign-in e-mail; like usernames, e-mails decide where one signs in. */
+async function organizationOfEmail(env: Env, email: string) {
+  const found = await Promise.all(organizationIds.map(id => database(env, id).prepare("SELECT 1 AS found FROM users u JOIN memberships m ON m.user_id=u.id WHERE u.email=? AND m.active=1").bind(email).first()));
   return organizationIds[found.findIndex(Boolean)] || organizationIds[0];
 }
 async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "waitUntil">, usage?: Usage & { organization?: string | null }): Promise<Response> {
@@ -165,9 +181,16 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (method === "POST" && /^\/api\/legal\/documents\/[a-z]+\/publish$/.test(path) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   // ST-158, ST-159: a change of e-mail and a closure request.
   if (accountBody(path, method)) input = await body(request);
+  // REL-007: a new password from a recovery link (ST-134) and the access policy.
+  if ((method === "POST" && recoveryConfirmPath.test(path)) || (method === "PUT" && path === "/api/security/policy")) input = await body(request);
+  if (["POST", "DELETE"].includes(method) && mfaMethods(path) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
+  if (method === "POST" && (path === "/api/me/passkeys" || path === "/api/me/tokens")) input = await body(request);
+  if (ssoMethods(path) && ["PUT", "POST"].includes(method) && request.headers.get("content-type")?.startsWith("application/json")) input = await body(request);
   // ST-160, ST-161: the person's own preferences and the bell; marking every notice as read needs no body.
   if (["PUT", "POST"].includes(method) && meMethods(path) && (method === "PUT" || request.headers.get("content-type")?.startsWith("application/json"))) input = await body(request);
-  let scope: string = scopeOfToken(sessionToken(request));
+  // ST-136: an integration token (Authorization: Bearer) names its organization like a session; a cookie wins.
+  const bearer = sessionToken(request) ? null : bearerToken(request);
+  let scope: string = scopeOfToken(sessionToken(request) || (bearer ? tokenScopeKey(bearer) : null));
   if (path.startsWith("/api/share/")) scope = scopeOfShare(path.split("/")[3]);
   const feedToken = feedPath.exec(path)?.[1];
   if (feedToken) scope = scopeOfToken(feedToken);
@@ -181,6 +204,28 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (path === "/api/login" && method === "POST") {
     const credentials = input as Record<string, unknown> | null;
     if (typeof credentials?.username === "string" && credentials.username.length <= 64) scope = await organizationOf(env, credentials.username.trim().toLowerCase());
+  }
+  // ST-130, ST-134: links sent by e-mail name their organization like a session token; asking for one names it by the
+  // username or the sign-in e-mail typed.
+  const linkToken = linkConfirmPath.exec(path)?.[1] || recoveryConfirmPath.exec(path)?.[1];
+  if (linkToken) scope = scopeOfToken(linkToken);
+  // ST-133: the second step names its organization by its challenge.
+  if (path === mfaPath && method === "POST") scope = scopeOfToken(String((input as Record<string, unknown> | null)?.challenge || ""));
+  // ST-129, ST-138: the provider's answer names its organization by its state; signing in with the institution's
+  // provider, by the domain of the e-mail typed.
+  if (callbackPath.test(path)) scope = scopeOfToken(url.searchParams.get("state"));
+  const startKey = providerStartPath.exec(path)?.[1];
+  if (startKey && method === "POST") {
+    const typed = String((input as Record<string, unknown> | null)?.identifier || "").trim().toLowerCase();
+    if (typed.length >= 3 && typed.length <= 254) scope = startKey === "sso"
+      ? await organizationOfDomain(organizationIds.map(id => ({ id, db: database(env, id) })), typed) || organizationIds[0]
+      : typed.includes("@") ? await organizationOfEmail(env, typed) : await organizationOf(env, typed);
+  }
+  // ST-132: a passkey sign-in names its organization by the ticket its client data signed.
+  if (path === "/api/login/passkey" && method === "POST") scope = scopeOfToken(passkeyTicket(input));
+  if ((path === "/api/login/link" || path === "/api/account/recovery" || path === "/api/login/passkey/options") && method === "POST") {
+    const typed = String((input as Record<string, unknown> | null)?.identifier || "").trim().toLowerCase();
+    if (typed.length >= 3 && typed.length <= 254) scope = typed.includes("@") ? await organizationOfEmail(env, typed) : await organizationOf(env, typed);
   }
   const db = database(env, scope, usage);
   if (usage) usage.organization = scope;
@@ -298,6 +343,22 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (accountAllowed) methods[path] = accountAllowed;
   const meAllowed = meMethods(path);
   if (meAllowed) methods[path] = meAllowed;
+  if (path === "/api/login/link" || path === "/api/account/recovery" || path === mfaPath) methods[path] = ["POST"];
+  const mfaAllowed = mfaMethods(path);
+  if (mfaAllowed) methods[path] = mfaAllowed;
+  // ST-129, ST-131, ST-138: identity providers.
+  if (callbackPath.test(path) || path === "/api/login/providers" || path === "/api/me/identities") methods[path] = ["GET"];
+  if (providerStartPath.test(path)) methods[path] = ["POST"];
+  if (identityPath.test(path)) methods[path] = ["POST", "DELETE"];
+  if (personIdentityPath.test(path)) methods[path] = ["DELETE"];
+  const ssoAllowed = ssoMethods(path);
+  if (ssoAllowed) methods[path] = ssoAllowed;
+  const tokenAllowed = tokenMethods(path);
+  if (tokenAllowed) methods[path] = tokenAllowed;
+  const passkeyAllowed = passkeyMethods(path);
+  if (passkeyAllowed) methods[path] = passkeyAllowed;
+  if (passkeySignInPaths.includes(path)) methods[path] = ["POST"];
+  if (linkConfirmPath.test(path) || recoveryConfirmPath.test(path)) methods[path] = ["GET", "POST"];
   const securityAllowed = securityMethodsOf(path);
   if (securityAllowed) methods[path] = securityAllowed;
   const allowed = methods[path] || (path === "/api/members" ? ["GET", "POST"] : /^\/api\/members\/[a-z0-9-]+$/.test(path) ? ["PUT"] : /^\/api\/members\/[a-z0-9-]+\/password$/.test(path) ? ["POST"] : /^\/api\/members\/[a-z0-9-]+\/departure$/.test(path) ? ["GET", "POST"] : /^\/api\/lessons\/[a-z0-9-]+$/.test(path) ? ["GET", "PUT", "DELETE"] : /^\/api\/lessons\/[a-z0-9-]+\/(publish|duplicate|review|review\/return)$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+$/.test(path) ? ["GET"] : /^\/api\/share\/[A-Z0-9-]+\/complete$/.test(path) ? ["POST"] : /^\/api\/share\/[A-Z0-9-]+\/files\/[a-z0-9-]+$/.test(path) ? ["GET"] : null);
@@ -335,15 +396,36 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
       if (user && counted[0]?.attempts === 10) await db.batch([securityEvent(db, { organizationId: scope, type: "sign_in_locked", outcome: "failed", subjectId: user.id, method: "password", detail: "10 intentos fallidos en 15 minutos; bloqueada 15 minutos", client })]);
       return json({ error: "Usuario o contraseña incorrectos." }, 401);
     }
-    const token = tokenPrefix(scope) + newToken();
-    await db.batch([
-      db.prepare("DELETE FROM sessions WHERE expires_at<=?").bind(now),
+    // REL-007: the session lasts what the organization's policy says.
+    const signedIn = await finishSignIn(db, request, user.id, scope, "password", client, [
       db.prepare("DELETE FROM login_limits WHERE expires_at<=?").bind(now),
       db.prepare("DELETE FROM login_limits WHERE bucket=?").bind(account),
-      ...openSession(db, await digest(token), user.id, scope, "password", client, now),
     ]);
-    return json({ ok: true }, 200, { "Set-Cookie": cookie(token, request) });
+    return json(await signedIn.json(), signedIn.status, cookieOf(signedIn));
   }
+  // ST-130: signing in with a link sent by e-mail; ST-134: recovering the password the same way.
+  const deferred = (work: Promise<unknown>) => { if (ctx) ctx.waitUntil(work); else void work; };
+  if (path === "/api/login/link") return requestLink("link", input, request, scope, db, mailSender(env), deferred);
+  if (path === "/api/account/recovery") return requestLink("recovery", input, request, scope, db, mailSender(env), deferred);
+  if (linkConfirmPath.test(path)) {
+    const signedIn = await signInWithLink(linkToken!, method, request, scope, db);
+    return json(await signedIn.json(), signedIn.status, cookieOf(signedIn));
+  }
+  const callbackKey = callbackPath.exec(path)?.[1];
+  if (callbackKey) return callback(callbackKey as never, url, request, scope, db, env);
+  if (startKey) return startSignIn(startKey as never, input, request, scope, db, env);
+  if (path === "/api/login/providers") return json({ providers: availableProviders(env, url.origin), sso: true });
+  if (passkeySignInPaths.includes(path)) {
+    const signedIn = await passkeySignIn(path, input, request, scope, db);
+    return json(await signedIn.json(), signedIn.status, cookieOf(signedIn));
+  }
+  if (path === mfaPath) {
+    const client = clientOf(request), answered = await answerChallenge(input, scope, db, client);
+    if ("response" in answered) return json(await answered.response.json(), answered.response.status);
+    const signedIn = await finishSignIn(db, request, answered.userId, scope, answered.method, client, [], true);
+    return json(await signedIn.json(), signedIn.status, cookieOf(signedIn));
+  }
+  if (recoveryConfirmPath.test(path)) return recoverPassword(linkToken!, method, input, request, scope, db, passwordChecker(db, scope, breachRange(env, url.origin)), mailSender(env));
   if (path.startsWith("/api/share/")) {
     const shareParts = path.split("/");
     if (shareParts[4] === "files" && method === "GET") return sharedFile(shareParts[3], shareParts[5], scope, db, env.COURSE_FILES);
@@ -357,7 +439,7 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
     const limit = await db.prepare("INSERT INTO login_limits (bucket, attempts, expires_at) VALUES (?,1,?) ON CONFLICT(bucket) DO UPDATE SET attempts=CASE WHEN expires_at<? THEN 1 ELSE attempts+1 END, expires_at=CASE WHEN expires_at<? THEN excluded.expires_at ELSE expires_at END RETURNING attempts")
       .bind(bucket, now + 900000, now, now).first<{ attempts: number }>();
     if (!limit || limit.attempts > 30) return json({ error: "Demasiados intentos. Espera 15 minutos y vuelve a intentar." }, 429, { "Retry-After": "900" });
-    const accepted = await acceptInvitation(invitationToken, input, scope, db, username => usernameTaken(env, username), clientOf(request));
+    const accepted = await acceptInvitation(invitationToken, input, scope, db, username => usernameTaken(env, username), clientOf(request), passwordChecker(db, scope, breachRange(env, url.origin)));
     return accepted.session ? json(await accepted.response.json(), accepted.response.status, { "Set-Cookie": cookie(accepted.session, request) }) : accepted.response;
   }
   if (emailToken) {
@@ -380,8 +462,11 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
     return json({ ok: true }, 200, { "Set-Cookie": cookie("", request, true) });
   }
   if (path === "/api/public/privacy") return publicPrivacy(url, id => database(env, id));
-  const current = await member(request, db);
+  const viaToken = !sessionToken(request) && bearer ? await tokenMember(bearer, db, permissionColumns, clientOf(request)) : null;
+  const current = viaToken ? withPermissions(viaToken) : await member(request, db);
   if (!current) return json({ error: "Inicia sesión para continuar." }, 401);
+  // ST-136: a token only reads, and never the account, the security, the people or the backup.
+  if (viaToken && (method !== "GET" || closedToTokens(path))) return json({ error: "Este token de integración solo lee y no abre esta parte de la plataforma.", code: "TOKEN_SCOPE" }, 403);
   // Until the person accepts the terms and consents to the privacy policy in force, only those and the session answer.
   const pending = await pendingFor(db, current);
   // ST-124: endpoints that change something tell the people affected, after their write.
@@ -395,9 +480,18 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
     deliverDue();
     return json({ member: current, pending, preferences: await preferencesFor(db, current.id, current.organizationId), ...(await onboardingPending(db, current) ? { onboarding: true } : {}) });
   }
-  if (path === "/api/account/password") return changePassword(input, current, sessionToken(request)!, db, notifier);
+  if (path === "/api/account/password") return changePassword(input, current, sessionToken(request)!, db, notifier, passwordChecker(db, current.organizationId, breachRange(env, url.origin)));
   // A temporary password opens nothing else until the person chooses their own (ST-093); the terms come after it.
   if (current.mustChangePassword) return json({ error: "Cambia tu contraseña temporal para continuar.", code: "PASSWORD_CHANGE_REQUIRED" }, 403);
+  // ST-133: until the person sets up the second factor their role requires, only that answers.
+  if (mfaAllowed) return myMfa(path, method, input, current, db, sessionToken(request)!, clientOf(request));
+  if ((path === "/api/me/identities" || identityPath.test(path)) && !current.mfaSetupRequired) return myIdentities(path, method, current, db, request, env);
+  if (ssoAllowed && !current.mfaSetupRequired) return sso(path, method, input, current, db, request);
+  const unlinkTarget = personIdentityPath.exec(path);
+  if (unlinkTarget && !current.mfaSetupRequired) return current.role === "admin" ? unlinkByAdmin(unlinkTarget[1], unlinkTarget[2] as never, current, db, clientOf(request)) : json({ error: "Solo administración desvincula cuentas de otras personas." }, 403);
+  if (tokenAllowed && !current.mfaSetupRequired) return tokens(path, method, input, current, db, clientOf(request));
+  if (passkeyAllowed && !current.mfaSetupRequired) return myPasskeys(path, method, input, current, db, request);
+  if (current.mfaSetupRequired) return json({ error: "Tu organización exige la verificación en dos pasos. Actívala para continuar.", code: "MFA_SETUP_REQUIRED" }, 403);
   if (path.startsWith("/api/legal")) return legal(path, method, input, current, db, notifier);
   if (pending.length && !(path === "/api/organization" && method === "GET")) return json({ error: "Acepta los términos y la política de privacidad vigentes para continuar.", pending }, 403);
   if (/^\/api\/courses\/[a-z0-9-]+\/files(?:\/|$)/.test(path)) return courseFiles(path, method, request, current, db, env.COURSE_FILES);
@@ -448,6 +542,9 @@ async function route(request: Request, env: Env, ctx?: Pick<ExecutionContext, "w
   if (/^\/api\/courses\/[a-z0-9-]+\/(core|sections\/differences|section-proposals(\/[a-z0-9-]+)?)$/.test(path) || /^\/api\/sections\/[a-z0-9-]+\/(plan|lessons|activities|content-overrides|units|copies|proposals|reviews)$/.test(path)) return sectionFreedom(path, method, input, current, db, notifier);
   if (/^\/api\/courses(\/|$)/.test(path)) return courses(path, method, input, current, db, notifier);
   if (/^\/api\/programs(\/|$)/.test(path)) return programs(path, method, input, current, db);
+  if (path === "/api/security/policy") return accessPolicy(method, input, current, db, clientOf(request));
+  const mfaTarget = mfaResetPath.exec(path)?.[1];
+  if (mfaTarget) return current.role === "admin" ? resetMfa(mfaTarget, current, db, clientOf(request)) : json({ error: "Solo administración restablece la verificación en dos pasos." }, 403);
   if (isSecurityPath(path)) return security(path, method, url, current, db, clientOf(request));
   if (path === "/api/activity") return activity(url, current, db);
   if (path === "/api/classes") return myClasses(current, db);
