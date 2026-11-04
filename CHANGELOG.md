@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.22 — 2026-11-03
+
+- Roles y accesos (ACC-01): pestañas **Matriz**, **Grupos de seguridad**, **Coordinación** e **Historial**, con el número
+  de grupos y de personas con coordinación en su pestaña; la matriz se filtra por área. Al crear o editar un grupo se
+  abre su pestaña.
+
 ## 1.6.21 — 2026-11-03
 
 - Cursos (CUR-01): vista **Lista** con una fila por curso (nombre, contenido, lecciones publicadas y acciones),

@@ -170,7 +170,7 @@ Incrementos de M8, en orden (brecha a la meta × uso):
 | Id | Incremento | Meta |
 | --- | --- | --- |
 | CUR-01 | Cursos agrupados por programa y ordenados por atención, con vista de lista compacta; en móvil, tarjetas compactas | ≤ 3 500 px en móvil con 25 cursos; 4.3. **Hecho en 1.6.21:** lista agrupada por programa (por omisión en el teléfono), 9 945 → 3 068 px; puntaje 3.75 → 4.20 (4 4 4 4 4 5 4 4: falta ordenar por atención) |
-| ACC-01 | Roles y accesos: pestañas (Matriz, Grupos de seguridad, Coordinación, Historial); la matriz agrupada y plegable por área | 4.2 |
+| ACC-01 | Roles y accesos: pestañas (Matriz, Grupos de seguridad, Coordinación, Historial); la matriz agrupada y plegable por área | 4.2. **Hecho en 1.6.22:** pestañas y filtro por área; 3.40 → 4.00 (4 4 4 4 4 4 4 4: falta explicar cada alcance en lenguaje simple) |
 | DOC-02 | Documentos: plantillas de demostración (boleta, constancia) para que el módulo se pueda ver y revisar; luego auditar el diseñador | 4.0 |
 | NOT-01 | Notificaciones: explicar qué es obligatorio y por qué el botón espera un cambio; aviso de correo sin configurar como `message-bar` con el siguiente paso | 4.0 |
 | LIB-01 | Biblioteca: leyenda de «general» y «del curso», y «Usado en N lecciones» enlazado | 4.0 |
