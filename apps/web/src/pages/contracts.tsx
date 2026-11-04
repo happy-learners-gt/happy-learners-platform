@@ -4,11 +4,12 @@ import type { CompensationKind, Contract, ContractEngagement, ContractPhase, Con
 import {
   compensationAllowed, compensationKinds, compensationLabels, compensationPeriods, compensationSummary, contractEngagements,
   contractAttentionLabels, contractAttentionPhases, contractPhaseLabels, contractsByAttention, contractTermFields, contractVariables, contractValues, engagementLabels, locationLabels, mergeContract,
-  periodLabels, workLocations,
+  periodLabels, workLocations, contractUrgency, endsWithin30,
 } from "@happy-learners/domain";
 import type { Editor } from "@tiptap/react";
 import { api, message } from "../api";
 import { sessionDay } from "../model";
+import { personalToday } from "../regional";
 import { Link, useNavigation, useUnsavedChanges } from "../navigation";
 import { useSession } from "../session";
 import { RichText } from "../RichText";
@@ -264,15 +265,18 @@ function ContractsTab({ creating, onCreating, preferred }: { creating: boolean; 
       .catch(cause => setError(message(cause)));
   };
   useEffect(load, []);
-  const rows = contractsByAttention((contracts || []).filter(item => (!phase || item.phase === phase) && (!person || item.userId === person) && (!template || item.templateId === template)));
+  // CON-03: «Terminan en 30 días» is a filter of its own: contracts in force whose end date is near.
+  const today = personalToday(), soon = (contracts || []).filter(item => endsWithin30(item, today)).length;
+  const rows = contractsByAttention((contracts || []).filter(item => (!phase || (phase === "soon" ? endsWithin30(item, today) : item.phase === phase)) && (!person || item.userId === person) && (!template || item.templateId === template)));
   const waiting = contractAttentionPhases.map(value => ({ value, count: (contracts || []).filter(item => item.phase === value).length })).filter(item => item.count > 0);
   const published = templates.some(item => item.status === "active" && !!item.current);
   if (error) return <ErrorState error={error} retry={load}/>;
   if (!contracts) return <Loading label="Cargando contratos…" lines={4}/>;
   return <>
-    {waiting.length > 0 && <div className="chips" role="group" aria-label="Esperan acción">
+    {(waiting.length > 0 || soon > 0) && <div className="chips" role="group" aria-label="Esperan acción">
       {waiting.map(item => <button key={item.value} type="button" className="chip-button" aria-pressed={phase === item.value} onClick={() => setPhase(phase === item.value ? "" : item.value)}>
         {`${contractAttentionLabels[item.value]} (${item.count})`}</button>)}
+      {soon > 0 && <button type="button" className="chip-button" aria-pressed={phase === "soon"} onClick={() => setPhase(phase === "soon" ? "" : "soon")}>{`Terminan en 30 días (${soon})`}</button>}
     </div>}
     <div className="table-toolbar contract-filters">
       <label className="onboarding-filter"><span>Fase</span><select value={phase} onChange={event => setPhase(event.target.value)}><option value="">Todas</option>{filterPhases.map(item => <option key={item} value={item}>{contractPhaseLabels[item]}</option>)}</select></label>
@@ -286,7 +290,7 @@ function ContractsTab({ creating, onCreating, preferred }: { creating: boolean; 
         <tbody>{rows.map(item => <tr key={item.id}>
           <th scope="row">{item.partyName}</th>
           <td>{item.title}</td>
-          <td><StatusBadge tone={phaseTone[item.phase]}>{contractPhaseLabels[item.phase]}</StatusBadge></td>
+          <td><StatusBadge tone={phaseTone[item.phase]}>{contractPhaseLabels[item.phase]}</StatusBadge>{(() => { const urgency = contractUrgency(item, today); return urgency && <span className={`contract-urgency small${urgency.warning ? " is-warning" : ""}`}>{urgency.text}</span>; })()}</td>
           <td>{sessionDay(item.startDate, "short")}</td>
           <td>{item.endDate ? sessionDay(item.endDate, "short") : "Indefinido"}</td>
           <td className="cell-actions"><button type="button" className="button ghost small" onClick={() => setSelected(item)}>Ver</button></td>

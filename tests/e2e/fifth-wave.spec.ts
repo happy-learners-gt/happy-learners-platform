@@ -42,3 +42,9 @@ test("EDU-01 PRF-01: each person's row says what they need, with a link; the rev
   const headings = await page.getByRole("heading", { level: 2 }).allTextContents();
   expect(headings.findIndex(text => text.startsWith("Perfiles por revisar"))).toBeLessThan(headings.indexOf("Publicación de perfiles"));
 });
+
+test("CON-03: each contract says how long it has waited for the signature or how soon it ends", async ({ page }) => {
+  await signIn(page, "admin-demo", "/contratos");
+  const table = page.getByRole("table", { name: /Contratos del equipo/ });
+  await expect(table.locator(".contract-urgency").filter({ hasText: /Esperando|Enviado hoy/ }).first()).toBeVisible();
+});
