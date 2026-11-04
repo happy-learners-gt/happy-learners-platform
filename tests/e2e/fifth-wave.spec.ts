@@ -29,3 +29,16 @@ test("IDA-02: on a phone the sections of Identidad y acceso are one row, and the
   expect(box!.height).toBeLessThan(80);
   await expect(page.getByRole("heading", { level: 1 })).toBeInViewport();
 });
+
+test("EDU-01 PRF-01: each person's row says what they need, with a link; the review tab shows the work before its setting", async ({ page }) => {
+  await signIn(page, "admin-demo", "/educadores");
+  const needs = page.locator(".person-needs a").filter({ hasText: /Perfil por revisar|Credencial por verificar|Documento por vencer|Pidió cerrar su cuenta/ });
+  await expect(needs.first()).toBeVisible();
+  const first = needs.first(), label = (await first.textContent())!;
+  await first.click();
+  await expect(page).toHaveURL(label.includes("Documento") ? /#documentos$/ : label.includes("cerrar") ? /#cierres$/ : /#perfiles$/);
+  await page.goto("/educadores#perfiles");
+  await expect(page.getByRole("heading", { level: 2, name: "Publicación de perfiles" })).toBeVisible();
+  const headings = await page.getByRole("heading", { level: 2 }).allTextContents();
+  expect(headings.findIndex(text => text.startsWith("Perfiles por revisar"))).toBeLessThan(headings.indexOf("Publicación de perfiles"));
+});

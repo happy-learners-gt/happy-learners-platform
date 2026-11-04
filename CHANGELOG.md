@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.5 — 2026-11-04
+
+- Educadores (EDU-01): bajo el nombre de cada persona se ve lo que necesita de administración (perfil por revisar,
+  credencial por verificar, documento por vencer, pidió cerrar su cuenta), cada cosa un enlace a donde se resuelve.
+- Revisión de perfiles (PRF-01): primero los perfiles y las credenciales por revisar; el ajuste «Los perfiles requieren
+  aprobación» queda al final.
+
 ## 1.7.4 — 2026-11-04
 
 Quinta ola del programa de mejora (AUD-05, `docs/transformacion/auditoria.md` §10).
