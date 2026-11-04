@@ -6,7 +6,7 @@ REL-007, ST-189 (SPR-004, DEC-058). Lo que se hace, cuándo y quién, para detec
 
 | Control | Frecuencia | Dónde |
 | --- | --- | --- |
-| Secretos (gitleaks), dependencias (OSV-Scanner) y código (Semgrep) | Cada PR y cada push a `main` | `.github/workflows/security.yml`; obligatorios para integrar en `main` (protección de rama) |
+| Secretos (gitleaks), dependencias (OSV-Scanner) y código (Semgrep) | Cada PR y cada push a `main` | `.github/workflows/security.yml`; obligatorios para llegar a producción: el despliegue se detiene si el PR del commit no los pasó (`scripts/security-gate.py`). La protección de rama de GitHub pide un plan de pago en repositorios privados |
 | DAST con OWASP ZAP, con sesión, contra un Worker local | Semanal | `.github/workflows/dast.yml`, `docs/security/dast.md` |
 | Flujos críticos en producción | Cada despliegue | `scripts/critical-flows.mjs` |
 | Monitor externo de disponibilidad | Cada 5 minutos | UptimeRobot (AP-03), `docs/operations/slo.md` |
