@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { Course, Lesson, Material, Resource, Taxonomy } from "@happy-learners/contracts";
 import { areaLabel } from "@happy-learners/domain";
 import { api, message } from "../api";
-import { useNavigation } from "../navigation";
+import { Link, useNavigation } from "../navigation";
 import { isEducator, useSession } from "../session";
 import { matches, newest, plural, usage } from "../model";
 import { ResourceCard } from "../ui/cards";
@@ -55,8 +55,11 @@ export function Library() {
       {(areaCounts.size > 1 || area) && <label className="select-inline"><span>Área</span><select value={area} onChange={event => filter("area", event.target.value)}><option value="">Todas</option>{[...areaCounts.entries()].map(([code, count]) => <option key={code} value={code}>{areaLabel(code)} ({count})</option>)}</select></label>}
     </div>
     <p className="toolbar-count" aria-live="polite">{plural(visible.length, "recurso", "recursos")}</p>
-    {visible.some(item => item.legacy) && <p className="muted small">«General · solo lectura»: recursos de la biblioteca anterior, disponibles en cualquier curso; ya no se editan. Los demás pertenecen a un curso y se editan desde él. Abre un recurso para ver en qué lecciones se usa.</p>}
-    {visible.length ? <div className="resource-list">{visible.map(item => <ResourceCard key={`${item.courseId}-${item.id}`} item={item} onOpen={() => setPreview(item)} menu={[
+    {visible.some(item => item.legacy) && <p className="muted small">«General · solo lectura»: recursos de la biblioteca anterior, disponibles en cualquier curso; ya no se editan. Los demás pertenecen a un curso y se editan desde él.</p>}
+    {visible.length ? <div className="resource-list">{visible.map(item => <ResourceCard key={`${item.courseId}-${item.id}`} item={item} onOpen={() => setPreview(item)}
+      // LIB-02: where it is used, in the list itself: the first two lessons and how many more.
+      extra={(() => { const used = usage(item.id, data.lessons); return used.length ? <p className="resource-usage small"><span className="muted">En: </span>{used.slice(0, 2).map((lesson, index) => <span key={lesson.id}>{index ? ", " : ""}<Link href={`/cursos/${lesson.courseId}/lecciones/${lesson.id}`}>{lesson.title}</Link></span>)}{used.length > 2 ? <span className="muted">{` y ${used.length - 2} más`}</span> : null}</p> : null; })()}
+      menu={[
       { label: "Vista previa", icon: "eye", onSelect: () => setPreview(item) },
       ...(educator && !item.legacy && item.kind !== "file" && editable(item) ? [{ label: "Editar", icon: "edit" as const, onSelect: () => setForm(item) }] : []),
       ...(!item.legacy ? [{ label: "Abrir en su curso", icon: "arrowRight" as const, onSelect: () => navigate(`/cursos/${item.courseId}/biblioteca`) }] : []),
