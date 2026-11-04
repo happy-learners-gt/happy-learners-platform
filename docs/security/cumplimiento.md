@@ -56,5 +56,5 @@ Estado: **Cumple** (con evidencia), **Parcial** (cumple una parte; la brecha est
 | Sin cierre de sesión por inactividad | Medio en equipos compartidos | Inactividad configurable en la política (siguiente incremento de seguridad) |
 | El enlace por correo no es un segundo factor | Bajo: con TOTP activo se pide igual | Documentado; la política puede desactivar el enlace |
 | Prueba de penetración externa pendiente (AP-05) | Medio antes de instituciones de pago | Contratarla con `alcance-pentest.md` |
-| Escáneres obligatorios en `main` (SEC-04) | Bajo | ST-189: protección de rama con los tres escáneres |
+| Escáneres obligatorios (SEC-04) | Cerrada | Hecho en 1.7.3: el despliegue exige los tres escáneres en verde en el PR del commit (`scripts/security-gate.py`); la protección de rama de GitHub pide un plan de pago |
 | Sin certificación (SOC 2, ISO 27001) | Comercial | Esta matriz es la base si una institución la pide; requiere un auditor externo |
