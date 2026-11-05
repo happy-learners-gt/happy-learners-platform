@@ -1,31 +1,40 @@
 # Siguiente sesión
 
-## Retomar
+## Retomar (estado guardado el 05-nov-2026)
 
-1. `cd happy-learners-platform && git status && git log --oneline -5` → rama `feat/HL-15-transformacion`. Si hay
-   cambios sin commit, son de la sesión anterior: revisarlos, no descartarlos.
-2. `git fetch && git log --oneline -3 origin/main`: si `main` avanzó, integrar `origin/main` en la rama.
-3. Seguir con la tarea de abajo.
+1. `cd happy-learners-platform && git fetch && git checkout main && git pull`. Todo el trabajo está en `main`
+   (producción 1.7.5, `b39b004`, PR #133). No quedan PR abiertos ni cambios sin commit.
+2. `cd ../happy-learners-ops && git checkout main && git pull` (último: #145, DEC-059, evidencia de SPR-004 al 4-nov).
+3. Seguir con la acción de abajo.
 
 ## Hecho
 
-- 1.6.0–1.6.20 en producción (#103–#123, 02 y 03-nov); SPR-004 cerrado el 3-nov con releases v1.2.0 y v1.6.20: menú y Agenda por rol, Inicio por excepciones, Horas por
-  periodo y con la mitad de lecturas, R1, límite de IA (H4), incorporación de educadores (con agregar a un curso),
-  calendario unificado, horario vigente con choques, orden estable de la actividad, contraste AA en oscuro y
-  segunda pasada de la auditoría (AUD-02). 1.6.8 (DOC-01, #111): empezar una plantilla de documento en un paso. 1.6.9 (AIG-4/5): propuestas usadas e
-  «Inteligencia artificial».
+- 1.6.0–1.6.36: programa de transformación (M0–M11). SPR-003 cerrado 27-oct y aceptado; SPR-004 aceptado, cierra el
+  10-nov (DEC-057) con todo su objetivo de seguridad (DEC-058).
+- REL-007 (SPR-004): 1.7.0 registro de seguridad y auditoría (#129), 1.7.1 identidad (#130), 1.7.2 «Identidad y acceso»
+  rediseñado (#131), 1.7.3 puerta de seguridad en el despliegue (#132). Releases v1.7.2 y v1.7.3.
+- Quinta ola M12 (AUD-05, auditoría §10): 1.7.4 y 1.7.5 (#133): Horas, Cursos, Educadores, Revisión de perfiles,
+  Contratos, Horarios, Agenda, Identidad y acceso, IA, Configuración académica, y sin peticiones por curso en Cursos,
+  Biblioteca y Buscar. 13 de 18 módulos en su meta.
 
 ## Siguiente acción
 
-1. `git status` y `git fetch && git merge origin/main` si avanzó. Rama `feat/HL-15-estado-1619` con este estado sin push.
-2. Siguiente de la cola: lo que priorice la PO de `ventaja.md` (MOAT-02 a 05); OBS-01 espera AP-09; ORG-01 y M10
-   esperan la marca (AP-06). El 13-nov SEC-04. El programa NO está completo: 6 de 18 módulos en su meta (ver MILESTONES).
-   Decisiones del dueño del 03-nov en `aprobaciones.md` (AP-03…AP-08); AP-09 pendiente.
-3. Por cada hito: `rm -rf build && npm run build`, E2E afectadas, `./scripts/verify`, versión y CHANGELOG, push, PR,
-   **todos** los checks verdes (también `code`/Semgrep; correr `uvx semgrep scan --config .semgrep` antes) →
-   `gh pr merge <n> --merge` (autorizado) → vigilar `verify`, `deploy`, `critical-flows` en `main`.
-4. **13-nov:** SEC-04, escáneres obligatorios en `main` (protección de rama con `secrets`, `dependencies`, `code`),
-   revisando antes que no hubo falsos positivos.
+1. Quinta ola: Cursos 4.40 (meta 4.5), Inteligencia artificial 4.15 (4.2; la tabla de capacidades es larga en el
+   teléfono, 3 025 px), Configuración académica 4.10 (4.2; el diálogo de programa es largo). Organización y Ayuda
+   esperan la marca (AP-06).
+2. **10-nov, cierre de SPR-004** (ops): `uv run python -m tools.sprint_evidence_github SPR-004 --delivery
+   project/delivery/SPR-004-entregas.json --cut 2026-11-10`, gráficas (`tools.sprint_charts SPR-004`), evidencia con
+   `provisional: false`, informe y presentación en versión final (agregar 1.7.4/1.7.5 y la quinta ola), `tools.planning_docs`,
+   `./hlops all`, ruff, pytest, PR y publicación (si se agota el tiempo: `gh run rerun <id> --failed`).
+3. SEC-04 ya está hecho (1.7.3) con la puerta de seguridad: la protección de rama pide GitHub Pro.
+4. Por cada incremento: `rm -rf build && npm run build`, E2E afectadas (en local escritorio y móvil comparten un
+   servidor: si chocan, correr `--workers=1`), Semgrep (`uvx semgrep scan --config .semgrep --baseline-commit origin/main`),
+   versión y CHANGELOG, PR, **todos** los checks verdes → merge → vigilar `verify`, `deploy`, `critical-flows`.
+
+## Pendiente del responsable del proyecto
+
+Google y Microsoft (registrar la aplicación, `docs/security/identidad.md`), Apple (cuenta de pago, OQ-016), AP-06 marca,
+AP-05 pentest, AP-09 Workers Observability, prioridad de MOAT-02 a 05 (PO).
 
 ## Lecciones de esta sesión
 
