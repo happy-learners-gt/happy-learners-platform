@@ -1,16 +1,16 @@
 # Estado actual
 
-- **Fecha:** 05-nov-2026
+- **Fecha:** 10-nov-2026
 - **Fase:** 3–4 · Hitos M0, M1, M3 hechos; M2 casi (falta AUD-02); M4 en curso (HRS-01 y CAL-01 hechos); M5 en curso
   (PPL-01 hecho)
 - **Producción:** 1.7.5 (`b39b004`, PR #133) el 04-nov; antes 1.7.0–1.7.3 (#129–#132, REL-007) y 1.6.x. Todos con los checks del PR, `verify`, `deploy` y `critical-flows` verdes; desde 1.7.3 el despliegue exige los escáneres de seguridad del PR.
 - **Rama:** `main` (sin trabajo pendiente fuera de `main`).
-  **Sprints (ops):** SPR-003 cerrado 27-oct y aceptado; SPR-004 aceptado en lo entregado y cierra el 10-nov (DEC-057) con todo su objetivo de seguridad: 10 historias de REL-007 más ST-184 a ST-189 (DEC-058, ops #144).
+  **Sprints (ops):** SPR-003 cerrado 27-oct y aceptado; SPR-004 cerrado el 10-nov y aceptado (DEC-057, DEC-060; ops #146; release v1.7.5 de cierre) con todo su objetivo de seguridad: 10 historias de REL-007 más ST-184 a ST-189 (DEC-058, ops #144).
 - **Últimas verificaciones:** `./scripts/verify` verde (77 archivos, 523 pruebas); E2E afectadas con build limpia en
   escritorio y móvil en cada PR; CI verde en cada PR.
 - **Autorización vigente (02-nov, del usuario):** «sigue adelante con el merge y también todo lo demás»: fusionar y
   desplegar los PR de cada hito con CI verde; aplicar las recomendaciones de la cola que no requieren cuentas ni gasto.
-- **En curso:** quinta ola M12 (13 de 18 módulos en su meta); cierre de SPR-004 el 10-nov
+- **En curso:** quinta ola M12 (13 de 18 módulos en su meta); SPR-005 desde el 11-nov
 - **Requieren al usuario:** AP-05 pentest manual de pago (SEC-06 gratuito en curso); AP-06 marca
   («Acervum» en discusión); AP-07 y AP-08 decididos el 03-nov; AP-09 lectura de Workers Observability (OBS-01)
 - **Siguiente acción:** M8 hecho salvo DOC-03 y LIB-02; M9 hecho salvo ORG-01 (espera AP-06); M11: MOAT-01 hecho (`ventaja.md`), OBS-01 espera AP-09 (MOAT-01, OBS-01); el 13-nov SEC-04. El programa
