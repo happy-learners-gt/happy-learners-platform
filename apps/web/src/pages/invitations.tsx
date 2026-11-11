@@ -155,7 +155,7 @@ function InviteDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
   }
   const preview = chosen?.current ? mergeContract(chosen.current.body, contractValues({
     partyName: displayName.trim() || "La persona invitada", partyEmail: email.trim() || null,
-    organization: organization?.name || "Happy Learners", engagement: chosen.engagement, terms,
+    organization: organization?.name || "Acervum", engagement: chosen.engagement, terms,
     startDate: startDate || today, endDate: endDate || null, formatDate: date => date,
   })) : null;
   return <Modal title="Invitar por correo" onClose={onClose} wide>
@@ -264,7 +264,7 @@ export function AcceptInvitation({ token }: { token: string }) {
   return <div className="login-page">
     <a className="skip-link" href="#main">Saltar al contenido</a>
     <main id="main" className={`login-main${offer ? " is-invitation" : ""}`}>
-      <div className="login-brand"><span className="brand-mark" aria-hidden="true">hl</span><span>Happy Learners</span></div>
+      <div className="login-brand"><span className="brand-mark" aria-hidden="true">A</span><span>Acervum</span></div>
       <section className={`login-card${offer ? " is-wide" : ""}`} aria-labelledby="invitation-title">
         {problem ? <>
           <h1 id="invitation-title">{problem.title}</h1>

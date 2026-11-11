@@ -68,7 +68,7 @@ declare global { interface Env { AI_BUDGET_PER_PERSON_USD?: string; AI_BUDGET_MI
 const usd = (value: string | undefined, fallback: number) => { const amount = Number(value); return value !== undefined && value !== "" && Number.isFinite(amount) && amount >= 0 ? amount : fallback; };
 /**
  * AIG-6: this month's AI budget of the organization and what it spent at the prices administration registered. The
- * runs are summed by model and day in the query; Happy Learners sets the amounts per deployment (AI_BUDGET_*).
+ * runs are summed by model and day in the query; Acervum sets the amounts per deployment (AI_BUDGET_*).
  */
 export async function aiBudgetOf(db: Database, organizationId: string, env: Pick<Env, "AI_BUDGET_PER_PERSON_USD" | "AI_BUDGET_MIN_USD">) {
   const month = `${new Date().toISOString().slice(0, 7)}-01`;

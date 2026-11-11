@@ -176,7 +176,7 @@ export function AuthenticatorWizard({ onClose, onDone }: { onClose: () => void; 
 /** The recovery codes, shown once: download, copy or print, then confirm they are kept. */
 export function RecoveryCodes({ codes, onDone }: { codes: string[]; onDone: () => void }) {
   const [saved, setSaved] = useState(false);
-  const text = `Códigos de recuperación de Happy Learners\nCada código funciona una sola vez.\n\n${codes.join("\n")}\n`;
+  const text = `Códigos de recuperación de Acervum\nCada código funciona una sola vez.\n\n${codes.join("\n")}\n`;
   return <Modal title="Guarda tus códigos de recuperación" onClose={() => saved && onDone()}>
     <div className="stack">
       <p>Te dejan entrar si pierdes tu teléfono. Cada uno funciona una vez y no se vuelven a mostrar.</p>

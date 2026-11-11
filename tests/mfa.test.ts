@@ -31,7 +31,7 @@ describe("ST-133 TOTP rules", () => {
     expect(key).toBe("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ");
     expect(fromBase32(key.toLowerCase().replace(/(.{4})/g, "$1 "))).toEqual(rfc);
     expect(fromBase32("no válida")).toBeNull();
-    expect(otpauthUri(key, "ana.gomez")).toBe("otpauth://totp/Happy%20Learners%3Aana.gomez?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Happy%20Learners&algorithm=SHA1&digits=6&period=30");
+    expect(otpauthUri(key, "ana.gomez")).toBe("otpauth://totp/Acervum%3Aana.gomez?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Acervum&algorithm=SHA1&digits=6&period=30");
     const code = recoveryCode(new Uint8Array(24).map((_, index) => index * 7))!;
     expect(code).toMatch(/^[a-hjkmnp-z2-9]{5}-[a-hjkmnp-z2-9]{5}$/);
     expect(recoveryCodeInput(` ${code.toUpperCase().replace("-", " ")} `)).toBe(code);
@@ -101,7 +101,7 @@ describe("ST-133 on the built Worker", () => {
     // sent anyway is still refused by the confirmation itself.
     expect((await read<{ code: string }>(await as(ana.cookie, "/me/confirm", "POST", { password: "otra" }), 400)).code).toBe("REAUTH_FAILED");
     const { setup } = await read<{ setup: { key: string; uri: string } }>(await as(ana.cookie, "/me/mfa/setup", "POST", { currentPassword: password }));
-    expect(setup.uri).toMatch(/^otpauth:\/\/totp\/Happy%20Learners%3Amfa-ana\?secret=[A-Z2-7]{32}&/);
+    expect(setup.uri).toMatch(/^otpauth:\/\/totp\/Acervum%3Amfa-ana\?secret=[A-Z2-7]{32}&/);
     expect((await read<{ code: string }>(await as(ana.cookie, "/me/mfa/enable", "POST", { code: "000000" }), 400)).code).toBe("MFA_CODE_INVALID");
     const secret = fromBase32(setup.key)!;
     const { recoveryCodes } = await read<{ recoveryCodes: string[] }>(await as(ana.cookie, "/me/mfa/enable", "POST", { code: await totpAt(secret, stepOf(Date.now())) }));

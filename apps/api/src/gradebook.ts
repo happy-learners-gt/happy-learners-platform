@@ -795,7 +795,7 @@ async function changesOf(db: Database, current: Member, section: SectionRow, lea
 }
 
 const decimal = (value: number) => new Intl.NumberFormat("es-GT", { maximumFractionDigits: 1 }).format(value);
-export const reportFooter = "Boleta informativa de Happy Learners. No sustituye el certificado oficial del Ministerio de Educación.";
+export const reportFooter = "Boleta informativa de Acervum. No sustituye el certificado oficial del Ministerio de Educación.";
 async function reportCsv(db: Database, current: Member, section: SectionRow, url: URL) {
   const years = await yearsOf(db, current.organizationId, section.courseId);
   const year = years.find(item => item.id === url.searchParams.get("year")) || years.find(item => item.status === "current") || years[0];

@@ -46,7 +46,7 @@ export function MfaRequired({ member, onDone, onLeave }: { member: Member; onDon
   return <div className="login-page">
     <a className="skip-link" href="#main">Saltar al contenido</a>
     <main id="main" className="login-main">
-      <div className="login-brand"><span className="brand-mark" aria-hidden="true">hl</span><span>Happy Learners</span></div>
+      <div className="login-brand"><span className="brand-mark" aria-hidden="true">A</span><span>Acervum</span></div>
       <section className="login-card" aria-labelledby="mfa-required-title">
         <h1 id="mfa-required-title">Protege tu cuenta</h1>
         <p>Hola, {member.displayName || member.username}. Tu organización pide un segundo método además de la contraseña. Elige uno; toma menos de un minuto.</p>

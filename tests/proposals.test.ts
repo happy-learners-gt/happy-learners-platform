@@ -244,7 +244,7 @@ describe("lesson proposals and the delivery PDF on the built Worker", () => {
     const downloaded = await response.text();
     expect(downloaded.startsWith("%PDF-1.4")).toBe(true);
     const text = pdfText(downloaded);
-    expect(text).toContain("Copia de entrega. No redistribuir. Generado en Happy Learners.");
+    expect(text).toContain("Copia de entrega. No redistribuir. Generado en Acervum.");
     expect(text).toContain(`1. ${first.title}`);
     expect(text).not.toContain("CAMBIO SIN PUBLICAR");
     expect(text).not.toContain(drafts[1].title.slice(0, 30));

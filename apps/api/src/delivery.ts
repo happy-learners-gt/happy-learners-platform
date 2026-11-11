@@ -10,11 +10,11 @@ import { apaOf } from "./resources";
  * GET /api/courses/:id/units/:unitId/delivery.pdf?section=:groupId[&period=:periodId] — the delivery copy of a module
  * for one section: only what is published (each lesson's published version, never its draft), under a letterhead with
  * the organization, the section's educators, course, section, school year, period and when it was generated, and the
- * footer «Copia de entrega. No redistribuir. Generado en Happy Learners.». Whoever sees the section downloads it.
+ * footer «Copia de entrega. No redistribuir. Generado en Acervum.». Whoever sees the section downloads it.
  */
 const reply = (value: unknown, status = 200) => Response.json(value, { status });
 const deliveryPath = /^\/api\/courses\/([a-z0-9-]+)\/units\/([a-z0-9-]+)\/delivery\.pdf$/;
-export const deliveryFooter = "Copia de entrega. No redistribuir. Generado en Happy Learners.";
+export const deliveryFooter = "Copia de entrega. No redistribuir. Generado en Acervum.";
 export const deliveryMethods = (path: string) => deliveryPath.test(path) ? ["GET"] : null;
 
 const phaseLabel = (lesson: Lesson, phase?: string) => sequenceOf(lesson.sequence).phases.find(item => item.id === phase)?.label;

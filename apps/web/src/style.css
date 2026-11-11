@@ -1,4 +1,4 @@
-/* Happy Learners components, Fluent 2 recipes. Tokens live in theme.css; this file only reads them.
+/* Acervum components, Fluent 2 recipes. Tokens live in theme.css; this file only reads them.
    Depth: rest surfaces use shadow-sm (4), hover shadow-md (8), flyouts shadow-flyout (16), dialogs shadow-dialog (64).
    Motion: things enter with --ease-enter, leave with --ease-exit, and change state with --ease. */
 

@@ -1,4 +1,4 @@
-/* Happy Learners theme · Fluent 2 (v0.6.0)
+/* Acervum theme · Fluent 2 (v0.6.0)
    Layer 1 — fluent/tokens.css: official Fluent 2 tokens (@fluentui/tokens), generated, never edited.
    Layer 2 — this file: the app's semantic tokens, each one pointing at a Fluent token. Components in
    style.css read only these semantic tokens, so a component never hard-codes a colour, radius, shadow or curve.

@@ -1,6 +1,6 @@
 # Estado actual
 
-- **Fecha:** 10-nov-2026
+- **Fecha:** 11-nov-2026
 - **Fase:** 3–4 · Hitos M0, M1, M3 hechos; M2 casi (falta AUD-02); M4 en curso (HRS-01 y CAL-01 hechos); M5 en curso
   (PPL-01 hecho)
 - **Producción:** 1.7.5 (`b39b004`, PR #133) el 04-nov; antes 1.7.0–1.7.3 (#129–#132, REL-007) y 1.6.x. Todos con los checks del PR, `verify`, `deploy` y `critical-flows` verdes; desde 1.7.3 el despliegue exige los escáneres de seguridad del PR.
@@ -10,10 +10,10 @@
   escritorio y móvil en cada PR; CI verde en cada PR.
 - **Autorización vigente (02-nov, del usuario):** «sigue adelante con el merge y también todo lo demás»: fusionar y
   desplegar los PR de cada hito con CI verde; aplicar las recomendaciones de la cola que no requieren cuentas ni gasto.
-- **En curso:** quinta ola M12 (13 de 18 módulos en su meta); SPR-005 desde el 11-nov
-- **Requieren al usuario:** AP-05 pentest manual de pago (SEC-06 gratuito en curso); AP-06 marca
-  («Acervum» en discusión); AP-07 y AP-08 decididos el 03-nov; AP-09 lectura de Workers Observability (OBS-01)
-- **Siguiente acción:** M8 hecho salvo DOC-03 y LIB-02; M9 hecho salvo ORG-01 (espera AP-06); M11: MOAT-01 hecho (`ventaja.md`), OBS-01 espera AP-09 (MOAT-01, OBS-01); el 13-nov SEC-04. El programa
+- **En curso:** marca Acervum (1.7.6, BRAND-01); M10 (HLP-01) y ORG-01; pasadas de detalle de Cursos, IA y Configuración académica.
+- **Entrega cerrada (11-nov):** los manuales de usuario y técnico de ops quedaron en edición final 3.0 (1.7.5, ops #147) y no se actualizan con lo que sigue hasta que el dueño lo pida.
+- **Requieren al usuario:** AP-05 pentest manual de pago (SEC-06 gratuito en curso); AP-06 decidido (Acervum); AP-07 y AP-08 decididos el 03-nov; AP-09 lectura de Workers Observability (OBS-01)
+- **Siguiente acción:** M8 hecho salvo DOC-03 y LIB-02; M9 hecho salvo ORG-01 (listo: marca decidida); M11: MOAT-01 hecho (`ventaja.md`), OBS-01 espera AP-09 (MOAT-01, OBS-01); el 13-nov SEC-04. El programa
   no está completo: 1 de 18 módulos en su meta (ver MILESTONES)
 - **Incidente 03-nov:** #108 se fusionó con el escáner `code` (Semgrep) en rojo porque la automatización solo miraba
   `verify`. Corregido en 1.6.6 (#109, todos los checks verdes);

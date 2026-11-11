@@ -61,7 +61,7 @@ export function ConsentGate({ pending, organizationId, onAccepted, onLogout }: {
   return <div className="login-page">
     <a className="skip-link" href="#main">Saltar al contenido</a>
     <main id="main" className="login-main">
-      <div className="login-brand"><span className="brand-mark" aria-hidden="true">hl</span><span>Happy Learners</span></div>
+      <div className="login-brand"><span className="brand-mark" aria-hidden="true">A</span><span>Acervum</span></div>
       <section className="login-card legal-card" aria-labelledby="consent-title">
         <h1 id="consent-title">Acepta los términos y la política de privacidad</h1>
         <p>Para usar la plataforma necesitas aceptar la versión vigente de cada documento. Tu aceptación queda registrada con su versión y su fecha{signing ? "; la de los términos y condiciones, además, con tu firma electrónica" : ""}.</p>
@@ -93,7 +93,7 @@ export function PrivacyPage() {
   return <div className="login-page">
     <a className="skip-link" href="#main">Saltar al contenido</a>
     <main id="main" className="login-main">
-      <div className="login-brand"><span className="brand-mark" aria-hidden="true">hl</span><span>Happy Learners</span></div>
+      <div className="login-brand"><span className="brand-mark" aria-hidden="true">A</span><span>Acervum</span></div>
       <article className="login-card legal-card" aria-labelledby="privacy-title">
         <h1 id="privacy-title">Política de privacidad</h1>
         {error ? <ErrorState title="No pudimos abrir la política" error={error}/> : !policies ? <Loading label="Cargando la política de privacidad…" lines={6}/>
@@ -327,7 +327,7 @@ function Signatures({ signatures }: { signatures: LegalSignature[] }) {
     const file = event.target.files?.[0];
     if (!file) { setReceipt(null); return; }
     const fields = file.size <= 2_000_000 ? receiptFields(await file.text()) : null;
-    if (!fields) { setReceipt(null); setError("Ese archivo no es una constancia de firma de Happy Learners."); return; }
+    if (!fields) { setReceipt(null); setError("Ese archivo no es una constancia de firma de Acervum."); return; }
     setReceipt({ name: file.name, fields });
   }
   return <section className="legal-kind" aria-labelledby="legal-signatures-title">

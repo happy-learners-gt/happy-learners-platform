@@ -83,7 +83,7 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | ACC-01 | Gobierno | Roles y accesos en pestañas (Matriz, Grupos de seguridad, Coordinación, Historial) y la matriz filtrable por área | P1 | AUD-03 | DONE | 1.6.22: 2 036 / 2 573 → 1 736 / 2 211 px (escritorio / móvil); al crear o editar un grupo se abre su pestaña; E2E `access` por pestañas; puntaje 3.40 → 4.00 |
 | HRS-04 | Operación | Horas efectivas abre en el último mes con clases cuando los últimos 30 días no tienen, y lo dice | P1 | AUD-04 | DONE | 1.6.27: `latestDay` en el informe vacío (zona del informe, atribución tras la última corrección); en la demostración abre en septiembre con 25 clases; puntaje 3.40 → 3.80 |
 | AGE-01 | Operación | Agenda: en la semana, una clase por horario y un chip «+N» que abre el día con las demás | P1 | AUD-04 | DONE | 1.6.30: dos columnas aún se truncaban con ~100 px por día, así que se muestra una; E2E en `layout.spec`; puntaje 3.50 → 4.00 |
-| ORG-01 | Institución | Organización: identidad (logotipo y marca) | P3 | AP-06 | BLOCKED | Espera la marca |
+| ORG-01 | Institución | Organización: identidad (logotipo y marca) | P3 | AP-06 | READY | Nombre decidido (Acervum); el logotipo de la institución no depende del de Acervum |
 | CAL-02 | Institución | Calendario institucional en pestañas (Ciclo y jornadas, Asuetos, Eventos) | P1 | AUD-04 | DONE | 1.6.29: móvil 3 814 → 2 014 / 1 794 / 844 px; al guardar un evento o una regla se abre su pestaña; el año conserva la pestaña; creación del calendario idempotente (dos primeras visitas a la vez daban error 500); puntaje 3.55 → 4.00 |
 | ACA-02 | Académico | Configuración académica: qué hacer con los paquetes (tres pasos) y que los estándares no se configuran | P2 | AUD-04 | DONE | 1.6.33: puntaje 3.55 → 3.90 |
 | CON-02 | Personas | Contratos: verificar una constancia en Ajustes, con un enlace desde Contratos | P2 | AUD-04 | DONE | 1.6.31: puntaje 3.60 → 3.85; los contratos siguen en dos lugares (Educadores y Contratos y políticas, T3) |
@@ -91,8 +91,8 @@ otros) a P3. Se toma la `READY` de mayor prioridad cuyas dependencias estén `DO
 | AIC-01 | IA | Inteligencia artificial: una tarjeta por capacidad en teléfonos | P2 | AUD-04 | DONE | 1.6.32: la tabla usa el patrón de tablas de lista (`members-table`), sin desplazamiento lateral; puntaje 3.85 → 4.05 |
 | MOAT-01 | Producto | Plan de la ventaja difícil de copiar en incrementos | P2 | — | DONE | `docs/transformacion/ventaja.md`: estado de las cuatro hipótesis (hechas) y MOAT-02 a MOAT-05 propuestos para la PO |
 | OBS-01 | Operación | Informe semanal de SLO desde los registros `event=api` | P2 | AP-09 | BLOCKED | Las consultas manuales están en `docs/operations/slo.md` §3; automatizarlo pide que el token de CI lea Workers Observability (AP-09) |
-| BRAND-01 | Marca | Cambio de nombre y marca cuando se decida (AP-06) | P2 | AP-06 | BLOCKED | Textos, metadatos y correos con la marca nueva |
+| BRAND-01 | Marca | Cambio de nombre a Acervum (AP-06) | P2 | AP-06 | DONE | 1.7.6: textos, títulos, correos, PDF, calendario, TOTP y passkeys; monograma provisional «A»; nombres internos sin cambio |
 | MOAT-02 | Producto | Cierre del periodo en un paso (aprobar y emitir boleta y constancias) | P2 | MOAT-01 | BACKLOG | Espera la prioridad de la PO (`ventaja.md`) |
 | MOAT-03 | Producto | Preparar el ciclo siguiente asistido | P2 | MOAT-01 | BACKLOG | Espera la prioridad de la PO |
 | MOAT-04 | Contenido | Más paquetes curriculares oficiales del CNB | P2 | MOAT-01 | BACKLOG | Fuentes oficiales y validación docente |
-| HLP-01 | Ayuda | Ayuda contextual por página (IA-05) | P3 | AP-06 | BACKLOG | — |
+| HLP-01 | Ayuda | Ayuda contextual por página (IA-05) | P3 | AP-06 | READY | Marca decidida |

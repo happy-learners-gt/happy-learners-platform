@@ -27,7 +27,7 @@ export function StyleGuide() {
   const [dialog, setDialog] = useState(false), [replay, setReplay] = useState(0), [segment, setSegment] = useState("a"), [order, setOrder] = useState(["Inicio", "Desarrollo", "Cierre"]), [tab, setTab] = useState<"plan" | "notas">("plan");
   return <>
     <PageHeader crumbs={[{ label: "Ayuda", href: "/ayuda" }, { label: "Guía de estilo" }]} title="Guía de estilo Fluent"
-      description="Los principios de Fluent Design —luz, profundidad, movimiento, material y escala— aplicados a los componentes de Happy Learners. Todo lo que ves aquí usa los mismos componentes y tokens que el resto de la plataforma."/>
+      description="Los principios de Fluent Design —luz, profundidad, movimiento, material y escala— aplicados a los componentes de Acervum. Todo lo que ves aquí usa los mismos componentes y tokens que el resto de la plataforma."/>
 
     <Section title="Luz">
       <p className="muted">Las superficies interactivas se iluminan bajo el puntero y el foco del teclado siempre es visible: un contorno oscuro con un anillo claro interior. Pasa el cursor sobre la tarjeta o recorre los botones con Tab.</p>

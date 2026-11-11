@@ -4,7 +4,7 @@ import { MyConsent } from "./legal";
 
 export function Help() {
   return <>
-    <PageHeader title="Ayuda" description="Cómo preparar, publicar e impartir una clase, y qué datos guarda Happy Learners."/>
+    <PageHeader title="Ayuda" description="Cómo preparar, publicar e impartir una clase, y qué datos guarda Acervum."/>
     <div className="prose">
       <h2>Cómo se organiza un curso</h2>
       <p>Un <strong>programa</strong> (opcional) reúne cursos que comparten configuración. Un <strong>curso</strong> tiene <strong>módulos</strong>; cada módulo tiene <strong>lecciones</strong>; cada lección tiene <strong>actividades</strong>, y una actividad puede usar un <strong>recurso</strong> de la biblioteca del curso. Cada curso puede llamar a sus módulos de otra forma (unidades, semanas, sesiones…).</p>

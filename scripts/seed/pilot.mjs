@@ -116,7 +116,8 @@ export const bookPages = [
   "Tema 9. Regla de tres. La regla de tres simple resuelve problemas de proporcionalidad: si 4 cuadernos cuestan 60 quetzales, 7 cuadernos cuestan 105 quetzales. Ejercicio: calcula cuántos quetzales se necesitan para comprar la refacción de todo el grado.",
   "Proyecto final. Diseña con tu equipo una feria escolar: dibuja el plano del lugar, calcula perímetros y áreas, organiza el presupuesto con fracciones y presenta en una gráfica las preferencias de tus compañeros.",
 ];
-export const bookPdf = () => pdfFile({ title: "Matemáticas 6 · Libro del estudiante (demostración)", header: ["Matemáticas 6 · Libro del estudiante", "Edición de demostración · Material ficticio"], footer: "Colegio Horizonte (demostración)", blocks: bookPages.flatMap((text, index) => [{ text: `Página ${index + 1}`, bold: true, size: 9, space: index ? 9999 : 0 }, { text, size: 12, space: 6 }]) });
+// The producer stays «Happy Learners»: migration 0054 records this PDF's fingerprint and is already applied.
+export const bookPdf = () => pdfFile({ producer: "Happy Learners", title: "Matemáticas 6 · Libro del estudiante (demostración)", header: ["Matemáticas 6 · Libro del estudiante", "Edición de demostración · Material ficticio"], footer: "Colegio Horizonte (demostración)", blocks: bookPages.flatMap((text, index) => [{ text: `Página ${index + 1}`, bold: true, size: 9, space: index ? 9999 : 0 }, { text, size: 12, space: 6 }]) });
 // Each block starts on a page of its own (a very large space), so PDF page n holds book page n.
 export const BOOK = { id: "seed-file-m6-libro", name: "Matemáticas 6 - Libro del estudiante.pdf", objectKey: `${ORG}/${COURSE}/seed-file-m6-libro` };
 const pdf = Buffer.from(bookPdf(), "latin1"), sha256 = createHash("sha256").update(pdf).digest("hex");

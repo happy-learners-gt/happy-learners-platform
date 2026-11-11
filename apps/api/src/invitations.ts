@@ -33,7 +33,7 @@ const one = (db: Database, id: string, organizationId: string) => db.prepare(`SE
 async function send(db: Database, sender: MailSender, current: Member, invitation: { id: string; email: string; displayName: string; role: AccountRole; expiresAt: string }, link: string): Promise<Delivery> {
   const organization = await db.prepare("SELECT name,timezone FROM organizations WHERE id=?").bind(current.organizationId).first<{ name: string | null; timezone: string | null }>();
   const message = invitationMessage(invitation.email, {
-    organization: organization?.name || "Happy Learners", displayName: invitation.displayName, role: invitation.role,
+    organization: organization?.name || "Acervum", displayName: invitation.displayName, role: invitation.role,
     inviter: current.displayName || current.username, link, expiresAt: invitation.expiresAt, timezone: organization?.timezone || "America/Guatemala",
   });
   return deliver(db, sender, current.organizationId, "invitation", invitation.id, message);
@@ -116,7 +116,7 @@ export async function previewInvitation(token: string, scope: string, db: Databa
   if (!found) return missing();
   const status = invitationState(found.status, found.expiresAt, new Date().toISOString());
   if (status !== "pending") return unavailable(status);
-  const preview: InvitationPreview = { organization: found.organization || "Happy Learners", displayName: found.displayName, email: found.email, role: found.role, expiresAt: found.expiresAt, contract: await invitationOffer(db, found.id) };
+  const preview: InvitationPreview = { organization: found.organization || "Acervum", displayName: found.displayName, email: found.email, role: found.role, expiresAt: found.expiresAt, contract: await invitationOffer(db, found.id) };
   return reply({ invitation: preview });
 }
 

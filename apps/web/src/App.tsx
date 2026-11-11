@@ -81,7 +81,7 @@ function useFocusHeading(path: string) {
       if (!heading || done) return false;
       done = true; heading.tabIndex = -1;
       if (!initial) heading.focus({ preventScroll: true });
-      document.title = `${heading.textContent?.trim()} · Happy Learners`;
+      document.title = `${heading.textContent?.trim()} · Acervum`;
       return true;
     };
     window.scrollTo(0, 0);
@@ -138,8 +138,8 @@ function AuthenticatedApp() {
     const home = homePages.find(page => page.value === preferences.homePage);
     if (url.pathname === "/" && home && home.path !== "/inicio") navigate(home.path, true);
   }, [preferences]);
-  if (status === "loading") return <main className="splash"><span className="brand-mark" aria-hidden="true">hl</span><p role="status">Abriendo tu espacio…</p></main>;
-  if (status === "offline") return <main className="splash"><span className="brand-mark" aria-hidden="true">hl</span><h1>No pudimos conectar</h1><p>Comprueba tu conexión y vuelve a intentar.</p><button type="button" className="button primary" onClick={start}>Volver a intentar</button></main>;
+  if (status === "loading") return <main className="splash"><span className="brand-mark" aria-hidden="true">A</span><p role="status">Abriendo tu espacio…</p></main>;
+  if (status === "offline") return <main className="splash"><span className="brand-mark" aria-hidden="true">A</span><h1>No pudimos conectar</h1><p>Comprueba tu conexión y vuelve a intentar.</p><button type="button" className="button primary" onClick={start}>Volver a intentar</button></main>;
   if (!member) return <Login onSignedIn={async () => { await refresh(); setExpired(false); }}/>;
   if (member.mustChangePassword) return <ChangePassword member={member} onChanged={async () => { await refresh(); toast({ message: "Contraseña guardada. Ya puedes usar tu espacio." }); }}
     onLeave={() => { api("/logout", "POST").catch(() => undefined).finally(() => setMember(null)); }}/>;

@@ -15,7 +15,7 @@ import { listenOnTestPort } from "./test-port";
 
 // ST-121 (HL-167): invitations by e-mail (DEC-042). Domain and adapters first, then the built Worker on a fresh store.
 const details = { organization: "Colegio Ficticio", displayName: "Paula <Gómez>", role: "educator" as const, inviter: "Marta Ruiz", link: "https://example.test/invitacion/d_" + "a".repeat(64), expiresAt: "2026-10-22T18:00:00.000Z", timezone: "America/Guatemala" };
-const sample: MailMessage = { to: "paula@example.test", subject: "Te invitaron a Happy Learners", text: "texto", html: "<p>html</p>" };
+const sample: MailMessage = { to: "paula@example.test", subject: "Te invitaron a Acervum", text: "texto", html: "<p>html</p>" };
 
 describe("HL-167 invitation rules and message", () => {
   it("CA1 accepts a valid e-mail, name and role, lowercasing the address", () => {
@@ -27,7 +27,7 @@ describe("HL-167 invitation rules and message", () => {
   });
   it("CA1 the message names the organization, role, inviter, link and expiry, and escapes HTML", () => {
     const message = invitationMessage("paula@example.test", details);
-    expect(message.subject).toBe("Te invitaron a Happy Learners");
+    expect(message.subject).toBe("Te invitaron a Acervum");
     expect(message.to).toBe("paula@example.test");
     for (const part of ["Colegio Ficticio", "Educador", "Marta Ruiz", details.link, "22 de octubre de 2026", "ignora este correo"]) {
       expect(message.text, part).toContain(part); expect(message.html, part).toContain(part);
@@ -51,7 +51,7 @@ describe("HL-167 invitation rules and message", () => {
 
 describe("HL-167 mail adapters", () => {
   const key = "xkeysib-0123456789abcdef-SECRET";
-  it("CA1 Brevo receives the api-key header, the Happy Learners sender and both bodies", async () => {
+  it("CA1 Brevo receives the api-key header, the Acervum sender and both bodies", async () => {
     const fetcher = vi.fn(async () => Response.json({ messageId: "<id@brevo>" }, { status: 201 }));
     const result = await new BrevoMailSender(key, "avisos@example.test", fetcher as unknown as typeof fetch).send(sample);
     expect(result).toEqual({ ok: true, id: "<id@brevo>" });
@@ -59,7 +59,7 @@ describe("HL-167 mail adapters", () => {
     expect(url).toBe(brevoEndpoint); expect(url).toBe("https://api.brevo.com/v3/smtp/email");
     expect(init.method).toBe("POST");
     expect((init.headers as Record<string, string>)["api-key"]).toBe(key);
-    expect(JSON.parse(String(init.body))).toEqual({ sender: { name: "Happy Learners", email: "avisos@example.test" }, to: [{ email: "paula@example.test" }], subject: sample.subject, textContent: "texto", htmlContent: "<p>html</p>" });
+    expect(JSON.parse(String(init.body))).toEqual({ sender: { name: "Acervum", email: "avisos@example.test" }, to: [{ email: "paula@example.test" }], subject: sample.subject, textContent: "texto", htmlContent: "<p>html</p>" });
   });
   it("CA1 non-2xx answers fail without the key or the recipient in the error; only 429/5xx are retried", async () => {
     const answer = (status: number) => vi.fn(async () => Response.json({ code: "unauthorized", message: `Key ${key} not found for paula@example.test` }, { status }));

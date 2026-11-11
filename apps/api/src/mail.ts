@@ -9,7 +9,7 @@ import { dailyMailCap, mailAttempts, mailDecision } from "@happy-learners/domain
 declare global { interface Env { BREVO_API_KEY?: string; MAIL_FROM?: string; MAIL_API_URL?: string } }
 
 export const brevoEndpoint = "https://api.brevo.com/v3/smtp/email";
-export const senderName = "Happy Learners";
+export const senderName = "Acervum";
 
 /** Keeps an error short and free of the key, of anything that looks like a key or token, and of the recipient. */
 export function sanitize(text: string, secrets: (string | undefined)[] = []): string {

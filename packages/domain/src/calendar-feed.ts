@@ -66,7 +66,7 @@ const host = (origin: string) => /^[a-z][a-z0-9+.-]*:\/\/([^/:?#]+)/i.exec(origi
 /** The whole feed: one VEVENT per class, with a UID that never changes and a SEQUENCE that grows with each change. */
 export function calendarFeed({ name, timezone, displayTimezone, origin, classes, now = new Date() }: FeedInput): string {
   const lines = [
-    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Happy Learners//Mis clases//ES", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Acervum//Mis clases//ES", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
     `X-WR-CALNAME:${escapeText(name)}`, `X-WR-TIMEZONE:${displayTimezone || timezone}`, "REFRESH-INTERVAL;VALUE=DURATION:PT1H", "X-PUBLISHED-TTL:PT1H",
   ];
   const dtstamp = stamp(now), domain = host(origin);

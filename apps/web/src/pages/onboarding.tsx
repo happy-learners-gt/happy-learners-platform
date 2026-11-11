@@ -53,7 +53,7 @@ export function OnboardingWizard({ onDone, onLogout }: { onDone: (href: string) 
   return <div className="login-page">
     <a className="skip-link" href="#main">Saltar al contenido</a>
     <main id="main" className="login-main">
-      <div className="login-brand"><span className="brand-mark" aria-hidden="true">hl</span><span>Happy Learners</span></div>
+      <div className="login-brand"><span className="brand-mark" aria-hidden="true">A</span><span>Acervum</span></div>
       <section className={`login-card legal-card onboarding-card${state?.contract && current === "agreement" ? " is-wide" : ""}`} aria-labelledby="onboarding-title">
         <h1 id="onboarding-title">Bienvenida</h1>
         <p>Unos pasos para empezar a trabajar sabiendo qué puedes hacer. Tu avance se guarda: si sales, continúas donde quedaste.</p>

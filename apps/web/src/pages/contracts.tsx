@@ -441,7 +441,7 @@ function ContractVerify() {
     const file = event.target.files?.[0];
     if (!file) { setReceipt(null); return; }
     const fields = file.size <= 2_000_000 ? receiptFields(await file.text()) : null;
-    if (!fields) { setReceipt(null); setError("Ese archivo no es una constancia de contrato de Happy Learners."); return; }
+    if (!fields) { setReceipt(null); setError("Ese archivo no es una constancia de contrato de Acervum."); return; }
     setReceipt({ name: file.name, fields });
   }
   return <form className="stack signature-verify" onSubmit={verify} aria-labelledby="contract-verify-title">

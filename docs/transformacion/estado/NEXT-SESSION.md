@@ -1,6 +1,6 @@
 # Siguiente sesión
 
-## Retomar (estado guardado el 10-nov-2026)
+## Retomar (estado guardado el 11-nov-2026)
 
 1. `cd happy-learners-platform && git fetch && git checkout main && git pull`. Todo el trabajo está en `main`
    (producción 1.7.5, `b39b004`, PR #133). No quedan PR abiertos ni cambios sin commit.
@@ -20,9 +20,10 @@
 
 ## Siguiente acción
 
-1. Quinta ola: Cursos 4.40 (meta 4.5), Inteligencia artificial 4.15 (4.2; la tabla de capacidades es larga en el
-   teléfono, 3 025 px), Configuración académica 4.10 (4.2; el diálogo de programa es largo). Organización y Ayuda
-   esperan la marca (AP-06).
+0. La plataforma se llama **Acervum** (1.7.6). Los manuales de ops son una entrega cerrada (edición 3.0, 1.7.5):
+   no tocarlos hasta que el dueño lo pida.
+1. M10 HLP-01 (Ayuda contextual) y ORG-01 (identidad de la organización). Quinta ola: Cursos 4.40 (meta 4.5), Inteligencia artificial 4.15 (4.2; la tabla de capacidades es larga en el
+   teléfono, 3 025 px), Configuración académica 4.10 (4.2; el diálogo de programa es largo). 
 2. SPR-005 (11–24 nov, Evaluación del aprendizaje, REL-008 v1.8.0): iniciar el sprint en ops.
 3. SEC-04 ya está hecho (1.7.3) con la puerta de seguridad: la protección de rama pide GitHub Pro.
 4. Por cada incremento: `rm -rf build && npm run build`, E2E afectadas (en local escritorio y móvil comparten un
@@ -31,8 +32,7 @@
 
 ## Pendiente del responsable del proyecto
 
-Google y Microsoft (registrar la aplicación, `docs/security/identidad.md`), Apple (cuenta de pago, OQ-016), AP-06 marca,
-AP-05 pentest, AP-09 Workers Observability, prioridad de MOAT-02 a 05 (PO).
+Google y Microsoft (registrar la aplicación, `docs/security/identidad.md`), Apple (cuenta de pago, OQ-016), AP-05 pentest, AP-09 Workers Observability, prioridad de MOAT-02 a 05 (PO).
 
 ## Lecciones de esta sesión
 

@@ -58,11 +58,11 @@ export function invitationMessage(to: string, details: InvitationDetails): MailM
   let expires: string;
   try { expires = new Intl.DateTimeFormat("es", { dateStyle: "long", timeStyle: "short", timeZone: details.timezone }).format(new Date(details.expiresAt)); }
   catch { expires = new Intl.DateTimeFormat("es", { dateStyle: "long", timeStyle: "short", timeZone: "UTC" }).format(new Date(details.expiresAt)) + " (UTC)"; }
-  const subject = "Te invitaron a Happy Learners";
+  const subject = "Te invitaron a Acervum";
   const text = [
     `Hola, ${details.displayName}:`,
     "",
-    `${details.inviter} te invitó a unirte a ${details.organization} en Happy Learners con el rol ${role}.`,
+    `${details.inviter} te invitó a unirte a ${details.organization} en Acervum con el rol ${role}.`,
     "",
     "Para aceptar, abre este enlace y elige tu usuario y contraseña:",
     details.link,
@@ -73,7 +73,7 @@ export function invitationMessage(to: string, details: InvitationDetails): MailM
   ].join("\n");
   const html = `<!doctype html><html lang="es"><body style="font-family:Segoe UI,Arial,sans-serif;color:#242424;line-height:1.5">
 <p>Hola, ${escape(details.displayName)}:</p>
-<p>${escape(details.inviter)} te invitó a unirte a <strong>${escape(details.organization)}</strong> en Happy Learners con el rol <strong>${escape(role)}</strong>.</p>
+<p>${escape(details.inviter)} te invitó a unirte a <strong>${escape(details.organization)}</strong> en Acervum con el rol <strong>${escape(role)}</strong>.</p>
 <p><a href="${escape(details.link)}" style="display:inline-block;padding:10px 16px;background:#0f6cbd;color:#ffffff;text-decoration:none;border-radius:4px">Aceptar la invitación</a></p>
 <p>Si el botón no funciona, copia este enlace en tu navegador:<br><span style="word-break:break-all">${escape(details.link)}</span></p>
 <p>El enlace caduca el ${escape(expires)}. Solo funciona una vez.</p>

@@ -81,7 +81,7 @@ export async function account(path: string, method: string, input: unknown, curr
   const now = new Date(), iso = now.toISOString(), tokenHash = await digest(context.token);
   if (path === "/api/me/account") {
     const [person, pending, sessions] = await db.batch([
-      db.prepare("SELECT u.username,COALESCE(u.display_name,u.username) AS displayName,CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END AS role,u.email,COALESCE(o.name,'Happy Learners') AS organization FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=? JOIN organizations o ON o.id=m.organization_id WHERE u.id=?").bind(current.organizationId, current.id),
+      db.prepare("SELECT u.username,COALESCE(u.display_name,u.username) AS displayName,CASE m.role WHEN 'instructor' THEN 'educator' ELSE m.role END AS role,u.email,COALESCE(o.name,'Acervum') AS organization FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=? JOIN organizations o ON o.id=m.organization_id WHERE u.id=?").bind(current.organizationId, current.id),
       db.prepare(`SELECT ${changeColumns} WHERE c.user_id=? AND c.status='pending' AND c.expires_at>? ORDER BY c.requested_at DESC LIMIT 1`).bind(current.id, iso),
       db.prepare("SELECT count(*) AS open FROM sessions WHERE user_id=? AND expires_at>?").bind(current.id, now.getTime()),
     ]) as unknown as [Omit<AccountOverview, "pendingEmail" | "mailConfigured" | "sessions">[], ChangeRow[], { open: number }[]];
@@ -186,7 +186,7 @@ export async function confirmEmail(token: string, method: string, scope: string,
   const now = new Date().toISOString(), status = emailChangeState(found.status, found.expiresAt, now);
   if (status !== "pending") return unavailable(status);
   if (method === "GET") {
-    const preview: EmailChangePreview = { organization: found.organization || "Happy Learners", username: found.username, newEmail: found.newEmail, expiresAt: found.expiresAt };
+    const preview: EmailChangePreview = { organization: found.organization || "Acervum", username: found.username, newEmail: found.newEmail, expiresAt: found.expiresAt };
     return reply({ change: preview });
   }
   const actor: Member = { id: found.userId, username: found.username, displayName: found.name, role: found.role, organizationId: scope };
