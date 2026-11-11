@@ -173,7 +173,7 @@ test("ST-098: the section code shows only that section's published content and i
   await page.context().addCookies([{ name: "hl_group", value: cookie.slice("hl_group=".length), url: origin, httpOnly: true, sameSite: "Strict" }]);
   await page.goto("/estudiante");
   await expect(page.getByRole("heading", { name: "Próxima clase" }).or(page.locator(".student-next"))).toBeVisible();
-  await expect(page.locator(".student-next")).toContainText(/Abrir lección|no está disponible/);
+  await expect(page.locator(".student-next")).toContainText(/Abrir lección|aún no están disponibles/);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
