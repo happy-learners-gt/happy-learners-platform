@@ -57,7 +57,7 @@ const zoneOf = (person: Person) => person.timezone || "UTC";
 const weekStartOf = (person: Person) => person.weekStart || localeWeekStart(person.locale || "es");
 const sentSince = async (db: Database, organizationId: string, now: Date) => (await db.prepare("SELECT count(*) AS sent FROM mail_outbox WHERE organization_id=? AND status='sent' AND sent_at>=?")
   .bind(organizationId, `${now.toISOString().slice(0, 10)}T00:00:00.000Z`).first<{ sent: number }>())?.sent || 0;
-const organizationName = async (db: Database, organizationId: string) => (await db.prepare("SELECT name FROM organizations WHERE id=?").bind(organizationId).first<{ name: string | null }>())?.name || "Happy Learners";
+const organizationName = async (db: Database, organizationId: string) => (await db.prepare("SELECT name FROM organizations WHERE id=?").bind(organizationId).first<{ name: string | null }>())?.name || "Acervum";
 const errorOf = (decision: string, mandatory: boolean, sending: number) => decision === "not_configured" ? "El envío de correo no está configurado."
   : decision === "no_address" ? "La persona no tiene correo de acceso ni de contacto."
   : decision === "deferred" ? (sending >= maxNotificationsPerRequest ? `Se superó el máximo de ${maxNotificationsPerRequest} correos por solicitud.` : `Se alcanzó el tope diario de correos${mandatory ? " (aviso obligatorio)" : " para avisos opcionales"}.`) : null;

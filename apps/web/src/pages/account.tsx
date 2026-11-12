@@ -164,7 +164,7 @@ export function SessionsSection({ revision, onChanged }: { revision: number; onC
     finally { setBusy(""); }
   }
   return <Anchored id="sesiones" title="Sesiones activas" action={others.length > 0 && <button type="button" className="button secondary small" disabled={busy === "others"} onClick={() => void closeOthers()}><Icon name="logout" size={16}/>Cerrar las demás sesiones</button>}>
-    <p className="muted small">Dónde está abierta tu cuenta. Cada sesión dura hasta 8 horas. Si no reconoces una, ciérrala y cambia tu contraseña.</p>
+    <p className="muted small">Dónde está abierta tu cuenta. Cada sesión dura lo que fija tu organización (8 horas si no la cambia). Si no reconoces una, ciérrala y cambia tu contraseña.</p>
     {error ? <ErrorState error={error} retry={load}/> : !sessions ? <Loading label="Cargando sesiones…" lines={2}/> : <div className="table-card" role="region" aria-label="Lista de sesiones activas" tabIndex={0}><table className="members-table account-table">
       <caption className="sr-only">Tus sesiones abiertas: dispositivo, país, inicio y último uso</caption>
       <thead><tr><th scope="col">Dispositivo</th><th scope="col">País</th><th scope="col">Inició</th><th scope="col">Último uso</th><th scope="col"><span className="sr-only">Acciones</span></th></tr></thead>
@@ -320,7 +320,7 @@ export function ConfirmEmail({ token }: { token: string }) {
   return <div className="login-page">
     <a className="skip-link" href="#main">Saltar al contenido</a>
     <main id="main" className="login-main">
-      <div className="login-brand"><span className="brand-mark" aria-hidden="true">hl</span><span>Happy Learners</span></div>
+      <div className="login-brand"><span className="brand-mark" aria-hidden="true">A</span><span>Acervum</span></div>
       <section className="login-card" aria-labelledby="email-title">
         {problem ? <>
           <h1 id="email-title">{problem.title}</h1>

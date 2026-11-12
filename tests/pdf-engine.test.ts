@@ -19,7 +19,9 @@ const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, 0x
 
 describe("1.5.0 PDF engine", () => {
   it("writes a document without the new features exactly as before", () => {
-    expect(createHash("sha256").update(pdfFile(classic)).digest("hex")).toBe("0edffec763e5579ad9bc9cfd1f7e5c3ab85e086705dce139764f354e0a7393a6");
+    // With the earlier producer the bytes are the 1.5.0 ones; 1.7.6 only renames the producer to Acervum.
+    expect(createHash("sha256").update(pdfFile({ ...classic, producer: "Happy Learners" })).digest("hex")).toBe("0edffec763e5579ad9bc9cfd1f7e5c3ab85e086705dce139764f354e0a7393a6");
+    expect(createHash("sha256").update(pdfFile(classic)).digest("hex")).toBe("88bbbe30d458368d69ab361ccdc42b27a9e9d80c117690d309633cd74f8059be");
   });
 
   it("reads a JPEG's size and colour, and refuses what is not a JPEG", () => {

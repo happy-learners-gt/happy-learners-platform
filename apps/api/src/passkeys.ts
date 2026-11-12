@@ -55,7 +55,7 @@ export async function myPasskeys(path: string, method: string, input: unknown, c
     if (existing.length >= maxPasskeys) return reply({ error: `Ya tienes ${maxPasskeys} passkeys. Elimina una antes de agregar otra.` }, 409);
     const token = await ticket(db, org, "passkey-register", current.id), url = new URL(request.url);
     return reply({ publicKey: {
-      challenge: toBase64Url(new TextEncoder().encode(token)), rp: { id: url.hostname, name: "Happy Learners" },
+      challenge: toBase64Url(new TextEncoder().encode(token)), rp: { id: url.hostname, name: "Acervum" },
       // The user handle names the organization (its letter) so the passkey signs in without typing anything.
       user: { id: toBase64Url(new TextEncoder().encode(`${tokenPrefix(org)}${current.id}`)), name: current.username, displayName: current.displayName || current.username },
       pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }], timeout: passkeyTimeoutMs, attestation: "none",

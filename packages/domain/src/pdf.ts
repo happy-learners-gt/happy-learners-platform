@@ -19,7 +19,9 @@ export type PdfBlock = {
 /** A JPEG as the PDF embeds it: its bytes, size in pixels and whether it is grey or colour. */
 export type PdfImage = { bytes: Uint8Array; width: number; height: number; components: 1 | 3 };
 export type PdfPage = { size?: "a4" | "letter" | "legal"; orientation?: "portrait" | "landscape"; marginMm?: number };
-export type PdfDocument = { title: string; header: string[]; footer: string; blocks: PdfBlock[]; page?: PdfPage; images?: Record<string, PdfImage>; logo?: string };
+export type PdfDocument = { title: string; header: string[]; footer: string; blocks: PdfBlock[]; page?: PdfPage; images?: Record<string, PdfImage>; logo?: string;
+  /** PDF metadata «Producer». Defaults to the product name; the demo book of migration 0054 keeps the name it was generated with. */
+  producer?: string };
 
 const sizes = { a4: [595.28, 841.89], letter: [612, 792], legal: [612, 1008] } as const;
 const bodySize = 10.5;
@@ -199,7 +201,7 @@ export function pdfFile(document: PdfDocument): string {
   objects[2] = `<< /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(" ")}] /Count ${total} >>`;
   objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>";
   objects[4] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>";
-  objects[5] = `<< /Title ${pdfString(document.title)} /Producer (Happy Learners) >>`;
+  objects[5] = `<< /Title ${pdfString(document.title)} /Producer ${pdfString(document.producer ?? "Acervum")} >>`;
   const fonts = `/F1 3 0 R /F2 4 0 R${italic ? ` /F3 ${italicIds[0]} 0 R /F4 ${italicIds[1]} 0 R` : ""}`;
   const xobjects = imageIds.length ? ` /XObject << ${imageIds.map((id, index) => `/Im${index + 1} ${id} 0 R`).join(" ")} >>` : "";
   streams.forEach((stream, index) => {

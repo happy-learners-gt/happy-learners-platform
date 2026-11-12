@@ -19,7 +19,7 @@ import { AgreementBanner } from "../pages/legal";
 import { ContractBanner } from "../pages/my-contracts";
 
 export function Brand() {
-  return <Link href="/inicio" className="brand" aria-label="Happy Learners, ir a Inicio"><span className="brand-mark" aria-hidden="true">hl</span><span className="brand-name">Happy Learners</span></Link>;
+  return <Link href="/inicio" className="brand" aria-label="Acervum, ir a Inicio"><span className="brand-mark" aria-hidden="true">A</span><span className="brand-name">Acervum</span></Link>;
 }
 
 /** One navigation system, mounted once for every page: a menu in levels that opens where you are; below 1024 px it is a drawer. */

@@ -15,7 +15,7 @@ function Frame({ title, children }: { title: string; children: React.ReactNode }
   return <div className="login-page">
     <a className="skip-link" href="#main">Saltar al contenido</a>
     <main id="main" className="login-main">
-      <div className="login-brand"><span className="brand-mark" aria-hidden="true">hl</span><span>Happy Learners</span></div>
+      <div className="login-brand"><span className="brand-mark" aria-hidden="true">A</span><span>Acervum</span></div>
       <section className="login-card" aria-labelledby="link-title"><h1 id="link-title">{title}</h1>{children}</section>
     </main>
   </div>;

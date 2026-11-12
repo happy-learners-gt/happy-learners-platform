@@ -15,13 +15,15 @@ REL-007, ST-189 (SPR-004, DEC-058). Lo que se hace, cuándo y quién, para detec
 
 ## 2. Revisión periódica de accesos (mensual)
 
-Administración, en Gobierno › Seguridad:
+Administración, en Gobierno › Identidad y acceso:
 
-1. **Revisión de accesos** (CSV): quién tiene acceso, con qué rol, coordinación, grupos, segundo factor, passkeys,
-   cuentas vinculadas, tokens activos y último inicio de sesión.
-2. Quitar el acceso a quien ya no debe tenerlo (Educadores › Quitar acceso o Registrar salida).
-3. Revocar tokens que nadie reconozca (Seguridad › Tokens) y desvincular cuentas externas que no correspondan.
-4. **Verificar la cadena** del registro y guardar el último sello fuera de la plataforma junto con el CSV.
+1. **Revisiones de acceso › Iniciar una revisión**: persona por persona, mantener o quitar el acceso; al completarla
+   se aplica cada «quitar» y queda registrado quién decidió qué. **Personas** muestra, para cada una, rol,
+   coordinación, grupos, segundo factor, passkeys, cuentas vinculadas, tokens activos y último inicio de sesión.
+2. Quitar el acceso a quien ya no debe tenerlo (en la revisión, o en Educadores › Quitar acceso o Registrar salida).
+3. Revocar tokens que nadie reconozca (Identidad y acceso › Integraciones) y desvincular cuentas externas que no
+   correspondan (panel de la persona).
+4. **Verificar la cadena** del registro (Registros) y guardar el último sello fuera de la plataforma.
 5. Revisar en el registro los bloqueos (`sign_in_locked`), los fallos del segundo paso (`mfa_failed`) y los cambios de
    política o de proveedor.
 

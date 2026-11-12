@@ -35,7 +35,7 @@ configuración el Worker no envía nada: cada mensaje queda en la bandeja de sal
 3. Define la dirección verificada como `MAIL_FROM`. Como `wrangler.jsonc` no la declara (no lleva valores reales) y
    `wrangler deploy` reemplaza las variables de texto del panel, guárdala también con
    `npx wrangler secret put MAIL_FROM --config build/wrangler.json`; el Worker la lee igual que una variable.
-   El nombre del remitente es siempre «Happy Learners».
+   El nombre del remitente es siempre «Acervum».
 
 No hay plan de pago: cada organización envía como máximo 250 correos por día UTC; al alcanzarlo, los mensajes quedan
 `deferred` y la invitación conserva su enlace para compartirlo. Si se agregan organizaciones, recuerda que el límite de

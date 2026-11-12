@@ -18,8 +18,8 @@ export function StudentLesson({ code }: { code: string }) {
 
 function PlayerBar({ title, step, total }: { title?: string; step?: number; total?: number }) {
   return <header className="player-bar">
-    <span className="brand-mark small" aria-hidden="true">hl</span>
-    {title ? <span className="player-title">{title}</span> : <span className="player-title">Happy Learners</span>}
+    <span className="brand-mark small" aria-hidden="true">A</span>
+    {title ? <span className="player-title">{title}</span> : <span className="player-title">Acervum</span>}
     {total !== undefined && step !== undefined && <div className="player-progress"><span>{step > total ? "Terminada" : step === 0 ? "Inicio" : `Actividad ${step} de ${total}`}</span>
       <div className="progress-track" role="progressbar" aria-label="Avance de la lección" aria-valuemin={0} aria-valuemax={total} aria-valuenow={Math.min(step, total)} aria-valuetext={step > total ? "Lección terminada" : `Actividad ${Math.max(step, 0)} de ${total}`}><span style={{ width: `${Math.min(step, total) / Math.max(total, 1) * 100}%` }}/></div></div>}
   </header>;

@@ -158,7 +158,7 @@ export function renderReport(template: ReportTemplate, records: ReportRecord[], 
 
 /** The template a kind starts from: the same information the platform printed before templates existed. */
 export function defaultTemplate(kind: ReportKind): ReportTemplate {
-  const base = { kind, page: { size: "letter" as const, orientation: "portrait" as const, marginMm: 20 }, logoId: null, footer: "Documento generado por Happy Learners" };
+  const base = { kind, page: { size: "letter" as const, orientation: "portrait" as const, marginMm: 20 }, logoId: null, footer: "Documento generado por Acervum" };
   if (kind === "panel-minutes") return { ...base, header: ["{{organizacion.nombre}}", "Acta de tribunal · {{curso.nombre}} · {{seccion.nombre}}"], blocks: [
     { id: "titulo", type: "title", text: "Acta de tribunal", align: "center" },
     { id: "datos", type: "fields", pairs: [{ label: "Estudiante", field: "estudiante.nombre" }, { label: "Evaluación", field: "actividad.nombre" }, { label: "Periodo", field: "periodo.nombre" }, { label: "Criterio", field: "tribunal.criterio" }, { label: "Resultado", field: "resultado.nota" }] },

@@ -51,13 +51,13 @@ cuenta conserva 90 días, como antes.
 
 ## Quién lo ve
 
-Solo administración (Gobierno › Seguridad). Cada ruta `/api/security/*` responde 401 sin sesión y 403 a quien no es
+Solo administración (Gobierno › Identidad y acceso › Registros). Cada ruta `/api/security/*` responde 401 sin sesión y 403 a quien no es
 administración; la prueba lo recorre ruta por ruta. Cada persona ve sus propios inicios de sesión en su cuenta y recibe
 sus eventos de seguridad, con sus sellos, en la copia de sus datos (sin quién más aparece en ellos).
 
 ## Auditoría (ST-068)
 
-Gobierno › Seguridad › Auditoría muestra las acciones críticas de toda la organización (la actividad) y el historial de
+Gobierno › Identidad y acceso › Registros › Auditoría muestra las acciones críticas de toda la organización (la actividad) y el historial de
 cambios de rol y de acceso, filtrados por persona, objeto y fecha. A diferencia de la actividad que cada persona ve de
 sus cursos, cubre toda la organización y solo la consulta administración.
 

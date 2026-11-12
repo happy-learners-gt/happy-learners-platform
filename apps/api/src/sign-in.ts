@@ -145,7 +145,7 @@ export async function signInWithLink(token: string, method: string, request: Req
   const problem = gone(found);
   if (problem) return problem;
   const person = found!;
-  if (method === "GET") return reply({ link: { username: person.username, name: person.name, organization: person.organization || "Happy Learners", expiresAt: new Date(person.expiresAt).toISOString() } });
+  if (method === "GET") return reply({ link: { username: person.username, name: person.name, organization: person.organization || "Acervum", expiresAt: new Date(person.expiresAt).toISOString() } });
   if (!(await policyOf(db, scope)).linkSignIn) return reply({ error: "Tu organización desactivó el inicio de sesión con enlace. Entra con tu contraseña.", code: "LINK_DISABLED" }, 410);
   const used = await db.guardedBatch(consume(db, person), [db.prepare("UPDATE auth_challenges SET used_at=? WHERE token_hash=?").bind(Date.now(), person.tokenHash)]);
   if (!used) return gone(await challenge(token, "link", scope, db)) || reply({ error: "Este enlace ya se usó. Pide otro.", code: "LINK_USED" }, 410);
@@ -158,7 +158,7 @@ export async function recoverPassword(token: string, method: string, input: unkn
   const problem = gone(found);
   if (problem) return problem;
   const person = found!;
-  if (method === "GET") return reply({ recovery: { username: person.username, name: person.name, organization: person.organization || "Happy Learners", expiresAt: new Date(person.expiresAt).toISOString(), minimum: (await policyOf(db, scope)).minPasswordLength } });
+  if (method === "GET") return reply({ recovery: { username: person.username, name: person.name, organization: person.organization || "Acervum", expiresAt: new Date(person.expiresAt).toISOString(), minimum: (await policyOf(db, scope)).minPasswordLength } });
   const password = input && typeof input === "object" ? (input as Record<string, unknown>).password : undefined;
   const invalid = await check(password, person.username);
   if (invalid) return reply({ error: invalid, code: "PASSWORD_REJECTED" }, 400);

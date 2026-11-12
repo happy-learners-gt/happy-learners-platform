@@ -14,7 +14,7 @@ export interface AccountContext { request: Request; origin: string; sender: Mail
 export async function sendNotice(db: Database, sender: MailSender, organizationId: string, person: { id: string; name: string; email: string | null }, referenceId: string, notice: AccountNotice): Promise<Delivery> {
   try {
     const organization = await db.prepare("SELECT name FROM organizations WHERE id=?").bind(organizationId).first<{ name: string | null }>();
-    const message = accountMessage(person.email || "", notice, { organization: organization?.name || "Happy Learners", recipientName: person.name, timezone: await timezoneOf(db, organizationId) });
+    const message = accountMessage(person.email || "", notice, { organization: organization?.name || "Acervum", recipientName: person.name, timezone: await timezoneOf(db, organizationId) });
     return await deliver(db, sender, organizationId, "account", referenceId, message, { userId: person.id, reason: accountNoticeReason(notice) });
   } catch (error) {
     console.error(JSON.stringify({ event: "account_notice_failed", cause: error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 240) : "Unknown error" }));

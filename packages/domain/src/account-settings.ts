@@ -113,7 +113,7 @@ export interface AccountNoticeDetails { organization: string; recipientName: str
  */
 export function accountMessage(to: string, notice: AccountNotice, details: AccountNoticeDetails): MailMessage {
   const lines: string[] = [], action: { label: string; link: string } | null = notice.kind === "email_verify" ? { label: "Confirmar mi correo", link: notice.link } : notice.kind === "closure_requested" ? { label: "Ver la solicitud", link: notice.link }
-    : notice.kind === "password_recovery" ? { label: "Elegir una contraseña nueva", link: notice.link } : notice.kind === "sign_in_link" ? { label: "Entrar a Happy Learners", link: notice.link } : null;
+    : notice.kind === "password_recovery" ? { label: "Elegir una contraseña nueva", link: notice.link } : notice.kind === "sign_in_link" ? { label: "Entrar a Acervum", link: notice.link } : null;
   const notMe = "Si no fuiste tú, cambia tu contraseña de inmediato y avisa a administración de tu organización.";
   switch (notice.kind) {
     case "email_verify":
@@ -145,7 +145,7 @@ export function accountMessage(to: string, notice: AccountNotice, details: Accou
       break;
   }
   const footer = "Este es un aviso de seguridad de tu cuenta: se envía siempre y no se puede desactivar.";
-  const text = [`Hola, ${details.recipientName}:`, "", ...lines, "", footer, `Happy Learners · ${details.organization}`].join("\n");
+  const text = [`Hola, ${details.recipientName}:`, "", ...lines, "", footer, `Acervum · ${details.organization}`].join("\n");
   const paragraphs = lines.filter(line => !action || line !== action.link).map(line => `<p>${escape(line)}</p>`).join("\n");
   const button = action ? `<p><a href="${escape(action.link)}" style="display:inline-block;padding:10px 16px;background:#0f6cbd;color:#ffffff;text-decoration:none;border-radius:4px">${escape(action.label)}</a></p>
 <p>Si el botón no funciona, copia este enlace en tu navegador:<br><span style="word-break:break-all">${escape(action.link)}</span></p>` : "";
@@ -154,7 +154,7 @@ export function accountMessage(to: string, notice: AccountNotice, details: Accou
 ${paragraphs}
 ${button}
 <p style="color:#616161">${escape(footer)}</p>
-<p style="color:#616161">Happy Learners · ${escape(details.organization)}</p>
+<p style="color:#616161">Acervum · ${escape(details.organization)}</p>
 </body></html>`;
   return { to, subject: `${subjects[notice.kind]} · ${clip(details.organization, 80)}`, text, html };
 }

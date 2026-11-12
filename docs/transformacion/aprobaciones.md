@@ -10,7 +10,7 @@ y qué sigue avanzando mientras tanto.
 | AP-03 | Monitor externo de `/api/health` | Pendiente |
 | AP-04 | Escáneres obligatorios en `main` desde el 13-nov | Autorizado 02-nov; se aplica el 13-nov (SEC-04) |
 | AP-05 | Prueba de penetración externa | Pendiente (antes de instituciones de pago) |
-| AP-06 | Nombre, marca, empresa y mesa de ayuda (carril D) | Pendiente |
+| AP-06 | Nombre, marca, empresa y mesa de ayuda (carril D) | Nombre decidido el 11-nov: **Acervum** (logotipo con la diseñadora) |
 | AP-07 | Tope mensual de IA por organización y plan | Pendiente (sin urgencia; hay guarda por persona) |
 
 ## AP-01 · R1: qué ve un estudiante al entrar con el código de su sección
@@ -67,6 +67,8 @@ y qué sigue avanzando mientras tanto.
   usa «Happy Learners» y la Ayuda actual.
 - **03-nov (dueño):** en proceso con una diseñadora; el nombre más probable es «Acervum», aún en discusión. HLP-01
   sigue esperando. Cuando se decida, el cambio de nombre es un incremento propio (textos, metadatos, correo).
+- **11-nov (dueño):** decidido, la plataforma se llama **Acervum**. BRAND-01 lo aplica en 1.7.6 con un monograma
+  provisional «A»; el logotipo de la diseñadora lo reemplazará. ORG-01 y HLP-01 quedan listos.
 
 ## AP-07 · Tope de IA por organización
 

@@ -46,7 +46,7 @@ export async function matchTotp(secret: Uint8Array, code: unknown, lastStep: num
   return null;
 }
 /** What an authenticator app reads (as a link or typed by hand): the issuer, the account and the key. */
-export function otpauthUri(secretBase32: string, account: string, issuer = "Happy Learners") {
+export function otpauthUri(secretBase32: string, account: string, issuer = "Acervum") {
   const label = encodeURIComponent(`${issuer}:${account}`);
   return `otpauth://totp/${label}?secret=${secretBase32}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=${totpDigits}&period=${totpPeriod}`;
 }

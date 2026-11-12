@@ -40,6 +40,6 @@ export async function feed(token: string, url: URL, scope: string, db: Database)
   const classes = (await db.prepare(`SELECT s.id,s.group_id AS groupId,s.session_date AS sessionDate,s.starts_at AS startsAt,s.duration_minutes AS durationMinutes,s.status,s.version,s.updated_at AS updatedAt,c.title AS courseTitle,g.name AS groupName
     FROM class_sessions s JOIN course_groups g ON g.id=s.group_id ${taughtClasses} AND s.session_date BETWEEN ? AND ? ORDER BY s.session_date,s.starts_at,s.id LIMIT 2000`)
     .bind(owner.userId, owner.organizationId, window.from, window.until).all<FeedClass>()).results;
-  const body = calendarFeed({ name: `Mis clases · ${owner.name || "Happy Learners"}`, timezone, displayTimezone: own.timezone, origin: url.origin, classes });
+  const body = calendarFeed({ name: `Mis clases · ${owner.name || "Acervum"}`, timezone, displayTimezone: own.timezone, origin: url.origin, classes });
   return new Response(body, { headers: { "Content-Type": "text/calendar; charset=utf-8", "Content-Disposition": 'inline; filename="mis-clases.ics"' } });
 }

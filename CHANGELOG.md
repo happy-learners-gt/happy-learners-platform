@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.7.6 — 2026-11-11
+
+La plataforma se llama **Acervum** (BRAND-01; decisión de marca del responsable del proyecto, AP-06).
+
+- El nombre aparece en el inicio de sesión, la barra superior, el título de cada página, la Ayuda, la guía de estilo,
+  las invitaciones y los avisos por correo (remitente «Acervum»), los enlaces de entrada y de recuperación, el
+  calendario sincronizado, los PDF (boleta, constancia y copia de entrega), los códigos de recuperación, la aplicación
+  de autenticación (emisor de los códigos nuevos) y las passkeys nuevas. El monograma provisional es «A» hasta que esté
+  el logotipo.
+- No cambian las direcciones, los datos, las cuentas ni los nombres internos (paquetes, claves y enlaces): las
+  sesiones, las passkeys y las aplicaciones de autenticación ya configuradas siguen funcionando, y las constancias
+  emitidas se siguen verificando.
+- El aviso de sesión vencida y Mi cuenta › Seguridad dicen que la duración de la sesión la fija la organización (8
+  horas si no la cambia), en lugar de «ocho horas» fijas.
+- `docs/security/`: las rutas de menú son las de Identidad y acceso (antes Gobierno › Seguridad).
+
 ## 1.7.5 — 2026-11-04
 
 - Educadores (EDU-01): bajo el nombre de cada persona se ve lo que necesita de administración (perfil por revisar,

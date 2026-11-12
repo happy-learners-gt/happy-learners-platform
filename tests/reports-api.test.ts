@@ -65,7 +65,7 @@ describe("1.5.0 report builder on the built Worker", () => {
     for (const id of ["seed-template-boleta-primaria", "seed-template-constancia-primaria"]) expect((await as(admin, `/report-templates/${id}`, "DELETE")).status).toBe(200);
     // Before any template, the report card is the one it always was.
     const before = await pdf(await as(admin, `/sections/${section}/grades/report.pdf?learner=${learner.id}`));
-    expect(before).toContain(inPdf("Boleta informativa de Happy Learners"));
+    expect(before).toContain(inPdf("Boleta informativa de Acervum"));
 
     const created = await read<{ template: Template }>(await as(admin, "/report-templates", "POST", { kind: "report-card" }), 201);
     expect(created.template.draft).toEqual(defaultTemplate("report-card"));
@@ -85,13 +85,13 @@ describe("1.5.0 report builder on the built Worker", () => {
     expect(preview).toContain(inPdf(learner.name));
     expect(preview).toContain("/Subtype /Image");
     // Still a draft: the report card has not changed.
-    expect(await pdf(await as(admin, `/sections/${section}/grades/report.pdf?learner=${learner.id}`))).toContain(inPdf("Boleta informativa de Happy Learners"));
+    expect(await pdf(await as(admin, `/sections/${section}/grades/report.pdf?learner=${learner.id}`))).toContain(inPdf("Boleta informativa de Acervum"));
 
     const published = await read<{ template: Template; versions: { version: number }[] }>(await as(admin, `/report-templates/${created.template.id}/publish`, "POST", {}));
     expect(published.template.publishedVersion).toBe(1);
     const after = await pdf(await as(educator, `/sections/${section}/grades/report.pdf?learner=${learner.id}`));
     expect(after).toContain(inPdf(`Boleta oficial del ciclo ${year}`));
-    expect(after).not.toContain(inPdf("Boleta informativa de Happy Learners"));
+    expect(after).not.toContain(inPdf("Boleta informativa de Acervum"));
 
     // Editing the draft after publishing does not change documents until the next version; a version can be restored.
     await read(await as(admin, `/report-templates/${created.template.id}`, "PUT", { draft: { ...draft, header: ["Otra cabecera"] } }));

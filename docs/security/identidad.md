@@ -40,7 +40,7 @@ Requiere el Apple Developer Program (USD 99 al año). Sin esa cuenta el botón n
 
 ## Proveedor institucional (Okta, Entra ID): lo hace administración de cada institución
 
-En Gobierno › Seguridad › Proveedor institucional, con la aplicación registrada en el proveedor de la institución:
+En Gobierno › Identidad y acceso › Inicio de sesión (proveedor institucional), con la aplicación registrada en el proveedor de la institución:
 
 - **Entra ID:** registro de aplicación de un solo inquilino; emisor `https://login.microsoftonline.com/<id del
   inquilino>/v2.0`; para el rol por grupo, agrega el reclamo `groups` (Configuración del token) y usa el identificador

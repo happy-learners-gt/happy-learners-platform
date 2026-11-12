@@ -157,7 +157,7 @@ export function notificationMessage(to: string, details: NotificationDetails): M
     : "Puedes elegir qué avisos recibes, por qué medio y con qué frecuencia en Preferencias, sección Notificaciones:";
   const text = [
     `Hola, ${details.recipientName}:`, "", `${details.reason}.`, "", `${actions[details.type]}:`, details.link, "",
-    footer, ...(details.mandatory ? [] : [details.preferencesLink]), "", `Happy Learners · ${details.organization}`,
+    footer, ...(details.mandatory ? [] : [details.preferencesLink]), "", `Acervum · ${details.organization}`,
   ].join("\n");
   const html = `<!doctype html><html lang="es"><body style="font-family:Segoe UI,Arial,sans-serif;color:#242424;line-height:1.5">
 <p>Hola, ${escape(details.recipientName)}:</p>
@@ -165,7 +165,7 @@ export function notificationMessage(to: string, details: NotificationDetails): M
 <p><a href="${escape(details.link)}" style="display:inline-block;padding:10px 16px;background:#0f6cbd;color:#ffffff;text-decoration:none;border-radius:4px">${escape(actions[details.type])}</a></p>
 <p>Si el botón no funciona, copia este enlace en tu navegador:<br><span style="word-break:break-all">${escape(details.link)}</span></p>
 <p style="color:#616161">${escape(footer)}${details.mandatory ? "" : ` <a href="${escape(details.preferencesLink)}">${escape(details.preferencesLink)}</a>`}</p>
-<p style="color:#616161">Happy Learners · ${escape(details.organization)}</p>
+<p style="color:#616161">Acervum · ${escape(details.organization)}</p>
 </body></html>`;
   return { to, subject, text, html };
 }
@@ -283,7 +283,7 @@ export function digestMessage(to: string, details: DigestDetails): MailMessage {
     `Hola, ${details.recipientName}:`, "", `${label} reúne ${count === 1 ? "un aviso" : `${count} avisos`} desde el último correo.`, "",
     ...groups.flatMap(group => [`${group.item.label} (${group.entries.length})`, ...group.entries.flatMap(entry => [`- ${when(entry.createdAt)} · ${entry.reason}.`, `  ${entry.link}`]), ""]),
     ...(more ? [more, ""] : []),
-    "Puedes cambiar la frecuencia de los correos en Preferencias, sección Notificaciones:", details.preferencesLink, "", `Happy Learners · ${details.organization}`,
+    "Puedes cambiar la frecuencia de los correos en Preferencias, sección Notificaciones:", details.preferencesLink, "", `Acervum · ${details.organization}`,
   ].join("\n");
   const html = `<!doctype html><html lang="es"><body style="font-family:Segoe UI,Arial,sans-serif;color:#242424;line-height:1.5">
 <p>Hola, ${escape(details.recipientName)}:</p>
@@ -292,7 +292,7 @@ ${groups.map(group => `<h2 style="font-size:16px;margin:16px 0 4px">${escape(gro
 <ul>${group.entries.map(entry => `<li><span style="color:#616161">${escape(when(entry.createdAt))}</span> · ${escape(entry.reason)}. <a href="${escape(entry.link)}">${escape(actions[entry.type])}</a></li>`).join("")}</ul>`).join("\n")}
 ${more ? `<p>${escape(more)}</p>` : ""}
 <p style="color:#616161">Puedes cambiar la frecuencia de los correos en Preferencias, sección Notificaciones: <a href="${escape(details.preferencesLink)}">${escape(details.preferencesLink)}</a></p>
-<p style="color:#616161">Happy Learners · ${escape(details.organization)}</p>
+<p style="color:#616161">Acervum · ${escape(details.organization)}</p>
 </body></html>`;
   return { to, subject: subject.slice(0, 200), text, html };
 }

@@ -49,7 +49,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => Promise<void> }) {
   return <div className="login-page">
     <a className="skip-link" href="#main">Saltar al contenido</a>
     <main id="main" className="login-main">
-      <div className="login-brand"><span className="brand-mark" aria-hidden="true">hl</span><span>Happy Learners</span></div>
+      <div className="login-brand"><span className="brand-mark" aria-hidden="true">A</span><span>Acervum</span></div>
       <section className="login-card" aria-labelledby="login-title">
         <h1 id="login-title">Iniciar sesión</h1>
         <p>Para educadores y administración.</p>
@@ -99,7 +99,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => Promise<void> }) {
 export function SessionExpiredDialog({ username, onRestored, onLeave }: { username: string; onRestored: () => Promise<void>; onLeave: () => void }) {
   const form = useLogin(onRestored, username);
   return <Modal title="Tu sesión terminó" onClose={onLeave}>
-    <p>Por seguridad, las sesiones duran hasta ocho horas. Vuelve a entrar para continuar; lo que tienes en pantalla se conserva.</p>
+    <p>Por seguridad, las sesiones duran un tiempo limitado: ocho horas, salvo que tu organización fije otra duración. Vuelve a entrar para continuar; lo que tienes en pantalla se conserva.</p>
     {form.challenge ? <MfaStep challenge={form.challenge} onDone={onRestored} onCancel={() => form.setChallenge(null)}/> : <>
     {form.error && <p className="form-alert" role="alert"><Icon name="alert" size={18}/>{form.error}</p>}
     <form onSubmit={form.submit} className="stack">
@@ -125,7 +125,7 @@ export function ChangePassword({ member, onChanged, onLeave }: { member: Member;
   return <div className="login-page">
     <a className="skip-link" href="#main">Saltar al contenido</a>
     <main id="main" className="login-main">
-      <div className="login-brand"><span className="brand-mark" aria-hidden="true">hl</span><span>Happy Learners</span></div>
+      <div className="login-brand"><span className="brand-mark" aria-hidden="true">A</span><span>Acervum</span></div>
       <section className="login-card" aria-labelledby="password-title">
         <h1 id="password-title">Cambia tu contraseña</h1>
         <p>Hola, {member.displayName || member.username}. Entraste con una contraseña temporal; elige una propia para continuar. Solo tú la conocerás.</p>
